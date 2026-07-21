@@ -46,6 +46,11 @@ here.
 
 - Rust, matching kan's dependency choices where they overlap (clap, rmcp,
   serde, thiserror, tokio) so the two crates stay easy to read together.
+- day has **two substrates**: kan, and (since v0.4) **git, read-only**. All
+  git access lives in `src/git.rs`, restricted to read subcommands, with a
+  test whitelisting them — day never stages, commits, tags, or pushes. git
+  was taken on reluctantly, because kan does not expose claim artifacts
+  (kan-tools/kan#61); if that changes, prefer reading the record.
 - day talks to kan by **shelling out to the `kan` binary**, never by linking
   it as a library. The boundary is the public CLI on purpose: it's the same
   contract any other consumer gets, so day can't quietly depend on kan

@@ -104,9 +104,22 @@ or every source atom reports its inputs missing, since a source's inputs come
 from outside the vocabulary by definition. Cross-frame realizability remains
 out of scope, deferred to v0.5 with frames.
 
-## v0.4 — Assessing
+## v0.4 — Assessing *(in progress)*
 
 Where "auditable, non-gameable" stops being an aspiration.
+
+**Shipped: `day assess docs`** — the first assessment, built at the release
+boundary because a tag and a published artifact are the most crystallized
+substrate available. It gave day its second substrate (git, read-only) and
+caught a real gap on its first run: releases were being recorded on `spine`
+rather than on a `release` subject, so the tool reported a release nobody had
+written down. One amendment the build forced: the evidence tier compares
+*code changed* against *watched docs changed* rather than correlating claims
+to the boundary, because `kan show` exposes no timestamps (kan-tools/kan#61) —
+and the simpler comparison is a closer match to the failure it exists to
+catch anyway.
+
+**Still to come in v0.4:**
 
 - `day assess` — did work land inside a telos's equivalence class? Judged
   against material evidence (builds, tests, diffs, artifacts), never against an

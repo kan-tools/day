@@ -197,6 +197,11 @@ fn ac9_conventions_document_the_prefixes_the_code_actually_reads() {
         day::atoms::FENCE_INFO,
         day::schema::SCHEMA_PREFIX,
         day::schema::FENCE_INFO,
+        day::bridge::BRIDGE_PREFIX,
+        day::bridge::FENCE_INFO,
+        day::bridge::TELOS_FENCE,
+        day::docs::FENCE_INFO,
+        day::docs::DOCS_SLUG,
     ] {
         assert!(
             text.contains(token),

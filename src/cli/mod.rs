@@ -44,6 +44,8 @@ pub enum Error {
     Bridge(#[from] crate::bridge::Error),
     #[error(transparent)]
     Atoms(#[from] crate::atoms::Error),
+    #[error(transparent)]
+    Docs(#[from] crate::docs::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -79,6 +81,9 @@ pub enum Command {
     Bridge(BridgeAction),
     /// Check kan reachability and verify the live atom vocabulary composes
     Doctor,
+    /// Assess whether what shipped matches what the record says
+    #[command(subcommand)]
+    Assess(AssessAction),
     /// Validate and record design documents
     #[command(subcommand)]
     Design(DesignAction),
@@ -178,6 +183,19 @@ pub enum BridgeAction {
     Check {
         /// The bridge slug
         slug: String,
+    },
+}
+
+/// v0.4's assessment surface. `docs` is the first leaf; telos assessment
+/// sits beside it as the rest of v0.4 lands.
+#[derive(Debug, Subcommand)]
+pub enum AssessAction {
+    /// Check that the docs still match what shipped
+    Docs {
+        /// Boundary to assess from (a git ref). Overrides the reconciled
+        /// release boundary and skips the reconciliation check.
+        #[arg(long)]
+        since: Option<String>,
     },
 }
 
@@ -444,6 +462,16 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             let report = crate::bridge::check(&client, &slug)?;
             print!("{}", report.render());
             Ok(if report.is_reachable() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(EXIT_FINDINGS)
+            })
+        }
+        Command::Assess(AssessAction::Docs { since }) => {
+            let git = crate::git::Git::new(cwd.clone());
+            let report = crate::docs::assess(&client, &git, &cwd, since.as_deref())?;
+            print!("{}", report.render());
+            Ok(if report.is_clean() {
                 ExitCode::SUCCESS
             } else {
                 ExitCode::from(EXIT_FINDINGS)

@@ -42,9 +42,17 @@ interesting one.
   tag with no recorded claim means a release nobody recorded, and a claim with
   no tag means a release nobody cut. Neither is an error to suppress; both are
   drift worth naming.
-- REQ-3: When the two boundaries disagree, the assessment runs from the
-  **earlier** of the two, so nothing between them escapes review. `--since
-  <cid-or-git-ref>` overrides both and skips reconciliation.
+- REQ-3: **Amended during the build — the first half is not implementable.**
+  As written this required running the assessment from the *earlier* of the
+  two boundaries. That needs the two to be orderable, and they are not: the
+  git tag is a commit, while the release claim is a CID with no commit
+  attached, because `kan show` exposes no artifacts or anchors
+  (kan-tools/kan#61). day cannot place a claim in git's history. **As
+  implemented:** divergence between the two records is *reported* — which is
+  the valuable half — and the diff boundary is the git tag, the only one of
+  the two that names a commit. `--since <git-ref>` overrides and skips
+  reconciliation. If kan#61 lands, the earlier-of-the-two rule becomes
+  implementable and should be revisited.
 - REQ-4: The mechanical tier is **version consistency**: every file the
   project declares as carrying the version must contain the version string
   from the declared source of truth. A file that carries a stale version fails.
@@ -55,11 +63,16 @@ interesting one.
   *suggests* rather than assumes, exactly as `Schema::starter` does. Not every
   project day serves is a Rust CLI, so day must not hard-code where a version
   lives or what a "surface" is.
-- REQ-6: The evidence tier reports, without judging: the claims recorded since
-  the boundary grouped by subject, and the files changed since the boundary.
-  A subject with claims whose docs went untouched is surfaced as a **prompt to
-  reconcile**, not a failure — deciding whether a change needed documenting
-  requires reading both, which is a judgment and stays with the command.
+- REQ-6: **Amended during the build.** As written, the evidence tier grouped
+  claims recorded since the boundary by subject. That is not computable for
+  the same reason as REQ-3: `kan show` exposes no timestamps, so day cannot
+  tell which claims fall after a git tag. **As implemented:** the tier
+  compares *what changed on disk* since the boundary against *whether any
+  watched doc changed with it*. Fully derivable, and a closer match to the
+  failure this exists to catch — a README left untouched across a release
+  that changed the tool underneath it. Still a **prompt to reconcile**, never
+  a failure: deciding whether a change needed documenting requires reading
+  both, which is judgment and stays with the reader.
 - REQ-7: `day assess docs` is advisory. It exits non-zero when the mechanical
   tier fails so CI can use it, and it never blocks, gates, or writes.
 - REQ-8: The surface is a new `assess` verb group with a `docs` leaf, leaving
@@ -78,9 +91,10 @@ interesting one.
 - [ ] AC-2: Given a `release` claim and a `v*` tag at different points,
       `day assess docs` names both boundaries and reports the divergence.
       (REQ-2)
-- [ ] AC-3: With divergent boundaries, the claims reported are those since the
-      **earlier** boundary, verified by a fixture where a claim falls between
-      the two. (REQ-3)
+- [ ] AC-3: Superseded by REQ-3's amendment — an earlier-of-the-two boundary
+      cannot be computed while a release claim carries no commit. The
+      reconciliation reporting it was meant to support is covered by AC-2.
+      (REQ-3)
 - [ ] AC-4: `--since` overrides both sources and produces no divergence
       finding. (REQ-3)
 - [ ] AC-5: A declared version-carrying file whose version string is stale
@@ -92,9 +106,9 @@ interesting one.
 - [ ] AC-7: With no `schema/docs` declared, `day assess docs` explains and
       prints a runnable command recording the starter, rather than assuming a
       layout. (REQ-5)
-- [ ] AC-8: Given claims on a subject since the boundary and no doc file
-      changed, the output names that subject as unreconciled; given docs
-      changed, it does not. (REQ-6)
+- [ ] AC-8: Given files changed since the boundary and no watched doc among
+      them, the output prompts to reconcile and names the watched docs; given
+      a watched doc changed, it does not prompt. (REQ-6)
 - [ ] AC-9: `day assess docs` exits non-zero on a mechanical failure and zero
       when only evidence-tier prompts remain, and writes nothing to kan or to
       the working tree in either case. (REQ-7)
@@ -120,10 +134,11 @@ existing `atoms::newest_fenced`, the same path `src/schema.rs` uses), the
 version-consistency check, and the evidence assembly. The two tiers stay
 separate types so the exit code depends only on the mechanical one.
 
-**`src/assess.rs` (new)** is the orchestration: reconcile boundaries, run the
-mechanical tier, assemble evidence, render. `src/cli/mod.rs` gains the
-`assess` group, and `src/mcp.rs` gains one tool dispatching to the same
-function.
+**Orchestration lives in `src/docs.rs`** rather than a third module. The
+design proposed a separate assess module; reconciling boundaries, running
+the two tiers, and rendering came to about thirty lines, and a module for
+that would be ceremony. `src/cli/mod.rs` gains the `assess` group, and
+`src/mcp.rs` gains one tool dispatching to the same function.
 
 **Boundary reconciliation** is the piece with real substance. `release`'s
 newest claim gives a CID but not a commit; the newest `v*` tag gives a commit
