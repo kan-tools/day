@@ -76,7 +76,7 @@ sounds stronger than it is while being quietly worked around.
 This is also the first real test of the conventions. Expect them to change
 under use; that is the point of doing this before anything is built on top.
 
-## v0.3 — Bridging
+## v0.3 — Bridging *(shipped)*
 
 Decomposition: the part of the model with the most substance and the least
 implementation.
@@ -94,6 +94,15 @@ implementation.
 
 Highest risk of rework in the whole roadmap. Ship it against real work
 (day's own, and kan's) rather than against a fixture.
+
+**Shipped in v0.3.0-beta.1**, with two amendments the build forced. The design
+treated sequence and concurrency as equivalent for realizability; they are
+not — `a > b` lets `b` use what `a` produced, `a & b` does not, and collapsing
+them would accept plans whose steps depend on work that has not happened. And
+a bridge needs to declare what is already available where it starts (`--have`),
+or every source atom reports its inputs missing, since a source's inputs come
+from outside the vocabulary by definition. Cross-frame realizability remains
+out of scope, deferred to v0.5 with frames.
 
 ## v0.4 — Assessing
 

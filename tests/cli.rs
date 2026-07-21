@@ -227,6 +227,45 @@ fn a_telos_stays_identifiable_when_the_newest_claim_is_commentary_about_it() {
     );
 }
 
+/// Found by the v0.3 adversarial review, cleaning up after itself: kan never
+/// destroys a subject, so a fully-retracted telos still appears in `status`.
+/// Listing it as "in play" would make retraction look like it had not worked.
+#[test]
+fn a_telos_whose_every_claim_is_retracted_is_not_in_play() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim("telos/live", "bafyreilive", "A telos still in play."),
+            // A retraction claim carries no text and no title — exactly what
+            // a subject looks like once everything on it is retracted.
+            common::retraction_claim("telos/gone", "bafyreigone"),
+        ],
+    );
+
+    let out = day(dir.path(), &kan, &["hook", "session-start"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success());
+
+    // Scoped to the teloi section deliberately. The retracted subject may
+    // still appear under "Still open", but that line is a passthrough of
+    // `kan issues` — how kan classifies a subject is kan's judgment, and day
+    // second-guessing it would be worse than the noise.
+    let teloi_section: String = stdout
+        .lines()
+        .skip_while(|l| !l.starts_with("Teloi in play"))
+        .take_while(|l| !l.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(teloi_section.contains("telos/live"), "{stdout}");
+    assert!(
+        !teloi_section.contains("telos/gone"),
+        "a fully-retracted telos should not be listed as in play: {teloi_section}"
+    );
+    assert!(teloi_section.contains("Teloi in play (1)"), "{stdout}");
+}
+
 #[test]
 fn ac6_session_start_hook_exits_zero_with_no_teloi_recorded() {
     let dir = tempfile::tempdir().unwrap();

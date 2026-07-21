@@ -81,7 +81,7 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
             .to_string();
     }
 
-    let mut out = format!("Teloi in play ({}):\n", teloi.len());
+    let mut lines = Vec::new();
     for subject in teloi {
         let claims = client.show(subject).unwrap_or_default();
         // The newest narrative claim is often commentary *about* the telos
@@ -91,13 +91,29 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         let title = claims.iter().rev().find_map(|c| c.title.clone());
         let latest = claims.iter().rev().find_map(|c| c.text.clone());
 
-        let line = match (title, latest) {
-            (Some(title), Some(text)) => format!("{title} — {}", excerpt(&text)),
-            (Some(title), None) => title,
-            (None, Some(text)) => excerpt(&text),
-            (None, None) => "(no claims yet)".to_string(),
-        };
-        out.push_str(&format!("- {subject}: {line}\n"));
+        match (title, latest) {
+            (Some(title), Some(text)) => {
+                lines.push(format!("- {subject}: {title} — {}", excerpt(&text)))
+            }
+            (Some(title), None) => lines.push(format!("- {subject}: {title}")),
+            (None, Some(text)) => lines.push(format!("- {subject}: {}", excerpt(&text))),
+            // Nothing left to say about it. kan never destroys a subject, so
+            // a fully-retracted telos still exists and still appears in
+            // `status` — but a telos whose every claim has been retracted is
+            // not "in play", and listing it as one would make retraction
+            // look like it had not worked.
+            (None, None) => continue,
+        }
+    }
+
+    if lines.is_empty() {
+        return "Every recorded telos has been retracted, so none are in play.\n".to_string();
+    }
+
+    let mut out = format!("Teloi in play ({}):\n", lines.len());
+    for line in lines {
+        out.push_str(&line);
+        out.push('\n');
     }
     out.push_str(
         "\nThese are in tension with each other by design; when work trades one off against \

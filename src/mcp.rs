@@ -97,6 +97,24 @@ impl DayServer {
         crate::record::next(&self.client(), &params.0.atom)
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))
     }
+
+    #[tool(
+        description = "Check whether a declared bridge could reach its target telos: walks the planned arrangement of atoms, verifies each step's inputs are available where it sits, and reports whether the target's declared witnesses are produced. Realizability is assessed within a single frame only. Reports; changes nothing."
+    )]
+    async fn bridge_check(
+        &self,
+        params: Parameters<BridgeCheckParams>,
+    ) -> Result<String, ErrorData> {
+        crate::bridge::check(&self.client(), &params.0.bridge)
+            .map(|report| report.render())
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))
+    }
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct BridgeCheckParams {
+    /// The bridge slug, e.g. `v0.3`.
+    pub bridge: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -125,12 +143,23 @@ impl ServerHandler for DayServer {
              on) declared on an atom/<slug> subject, carrying a fenced day-atom JSON \
              block naming its inputs, outputs, and the atoms it composes into; the \
              vocabulary is per-atom additive, so a newer claim supersedes an older one \
-             and nothing is ever deleted. The tools read that state: doctor verifies \
-             kan is reachable and that the live atom vocabulary composes, and \
-             session_context returns the teloi, atoms, and drift warnings in play. \
-             Both are advisory — day reports drift, it never blocks an action. Assess \
-             work against material evidence (builds, tests, diffs) rather than against \
-             your own account of it, and record what you find back into kan.",
+             and nothing is ever deleted. A bridge, on a bridge/<slug> subject, is a \
+             planned arrangement of atoms aimed at a target telos — how you get from \
+             here to there. Its plan composes atoms in sequence (b may use what a \
+             produced), concurrently (neither may rely on the other), or as \
+             alternatives (either route suffices, so only what every branch produces \
+             can be relied on downstream). A telos may declare witnesses: artifact \
+             types that would evidence it, which is what makes \"does this plan reach \
+             that telos\" checkable without collapsing the telos to a type. The tools \
+             read that state: doctor verifies kan is reachable and that the live atom \
+             vocabulary composes, next reports what follows an atom, design_check \
+             validates a design document, bridge_check computes whether a plan could \
+             reach its target, and session_context returns the teloi, atoms, open \
+             subjects, and drift warnings in play. All are advisory — day reports \
+             drift, it never blocks an action, and it does not track whether planned \
+             steps have happened. Realizability as reported is frame-internal only. \
+             Assess work against material evidence (builds, tests, diffs) rather than \
+             against your own account of it, and record what you find back into kan.",
         )
     }
 }

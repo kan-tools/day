@@ -40,6 +40,10 @@ pub enum Error {
     Record(#[from] crate::record::Error),
     #[error(transparent)]
     Vocabulary(#[from] crate::vocabulary::Error),
+    #[error(transparent)]
+    Bridge(#[from] crate::bridge::Error),
+    #[error(transparent)]
+    Atoms(#[from] crate::atoms::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -70,6 +74,9 @@ pub enum Command {
     /// Declare or revise a process atom
     #[command(subcommand)]
     Atom(AtomAction),
+    /// Plan a path from here to a telos, and check it could get there
+    #[command(subcommand)]
+    Bridge(BridgeAction),
     /// Check kan reachability and verify the live atom vocabulary composes
     Doctor,
     /// Validate and record design documents
@@ -108,6 +115,11 @@ pub enum TelosAction {
         /// Declare the subject's kind: issue, idea, or question (requires --title)
         #[arg(long, requires = "title")]
         kind: Option<String>,
+        /// An artifact type that would evidence this telos (repeatable).
+        /// Types, not instances — many concrete artifacts of a declared type
+        /// satisfy the telos equally, which is the weak equivalence.
+        #[arg(long = "witness")]
+        witnesses: Vec<String>,
     },
     /// Record that two teloi are in tension, and why
     Tension {
@@ -138,6 +150,34 @@ pub enum AtomAction {
         /// Prose describing the atom, above the generated interface block
         #[arg(long)]
         note: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BridgeAction {
+    /// Declare a bridge, or revise it by declaring again
+    Declare {
+        /// Slug, e.g. `v0.3` (becomes `bridge/v0.3`)
+        slug: String,
+        /// Target telos slug this bridge aims at
+        #[arg(long)]
+        telos: String,
+        /// The plan: `a > b` in sequence, `a & b` concurrently, `a | b` as
+        /// alternatives, parentheses to group
+        #[arg(long)]
+        plan: String,
+        /// An artifact type already available where this bridge starts
+        /// (repeatable) — the "here" in "a path from here to a telos"
+        #[arg(long = "have")]
+        have: Vec<String>,
+        /// Prose describing the bridge, above the generated plan block
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Check whether a declared bridge could reach its target telos
+    Check {
+        /// The bridge slug
+        slug: String,
     },
 }
 
@@ -214,13 +254,22 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             statement,
             title,
             kind,
+            witnesses,
         }) => {
+            // Witnesses are appended as a block only when given, so a telos
+            // stays a plain statement unless it opts into being a
+            // machine-checkable bridge target.
+            let text = if witnesses.is_empty() {
+                statement.clone()
+            } else {
+                crate::bridge::Witnesses { witnesses }.to_claim_text(&statement)
+            };
             let outcome = crate::vocabulary::declare(
                 &client,
                 crate::vocabulary::Declaration {
                     subject: &format!("{}{slug}", crate::atoms::TELOS_PREFIX),
                     verb: "decide",
-                    text: &statement,
+                    text: &text,
                     title: title.as_deref(),
                     kind: kind.as_deref(),
                     also_cite: &[],
@@ -347,6 +396,58 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         Command::Next { atom } => {
             print!("{}", crate::record::next(&client, &atom)?);
             Ok(ExitCode::SUCCESS)
+        }
+        // The plan is parsed and its atoms resolved before anything is
+        // written: a bridge naming an atom that does not exist is a claim
+        // about nothing.
+        Command::Bridge(BridgeAction::Declare {
+            slug,
+            telos,
+            plan,
+            have,
+            note,
+        }) => {
+            let node = crate::bridge::parse(&plan)?;
+            let (declared, _) = crate::atoms::load(&client)?;
+            let undeclared: Vec<String> = crate::bridge::referenced(&node)
+                .into_iter()
+                .filter(|name| !declared.iter().any(|a| &a.name == name))
+                .collect();
+            if !undeclared.is_empty() {
+                return Err(crate::bridge::Error::UndeclaredAtoms(undeclared.join(", ")).into());
+            }
+
+            let plan = crate::bridge::Plan {
+                telos,
+                have,
+                plan: node,
+            };
+            let outcome = crate::vocabulary::declare(
+                &client,
+                crate::vocabulary::Declaration {
+                    subject: &format!("{}{slug}", crate::bridge::BRIDGE_PREFIX),
+                    verb: "observe",
+                    text: &plan.to_claim_text(&slug, note.as_deref()),
+                    title: None,
+                    kind: None,
+                    also_cite: &[],
+                    act: crate::vocabulary::Act::Declare,
+                },
+            )?;
+            print!("{}", outcome.render());
+
+            let report = crate::bridge::check(&client, &slug)?;
+            print!("\n{}", report.render());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Bridge(BridgeAction::Check { slug }) => {
+            let report = crate::bridge::check(&client, &slug)?;
+            print!("{}", report.render());
+            Ok(if report.is_reachable() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(EXIT_FINDINGS)
+            })
         }
         Command::Mcp => {
             mcp::serve(cwd).await?;

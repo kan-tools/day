@@ -116,6 +116,11 @@ those local sections agree on the overlaps between frames as time unfolds —
 not merely when each frame individually believes its own leg of the path is
 fine.
 
+**Implemented, in part.** `bridge/<slug>` subjects hold plans, teloi may
+declare witnesses, and `day bridge check` computes frame-internal
+realizability — see `docs/CONVENTIONS.md`. The cross-frame half of the
+definition above is not implemented and is not implied by that check.
+
 ## The practical model: atoms and composition
 
 The full formalization above (and its poly-functor treatment of
