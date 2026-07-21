@@ -196,6 +196,38 @@ fn ac6_session_start_hook_lists_recorded_telos_subjects() {
 }
 
 #[test]
+fn a_telos_stays_identifiable_when_the_newest_claim_is_commentary_about_it() {
+    // Found by dogfooding: recording a tension against a telos made the
+    // hook show the tension instead of the telos, in the tool whose own
+    // telos is legibility. The declared title is what the subject *is*.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "telos/legible-process",
+                "bafyreideclare",
+                "The process a project followed is reconstructable from the record alone.",
+            ),
+            common::subject_claim("telos/legible-process", "bafyreititle", "Legible process"),
+            claim(
+                "telos/legible-process",
+                "bafyreitension",
+                "Tension: this trades off against affordance-not-enforcement.",
+            ),
+        ],
+    );
+
+    let out = day(dir.path(), &kan, &["hook", "session-start"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("Legible process"),
+        "the telos title should survive later commentary: {stdout}"
+    );
+}
+
+#[test]
 fn ac6_session_start_hook_exits_zero_with_no_teloi_recorded() {
     let dir = tempfile::tempdir().unwrap();
     let kan = write_kan_stub(dir.path(), &[]);

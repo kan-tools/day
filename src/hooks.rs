@@ -62,13 +62,21 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
 
     let mut out = format!("Teloi in play ({}):\n", teloi.len());
     for subject in teloi {
-        let excerpt = client
-            .show(subject)
-            .ok()
-            .and_then(|claims| claims.iter().rev().find_map(|c| c.text.clone()))
-            .map(|text| excerpt(&text))
-            .unwrap_or_else(|| "(no narrative claim yet)".to_string());
-        out.push_str(&format!("- {subject}: {excerpt}\n"));
+        let claims = client.show(subject).unwrap_or_default();
+        // The newest narrative claim is often commentary *about* the telos
+        // — a recorded tension, an assessment — not the telos itself. The
+        // declared title is what the subject is; show it first so a telos
+        // stays identifiable no matter what was last said about it.
+        let title = claims.iter().rev().find_map(|c| c.title.clone());
+        let latest = claims.iter().rev().find_map(|c| c.text.clone());
+
+        let line = match (title, latest) {
+            (Some(title), Some(text)) => format!("{title} — {}", excerpt(&text)),
+            (Some(title), None) => title,
+            (None, Some(text)) => excerpt(&text),
+            (None, None) => "(no claims yet)".to_string(),
+        };
+        out.push_str(&format!("- {subject}: {line}\n"));
     }
     out.push_str(
         "\nThese are in tension with each other by design; when work trades one off against \
