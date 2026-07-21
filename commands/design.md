@@ -6,11 +6,11 @@ description: Interactive, iterative design document authoring grounded in codeba
 > **day's "generative closed-loop design" atom** (`docs/TELOS.md`). Its
 > interface: it consumes a rough intent plus the codebase, and produces a
 > validated design document plus the kan claims that make it findable
-> later. It composes into `/adversarial-review`, which checks an
-> implementation back against the document this produces.
+> later. It composes into a build step, and the document it produces is
+> still what `/adversarial-review` audits against further downstream.
 >
 > ```day-atom
-> {"in": ["intent"], "out": ["design-doc"], "next": ["adversarial-review"]}
+> {"in": ["intent"], "out": ["design-doc"], "next": ["generative-build"]}
 > ```
 >
 > This command lived in kan's own repo until day existed to receive it —

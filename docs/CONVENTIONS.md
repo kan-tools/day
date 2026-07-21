@@ -82,10 +82,31 @@ EOF
 )" --subject atom/generative-build
 ```
 
+Not every atom needs a shipped command. `generative-build` — an agent
+session turning an accepted design into code — is a real atom in day's own
+vocabulary with no slash command behind it. The vocabulary describes the
+process, not the tooling.
+
 `day doctor` reads every `atom/*` subject and checks the set composes: each
-`next` target must exist, and an upstream atom's `out` must cover its
-downstream atom's `in`. A failure is reported, never repaired — day has no
+`next` target must exist, and each atom's `in` must be covered by what its
+upstream atoms produce. A failure is reported, never repaired — day has no
 write path into the log.
+
+Coverage is checked against the **transitive** upstream closure, not just the
+immediate predecessor, because artifacts accumulate along a bridging path
+rather than being consumed by the next step. day's own three atoms are the
+worked example:
+
+```
+design  in[intent]                    out[design-doc]   next[generative-build]
+generative-build  in[design-doc]      out[code-change]  next[adversarial-review]
+adversarial-review  in[design-doc, code-change]  out[verdict]
+```
+
+The review needs the design doc as well as the code change, and the design
+doc is still there when the review runs even though the build step didn't
+re-emit it. An atom with no upstream atoms is a source: its inputs come from
+outside the vocabulary and aren't checked.
 
 ## Assessments
 

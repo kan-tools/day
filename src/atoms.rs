@@ -131,15 +131,28 @@ pub fn extract_interface(text: &str) -> Option<Result<Interface, serde_json::Err
 }
 
 /// The composition check: every declared `next` edge must name an atom that
-/// exists, and the upstream atom's outputs must cover the downstream atom's
-/// inputs. A derived read over kan's fold — the same category of
-/// computation as kan's own status fold, computing nothing into the log.
+/// exists, and every atom that has upstream atoms must have its inputs
+/// covered by what those upstreams produce. A derived read over kan's fold —
+/// the same category of computation as kan's own status fold, computing
+/// nothing into the log.
+///
+/// Coverage is checked against the **transitive** upstream closure, not just
+/// the immediate predecessor. Artifacts accumulate along a bridging path
+/// rather than being consumed by the next step: an adversarial review needs
+/// both the design doc and the code change, and the design doc is still
+/// there when the review runs even though the build step in between didn't
+/// re-emit it. Checking only immediate predecessors reports that as a
+/// failure, which is how this rule was found — day's own two atoms tripped
+/// it the first time `day doctor` ran against a real log.
+///
+/// An atom with no upstream atoms is a source; its inputs come from outside
+/// the vocabulary and are not checked.
 pub fn check(atoms: &[Atom]) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     for atom in atoms {
         for successor in &atom.interface.next {
-            let Some(downstream) = atoms.iter().find(|a| &a.name == successor) else {
+            if !atoms.iter().any(|a| &a.name == successor) {
                 findings.push(Finding {
                     atoms: vec![atom.name.clone(), successor.clone()],
                     message: format!(
@@ -147,35 +160,76 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
                         atom.subject()
                     ),
                 });
-                continue;
-            };
-
-            let missing: Vec<&str> = downstream
-                .interface
-                .inputs
-                .iter()
-                .filter(|input| !atom.interface.outputs.contains(input))
-                .map(String::as_str)
-                .collect();
-
-            if !missing.is_empty() {
-                findings.push(Finding {
-                    atoms: vec![atom.name.clone(), downstream.name.clone()],
-                    message: format!(
-                        "{} -> {}: interfaces do not compose — {} needs input(s) [{}] that {} does not produce (it outputs [{}])",
-                        atom.subject(),
-                        downstream.subject(),
-                        downstream.subject(),
-                        missing.join(", "),
-                        atom.subject(),
-                        atom.interface.outputs.join(", "),
-                    ),
-                });
             }
         }
     }
 
+    for atom in atoms {
+        let upstream = ancestors(atoms, &atom.name);
+        if upstream.is_empty() {
+            continue;
+        }
+
+        let available: Vec<&str> = upstream
+            .iter()
+            .flat_map(|a| a.interface.outputs.iter().map(String::as_str))
+            .collect();
+        let missing: Vec<&str> = atom
+            .interface
+            .inputs
+            .iter()
+            .filter(|input| !available.contains(&input.as_str()))
+            .map(String::as_str)
+            .collect();
+
+        if !missing.is_empty() {
+            let mut implicated: Vec<String> = upstream.iter().map(|a| a.name.clone()).collect();
+            implicated.push(atom.name.clone());
+            findings.push(Finding {
+                atoms: implicated,
+                message: format!(
+                    "{}: interfaces do not compose — needs input(s) [{}] that nothing upstream produces (upstream {} produce [{}])",
+                    atom.subject(),
+                    missing.join(", "),
+                    upstream
+                        .iter()
+                        .map(|a| a.subject())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    available.join(", "),
+                ),
+            });
+        }
+    }
+
     findings
+}
+
+/// Every atom that can reach `name` through `next` edges. Breadth-first with
+/// a visited set, so a cyclic vocabulary terminates rather than hanging —
+/// cycles are legal here (a drift-evaluation atom feeding back into design
+/// is a real pattern), they just must not be walked twice.
+fn ancestors<'a>(atoms: &'a [Atom], name: &str) -> Vec<&'a Atom> {
+    let mut found: Vec<&Atom> = Vec::new();
+    let mut frontier = vec![name.to_string()];
+    let mut seen: Vec<String> = vec![name.to_string()];
+
+    while let Some(current) = frontier.pop() {
+        for candidate in atoms {
+            if !candidate.interface.next.contains(&current) {
+                continue;
+            }
+            if seen.contains(&candidate.name) {
+                continue;
+            }
+            seen.push(candidate.name.clone());
+            frontier.push(candidate.name.clone());
+            found.push(candidate);
+        }
+    }
+
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    found
 }
 
 #[cfg(test)]
@@ -235,6 +289,34 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].atoms, vec!["design", "build"]);
         assert!(findings[0].message.contains("verified-spec"));
+    }
+
+    #[test]
+    fn an_artifact_stays_available_past_the_step_that_did_not_re_emit_it() {
+        // The case day's own vocabulary hit: review needs the design doc
+        // and the code change; build sits in between and only produces the
+        // code change. The design doc is still there when review runs.
+        let atoms = vec![
+            atom("design", &["intent"], &["design-doc"], &["build"]),
+            atom("build", &["design-doc"], &["code-change"], &["review"]),
+            atom("review", &["design-doc", "code-change"], &["verdict"], &[]),
+        ];
+        assert_eq!(check(&atoms), vec![]);
+    }
+
+    #[test]
+    fn a_cyclic_vocabulary_terminates() {
+        let atoms = vec![
+            atom("design", &["drift-report"], &["design-doc"], &["drift"]),
+            atom("drift", &["design-doc"], &["drift-report"], &["design"]),
+        ];
+        assert_eq!(check(&atoms), vec![]);
+    }
+
+    #[test]
+    fn a_source_atoms_inputs_are_not_checked() {
+        let atoms = vec![atom("design", &["intent"], &["design-doc"], &[])];
+        assert_eq!(check(&atoms), vec![]);
     }
 
     #[test]
