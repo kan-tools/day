@@ -48,6 +48,9 @@ pub struct Claim {
     /// The claim's narrative text, when its body carries one (`Status`
     /// claims and relations do not).
     pub text: Option<String>,
+    /// The declared subject title, present only on `Subject` claims. A
+    /// subject's name is an rkey, not a label; this is what it's called.
+    pub title: Option<String>,
 }
 
 pub struct KanClient {
@@ -156,7 +159,8 @@ fn parse_claim_line(line: &str) -> Option<Claim> {
     Some(Claim {
         cid,
         kind,
-        text: extract_debug_text(body),
+        text: extract_debug_field(body, "text"),
+        title: extract_debug_field(body, "title"),
     })
 }
 
@@ -167,10 +171,11 @@ fn split_once_whitespace(s: &str) -> Option<(&str, &str)> {
     Some((&s[..end], s[end..].trim_start()))
 }
 
-/// Pulls the `text: "..."` field out of a `Debug`-rendered claim body,
+/// Pulls a named string field out of a `Debug`-rendered claim body,
 /// respecting backslash escapes when hunting for the closing quote.
-fn extract_debug_text(body: &str) -> Option<String> {
-    let start = body.find("text: \"")? + "text: \"".len();
+fn extract_debug_field(body: &str, field: &str) -> Option<String> {
+    let needle = format!("{field}: \"");
+    let start = body.find(&needle)? + needle.len();
     let rest = &body[start..];
     let mut escaped = false;
     for (i, c) in rest.char_indices() {

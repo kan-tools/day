@@ -26,6 +26,17 @@ pub fn claim(subject: &str, cid: &str, text: &str) -> StubClaim {
     }
 }
 
+/// A `Subject` claim, which carries a `title` field instead of `text` —
+/// what `kan <verb> --title --kind` appends alongside a narrative claim.
+pub fn subject_claim(subject: &str, cid: &str, title: &str) -> StubClaim {
+    StubClaim {
+        subject: subject.to_string(),
+        cid: cid.to_string(),
+        kind: "Subject".to_string(),
+        text: title.to_string(),
+    }
+}
+
 /// An `atom/<slug>` claim carrying a `day-atom` interface block, written the
 /// way `docs/CONVENTIONS.md` tells a human or agent to write one.
 pub fn atom_claim(
@@ -65,8 +76,11 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     for subject in &subjects {
         let last = claims.iter().rev().find(|c| c.subject == *subject).unwrap();
         status.push_str(&format!(
-            "[Local({:?})]: {} — {} {{ text: {:?} }}  ({})\n",
-            subject, last.kind, last.kind, last.text, last.cid,
+            "[Local({:?})]: {} — {}  ({})\n",
+            subject,
+            last.kind,
+            debug_body(last),
+            last.cid,
         ));
     }
     std::fs::write(data.join("status.txt"), status).unwrap();
@@ -78,10 +92,7 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
             claims.iter().filter(|c| c.subject == *subject).collect();
         let mut show = format!("{subject} ({} live claim(s)):\n", for_subject.len());
         for c in for_subject {
-            show.push_str(&format!(
-                "  {}  {}  {} {{ text: {:?} }}\n",
-                c.cid, c.kind, c.kind, c.text,
-            ));
+            show.push_str(&format!("  {}  {}  {}\n", c.cid, c.kind, debug_body(c)));
         }
         std::fs::write(data.join(show_filename(subject)), show).unwrap();
     }
@@ -114,6 +125,17 @@ esac
     }
 
     script
+}
+
+/// kan renders each claim body with Rust's `Debug`, and the field name
+/// differs by body: narrative claims carry `text`, `Subject` claims carry
+/// `title` plus a `subject_kind`.
+fn debug_body(claim: &StubClaim) -> String {
+    if claim.kind == "Subject" {
+        format!("Subject {{ title: {:?}, subject_kind: Idea }}", claim.text)
+    } else {
+        format!("{} {{ text: {:?} }}", claim.kind, claim.text)
+    }
 }
 
 fn show_filename(subject: &str) -> String {
