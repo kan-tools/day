@@ -129,7 +129,29 @@ case "$1" in
     n=$((n + 1))
     printf '%s' "$n" > "$DATA/append-count"
     printf '%s\n<<<END-OF-APPEND>>>\n' "$*" >> "$DATA/appends.log"
-    printf 'bafyreistub%08d\n' "$n"
+    cid=$(printf 'bafyreistub%08d' "$n")
+
+    # An append is then readable: without this the stub is write-only, and
+    # any behavior that writes and then reads back (declaring an atom, then
+    # checking whether the vocabulary composes) is untestable against it.
+    shift
+    text="$1"
+    subj="general"
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "--subject" ]; then subj="$2"; fi
+      shift
+    done
+    esc=$(printf '%s' "$text" \
+      | sed 's/\\/\\\\/g; s/"/\\"/g' \
+      | awk 'BEGIN{{ORS=""}} NR>1{{printf "\\n"}} {{print}}')
+    f="$DATA/show-$(printf '%s' "$subj" | tr '/' '_').txt"
+    [ -f "$f" ] || printf '%s (live claims):\n' "$subj" > "$f"
+    printf '  %s  Observation  Observation {{ text: "%s" }}\n' "$cid" "$esc" >> "$f"
+    grep -q "\[Local(\"$subj\")\]" "$DATA/status.txt" 2>/dev/null \
+      || printf '[Local("%s")]: Observation — Observation {{ text: "%s" }}  (%s)\n' \
+           "$subj" "$esc" "$cid" >> "$DATA/status.txt"
+
+    printf '%s\n' "$cid"
     exit 0 ;;
   *) echo "kan stub: unsupported command $1" >&2; exit 1 ;;
 esac
