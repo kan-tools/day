@@ -85,7 +85,7 @@ Claude Code plugin:
 
 ## Status
 
-Early. v0.1.0-beta.1 is the scaffold: four verbs, two commands, one hook, and
+Early. v0.1.1-beta.1 is the scaffold: four verbs, two commands, one hook, and
 the conventions doc. Declaring a telos, planning a bridge between teloi, and
 recording an assessment are all still calling conventions you apply by hand
 with kan — not yet verbs day offers. The conventions are v0 and expected to
