@@ -47,10 +47,14 @@ here.
   it as a library. The boundary is the public CLI on purpose: it's the same
   contract any other consumer gets, so day can't quietly depend on kan
   internals.
-- day is a **reader**. It has no write path into the log. Claims get recorded
-  by *instructing* an agent to call kan's write verbs (that's what the
-  commands do), never by day calling them itself. This is what makes it
-  structurally impossible for day to destroy a subject.
+- day is a **reader**. It runs kan's read verbs only; it never appends,
+  retracts, or rejects a claim. Claims get recorded by *instructing* an agent
+  to call kan's write verbs (that's what the commands do), never by day
+  calling them itself. This is what makes it structurally impossible for day
+  to alter or destroy a subject. (Caveat worth stating precisely rather than
+  papering over: kan initializes a `.kan/` workspace on first use, so a day
+  read in a repo kan has never seen creates an empty log there. No claim is
+  touched, but it isn't literally zero side effects.)
 - Correctness before features. The atom composition check should be boring
   and obviously right.
 - Keep the CLI small. Four verbs today. A new verb needs a design doc.

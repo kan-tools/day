@@ -4,9 +4,16 @@
 //! the `kan` binary, parsed from its stdout — the same shape kan's own
 //! `GitAncestry` provider uses for git.
 //!
-//! Nothing in this module writes. day records claims by *instructing* an
-//! agent to call kan's write verbs (the skills do this); the binary itself
-//! stays a reader, so there is no path by which day can destroy a subject.
+//! Nothing in this module appends, retracts, or rejects a claim. day records
+//! claims by *instructing* an agent to call kan's write verbs (the commands
+//! do this); the binary itself only ever runs kan's read verbs, so there is
+//! no path by which day can alter or destroy a subject.
+//!
+//! One honest caveat: kan initializes its own workspace (`.kan/`) on first
+//! use, so running a kan read verb in a repo kan has never seen creates an
+//! empty log there. That is kan's behavior, not day's, and it touches no
+//! claims — but it does mean "day never causes a write to disk" would be
+//! too strong a claim to make.
 
 use std::path::PathBuf;
 use std::process::Command;
