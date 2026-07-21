@@ -168,6 +168,69 @@ embedded in the plan claim. Gating would mostly cause people to skip
 recording rather than fix the document, and an unrecorded design serves the
 record worse than a visibly rough one.
 
+## Bridges — `bridge/<slug>`
+
+A **bridge** is a planned arrangement of atoms aimed at a target telos: how
+you get from here to there. Intermediate states are not a new kind of thing —
+per `docs/TELOS.md` a bridging state is just a telos at a shorter horizon, so
+they stay ordinary `telos/<slug>` subjects and the *plan* is what a bridge
+adds.
+
+For "does this plan reach that telos" to be checkable at all, the telos has to
+say what would evidence it. A telos may declare **witnesses**: artifact
+*types* that would count as evidence, in a fenced `day-telos` block.
+
+```bash
+day telos declare v03-shipped "day v0.3 is published." --witness published-artifact
+```
+
+Witnesses do not collapse a telos to a type. They name the *kind* of evidence
+while leaving open which concrete instance provides it — many artifacts of a
+declared type satisfy the telos equally, which is the weak equivalence being
+preserved. A telos without witnesses is still valid; it simply cannot be
+machine-checked as a bridge target, which day says rather than guessing.
+
+```bash
+day bridge declare v0.3 --telos v03-shipped --have intent   --plan "design > generative-build > adversarial-review > pull-request > release"
+day bridge check v0.3
+```
+
+The plan grammar, in a fenced `day-bridge` block that day generates:
+
+| Form | Meaning |
+| ---- | ------- |
+| `a > b` | in sequence — `b` may use what `a` produced |
+| `a & b` | concurrently — both happen, but neither may rely on the other |
+| `a \| b` | alternatives — either route suffices |
+| `(...)` | grouping |
+
+`|` binds tightest, then `&`, then `>`.
+
+**Sequence and concurrency are not the same**, and the difference is the
+point: in `a > b` the ordering guarantees `b` can use `a`'s output, while in
+`a & b` there is no such guarantee, so `b` is checked against only what was
+available before either began.
+
+**An alternative offers downstream only what every branch produces.** A route
+that might not be taken cannot be relied on to have produced anything. That
+intersection is what makes `|` mean something rather than being `&` with
+different spelling, and it is how de-risking through separable parallel paths
+becomes structural rather than a comment.
+
+Availability accumulates along a path and is never consumed — the same rule
+the atom composition check uses, so a design doc is still there when a review
+runs even though the build between them did not re-emit it.
+
+**day does not track whether a plan's steps have happened.** It checks whether
+an arrangement *could* reach a telos and stops. Whether a step happened is
+already derivable from claims and artifacts existing, and answering "how far
+along are we" is the first question of a task tracker.
+
+Realizability as reported is **frame-internal only**. `docs/TELOS.md` defines
+it as two-fold — frame-internal continuity plus temporal coherence across
+frames — and the second is vacuous with one actor. day says so in its output
+rather than letting a single-frame result read as a settled global one.
+
 ## Assessments
 
 An assessment is the claim that some work did (or did not) land inside a

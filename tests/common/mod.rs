@@ -10,6 +10,7 @@
 use std::path::{Path, PathBuf};
 
 /// One canned claim on one subject.
+#[derive(Clone)]
 pub struct StubClaim {
     pub subject: String,
     pub cid: String,
@@ -34,6 +35,17 @@ pub fn subject_claim(subject: &str, cid: &str, title: &str) -> StubClaim {
         cid: cid.to_string(),
         kind: "Subject".to_string(),
         text: title.to_string(),
+    }
+}
+
+/// A `Retraction` claim, which carries neither text nor title — what a
+/// subject looks like once everything on it has been retracted.
+pub fn retraction_claim(subject: &str, cid: &str) -> StubClaim {
+    StubClaim {
+        subject: subject.to_string(),
+        cid: cid.to_string(),
+        kind: "Retraction".to_string(),
+        text: String::new(),
     }
 }
 
@@ -174,6 +186,11 @@ esac
 /// differs by body: narrative claims carry `text`, `Subject` claims carry
 /// `title` plus a `subject_kind`.
 fn debug_body(claim: &StubClaim) -> String {
+    if claim.kind == "Retraction" {
+        // kan renders a retraction as the CID it supersedes, with no text
+        // or title field at all.
+        return format!("Retraction {{ supersedes: Cid({}) }}", claim.cid);
+    }
     if claim.kind == "Subject" {
         format!("Subject {{ title: {:?}, subject_kind: Idea }}", claim.text)
     } else {
