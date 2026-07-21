@@ -20,3 +20,4 @@ pub mod kan_client;
 pub mod mcp;
 pub mod record;
 pub mod schema;
+pub mod vocabulary;

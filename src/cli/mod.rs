@@ -1,8 +1,14 @@
-//! day's CLI surface. Deliberately four verbs: the walking skeleton for the
-//! process layer, not its final vocabulary (`.design/` in this repo tracks
-//! what comes next). Verbs are grouped by what they're for — setting day up
-//! (`init`), inspecting process state (`doctor`), being called by a harness
+//! day's CLI surface, grouped by what each verb is for: setting day up
+//! (`init`), declaring the project's vocabulary (`telos`, `atom`),
+//! inspecting process state (`doctor`, `next`), working with design
+//! documents and reviews (`design`, `review`), being called by a harness
 //! (`hook`), and serving the same reads to agents over MCP (`mcp`).
+//!
+//! Two absences are deliberate. There is **no `revise` verb** — kan is
+//! append-only, so a revision is just a later claim and `declare` cites the
+//! prior one automatically. There are **no read verbs** — kan's own
+//! `show`/`status` plus `doctor` and `session_context` already cover
+//! reading, and duplicating kan's surface costs more than it returns.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -32,6 +38,8 @@ pub enum Error {
     Schema(#[from] crate::schema::Error),
     #[error(transparent)]
     Record(#[from] crate::record::Error),
+    #[error(transparent)]
+    Vocabulary(#[from] crate::vocabulary::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -47,8 +55,21 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Print the steps to wire day into this repo, and check kan is reachable
-    Init,
+    /// Record this project's baseline vocabulary and print the wiring steps
+    Init {
+        /// Print only; record nothing
+        #[arg(long)]
+        print: bool,
+        /// Re-record the baseline even if it already exists
+        #[arg(long)]
+        force: bool,
+    },
+    /// Declare or revise a telos
+    #[command(subcommand)]
+    Telos(TelosAction),
+    /// Declare or revise a process atom
+    #[command(subcommand)]
+    Atom(AtomAction),
     /// Check kan reachability and verify the live atom vocabulary composes
     Doctor,
     /// Validate and record design documents
@@ -64,11 +85,58 @@ pub enum Command {
     },
     /// Entry point harness hooks call; prints advisory context, never blocks
     Hook {
-        /// The harness event (currently: session-start)
+        /// The harness event: session-start or session-end
         event: String,
     },
     /// MCP server over stdio
     Mcp,
+}
+
+/// Teloi are declared and revised with the same verb: kan is append-only, so
+/// a revision is just a later claim citing the earlier one.
+#[derive(Debug, Subcommand)]
+pub enum TelosAction {
+    /// Declare a telos, or revise it by declaring again
+    Declare {
+        /// Slug, e.g. `legible-process` (becomes `telos/legible-process`)
+        slug: String,
+        /// The telos statement
+        statement: String,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        kind: Option<String>,
+    },
+    /// Record that two teloi are in tension, and why
+    Tension {
+        /// First telos slug
+        a: String,
+        /// Second telos slug
+        b: String,
+        /// Why they pull against each other
+        why: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AtomAction {
+    /// Declare a process atom, or revise it by declaring again
+    Declare {
+        /// Slug, e.g. `generative-build` (becomes `atom/generative-build`)
+        slug: String,
+        /// A type this atom requires (repeatable)
+        #[arg(long = "in")]
+        inputs: Vec<String>,
+        /// A type this atom produces (repeatable)
+        #[arg(long = "out")]
+        outputs: Vec<String>,
+        /// An atom slug this one composes into (repeatable)
+        #[arg(long = "next")]
+        next: Vec<String>,
+        /// Prose describing the atom, above the generated interface block
+        #[arg(long)]
+        note: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -118,9 +186,108 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
     let client = KanClient::new(cwd.clone());
 
     match cli.command {
-        Command::Init => {
+        // Records claims (the user's own append-only, attributable data) but
+        // never writes config (opaque, unattributable, awkward to undo).
+        // That split is what keeps `init` from being a silently-mutating
+        // setup command.
+        Command::Init { print, force } => {
             client.probe()?;
+            if !print {
+                let slug = crate::schema::DEFAULT_SLUG;
+                if force || !crate::schema::Schema::is_declared(&client, slug)? {
+                    let cid = crate::schema::Schema::starter().record(&client, slug)?;
+                    println!("recorded baseline design-doc schema on `schema/{slug}` ({cid})\n");
+                } else {
+                    println!(
+                        "baseline design-doc schema already declared on `schema/{slug}` \
+                         — nothing recorded (use --force to re-record)\n"
+                    );
+                }
+            }
             print!("{}", init_instructions());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Telos(TelosAction::Declare {
+            slug,
+            statement,
+            title,
+            kind,
+        }) => {
+            let outcome = crate::vocabulary::declare(
+                &client,
+                crate::vocabulary::Declaration {
+                    subject: &format!("{}{slug}", crate::atoms::TELOS_PREFIX),
+                    verb: "decide",
+                    text: &statement,
+                    title: title.as_deref(),
+                    kind: kind.as_deref(),
+                    also_cite: &[],
+                    act: crate::vocabulary::Act::Declare,
+                },
+            )?;
+            print!("{}", outcome.render());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Telos(TelosAction::Tension { a, b, why }) => {
+            let prefix = crate::atoms::TELOS_PREFIX;
+            let subject_a = format!("{prefix}{a}");
+            let subject_b = format!("{prefix}{b}");
+            let text = format!("Tension: {subject_a} vs {subject_b}. {why}");
+            let outcome = crate::vocabulary::declare(
+                &client,
+                crate::vocabulary::Declaration {
+                    subject: &subject_a,
+                    verb: "decide",
+                    text: &text,
+                    title: None,
+                    kind: None,
+                    also_cite: &[subject_b],
+                    act: crate::vocabulary::Act::Relate { what: "tension" },
+                },
+            )?;
+            print!("{}", outcome.render());
+            Ok(ExitCode::SUCCESS)
+        }
+        // Reports composition findings but records regardless: declaring a
+        // multi-atom chain necessarily passes through states where it does
+        // not yet compose, whatever order you declare it in.
+        Command::Atom(AtomAction::Declare {
+            slug,
+            inputs,
+            outputs,
+            next,
+            note,
+        }) => {
+            let interface = crate::atoms::Interface {
+                inputs,
+                outputs,
+                next,
+            };
+            let outcome = crate::vocabulary::declare(
+                &client,
+                crate::vocabulary::Declaration {
+                    subject: &format!("{}{slug}", crate::atoms::ATOM_PREFIX),
+                    verb: "observe",
+                    text: &interface.to_claim_text(&slug, note.as_deref()),
+                    title: None,
+                    kind: None,
+                    also_cite: &[],
+                    act: crate::vocabulary::Act::Declare,
+                },
+            )?;
+            print!("{}", outcome.render());
+
+            let report = doctor::run(&client)?;
+            if !report.is_healthy() {
+                println!("\nThe vocabulary does not compose yet:");
+                for finding in &report.findings {
+                    println!("  ! {}", finding.message);
+                }
+                println!(
+                    "\nRecorded anyway — a chain of atoms passes through this state while \
+                     you declare it."
+                );
+            }
             Ok(ExitCode::SUCCESS)
         }
         Command::Doctor => {

@@ -44,8 +44,15 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
     let parsed: Value = serde_json::from_str(&raw).expect("hooks.json should be valid JSON");
 
     // Parse first so a malformed file fails loudly rather than passing the
-    // substring check by accident.
-    assert!(parsed["hooks"]["SessionStart"].is_array());
+    // substring check by accident. Every registered event is covered, so a
+    // future hook cannot be added outside this guardrail.
+    let events = parsed["hooks"]
+        .as_object()
+        .expect("hooks should be an object");
+    assert!(!events.is_empty());
+    for (event, entries) in events {
+        assert!(entries.is_array(), "{event} should hold an array");
+    }
 
     let hook_commands = raw.to_lowercase();
     for forbidden in [
@@ -65,12 +72,17 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
 }
 
 #[test]
-fn ac5_the_session_start_hook_invokes_day_and_nothing_else() {
+fn ac5_the_session_hooks_invoke_day_and_nothing_else() {
     let hooks = read_json("hooks/hooks.json");
-    let command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-        .as_str()
-        .expect("a SessionStart command should be declared");
-    assert_eq!(command, "day hook session-start");
+    for (event, expected) in [
+        ("SessionStart", "day hook session-start"),
+        ("SessionEnd", "day hook session-end"),
+    ] {
+        let command = hooks["hooks"][event][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a {event} command should be declared"));
+        assert_eq!(command, expected);
+    }
 }
 
 #[test]
@@ -141,6 +153,22 @@ fn ac9_neither_command_hardcodes_an_invocation_of_the_other() {
             "{file} should end by asking the atom graph what comes next"
         );
     }
+}
+
+/// `.design/vocabulary-verbs.md` AC-11. The conventions are the contract,
+/// not day's verbs: a hand-written claim following this page must stay as
+/// valid as one day wrote, or day has quietly become required.
+#[test]
+fn ac11_conventions_state_that_hand_written_claims_remain_valid() {
+    let text = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md")).unwrap();
+    assert!(
+        text.contains("hand-written claim"),
+        "CONVENTIONS.md should say hand-written claims remain valid"
+    );
+    assert!(
+        text.contains("no `revise` verb") || text.contains("no revise verb"),
+        "CONVENTIONS.md should explain that revision is just a later claim"
+    );
 }
 
 #[test]

@@ -118,6 +118,13 @@ impl KanClient {
         Ok(out.lines().filter_map(parse_subject_line).collect())
     }
 
+    /// Subjects that are not yet resolved, via `kan issues` — which prints
+    /// the same `[Local("subject")]` line shape `status` does.
+    pub fn issues(&self) -> Result<Vec<String>, Error> {
+        let out = self.run(&["issues"])?;
+        Ok(out.lines().filter_map(parse_subject_line).collect())
+    }
+
     /// A subject's live claims, via `kan show <subject>`.
     pub fn show(&self, subject: &str) -> Result<Vec<Claim>, Error> {
         let out = self.run(&["show", subject])?;

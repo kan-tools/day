@@ -64,6 +64,20 @@ impl Atom {
     }
 }
 
+impl Interface {
+    /// Renders the claim text `day atom declare` appends — the exact shape
+    /// [`extract_interface`] reads back. Write and read share the
+    /// `Interface` type and this one function, so a hand-written block and a
+    /// day-written block cannot mean different things.
+    pub fn to_claim_text(&self, slug: &str, note: Option<&str>) -> String {
+        let json = serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string());
+        let note = note
+            .map(|n| format!("{n}\n\n"))
+            .unwrap_or_else(|| format!("The {slug} atom.\n\n"));
+        format!("{note}```{FENCE_INFO}\n{json}\n```\n")
+    }
+}
+
 /// Something wrong with the live atom set. Advisory: day reports these and
 /// exits non-zero, it never rewrites the log to "fix" them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -294,6 +308,20 @@ mod tests {
                 next: next.iter().map(|s| s.to_string()).collect(),
             },
         }
+    }
+
+    #[test]
+    fn a_written_interface_reads_back_identical() {
+        let interface = Interface {
+            inputs: vec!["design-doc".into()],
+            outputs: vec!["code-change".into()],
+            next: vec!["adversarial-review".into()],
+        };
+        let text = interface.to_claim_text("generative-build", None);
+        let parsed = extract_interface(&text)
+            .expect("the written text should contain a block")
+            .expect("the written block should be valid");
+        assert_eq!(parsed, interface);
     }
 
     #[test]

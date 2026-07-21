@@ -25,9 +25,23 @@ apply to one project at once, and they are usually in some tension with each
 other. That tension is information; do not collapse it.
 
 ```bash
-kan decide "The CLI vocabulary stays legible to an agent that has never seen it before." \
-  --subject telos/interface-legibility --title "Interface legibility" --kind Goal
+day telos declare interface-legibility \
+  "The CLI vocabulary stays legible to an agent that has never seen it before." \
+  --title "Interface legibility" --kind idea
+
+# ...and when two teloi pull against each other, which is normal:
+day telos tension interface-legibility feature-depth \
+  "Every verb added for depth is one more thing to learn before the tool reads clearly."
 ```
+
+**The conventions are the contract, not the verbs.** `day telos declare` is a
+convenience over `kan decide --subject telos/<slug>`; a hand-written claim
+following the conventions on this page is exactly as valid, and day reads it
+identically. Nothing here requires day to be installed.
+
+There is no `revise` verb, for teloi or anything else. kan is append-only, so
+a revision *is* a later claim — `declare` again and day cites the previous
+claim automatically.
 
 - Use `decide` to declare or revise a telos (it is a choice), `observe` to
   record something noticed about how a telos is holding up, and `result` to
@@ -72,15 +86,16 @@ deliberately does not check what they mean. The type vocabulary is the
 project's to choose and evolve.
 
 ```bash
-kan observe "$(cat <<'EOF'
-The generative build atom: an agent session turns an accepted design into code.
+day atom declare generative-build \
+  --in design-doc --out code-change --next adversarial-review \
+  --note "An agent session turns an accepted design into code."
+```
 
-```day-atom
-{"in": ["design-doc"], "out": ["code-change"], "next": ["adversarial-review"]}
-```
-EOF
-)" --subject atom/generative-build
-```
+day generates the block; you never hand-write the JSON. As with teloi, a
+hand-written claim carrying the same block is equally valid — and
+`day atom declare` reports composition findings but records regardless,
+because declaring a multi-atom chain necessarily passes through states where
+it does not yet compose, whatever order you declare it in.
 
 Not every atom needs a shipped command. `generative-build` — an agent
 session turning an accepted design into code — is a real atom in day's own
