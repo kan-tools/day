@@ -10,7 +10,7 @@ mod common;
 
 use std::process::Stdio;
 
-use common::{atom_claim, write_kan_stub};
+use common::{atom_claim, schema_claim, write_kan_stub};
 use serde_json::{json, Value};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -23,6 +23,9 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
     let kan = write_kan_stub(
         dir.path(),
         &[
+            // design_check needs a declared schema; day deliberately
+            // refuses to validate against one nobody chose.
+            schema_claim("design-doc", "bafyreischema"),
             atom_claim(
                 "design",
                 "bafyreidesign",
@@ -163,4 +166,44 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         "the MCP tool and the CLI verb must return the same report"
     );
     assert!(text.contains("composition: ok"), "got: {text}");
+
+    // The other half of AC-10, which the adversarial review found was
+    // claimed but never asserted: design_check must agree with its CLI verb
+    // too, not merely appear in tools/list.
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    std::fs::write(dir.path().join("src/thing.rs"), "// fixture\n").unwrap();
+    let doc = "# Feature: t\n\n## Summary\nS.\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+        ## Acceptance Criteria\n- [ ] AC-1: x (REQ-1)\n- [ ] AC-2: y (REQ-2)\n\n\
+        ## Architecture\nTouches `src/thing.rs`.\n";
+    std::fs::write(dir.path().join("doc.md"), doc).unwrap();
+
+    let cli = std::process::Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(["design", "check", "doc.md"])
+        .current_dir(dir.path())
+        .env("DAY_KAN_BIN", &kan)
+        .output()
+        .expect("failed to run day design check");
+    let cli_check = String::from_utf8_lossy(&cli.stdout).into_owned();
+
+    stdin
+        .write_all(
+            send(json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {"name": "design_check", "arguments": {"path": "doc.md"}}
+            }))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let call = recv!();
+    let text = call["result"]["content"][0]["text"]
+        .as_str()
+        .expect("design_check should return text content");
+    assert_eq!(
+        text.trim(),
+        cli_check.trim(),
+        "the MCP design_check tool and the CLI verb must return the same report"
+    );
 }

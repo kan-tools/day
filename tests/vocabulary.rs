@@ -108,6 +108,26 @@ fn ac2_title_and_kind_are_passed_through() {
     assert!(log[0].contains("--kind idea"), "{}", log[0]);
 }
 
+/// Found by the adversarial review: `--title` without `--kind` used to be
+/// accepted, and the title was then silently discarded, because both the
+/// vocabulary writer and the kan client only pass the pair. Silently
+/// dropping what a user explicitly asked for is the worst of the available
+/// behaviors, so it is now a parse-time error.
+#[test]
+fn a_title_without_a_kind_is_refused_rather_than_silently_dropped() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    for args in [
+        vec!["telos", "declare", "x", "A statement.", "--title", "X"],
+        vec!["telos", "declare", "x", "A statement.", "--kind", "idea"],
+    ] {
+        let out = day(dir.path(), &kan, &args);
+        assert!(!out.status.success(), "{args:?} should be refused");
+        assert!(appends(dir.path()).is_empty(), "nothing should be appended");
+    }
+}
+
 #[test]
 fn ac3_tension_cites_both_teloi_and_refuses_when_one_is_missing() {
     let dir = tempfile::tempdir().unwrap();
@@ -189,28 +209,33 @@ fn ac4_a_declared_atom_round_trips_through_the_interface_parser() {
 #[test]
 fn ac5_a_non_composing_atom_is_reported_and_still_recorded() {
     let dir = tempfile::tempdir().unwrap();
-    // A vocabulary that already fails to compose: `design` feeds `review`,
-    // but `review` needs an input nothing upstream produces. (The stub is a
-    // fixed log, so the check runs over this rather than over the atom being
-    // declared — which is the same code path either way.)
+    // `review` needs an input nothing produces. The atom declared below is
+    // the one that introduces the failure, and the stub reflects appends, so
+    // the check genuinely runs over the newly-declared interface rather than
+    // over a pre-arranged one.
     let kan = write_kan_stub(
         dir.path(),
-        &[
-            common::atom_claim("design", "bafyreidesign", &[], &["design-doc"], &["review"]),
-            common::atom_claim(
-                "review",
-                "bafyreireview",
-                &["verified-spec"],
-                &["verdict"],
-                &[],
-            ),
-        ],
+        &[common::atom_claim(
+            "review",
+            "bafyreireview",
+            &["verified-spec"],
+            &["verdict"],
+            &[],
+        )],
     );
 
     let out = day(
         dir.path(),
         &kan,
-        &["atom", "declare", "build", "--out", "code-change"],
+        &[
+            "atom",
+            "declare",
+            "build",
+            "--out",
+            "code-change",
+            "--next",
+            "review",
+        ],
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(

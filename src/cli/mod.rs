@@ -102,9 +102,11 @@ pub enum TelosAction {
         slug: String,
         /// The telos statement
         statement: String,
-        #[arg(long)]
+        /// Declare the subject's title (requires --kind)
+        #[arg(long, requires = "kind")]
         title: Option<String>,
-        #[arg(long)]
+        /// Declare the subject's kind: issue, idea, or question (requires --title)
+        #[arg(long, requires = "title")]
         kind: Option<String>,
     },
     /// Record that two teloi are in tension, and why

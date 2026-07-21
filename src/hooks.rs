@@ -41,8 +41,29 @@ pub fn session_start(client: &KanClient) -> String {
     out.push_str(&render_teloi(client, &subjects));
     out.push('\n');
     out.push_str(&render_atoms(client));
+    out.push_str(&render_open(client));
     out.push_str(PRACTICE);
     out
+}
+
+/// What is still unresolved. This lives at session *start* rather than
+/// session end because only `UserPromptSubmit`, `UserPromptExpansion`, and
+/// `SessionStart` add hook stdout to the model's context — every
+/// end-of-session event writes to the debug log instead (verified against
+/// Claude Code's hook documentation, not assumed). See [`session_end`].
+fn render_open(client: &KanClient) -> String {
+    match client.issues() {
+        Ok(open) if open.is_empty() => String::new(),
+        Ok(open) => format!(
+            "\nStill open ({}): {}\n",
+            open.len(),
+            open.iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Err(_) => String::new(),
+    }
 }
 
 fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
@@ -145,15 +166,26 @@ pub fn dispatch(event: &str, client: &KanClient) -> Result<String, UnknownEvent>
 #[error("unknown hook event `{0}` (known events: session-start, session-end)")]
 pub struct UnknownEvent(pub String);
 
-/// The end-of-session prompt: what is still open, and a nudge to record
-/// outcomes before the context holding them is gone.
+/// An end-of-session report, for a human to run by hand.
 ///
-/// It reports what is **open**, not what changed during this session. day
-/// has no store and therefore no session state, and acquiring one to answer
-/// "what did you touch" would trade `telos/no-store-of-its-own` for a
-/// reminder. Open-subject state is derivable from the log alone, which makes
-/// this the honest stateless approximation rather than a worse version of a
-/// stateful feature.
+/// **It is deliberately not registered as a `SessionEnd` hook.** The original
+/// design wanted this to prompt the agent before its context was lost, and
+/// that is not achievable: only `UserPromptSubmit`, `UserPromptExpansion`,
+/// and `SessionStart` add hook stdout to the model's context, and every
+/// end-of-session event writes to the debug log instead. The one mechanism
+/// that *would* deliver text at that moment is `Stop`'s blocking decision —
+/// which is exactly what `telos/affordance-not-enforcement` forbids, so the
+/// only route to the goal is one day will not take. That tension, recorded
+/// abstractly on the telos subjects, turned out to have a concrete instance.
+///
+/// The useful half — what is still open — moved to [`session_start`], where
+/// injection works and the agent can still act on it. This stays as a
+/// command because running it by hand is genuinely useful; it just is not
+/// wired to an event that would silently do nothing.
+///
+/// It reports what is **open**, not what changed during this session: day
+/// has no store and therefore no session state, and acquiring one would
+/// trade `telos/no-store-of-its-own` for a reminder.
 ///
 /// Infallible and non-blocking, like every hook here.
 pub fn session_end(client: &KanClient) -> String {

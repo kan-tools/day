@@ -72,16 +72,30 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
 }
 
 #[test]
-fn ac5_the_session_hooks_invoke_day_and_nothing_else() {
+fn ac5_the_session_start_hook_invokes_day_and_nothing_else() {
     let hooks = read_json("hooks/hooks.json");
-    for (event, expected) in [
-        ("SessionStart", "day hook session-start"),
-        ("SessionEnd", "day hook session-end"),
-    ] {
-        let command = hooks["hooks"][event][0]["hooks"][0]["command"]
-            .as_str()
-            .unwrap_or_else(|| panic!("a {event} command should be declared"));
-        assert_eq!(command, expected);
+    let command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+        .as_str()
+        .expect("a SessionStart command should be declared");
+    assert_eq!(command, "day hook session-start");
+}
+
+/// Guards the adversarial review's blocking finding. Only
+/// `UserPromptSubmit`, `UserPromptExpansion`, and `SessionStart` add hook
+/// stdout to the model's context; every other event writes to the debug log.
+/// Registering a hook whose whole purpose is to say something to the agent
+/// on any other event ships a feature that silently reaches nobody.
+#[test]
+fn hooks_are_only_registered_on_events_that_deliver_stdout_to_the_model() {
+    let hooks = read_json("hooks/hooks.json");
+    let registered = hooks["hooks"].as_object().expect("hooks object");
+    for event in registered.keys() {
+        assert!(
+            ["UserPromptSubmit", "UserPromptExpansion", "SessionStart"].contains(&event.as_str()),
+            "{event} does not add hook stdout to the model's context, so a prompt \
+             registered there would reach nobody. If this hook is for a side effect \
+             rather than for saying something, widen this test deliberately."
+        );
     }
 }
 

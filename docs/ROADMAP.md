@@ -25,15 +25,29 @@ most model.**
 Two passes: `.design/design-atom-backing.md` (`day design check|record`, `day
 review record`, `day next`, the `schema/<slug>` convention, and day's first
 write path) and `.design/vocabulary-verbs.md` (`day telos declare|tension`,
-`day atom declare`, baseline setup in `day init`, and the session-end hook).
+`day atom declare`, and baseline setup in `day init`).
 
-Three narrowings against what this section originally anticipated, each
-recorded as a claim rather than quietly dropped: **no `revise` verb** (kan is
-append-only, so a revision is just a later claim), **no read verbs** (kan's
-`show`/`status` plus `doctor` and `session_context` cover reading), and the
-session-end hook reports **what is open** rather than what changed this
-session — day has no store and so no session state, and acquiring one would
-trade `telos/no-store-of-its-own` for a reminder.
+Narrowings against what this section originally anticipated, each recorded as
+a claim rather than quietly dropped:
+
+- **No `revise` verb.** kan is append-only, so a revision is just a later
+  claim; `declare` cites the prior one.
+- **No read verbs.** kan's `show`/`status` plus `doctor` and
+  `session_context` already cover reading.
+- **No end-of-session hook.** This section originally promised one. It is not
+  achievable: only `UserPromptSubmit`, `UserPromptExpansion`, and
+  `SessionStart` add hook stdout to the model's context, and every
+  end-of-session event writes to the debug log instead. The one mechanism
+  that would deliver text at that moment is `Stop`'s blocking decision —
+  which `telos/affordance-not-enforcement` forbids, making this a concrete
+  instance of a tension previously recorded only in the abstract. The useful
+  content (what is still open) moved into the **session-start** hook, where
+  injection works and the agent can still act on it; `day hook session-end`
+  remains as a command to run by hand.
+
+Found by running `/adversarial-review` on the v0.2 diff — day's own atom, on
+its own work. The verdict was **BLOCK**, and this is one of the two findings
+that earned it.
 
 The friction blocking daily use is that recording a telos or an atom means
 hand-writing a fenced JSON block inside a claim. That friction suppresses

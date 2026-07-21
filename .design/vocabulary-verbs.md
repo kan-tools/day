@@ -7,7 +7,7 @@ JSON block inside a `kan observe` heredoc. That friction suppresses
 recording, and suppressed recording undermines `telos/legible-process`
 directly. This adds `day telos declare`, `day telos tension`, and `day atom
 declare` over one shared vocabulary-writer, folds baseline setup into `day
-init`, and adds the SessionEnd hook — completing v0.2.
+init`, and reports what is still open at session start — completing v0.2.
 
 ## Requirements
 
@@ -44,11 +44,19 @@ init`, and adds the SessionEnd hook — completing v0.2.
   suppresses all writing for anyone who wants the old behavior.
 - REQ-6: `day init` is idempotent. With a schema already declared it reports
   that and records nothing; `--force` re-records deliberately.
-- REQ-7: A `session-end` hook event reporting the subjects that are still
-  open (via `kan issues`) and the declared teloi, and asking that outcomes,
-  findings, and decisions be recorded before the context is lost. Advisory
-  and exit-0 like every other hook, and registered in `hooks/hooks.json`
-  alongside SessionStart.
+- REQ-7: **Amended after implementation, by the adversarial review that
+  BLOCKed this work.** As written, this required a `session-end` hook event
+  prompting for what should be recorded before the context is lost. That is
+  not achievable: only `UserPromptSubmit`, `UserPromptExpansion`, and
+  `SessionStart` add hook stdout to the model's context (verified against
+  Claude Code's hook documentation), and every end-of-session event writes to
+  the debug log instead. The only mechanism that would deliver text at that
+  moment is `Stop`'s blocking decision, which
+  `telos/affordance-not-enforcement` forbids — so the sole route to the goal
+  is one day will not take. **As implemented:** the open-subject report moved
+  into the session-start hook, where injection works and the agent can still
+  act on it, and `day hook session-end` remains a command to run by hand,
+  deliberately not registered on an event where it would reach nobody.
 - REQ-8: The hook reports what is **open**, not what changed "this session" —
   day has no store and therefore no session state, and acquiring one to
   answer that question would trade `telos/no-store-of-its-own` for a
@@ -88,11 +96,13 @@ init`, and adds the SessionEnd hook — completing v0.2.
 - [ ] AC-7: `day init` never creates or modifies any file under `.claude/`,
       and `day init --print` appends nothing at all. (REQ-5)
 - [ ] AC-8: `day hook session-end` lists open subjects and declared teloi,
-      exits 0, and exits 0 with an explanatory note when kan is unreachable.
-      (REQ-7, REQ-8)
-- [ ] AC-9: `hooks/hooks.json` registers SessionEnd, and the existing test
-      asserting no blocking construct appears in the hook config still
-      passes over the added entry. (REQ-7)
+      exits 0, and exits 0 with an explanatory note when kan is unreachable;
+      the session-*start* hook also reports what is still open. (REQ-7,
+      REQ-8)
+- [ ] AC-9: `hooks/hooks.json` registers hooks **only** on events that add
+      stdout to the model's context, enforced by a test over every
+      registered event — so a hook that would silently reach nobody cannot
+      be added unnoticed. (REQ-7)
 - [ ] AC-10: All three declaration verbs route through the same
       `src/vocabulary.rs` entry point — asserted by a test that a telos and
       an atom declaration produce claims whose citation behavior is
@@ -149,7 +159,7 @@ no store, and cannot alter or destroy a subject.
   schema is the one thing standing between a fresh repo and a working `day
   design check`. The write/print split — claims yes, config no — is what
   keeps this from being a silently-mutating setup command.
-- **SessionEnd reports open subjects, not session deltas**: day has no store
+- **The end-of-session report reports open subjects, not session deltas**: day has no store
   and therefore no session state, and acquiring one would trade
   `telos/no-store-of-its-own` for a reminder. What is open is derivable from
   the log alone.
