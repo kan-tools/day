@@ -28,6 +28,10 @@ pub enum Error {
     UnknownEvent(#[from] hooks::UnknownEvent),
     #[error(transparent)]
     Mcp(#[from] mcp::Error),
+    #[error(transparent)]
+    Schema(#[from] crate::schema::Error),
+    #[error(transparent)]
+    Record(#[from] crate::record::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -47,6 +51,17 @@ pub enum Command {
     Init,
     /// Check kan reachability and verify the live atom vocabulary composes
     Doctor,
+    /// Validate and record design documents
+    #[command(subcommand)]
+    Design(DesignAction),
+    /// Record an adversarial-review verdict
+    #[command(subcommand)]
+    Review(ReviewAction),
+    /// Report what the atom graph says follows an atom
+    Next {
+        /// The atom slug, e.g. `design`
+        atom: String,
+    },
     /// Entry point harness hooks call; prints advisory context, never blocks
     Hook {
         /// The harness event (currently: session-start)
@@ -54,6 +69,48 @@ pub enum Command {
     },
     /// MCP server over stdio
     Mcp,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DesignAction {
+    /// Validate a design document against the project's live schema
+    Check {
+        /// Path to the design document
+        path: PathBuf,
+        /// Schema slug to validate against
+        #[arg(long, default_value = crate::schema::DEFAULT_SLUG)]
+        schema: String,
+    },
+    /// Record a design pass into kan: observe, plan, and one decide per
+    /// resolved question. Records even if validation fails.
+    Record {
+        /// Path to the design document
+        path: PathBuf,
+        /// Subject to record on (default: the document's filename stem)
+        #[arg(long)]
+        subject: Option<String>,
+        /// Schema slug to validate against
+        #[arg(long, default_value = crate::schema::DEFAULT_SLUG)]
+        schema: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReviewAction {
+    /// Append a verdict claim citing the design claim it audits
+    Record {
+        /// Subject being reviewed
+        subject: String,
+        /// One of APPROVE, APPROVE-WITH-FOLLOW-UPS, REDIRECT, BLOCK
+        #[arg(long)]
+        verdict: String,
+        /// One-line rationale
+        #[arg(long)]
+        rationale: String,
+        /// CID of the design claim being audited (required)
+        #[arg(long, required = true)]
+        cites: Vec<String>,
+    },
 }
 
 pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
@@ -82,6 +139,44 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 Ok(text) => print!("{text}"),
                 Err(e) => println!("## day\n\n{e}"),
             }
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Design(DesignAction::Check { path, schema }) => {
+            let schema = crate::schema::Schema::load(&client, &schema)?;
+            let doc = crate::record::read_document(&path)?;
+            let report = crate::design::check(&doc, &schema, &cwd);
+            print!("{}", report.render());
+            Ok(if report.is_clean() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(EXIT_FINDINGS)
+            })
+        }
+        // Records regardless of the validation result, so exit status
+        // reflects "did the append succeed", not "was the doc perfect".
+        Command::Design(DesignAction::Record {
+            path,
+            subject,
+            schema,
+        }) => {
+            let schema = crate::schema::Schema::load(&client, &schema)?;
+            let recorded =
+                crate::record::design(&client, &path, &cwd, subject.as_deref(), &schema)?;
+            print!("{}", recorded.render());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Review(ReviewAction::Record {
+            subject,
+            verdict,
+            rationale,
+            cites,
+        }) => {
+            let cid = crate::record::review(&client, &subject, &verdict, &rationale, &cites)?;
+            println!("recorded verdict on `{subject}` ({cid})");
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Next { atom } => {
+            print!("{}", crate::record::next(&client, &atom)?);
             Ok(ExitCode::SUCCESS)
         }
         Command::Mcp => {

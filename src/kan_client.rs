@@ -123,6 +123,67 @@ impl KanClient {
         let out = self.run(&["show", subject])?;
         Ok(out.lines().filter_map(parse_claim_line).collect())
     }
+
+    /// Appends a narrative claim through kan's own write verb and returns
+    /// the CID kan prints.
+    ///
+    /// This is the v0.2 invariant, stated precisely (`docs/ROADMAP.md`): day
+    /// writes, but only ever by invoking kan's public verbs. kan signs,
+    /// content-addresses, and owns the log format; day never touches storage
+    /// and still has no destroy path, because kan exposes none to reach.
+    ///
+    /// Chaining is the point. day assembles `--cites` from CIDs it captured
+    /// itself, which makes the "pass a file path to `--cites`" class of error
+    /// unreachable rather than merely documented against — that bug existed
+    /// in the prose instructions this replaces.
+    pub fn append(&self, write: Write<'_>) -> Result<String, Error> {
+        let mut args: Vec<&str> = vec![write.verb, write.text];
+        args.push("--subject");
+        args.push(write.subject);
+        for cid in write.cites {
+            args.push("--cites");
+            args.push(cid);
+        }
+        if let (Some(title), Some(kind)) = (write.title, write.kind) {
+            args.extend_from_slice(&["--title", title, "--kind", kind]);
+        }
+        Ok(self.run(&args)?.trim().to_string())
+    }
+}
+
+/// One append, as arguments rather than a long parameter list — the write
+/// verbs differ only in which kan verb they invoke.
+pub struct Write<'a> {
+    pub verb: &'a str,
+    pub text: &'a str,
+    pub subject: &'a str,
+    pub cites: &'a [String],
+    pub title: Option<&'a str>,
+    pub kind: Option<&'a str>,
+}
+
+impl<'a> Write<'a> {
+    pub fn new(verb: &'a str, subject: &'a str, text: &'a str) -> Self {
+        Self {
+            verb,
+            text,
+            subject,
+            cites: &[],
+            title: None,
+            kind: None,
+        }
+    }
+
+    pub fn cites(mut self, cites: &'a [String]) -> Self {
+        self.cites = cites;
+        self
+    }
+
+    pub fn declaring(mut self, title: &'a str, kind: &'a str) -> Self {
+        self.title = Some(title);
+        self.kind = Some(kind);
+        self
+    }
 }
 
 /// `kan status` prints `[Local("subject")]: Kind — body  (cid)`. Only the

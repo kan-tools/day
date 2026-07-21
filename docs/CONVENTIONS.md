@@ -108,6 +108,51 @@ doc is still there when the review runs even though the build step didn't
 re-emit it. An atom with no upstream atoms is a source: its inputs come from
 outside the vocabulary and aren't checked.
 
+## Design-doc schemas — `schema/<slug>`
+
+A design document's shape is process vocabulary too, so it lives in kan the
+same way atoms do: a `schema/<slug>` subject (day looks for
+`schema/design-doc` by default) carrying a fenced `day-schema` JSON block,
+newest claim wins.
+
+```day-schema
+{
+  "sections": ["Summary", "Requirements", "Acceptance Criteria", "Architecture"],
+  "requirement_prefix": "REQ-",
+  "criterion_prefix": "AC-",
+  "min_requirements": 2,
+  "min_criteria": 2,
+  "placeholders": ["TODO", "TBD"],
+  "paths_section": "Architecture",
+  "resolved_section": "Resolved Questions"
+}
+```
+
+day ships **no** hard-coded document shape. If no schema is declared,
+`day design check` says so and prints a runnable command recording the
+starter schema above — it will not quietly validate against an opinion you
+never chose. A project that wants different sections changes its claim, not
+day.
+
+`day design check <path>` reports one line per rule: required sections
+present and non-empty, requirement and criterion counts against the declared
+minimums, every declared requirement referenced by at least one acceptance
+criterion, no placeholder tokens outside fenced code blocks, every
+backtick-quoted path in `paths_section` existing on disk, and a count of
+unresolved `<!-- OPEN` blocks. Open questions warn; they do not fail — an
+explicitly-marked unknown is a feature of a design doc, not a defect.
+
+`day design record <path>` appends the chain: an `observe` carrying the
+validation result, a `plan` for the design citing it, and one `decide` per
+bullet under `resolved_section` citing the plan. day assembles `--cites`
+from CIDs it captured itself, which is what makes the "pass a file path to
+`--cites`" error unreachable rather than merely warned against.
+
+**A document that fails validation is still recorded**, with the result
+embedded in the plan claim. Gating would mostly cause people to skip
+recording rather than fix the document, and an unrecorded design serves the
+record worse than a visibly rough one.
+
 ## Assessments
 
 An assessment is the claim that some work did (or did not) land inside a

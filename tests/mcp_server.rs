@@ -124,10 +124,19 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    for expected in ["doctor", "session_context"] {
+    for expected in ["doctor", "session_context", "design_check", "next"] {
         assert!(
             names.contains(&expected),
             "missing tool {expected:?} in {names:?}"
+        );
+    }
+    // The interview itself is deliberately not a tool: a multi-turn
+    // interview is not a function call (`.design/design-atom-backing.md`
+    // REQ-8). MCP exposes the checks, not the workflow.
+    for absent in ["design_record", "review_record"] {
+        assert!(
+            !names.contains(&absent),
+            "{absent:?} should not be an MCP tool, found in {names:?}"
         );
     }
 

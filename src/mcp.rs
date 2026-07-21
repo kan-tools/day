@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 
 use rmcp::{
-    handler::server::router::tool::ToolRouter,
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router, ErrorData, ServerHandler, ServiceExt,
 };
@@ -73,6 +73,42 @@ impl DayServer {
     async fn session_context(&self) -> Result<String, ErrorData> {
         Ok(hooks::session_start(&self.client()))
     }
+
+    #[tool(
+        description = "Validate a design document against this project's live design-doc schema (declared in kan): required sections, requirement and acceptance-criterion counts, every requirement covered by a criterion, placeholder text, referenced file paths existing, and unresolved open questions. Reports findings; changes nothing."
+    )]
+    async fn design_check(
+        &self,
+        params: Parameters<DesignCheckParams>,
+    ) -> Result<String, ErrorData> {
+        let client = self.client();
+        let schema = crate::schema::Schema::load(&client, crate::schema::DEFAULT_SLUG)
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+        let path = self.cwd.join(&params.0.path);
+        let doc = crate::record::read_document(&path)
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+        Ok(crate::design::check(&doc, &schema, &self.cwd).render())
+    }
+
+    #[tool(
+        description = "Report what the project's atom graph says follows a given atom, and what each successor needs. Use this instead of assuming a fixed pipeline: composition is declared in kan and differs per project."
+    )]
+    async fn next(&self, params: Parameters<NextParams>) -> Result<String, ErrorData> {
+        crate::record::next(&self.client(), &params.0.atom)
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))
+    }
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct DesignCheckParams {
+    /// Path to the design document, relative to the repo root.
+    pub path: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct NextParams {
+    /// The atom slug, e.g. `design`.
+    pub atom: String,
 }
 
 #[tool_handler(router = self.tool_router)]

@@ -110,6 +110,15 @@ case "$1" in
     f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').txt"
     if [ -f "$f" ]; then cat "$f"; else echo "$2: no claims"; fi
     exit 0 ;;
+  observe|plan|decide|result|resolve)
+    # Log the whole invocation so tests can assert on the chain day built,
+    # then print a CID the way kan does, since day chains on that output.
+    n=$(cat "$DATA/append-count" 2>/dev/null || echo 0)
+    n=$((n + 1))
+    printf '%s' "$n" > "$DATA/append-count"
+    printf '%s\n' "$*" >> "$DATA/appends.log"
+    printf 'bafyreistub%08d\n' "$n"
+    exit 0 ;;
   *) echo "kan stub: unsupported command $1" >&2; exit 1 ;;
 esac
 "#,
@@ -145,6 +154,25 @@ fn show_filename(subject: &str) -> String {
 /// Path to a binary that does not exist, for the "kan is absent" cases.
 pub fn missing_kan(dir: &Path) -> PathBuf {
     dir.join("definitely-not-installed-kan")
+}
+
+/// Every write the stub kan received, one line per invocation, in order.
+pub fn appends(dir: &Path) -> Vec<String> {
+    std::fs::read_to_string(dir.join("kan-stub-data").join("appends.log"))
+        .map(|s| s.lines().map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// A `schema/<slug>` claim carrying day's own starter schema, so tests
+/// validate against the same shape day suggests to users rather than a
+/// fixture that could drift from it.
+pub fn schema_claim(slug: &str, cid: &str) -> StubClaim {
+    let json = serde_json::to_string(&day::schema::Schema::starter()).unwrap();
+    claim(
+        &format!("schema/{slug}"),
+        cid,
+        &format!("Design-doc schema.\n\n```day-schema\n{json}\n```\n"),
+    )
 }
 
 /// The repo root, so tests can assert on shipped plugin/doc files.

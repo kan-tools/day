@@ -141,9 +141,15 @@ you are willing to say it.
 ### Step 7 — Record it
 
 ```bash
-VERDICT=$(kan decide "adversarial review of <subject>: <APPROVE|APPROVE WITH FOLLOW-UPS|REDIRECT|BLOCK> -- <one-line rationale>" \
-  --subject <subject> --cites "<cid of the plan/design claim being audited>")
+day review record <subject> \
+  --verdict APPROVE-WITH-FOLLOW-UPS \
+  --rationale "<one line>" \
+  --cites <cid of the design/plan claim being audited>
 ```
+
+The verdict must be one of the four values above and must cite the claim it
+audits; `day` rejects anything else rather than recording a verdict nobody can
+trace back to what it judged.
 
 Record each material finding as its own claim citing that verdict, so a later
 session can find the finding without re-reading this whole review:
@@ -157,6 +163,16 @@ If the verdict is BLOCK or REDIRECT, also mark the subject:
 ```bash
 kan mark <subject> --value Blocked   # check `kan mark --help` for valid values
 ```
+
+### Step 8 — What comes next
+
+```bash
+day next adversarial-review
+```
+
+Report what the graph says rather than naming a step from memory. A project
+that loops review back into design has declared that; another may terminate
+here.
 
 ## Rules
 

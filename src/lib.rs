@@ -13,7 +13,10 @@
 
 pub mod atoms;
 pub mod cli;
+pub mod design;
 pub mod doctor;
 pub mod hooks;
 pub mod kan_client;
 pub mod mcp;
+pub mod record;
+pub mod schema;
