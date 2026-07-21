@@ -32,20 +32,39 @@ polynomial-functor treatment of composition), is written up in
 
 ## What it actually does today
 
-Deliberately small. The theory is ambitious; the tool is a walking skeleton.
+Deliberately small. The theory is ambitious; the tool is not.
 
-- **`day doctor`** — checks kan is reachable, reads the live atom vocabulary,
-  and verifies it still composes: every declared successor exists, and each
-  upstream atom's outputs cover its downstream atom's inputs.
-- **`day hook session-start`** — the harness integration. Injects the teloi
-  in play, the declared atoms, and any drift warnings as advisory context at
-  the start of a session.
-- **`day mcp`** — the same reads over MCP, for agents without a shell.
-- **`day init`** — prints how to wire day into a repo. Prints; never mutates.
+**Declaring the vocabulary**
+- **`day telos declare`** — declare a telos, or revise it by declaring again.
+  There is no `revise` verb: kan is append-only, so a revision *is* a later
+  claim, and day cites the previous one for you.
+- **`day telos tension`** — record that two teloi pull against each other,
+  and why. The relation that makes teloi more than a values list.
+- **`day atom declare`** — declare a process unit with its input, output, and
+  successor types. day generates the interface block; you never hand-write it.
+- **`day init`** — records the baseline design-doc schema, and *prints* the
+  harness wiring. It writes claims, never config.
+
+**Reading and checking**
+- **`day doctor`** — verifies the live atom vocabulary still composes: every
+  declared successor exists, and each atom's inputs are covered by what its
+  upstream atoms produce.
+- **`day next <atom>`** — what the graph says follows this step, and what it
+  needs. Ask this instead of assuming a fixed pipeline.
+- **`day design check`** — validates a design document against the schema
+  your project declared in kan.
+- **`day design record`** / **`day review record`** — append the claim chain
+  for a design pass, or a four-value review verdict citing what it audits.
+- **`day hook session-start`** — the harness integration. Injects the teloi in
+  play, the declared atoms, what's still open, and any drift warnings.
+- **`day mcp`** — the checks over MCP, for agents without a shell.
+
+**Commands**
 - **`/design`** — interactive, codebase-grounded design authoring that records
-  into kan.
+  into kan and validates against your schema.
 - **`/adversarial-review`** — a hostile-by-default post-implementation audit
-  against a named north star, ending in one of four hard verdicts.
+  against a named north star, ending in one of four hard verdicts. It has been
+  run on day itself, and it returned BLOCK.
 
 ## Two rules that are load-bearing
 
@@ -85,17 +104,20 @@ Claude Code plugin:
 
 ## Status
 
-Early. v0.1.2-beta.1 is the scaffold: four verbs, two commands, one hook, and
-the conventions doc. Declaring a telos, planning a bridge between teloi, and
-recording an assessment are all still calling conventions you apply by hand
-with kan — not yet verbs day offers. The conventions are v0 and expected to
-change.
+Early. v0.2.0-beta.1 completes *declaring*: teloi, tensions, atoms, and
+design-doc schemas are all commands now rather than hand-written claims. What
+remains hand-applied is the bigger half of the model — planning a bridge
+between teloi, decomposing it into work units, and recording an assessment
+against material evidence. The conventions are v0 and expected to change.
 
 Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
-Next up is v0.2, the declaring surface — chosen over the more interesting
-bridging and assessment work because every real bug so far was found by using
-day on day, so the version that gets it used daily beats the version that adds
-the most model.
+Next is v0.3, bridging — the decomposition work, and the most speculative part
+of the roadmap.
+
+Every real bug so far has been found by using day on day rather than by
+testing it, including the two that blocked this release. That is the strongest
+signal available about how to sequence what comes next, and the roadmap is
+ordered on it.
 
 ## License
 
