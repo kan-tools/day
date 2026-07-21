@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "day": {
+      "type": "stdio",
+      "command": "day",
+      "args": ["mcp"]
+    }
+  }
+}

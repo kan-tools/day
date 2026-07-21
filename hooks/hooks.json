@@ -1,0 +1,16 @@
+{
+  "_comment": "Advisory only. day injects context; it never gates, denies, or rejects an agent action. No hook here may ever emit a blocking decision -- tests/plugin.rs enforces that, and docs/TELOS.md explains why (affordance, not enforcement: crosslink's blocking hooks are the friction this tool exists to avoid repeating).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "day hook session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
