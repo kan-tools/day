@@ -50,14 +50,24 @@ here.
   it as a library. The boundary is the public CLI on purpose: it's the same
   contract any other consumer gets, so day can't quietly depend on kan
   internals.
-- day is a **reader**. It runs kan's read verbs only; it never appends,
-  retracts, or rejects a claim. Claims get recorded by *instructing* an agent
-  to call kan's write verbs (that's what the commands do), never by day
-  calling them itself. This is what makes it structurally impossible for day
-  to alter or destroy a subject. (Caveat worth stating precisely rather than
-  papering over: kan initializes a `.kan/` workspace on first use, so a day
-  read in a repo kan has never seen creates an empty log there. No claim is
-  touched, but it isn't literally zero side effects.)
+- **day writes only through kan's public CLI.** As of v0.2 day appends
+  claims (`day design record`, `day review record`), but always by invoking
+  `kan observe`/`plan`/`decide` as a subprocess — never by touching kan's
+  storage, its signing, or its log format. kan remains the only thing that
+  decides what a claim *is*.
+  - The guarantee that matters is unchanged: **day cannot alter or destroy a
+    subject.** It only ever appends, and kan exposes no destroy path to
+    reach. Earlier versions said "day is a reader", which was a proxy for
+    this; the proxy stopped being true in v0.2 and the real invariant is
+    stated directly rather than worked around.
+  - What day must never do: write kan's files directly, bypass its signing,
+    or keep a store of its own. If a feature seems to need any of those,
+    it is wrong or it belongs in kan.
+  - day never retracts or rejects. Superseding is done by appending, the
+    same way kan does it.
+  - (Caveat, stated precisely rather than papered over: kan initializes a
+    `.kan/` workspace on first use, so even a day *read* in a repo kan has
+    never seen creates an empty log there.)
 - Correctness before features. The atom composition check should be boring
   and obviously right.
 - Keep the CLI small. Four verbs today. A new verb needs a design doc.

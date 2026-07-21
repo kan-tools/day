@@ -25,6 +25,13 @@ pub const FENCE_INFO: &str = "day-atom";
 pub enum Error {
     #[error(transparent)]
     Kan(#[from] kan_client::Error),
+    #[error("{subject}: fenced block on claim {cid} is not valid JSON: {source}")]
+    Malformed {
+        subject: String,
+        cid: String,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 /// An atom's declared interface. `inputs`/`outputs` are free-form type
@@ -117,17 +124,58 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
     Ok((atoms, findings))
 }
 
-/// Pulls the first fenced ```` ```day-atom ```` block out of a claim's text.
-/// Returns `None` when the claim carries no block at all (most claims
-/// don't), `Some(Err(..))` when it carries one that doesn't parse — the
-/// difference matters, since the second is a real finding and the first
-/// isn't.
-pub fn extract_interface(text: &str) -> Option<Result<Interface, serde_json::Error>> {
-    let open = format!("```{FENCE_INFO}");
+/// Pulls the first fenced block with the given info string out of a claim's
+/// text and deserializes it. Returns `None` when the claim carries no such
+/// block at all (most claims don't), `Some(Err(..))` when it carries one
+/// that doesn't parse — the difference matters, since the second is a real
+/// finding and the first isn't.
+///
+/// Shared by atoms (`day-atom`) and design-doc schemas (`day-schema`): one
+/// embedded-block convention, not two, so a project learns the pattern once.
+pub fn extract_fenced<T: serde::de::DeserializeOwned>(
+    text: &str,
+    fence: &str,
+) -> Option<Result<T, serde_json::Error>> {
+    let open = format!("```{fence}");
     let start = text.find(&open)? + open.len();
     let rest = &text[start..];
     let end = rest.find("```")?;
     Some(serde_json::from_str(rest[..end].trim()))
+}
+
+/// [`extract_fenced`] specialized to an atom's `day-atom` interface block.
+pub fn extract_interface(text: &str) -> Option<Result<Interface, serde_json::Error>> {
+    extract_fenced(text, FENCE_INFO)
+}
+
+/// Reads the newest claim on `subject` carrying a `fence` block, returning
+/// the parsed value with the CID of the claim it came from. The
+/// newest-wins rule every kan-backed vocabulary in day uses.
+pub fn newest_fenced<T: serde::de::DeserializeOwned>(
+    client: &KanClient,
+    subject: &str,
+    fence: &str,
+) -> Result<Option<(String, T)>, Error> {
+    let claims = client.show(subject)?;
+    for claim in claims.iter().rev() {
+        let Some(text) = claim.text.as_deref() else {
+            continue;
+        };
+        match extract_fenced::<T>(text, fence) {
+            Some(Ok(value)) => return Ok(Some((claim.cid.clone(), value))),
+            // A malformed block on the newest claim is not silently skipped
+            // in favour of an older good one — that would hide the error.
+            Some(Err(e)) => {
+                return Err(Error::Malformed {
+                    subject: subject.to_string(),
+                    cid: claim.cid.clone(),
+                    source: e,
+                })
+            }
+            None => continue,
+        }
+    }
+    Ok(None)
 }
 
 /// The composition check: every declared `next` edge must name an atom that

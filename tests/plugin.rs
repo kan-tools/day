@@ -99,10 +99,48 @@ fn ac8_the_review_atom_declares_all_four_verdicts() {
     for verdict in ["APPROVE", "APPROVE WITH FOLLOW-UPS", "REDIRECT", "BLOCK"] {
         assert!(text.contains(verdict), "missing verdict {verdict:?}");
     }
+    // The verdict is still recorded into kan, but through `day review
+    // record`, which enforces the closed verdict set and the citation
+    // rather than trusting the prompt to.
     assert!(
-        text.contains("kan decide"),
-        "the verdict should be recorded into kan"
+        text.contains("day review record"),
+        "the verdict should be recorded through day's verb"
     );
+    assert!(
+        text.contains("--cites"),
+        "a verdict must cite the claim it audits"
+    );
+}
+
+/// `.design/design-atom-backing.md` AC-9. Composition is data: the atom
+/// graph in kan says what follows what, so a project can insert a step by
+/// changing a claim rather than editing day's prompts. A command naming
+/// another command would quietly hard-code a pipeline and undo that.
+#[test]
+fn ac9_neither_command_hardcodes_an_invocation_of_the_other() {
+    let cases = [
+        ("commands/design.md", "/adversarial-review"),
+        ("commands/adversarial-review.md", "/design"),
+    ];
+    for (file, forbidden) in cases {
+        let text = std::fs::read_to_string(repo_root().join(file)).unwrap();
+        for line in text.lines() {
+            // A prose mention is fine; an instruction to run it is not.
+            let invokes = line.contains(forbidden)
+                && (line.contains("Run ")
+                    || line.contains("run ")
+                    || line.trim_start().starts_with('$'));
+            assert!(
+                !invokes,
+                "{file} should reach the next step via `day next`, not by naming \
+                 {forbidden}: {line}"
+            );
+        }
+        assert!(
+            text.contains("day next"),
+            "{file} should end by asking the atom graph what comes next"
+        );
+    }
 }
 
 #[test]
@@ -115,6 +153,8 @@ fn ac9_conventions_document_the_prefixes_the_code_actually_reads() {
         day::atoms::ATOM_PREFIX,
         day::atoms::TELOS_PREFIX,
         day::atoms::FENCE_INFO,
+        day::schema::SCHEMA_PREFIX,
+        day::schema::FENCE_INFO,
     ] {
         assert!(
             text.contains(token),

@@ -146,60 +146,60 @@ invariant (no operation destroys a subject) constrains this section directly.
 
 ### Validation
 
-After writing (or updating) the document, run validation and print results:
-
-```
-Design doc validation:
-  [PASS] Summary present
-  [PASS] Requirements: N items
-  [PASS] Acceptance Criteria: N items
-  [PASS] Architecture references real files
-  [WARN] REQ-X has no matching acceptance criterion  (if applicable)
-  [PASS] No placeholder text
-  [OPEN] N unresolved open questions remain  (if applicable)
-```
-
-Check these:
-- Summary section is non-empty.
-- At least 2 requirements exist.
-- At least 2 acceptance criteria exist.
-- Architecture section references at least one real file path (verify with `ls`).
-- No `<...>`, `TODO`, or `TBD` in the document.
-- Each REQ-N has at least one AC-N that addresses it.
-- Count remaining `<!-- OPEN -->` blocks.
-
-### Phase 5: Record into kan (only if `kan` is built; otherwise skip and say so)
-
-Once the spine exists, the design doc gets folded into the log instead of a separate
-knowledge store:
+**Do not validate by hand. Run:**
 
 ```bash
-# --cites takes CIDs of prior claims, never file paths. Capture the CID the
-# write verb prints and chain it into the next call; name the design doc in
-# the claim text instead, and use --file for a path anchor.
-OBSERVED=$(kan observe "explored <files/spec sections> for <slug>" --subject <slug>)
-PLAN=$(kan plan "<slug> design (.design/<slug>.md): <one-line summary>" \
-  --subject <slug> --cites "$OBSERVED")
+day design check .design/<slug>.md
 ```
 
-For each open question resolved in Phase 3:
+It checks the document against this project's live schema (declared in kan,
+`docs/CONVENTIONS.md`): required sections, requirement and criterion counts,
+every requirement covered by a criterion, placeholder text, referenced file
+paths existing on disk, and unresolved open questions. Print its output as-is.
+
+This used to be a list of rules for you to apply. It is a linter now because
+counting is exactly what a language model does worst and reports most
+confidently — and because a check you perform on yourself is not a check. If
+`day` is unavailable, say so plainly rather than substituting your own count.
+
+Fix what it reports and re-run until it is clean, or until what remains is a
+deliberate open question (those warn; they do not fail).
+
+### Phase 5: Record into kan
+
+**Do not assemble the claim chain by hand. Run:**
 
 ```bash
-kan decide "<question>: <resolution>" --subject <slug> --cites "$PLAN"
+day design record .design/<slug>.md
 ```
 
-If `kan` is not yet built, skip this phase entirely and print a note instead:
+It appends an `observe` carrying the validation result, a `plan` for the design
+citing it, and one `decide` per bullet under the schema's resolved-questions
+section citing the plan — building `--cites` from CIDs it captured itself.
 
-```
-kan not built yet — design recorded as a plain file only.
-Back-fill with `kan observe` / `kan plan` / `kan decide` once the CLI exists.
+That last part is the whole reason this is a command and not instructions. The
+prose this replaces told you to pass file paths to `--cites`, which takes claim
+CIDs and errors on a path. It was wrong for as long as it was prose.
+
+A document that fails validation is **still recorded**, with the result embedded
+in the plan claim. Do not withhold a recording because a design is rough — an
+unrecorded design serves the record worse than a visibly incomplete one.
+
+Report the CIDs it prints. If `day` or `kan` is unavailable, say so and leave the
+document as a plain file rather than improvising a chain.
+
+### Phase 6: What comes next
+
+Do not tell the user to run a particular command next. Ask the graph:
+
+```bash
+day next design
 ```
 
-Do not invent kan subcommands or flags. Check `kan --help` (and `kan <verb> --help`)
-rather than guessing; kan's vocabulary is `observe | plan | decide | block | resolve |
-result | same | relate | mark | retract | reject | show | status | issues | context |
-mcp`. If a step needs a flag that doesn't obviously exist, ask the user or note it as
-an open question.
+Composition is declared in kan, so what follows a design differs by project —
+one may go straight to build, another through formal verification first. Report
+what it says. If you name a fixed next step from memory, you have hard-coded a
+pipeline that this project may not have.
 
 ### Summary Output
 

@@ -20,7 +20,13 @@ That is the strongest signal available about how to sequence what follows:
 **prefer the version that gets day used daily over the version that adds the
 most model.**
 
-## v0.2 — Declaring
+## v0.2 — Declaring *(in progress)*
+
+**Landed so far**: the design/review backing
+(`.design/design-atom-backing.md`) — `day design check`, `day design record`,
+`day review record`, `day next`, the `schema/<slug>` convention, and day's
+first write path. **Still to come in v0.2**: the `day telos` and `day atom`
+declaration verbs.
 
 The friction blocking daily use is that recording a telos or an atom means
 hand-writing a fenced JSON block inside a claim. That friction suppresses
