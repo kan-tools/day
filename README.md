@@ -91,6 +91,12 @@ recording an assessment are all still calling conventions you apply by hand
 with kan — not yet verbs day offers. The conventions are v0 and expected to
 change.
 
+Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Next up is v0.2, the declaring surface — chosen over the more interesting
+bridging and assessment work because every real bug so far was found by using
+day on day, so the version that gets it used daily beats the version that adds
+the most model.
+
 ## License
 
 MIT

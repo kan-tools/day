@@ -13,6 +13,9 @@ authoritative.
 3. `docs/CONVENTIONS.md` — AUTHORITATIVE for what day actually reads and
    writes. If TELOS.md and CONVENTIONS.md disagree about the shipped tool,
    CONVENTIONS.md wins.
+4. `docs/ROADMAP.md` — where this is going and why in that order. A draft,
+   not a schedule; revise it by editing it and recording the change in kan
+   (`--subject roadmap`), never by pretending it always said something else.
 
 ## The two non-negotiables
 
