@@ -66,6 +66,11 @@ pub fn atom_claim(
 pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     let data = dir.join("kan-stub-data");
     std::fs::create_dir_all(&data).unwrap();
+    // Re-stubbing means "start from this log state", so any writes recorded
+    // against the previous stub are cleared — otherwise a test that stubs
+    // twice sees the first phase's appends in the second phase's assertions.
+    let _ = std::fs::remove_file(data.join("appends.log"));
+    let _ = std::fs::remove_file(data.join("append-count"));
 
     let mut subjects: Vec<&str> = claims.iter().map(|c| c.subject.as_str()).collect();
     subjects.sort_unstable();
@@ -83,7 +88,10 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
             last.cid,
         ));
     }
-    std::fs::write(data.join("status.txt"), status).unwrap();
+    std::fs::write(data.join("status.txt"), &status).unwrap();
+    // `kan issues` prints the same line shape for the subset that isn't
+    // resolved; the stub has no status model, so every subject is open.
+    std::fs::write(data.join("issues.txt"), &status).unwrap();
 
     // `kan show <subject>`: header line, then one line per live claim,
     // oldest first — the order day relies on to pick the newest interface.
@@ -110,13 +118,17 @@ case "$1" in
     f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').txt"
     if [ -f "$f" ]; then cat "$f"; else echo "$2: no claims"; fi
     exit 0 ;;
+  issues) cat "$DATA/issues.txt" 2>/dev/null; exit 0 ;;
   observe|plan|decide|result|resolve)
     # Log the whole invocation so tests can assert on the chain day built,
     # then print a CID the way kan does, since day chains on that output.
+    # Records are separated by a marker, not by newlines: claim text is
+    # routinely multi-line (a fenced interface block is), so one-line-per-
+    # append would split a single write across several records.
     n=$(cat "$DATA/append-count" 2>/dev/null || echo 0)
     n=$((n + 1))
     printf '%s' "$n" > "$DATA/append-count"
-    printf '%s\n' "$*" >> "$DATA/appends.log"
+    printf '%s\n<<<END-OF-APPEND>>>\n' "$*" >> "$DATA/appends.log"
     printf 'bafyreistub%08d\n' "$n"
     exit 0 ;;
   *) echo "kan stub: unsupported command $1" >&2; exit 1 ;;
@@ -156,10 +168,18 @@ pub fn missing_kan(dir: &Path) -> PathBuf {
     dir.join("definitely-not-installed-kan")
 }
 
-/// Every write the stub kan received, one line per invocation, in order.
+/// Every write the stub kan received, one entry per invocation, in order.
+/// Entries may span multiple lines — a claim carrying a fenced interface
+/// block does — so they are split on the stub's record marker.
 pub fn appends(dir: &Path) -> Vec<String> {
     std::fs::read_to_string(dir.join("kan-stub-data").join("appends.log"))
-        .map(|s| s.lines().map(str::to_string).collect())
+        .map(|s| {
+            s.split("<<<END-OF-APPEND>>>")
+                .map(str::trim)
+                .filter(|e| !e.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default()
 }
 

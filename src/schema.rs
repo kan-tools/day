@@ -27,6 +27,8 @@ pub const DEFAULT_SLUG: &str = "design-doc";
 pub enum Error {
     #[error(transparent)]
     Atoms(#[from] atoms::Error),
+    #[error(transparent)]
+    Vocabulary(#[from] crate::vocabulary::Error),
     #[error(
         "no design-doc schema is declared for this project (expected a `{FENCE_INFO}` block on \
          subject `{SCHEMA_PREFIX}{DEFAULT_SLUG}`).\n\nA design doc's shape is this project's \
@@ -116,6 +118,34 @@ impl Schema {
                 starter: Self::starter_command(slug),
             }),
         }
+    }
+
+    /// Whether a schema is already declared for `slug`.
+    pub fn is_declared(client: &KanClient, slug: &str) -> Result<bool, Error> {
+        let subject = format!("{SCHEMA_PREFIX}{slug}");
+        Ok(newest_fenced::<Self>(client, &subject, FENCE_INFO)?.is_some())
+    }
+
+    /// Records this schema as a claim. Used by `day init` so a fresh repo
+    /// reaches a working `day design check` with a command rather than a
+    /// copy-paste — the starter has one definition either way, so the
+    /// printed and recorded forms cannot disagree.
+    pub fn record(&self, client: &KanClient, slug: &str) -> Result<String, Error> {
+        let json = serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string());
+        let text = format!("Design-doc schema for this project.\n\n```{FENCE_INFO}\n{json}\n```\n");
+        Ok(crate::vocabulary::declare(
+            client,
+            crate::vocabulary::Declaration {
+                subject: &format!("{SCHEMA_PREFIX}{slug}"),
+                verb: "observe",
+                text: &text,
+                title: None,
+                kind: None,
+                also_cite: &[],
+                act: crate::vocabulary::Act::Declare,
+            },
+        )?
+        .cid)
     }
 }
 

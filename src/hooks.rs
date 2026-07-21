@@ -136,13 +136,84 @@ const PRACTICE: &str = "\nWorking practice for this session:\n\
 pub fn dispatch(event: &str, client: &KanClient) -> Result<String, UnknownEvent> {
     match event {
         "session-start" => Ok(session_start(client)),
+        "session-end" => Ok(session_end(client)),
         other => Err(UnknownEvent(other.to_string())),
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("unknown hook event `{0}` (known events: session-start)")]
+#[error("unknown hook event `{0}` (known events: session-start, session-end)")]
 pub struct UnknownEvent(pub String);
+
+/// The end-of-session prompt: what is still open, and a nudge to record
+/// outcomes before the context holding them is gone.
+///
+/// It reports what is **open**, not what changed during this session. day
+/// has no store and therefore no session state, and acquiring one to answer
+/// "what did you touch" would trade `telos/no-store-of-its-own` for a
+/// reminder. Open-subject state is derivable from the log alone, which makes
+/// this the honest stateless approximation rather than a worse version of a
+/// stateful feature.
+///
+/// Infallible and non-blocking, like every hook here.
+pub fn session_end(client: &KanClient) -> String {
+    let mut out = String::from("## day — before this session ends\n\n");
+
+    if client.probe().is_err() {
+        out.push_str("kan is not reachable, so there is nothing to check.\n");
+        return out;
+    }
+
+    match client.issues() {
+        Ok(open) if open.is_empty() => {
+            out.push_str("No subjects are left open.\n");
+        }
+        Ok(open) => {
+            out.push_str(&format!("Still open ({}):\n", open.len()));
+            for subject in &open {
+                out.push_str(&format!("- {subject}\n"));
+            }
+            out.push('\n');
+        }
+        Err(e) => {
+            out.push_str(&format!("Open subjects could not be read ({e}).\n\n"));
+        }
+    }
+
+    if let Ok(subjects) = client.subjects() {
+        let teloi: Vec<&String> = subjects
+            .iter()
+            .filter(|s| s.starts_with(TELOS_PREFIX))
+            .collect();
+        if !teloi.is_empty() {
+            out.push_str(&format!(
+                "Teloi this work was meant to serve: {}\n\n",
+                teloi
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+
+    out.push_str(CLOSING_PRACTICE);
+    out
+}
+
+/// The one prescriptive block at session end. Deliberately short and
+/// specific: a generic "remember to record things" is the kind of
+/// boilerplate that gets skipped after the second time.
+const CLOSING_PRACTICE: &str = "\
+    Before the context holding this session is gone, record what would otherwise be \
+    lost:\n\
+    - Outcomes of what you actually did (`kan result`), and resolutions for anything \
+      finished (`kan resolve`).\n\
+    - Findings you would have to re-derive next time (`kan observe`), and choices \
+      whose reasoning is not obvious from the diff (`kan decide`).\n\
+    - Cite the claims each one builds on. An uncited claim is findable; an uncited \
+      chain of reasoning is not reconstructable.\n\
+    Nothing here blocks ending the session.\n";
 
 /// Re-exported for the composition check's callers; keeps `atoms` in this
 /// module's public surface for hook consumers that want the raw set.

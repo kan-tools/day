@@ -20,13 +20,20 @@ That is the strongest signal available about how to sequence what follows:
 **prefer the version that gets day used daily over the version that adds the
 most model.**
 
-## v0.2 — Declaring *(in progress)*
+## v0.2 — Declaring *(complete)*
 
-**Landed so far**: the design/review backing
-(`.design/design-atom-backing.md`) — `day design check`, `day design record`,
-`day review record`, `day next`, the `schema/<slug>` convention, and day's
-first write path. **Still to come in v0.2**: the `day telos` and `day atom`
-declaration verbs.
+Two passes: `.design/design-atom-backing.md` (`day design check|record`, `day
+review record`, `day next`, the `schema/<slug>` convention, and day's first
+write path) and `.design/vocabulary-verbs.md` (`day telos declare|tension`,
+`day atom declare`, baseline setup in `day init`, and the session-end hook).
+
+Three narrowings against what this section originally anticipated, each
+recorded as a claim rather than quietly dropped: **no `revise` verb** (kan is
+append-only, so a revision is just a later claim), **no read verbs** (kan's
+`show`/`status` plus `doctor` and `session_context` cover reading), and the
+session-end hook reports **what is open** rather than what changed this
+session — day has no store and so no session state, and acquiring one would
+trade `telos/no-store-of-its-own` for a reminder.
 
 The friction blocking daily use is that recording a telos or an atom means
 hand-writing a fenced JSON block inside a claim. That friction suppresses
