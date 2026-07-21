@@ -74,6 +74,28 @@ here.
 - `DAY_KAN_BIN` exists so tests can stub kan. Every integration test uses it;
   none require a real kan install.
 
+## Dogfood before you trust a test
+
+**Every defect found in day so far came from running it, not from testing
+it.** Not most — every one. The composition check's false positive on day's
+own atoms, a telos rendering its tension instead of itself, `--title`
+silently discarding a title, a session hook wired to an event that cannot
+reach the model, `bridge check` reporting the wrong set, a retracted telos
+still listed as in play. All seven were invisible to a green suite, because
+tests assert day's *output* while the defects were in what that output means
+or whether anything receives it.
+
+So: before calling a feature done, use it on this repo or on kan against the
+real log. A passing suite is necessary and has never been sufficient here.
+
+Two corollaries worth keeping:
+- A check that only inspects its own side of an interface will miss the
+  interface. Verify what the *other* side does — read the harness docs, call
+  the MCP tool, install the published crate.
+- Probes against a real log leave real claims. Use a scratch repo, or retract
+  in the same breath. An assessment that pollutes the record it assesses is
+  measuring its own footprint.
+
 ## Working practice
 
 - Design goes through `/design` and lands in `.design/<slug>.md` before
