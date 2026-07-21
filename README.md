@@ -45,6 +45,13 @@ Deliberately small. The theory is ambitious; the tool is not.
 - **`day init`** — records the baseline design-doc schema, and *prints* the
   harness wiring. It writes claims, never config.
 
+**Planning**
+- **`day bridge declare`** — a planned arrangement of atoms aimed at a telos:
+  `a > b` in sequence, `a & b` concurrently, `a | b` as alternatives.
+- **`day bridge check`** — could this plan actually get there? Walks the
+  arrangement, verifies each step's inputs are available where it sits, and
+  reports whether the target's declared witnesses are produced.
+
 **Reading and checking**
 - **`day doctor`** — verifies the live atom vocabulary still composes: every
   declared successor exists, and each atom's inputs are covered by what its
@@ -104,15 +111,15 @@ Claude Code plugin:
 
 ## Status
 
-Early. v0.2.0-beta.1 completes *declaring*: teloi, tensions, atoms, and
-design-doc schemas are all commands now rather than hand-written claims. What
-remains hand-applied is the bigger half of the model — planning a bridge
-between teloi, decomposing it into work units, and recording an assessment
-against material evidence. The conventions are v0 and expected to change.
+Early. v0.3.0-beta.1 adds *bridging*: you can plan a path from where a project
+is to a telos it is aiming at, and check whether that plan could get there.
+What remains hand-applied is assessment — judging whether work actually landed
+inside a telos's equivalence class, against material evidence. The conventions
+are v0 and expected to change.
 
 Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
-Next is v0.3, bridging — the decomposition work, and the most speculative part
-of the roadmap.
+Next is v0.4, assessing, whose first atom (`day assess docs`) is already
+designed.
 
 Every real bug so far has been found by using day on day rather than by
 testing it, including the two that blocked this release. That is the strongest
