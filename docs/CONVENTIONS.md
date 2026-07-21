@@ -231,6 +231,44 @@ it as two-fold — frame-internal continuity plus temporal coherence across
 frames — and the second is vacuous with one actor. day says so in its output
 rather than letting a single-frame result read as a settled global one.
 
+## Docs assessment — `schema/docs`
+
+`day assess docs` asks whether what the docs assert still matches what
+shipped. What it checks is declared per project on a `schema/docs` subject
+in a fenced `day-docs` block — day assumes no layout, because not every
+project it might serve is a Rust CLI.
+
+```day-docs
+{
+  "version_source": "Cargo.toml",
+  "version_key": "version",
+  "version_files": ["README.md"],
+  "doc_files": ["README.md", "docs/ROADMAP.md"],
+  "release_subject": "release"
+}
+```
+
+`version_key` is read format-agnostically: day finds the key and takes the
+value after it, which covers `version = "1.0"`, `"version": "1.0"`, and
+`version: 1.0` without knowing TOML, JSON, or YAML.
+
+**Two tiers with different powers.** The *mechanical* tier can fail — a
+declared version-carrying file with a stale version is wrong, full stop. The
+*evidence* tier only prompts: it reports what changed since the last release
+and whether any watched doc changed with it. Deciding whether a change
+*needed* documenting takes reading both, and that judgment stays with the
+reader.
+
+**The release boundary is reconciled, not chosen.** day reads both the last
+claim on the release subject and the last `v*` git tag. Disagreement is a
+finding: a release tagged but never recorded, or recorded but never cut, is
+itself drift. `--since <ref>` names the boundary outright and skips the
+question.
+
+This is where day reads **git**, its second substrate, and only ever reads:
+`tag` and `diff`, behind one module, with a test whitelisting the permitted
+subcommands.
+
 ## Assessments
 
 An assessment is the claim that some work did (or did not) land inside a

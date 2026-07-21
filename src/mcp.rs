@@ -109,6 +109,16 @@ impl DayServer {
             .map(|report| report.render())
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))
     }
+
+    #[tool(
+        description = "Assess whether this project's docs still match what shipped: checks that declared version-carrying files hold the current version, reconciles the last release recorded in kan against the last git tag, and reports what changed since without any watched doc changing. Reports; changes nothing."
+    )]
+    async fn assess_docs(&self) -> Result<String, ErrorData> {
+        let git = crate::git::Git::new(self.cwd.clone());
+        crate::docs::assess(&self.client(), &git, &self.cwd, None)
+            .map(|report| report.render())
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))
+    }
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]

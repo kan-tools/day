@@ -26,6 +26,12 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
             // design_check needs a declared schema; day deliberately
             // refuses to validate against one nobody chose.
             schema_claim("design-doc", "bafyreischema"),
+            common::claim(
+                "schema/docs",
+                "bafyreidocs",
+                "Docs schema.\n\n```day-docs\n{\"version_source\": \"Cargo.toml\", \
+                 \"version_files\": [\"README.md\"]}\n```\n",
+            ),
             atom_claim(
                 "design",
                 "bafyreidesign",
@@ -43,6 +49,15 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         ],
     );
 
+    // assess_docs needs a docs schema, a version source, and git.
+    std::fs::write(
+        dir.path().join("Cargo.toml"),
+        "[package]\nversion = \"1.0.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("README.md"), "1.0.0\n").unwrap();
+    let git = write_git_stub(dir.path());
+
     let cli = std::process::Command::new(env!("CARGO_BIN_EXE_day"))
         .arg("doctor")
         .current_dir(dir.path())
@@ -55,6 +70,7 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         .arg("mcp")
         .current_dir(dir.path())
         .env("DAY_KAN_BIN", &kan)
+        .env("DAY_GIT_BIN", &git)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -127,7 +143,14 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    for expected in ["doctor", "session_context", "design_check", "next"] {
+    for expected in [
+        "doctor",
+        "session_context",
+        "design_check",
+        "next",
+        "bridge_check",
+        "assess_docs",
+    ] {
         assert!(
             names.contains(&expected),
             "missing tool {expected:?} in {names:?}"
@@ -206,4 +229,48 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         cli_check.trim(),
         "the MCP design_check tool and the CLI verb must return the same report"
     );
+
+    // Every MCP tool is asserted equivalent to its CLI verb, not merely
+    // present. The previous review found design_check had been added
+    // without this; assess_docs was then added the same way. Covering all
+    // of them here is what stops the pattern recurring a third time.
+    let cli = std::process::Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(["assess", "docs"])
+        .current_dir(dir.path())
+        .env("DAY_KAN_BIN", &kan)
+        .env("DAY_GIT_BIN", &git)
+        .output()
+        .expect("failed to run day assess docs");
+    let cli_assess = String::from_utf8_lossy(&cli.stdout).into_owned();
+
+    stdin
+        .write_all(
+            send(json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": {"name": "assess_docs", "arguments": {}}
+            }))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let call = recv!();
+    let text = call["result"]["content"][0]["text"]
+        .as_str()
+        .expect("assess_docs should return text content");
+    assert_eq!(
+        text.trim(),
+        cli_assess.trim(),
+        "the MCP assess_docs tool and the CLI verb must return the same report"
+    );
+}
+
+/// A stub `git` for the MCP test: no tags, no changes.
+fn write_git_stub(dir: &std::path::Path) -> std::path::PathBuf {
+    let script = dir.join("git-stub.sh");
+    std::fs::write(&script, "#!/bin/sh\nprintf ''\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
 }
