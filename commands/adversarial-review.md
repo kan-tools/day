@@ -176,6 +176,17 @@ here.
 
 ## Rules
 
+- **Probes leave traces.** Verifying a defect by running the real command
+  against the real log appends real claims — that is how a junk
+  `telos/review-probe` subject ended up in day's own record and then in its
+  session-start context. Probe in a scratch repo, or retract in the same
+  breath. An assessment that pollutes the record it assesses is measuring its
+  own footprint.
+- **Check the other side of every interface.** The most serious finding this
+  review has produced was a hook wired to an event whose stdout never reaches
+  the model — invisible to every test, because the tests asserted what the
+  tool printed rather than whether anything read it. Read the docs for the
+  thing being integrated with; do not infer its behavior from your own side.
 - Do NOT modify code. This atom reads and judges; fixing is a separate atom.
 - Do NOT trust the design doc, the ADRs, or the commit messages about whether
   the work was done. They are claims about the work, not the work.
