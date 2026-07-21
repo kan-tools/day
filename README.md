@@ -52,6 +52,12 @@ Deliberately small. The theory is ambitious; the tool is not.
   arrangement, verifies each step's inputs are available where it sits, and
   reports whether the target's declared witnesses are produced.
 
+**Assessing**
+- **`day assess docs`** — do the docs still match what shipped? Checks
+  declared version-carrying files, reconciles the last recorded release
+  against the last git tag, and prompts when code changed and no watched doc
+  did.
+
 **Reading and checking**
 - **`day doctor`** — verifies the live atom vocabulary still composes: every
   declared successor exists, and each atom's inputs are covered by what its
@@ -111,15 +117,14 @@ Claude Code plugin:
 
 ## Status
 
-Early. v0.3.0-beta.1 adds *bridging*: you can plan a path from where a project
-is to a telos it is aiming at, and check whether that plan could get there.
-What remains hand-applied is assessment — judging whether work actually landed
-inside a telos's equivalence class, against material evidence. The conventions
-are v0 and expected to change.
+Early. v0.4.0-beta.1 opens *assessing* with `day assess docs`, and gives day a
+second substrate: git, read-only. What remains is the larger half of
+assessment — judging whether work landed inside a telos's equivalence class
+against material evidence — and then frames, where a telos becomes something
+several actors can hold differently. The conventions are v0 and expected to
+change.
 
 Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
-Next is v0.4, assessing, whose first atom (`day assess docs`) is already
-designed.
 
 Every real bug so far has been found by using day on day rather than by
 testing it, including the two that blocked this release. That is the strongest
