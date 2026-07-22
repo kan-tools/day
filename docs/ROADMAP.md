@@ -375,8 +375,34 @@ forbids); the git diff against `HEAD` (stateless and evidence-derived, but
 approximate); or a recorded claim (task-tracking under another name).
 
 This is **the same question as the status line's latency cache**. Both want a
-small piece of ephemeral derived state on disk. Decide it once, deliberately —
-the easy answer to each is a cache file, and taken together they are a store.
+small piece of ephemeral derived state on disk.
+
+**Decided: a disposable render cache.** `SessionStart` does the kan reads —
+it already runs, already reads kan, and has time — and writes a small
+rendered snapshot. The status line just reads that snapshot, so it can never
+be cancelled mid-flight. The same snapshot is the baseline transition
+detection needs.
+
+Why that is not a store, stated so it can be argued with. This telos exists
+so *"a project can discard day entirely and lose nothing but opinions"*. A
+cache that is strictly derived, gitignored, regenerated next session, and
+never read as a source of truth for anything but display satisfies that
+exactly — delete it and nothing is lost.
+
+**The precedent that makes it defensible is kan's own.** `.kan/log/` is the
+durable signed record; `.kan/index.sqlite` is a disposable derived index that
+rebuilds from it — verified during this session's recovery work, where
+deleting the index recovered all 164 claims from the log. A day render cache
+stands in the same relation to kan's log as kan's index does to it. If the
+pattern is acceptable for the memory layer it is acceptable for the process
+layer.
+
+**Guardrails the design pass must build in**, because this is a step toward
+the seam `tension/composable-process--no-store-of-its-own` already names:
+gitignored; regenerable from kan and git alone; **never read by any check,
+assessment or verb whose answer matters**; contains nothing not derivable;
+and its absence is never an error. *If day ever reads the cache to decide
+something rather than to display something, that is the line being crossed.*
 
 **Which hook events reach the *human* is unknown and must be verified first.**
 `hooks/hooks.json` records which events deliver stdout to the **model**;

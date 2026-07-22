@@ -5,6 +5,12 @@ target
 # kan's local log/index/identity, if day is dogfooded in its own repo
 .kan/
 
+# day's disposable render cache: strictly derived from kan and git, written
+# by the session-start hook so the status line can render without shelling
+# kan. Delete it and lose nothing -- it regenerates, and nothing reads it to
+# decide anything (docs/ROADMAP.md v0.6).
+.day/
+
 # rustfmt backups
 **/*.rs.bk
 
