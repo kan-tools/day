@@ -31,6 +31,12 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+    #[error(
+        "could not read `{args}` output from kan: {detail}\n\nThis usually means kan's \
+         --json shape changed. day pins to a shape version rather than parsing rendered \
+         output, so this is an error instead of a silently empty result."
+    )]
+    Shape { args: String, detail: String },
     #[error("`{bin} {args}` failed ({status}){stderr}")]
     Failed {
         bin: String,
@@ -40,17 +46,58 @@ pub enum Error {
     },
 }
 
-/// One live claim as `kan show` prints it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The `--json` shape version day understands.
+///
+/// kan documents the shape as **versioned and additive-only**, and the
+/// rendered form as free to change. day reads the structured form for
+/// exactly that reason: it parsed the rendered form once, kan changed it,
+/// and day read a full log as empty while reporting success.
+///
+/// Checked rather than assumed. A shape day does not know is an error with a
+/// message, never a silently empty read — that failure mode is the one this
+/// migration exists to end.
+const SHAPE_VERSION: u32 = 1;
+
+/// One live claim, from `kan show --json`.
+///
+/// Unknown fields are ignored by construction, which is what makes kan's
+/// additive-only promise usable: a field added upstream cannot break day.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 pub struct Claim {
     pub cid: String,
     pub kind: String,
     /// The claim's narrative text, when its body carries one (`Status`
     /// claims and relations do not).
+    #[serde(default)]
     pub text: Option<String>,
     /// The declared subject title, present only on `Subject` claims. A
     /// subject's name is an rkey, not a label; this is what it's called.
+    #[serde(default)]
     pub title: Option<String>,
+    /// The signing DID. Exposed by `--json` and not by the rendered form;
+    /// day#25's locally-signed injection scoping has no other way to tell
+    /// whose claim it is reading.
+    #[serde(default)]
+    pub author: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ShowEnvelope {
+    v: u32,
+    #[serde(default)]
+    claims: Vec<Claim>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SubjectsEnvelope {
+    v: u32,
+    #[serde(default)]
+    subjects: Vec<SubjectEntry>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SubjectEntry {
+    subject: String,
 }
 
 pub struct KanClient {
@@ -111,24 +158,30 @@ impl KanClient {
         self.run(&["--help"]).map(|_| ())
     }
 
-    /// Every subject in the log, via bare `kan status` (which prints one
-    /// line per subject).
+    /// Every subject in the log, via `kan status --json`.
     pub fn subjects(&self) -> Result<Vec<String>, Error> {
-        let out = self.run(&["status"])?;
-        Ok(out.lines().filter_map(parse_subject_line).collect())
+        self.subject_names(&["status", "--json"])
     }
 
-    /// Subjects that are not yet resolved, via `kan issues` — which prints
-    /// the same `[Local("subject")]` line shape `status` does.
+    /// Subjects that are not yet resolved, via `kan issues --json`.
     pub fn issues(&self) -> Result<Vec<String>, Error> {
-        let out = self.run(&["issues"])?;
-        Ok(out.lines().filter_map(parse_subject_line).collect())
+        self.subject_names(&["issues", "--json"])
     }
 
-    /// A subject's live claims, via `kan show <subject>`.
+    fn subject_names(&self, args: &[&str]) -> Result<Vec<String>, Error> {
+        let out = self.run(args)?;
+        let envelope: SubjectsEnvelope = parse(&out, args)?;
+        check_shape(envelope.v, args)?;
+        Ok(envelope.subjects.into_iter().map(|s| s.subject).collect())
+    }
+
+    /// A subject's live claims, via `kan show <subject> --json`.
     pub fn show(&self, subject: &str) -> Result<Vec<Claim>, Error> {
-        let out = self.run(&["show", subject])?;
-        Ok(out.lines().filter_map(parse_claim_line).collect())
+        let args = ["show", subject, "--json"];
+        let out = self.run(&args)?;
+        let envelope: ShowEnvelope = parse(&out, &args)?;
+        check_shape(envelope.v, &args)?;
+        Ok(envelope.claims)
     }
 
     /// Appends a narrative claim through kan's own write verb and returns
@@ -215,142 +268,111 @@ impl<'a> Write<'a> {
     }
 }
 
-/// `kan status` prints `[Local("subject")]: Kind — body  (cid)`. Only the
-/// subject name is wanted here; the trailing summary is `kan`'s own
-/// rendering and day never re-interprets it.
-fn parse_subject_line(line: &str) -> Option<String> {
-    let line = line.trim();
-    if !line.starts_with('[') {
-        return None;
-    }
-    let start = line.find("(\"")? + 2;
-    let rest = &line[start..];
-    let end = rest.find("\")")?;
-    Some(rest[..end].to_string())
-}
-
-/// `kan show` prints a header line then `  <cid>  <Kind>  <Debug body>` per
-/// claim. The body is Rust `Debug` output, so any `text:` field inside it is
-/// escaped — [`unescape_debug_string`] undoes that.
-fn parse_claim_line(line: &str) -> Option<Claim> {
-    if !line.starts_with("  ") {
-        return None;
-    }
-    // Fields are separated by whitespace *runs*, so `splitn` on a single
-    // whitespace char would yield empty fields between kan's double spaces.
-    let mut rest = line.trim();
-    let (cid, tail) = split_once_whitespace(rest)?;
-    if !cid.starts_with("bafy") {
-        return None;
-    }
-    rest = tail;
-    let (kind, body) = split_once_whitespace(rest)?;
-    let (cid, kind) = (cid.to_string(), kind.to_string());
-    Some(Claim {
-        cid,
-        kind,
-        text: extract_debug_field(body, "text"),
-        title: extract_debug_field(body, "title"),
+/// Deserializes a `--json` envelope, naming the command when it fails.
+///
+/// A parse failure here is loud on purpose. The whole point of migrating off
+/// the rendered form is that a shape day cannot read must never look like an
+/// empty log.
+fn parse<T: serde::de::DeserializeOwned>(out: &str, args: &[&str]) -> Result<T, Error> {
+    serde_json::from_str(out).map_err(|source| Error::Shape {
+        args: args.join(" "),
+        detail: source.to_string(),
     })
 }
 
-/// Splits off the first whitespace-delimited field, returning it and the
-/// remainder with leading whitespace trimmed.
-fn split_once_whitespace(s: &str) -> Option<(&str, &str)> {
-    let end = s.find(char::is_whitespace)?;
-    Some((&s[..end], s[end..].trim_start()))
-}
-
-/// Pulls a named string field out of a `Debug`-rendered claim body,
-/// respecting backslash escapes when hunting for the closing quote.
-fn extract_debug_field(body: &str, field: &str) -> Option<String> {
-    let needle = format!("{field}: \"");
-    let start = body.find(&needle)? + needle.len();
-    let rest = &body[start..];
-    let mut escaped = false;
-    for (i, c) in rest.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match c {
-            '\\' => escaped = true,
-            '"' => return Some(unescape_debug_string(&rest[..i])),
-            _ => {}
-        }
+/// Refuses a `--json` shape version day does not know.
+fn check_shape(v: u32, args: &[&str]) -> Result<(), Error> {
+    if v == SHAPE_VERSION {
+        return Ok(());
     }
-    None
-}
-
-/// Inverse of Rust's `Debug` string escaping, enough of it for claim text:
-/// `\"`, `\\`, `\n`, `\r`, `\t`, `\0`, `\'`, and `\u{...}`. Unknown escapes
-/// pass through with the backslash dropped rather than erroring — a claim
-/// whose text day can't perfectly round-trip is still worth surfacing.
-fn unescape_debug_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('t') => out.push('\t'),
-            Some('0') => out.push('\0'),
-            Some('u') => {
-                // \u{1f600}
-                let mut hex = String::new();
-                if chars.next() == Some('{') {
-                    for c in chars.by_ref() {
-                        if c == '}' {
-                            break;
-                        }
-                        hex.push(c);
-                    }
-                }
-                match u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
-                    Some(c) => out.push(c),
-                    None => out.push('\u{fffd}'),
-                }
-            }
-            Some(other) => out.push(other),
-            None => out.push('\\'),
-        }
-    }
-    out
+    Err(Error::Shape {
+        args: args.join(" "),
+        detail: format!(
+            "kan reported --json shape v{v}; day understands v{SHAPE_VERSION}. \
+             kan's shape is additive-only, so a higher version is usually readable — \
+             but day will not guess, because guessing wrong reads as an empty log."
+        ),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The shape day reads, exactly as `kan show --json` emits it.
+    const SHOW: &str = r#"{
+      "v": 1,
+      "subject": "telos/a",
+      "claims": [
+        {"cid":"bafyreia","kind":"Decision","subject":"telos/a",
+         "author":"did:key:zabc","text":"A telos.","cites":[],"artifacts":[]},
+        {"cid":"bafyreib","kind":"Subject","subject":"telos/a",
+         "author":"did:key:zabc","title":"A"},
+        {"cid":"bafyreic","kind":"Relation","subject":"telos/a",
+         "author":"did:key:zabc","relation":"InTensionWith","target":"telos/b"}
+      ],
+      "inbound": []
+    }"#;
+
     #[test]
-    fn parses_a_status_subject_line() {
-        let line = r#"[Local("process-layer")]: Decision — Decision { text: "x" }  (bafyrei)"#;
-        assert_eq!(parse_subject_line(line).as_deref(), Some("process-layer"));
+    fn claims_come_back_with_the_fields_day_reads() {
+        let envelope: ShowEnvelope = parse(SHOW, &["show"]).expect("should parse");
+        assert_eq!(envelope.v, SHAPE_VERSION);
+        assert_eq!(envelope.claims.len(), 3);
+
+        assert_eq!(envelope.claims[0].text.as_deref(), Some("A telos."));
+        assert_eq!(envelope.claims[0].author.as_deref(), Some("did:key:zabc"));
+        // A title rides on the Subject claim, not the narrative one.
+        assert_eq!(envelope.claims[1].title.as_deref(), Some("A"));
+        // Relations carry no narrative body, which is why a tension's reason
+        // needs a subject of its own.
+        assert_eq!(envelope.claims[2].text, None);
+        assert_eq!(envelope.claims[2].kind, "Relation");
+    }
+
+    /// kan's shape is additive-only, so a field day has never heard of must
+    /// not break it. This is the property that makes pinning a shape version
+    /// safe rather than brittle.
+    #[test]
+    fn an_unknown_field_is_ignored_rather_than_fatal() {
+        let json = r#"{"v":1,"claims":[
+            {"cid":"bafyreia","kind":"Decision","text":"x","invented_later":{"a":1}}
+        ]}"#;
+        let envelope: ShowEnvelope = parse(json, &["show"]).expect("additive change must parse");
+        assert_eq!(envelope.claims[0].text.as_deref(), Some("x"));
+    }
+
+    /// The failure this whole migration exists to end. day parsed kan's
+    /// rendered output, kan changed it, and day reported an empty vocabulary
+    /// against seven declared atoms at exit 0. Unreadable output must now be
+    /// an error carrying the command that produced it.
+    #[test]
+    fn output_day_cannot_read_is_an_error_not_an_empty_result() {
+        let err = parse::<ShowEnvelope>("telos/a (2 live claim(s)):", &["show", "telos/a"])
+            .expect_err("rendered output must not parse as a shape");
+        let rendered = err.to_string();
+        assert!(rendered.contains("show telos/a"), "{rendered}");
+        assert!(rendered.contains("silently empty"), "{rendered}");
+    }
+
+    /// A shape version day does not know is refused for the same reason.
+    /// Additive-only means a higher version is *probably* readable, and
+    /// "probably" is what produced a silently empty log once already.
+    #[test]
+    fn an_unknown_shape_version_is_refused() {
+        assert!(check_shape(SHAPE_VERSION, &["status"]).is_ok());
+        let err = check_shape(SHAPE_VERSION + 1, &["status"]).expect_err("unknown shape");
+        assert!(err.to_string().contains("day understands"), "{err}");
     }
 
     #[test]
-    fn ignores_the_show_header_line() {
-        assert_eq!(parse_claim_line("process-layer (5 live claim(s)):"), None);
-    }
-
-    #[test]
-    fn parses_a_claim_line_with_escaped_text() {
-        let line =
-            r#"  bafyreiabc  Observation  Observation { text: "he said \"hi\"\nthen left" }"#;
-        let claim = parse_claim_line(line).expect("claim line");
-        assert_eq!(claim.cid, "bafyreiabc");
-        assert_eq!(claim.kind, "Observation");
-        assert_eq!(claim.text.as_deref(), Some("he said \"hi\"\nthen left"));
-    }
-
-    #[test]
-    fn parses_a_claim_body_with_no_text_field() {
-        let line = "  bafyreiabc  Status  Status { value: Resolved }";
-        let claim = parse_claim_line(line).expect("claim line");
-        assert_eq!(claim.text, None);
+    fn subject_lists_come_back_in_order() {
+        let json = r#"{"v":1,"subjects":[
+            {"subject":"atom/design","state":"Unclassified"},
+            {"subject":"telos/a","state":"Settled","value":"Open"}
+        ]}"#;
+        let envelope: SubjectsEnvelope = parse(json, &["status"]).expect("should parse");
+        let names: Vec<String> = envelope.subjects.into_iter().map(|s| s.subject).collect();
+        assert_eq!(names, vec!["atom/design", "telos/a"]);
     }
 }

@@ -53,6 +53,52 @@ claim automatically.
   `decide` claim citing both subjects. An unstated trade-off is how a
   misaligned telos enters a project unnoticed.
 
+**A telos subject carries its declaration and its edges — not commentary
+about it.** That is a rule with a reason: everywhere day renders a telos it
+shows the newest claim carrying text, so anything else recorded there
+displaces the statement. Recording a tension's reason on a telos subject
+used to do exactly that, in day's own log, for four of six teloi.
+
+## Tensions — `tension/<a>--<b>`
+
+Two teloi pulling against each other is normal and is information. The
+*reason* is the part a reader needs — "these two conflict" is much less
+useful than "these two conflict because compelling the records legibility
+needs would make day the kind of tool people route around".
+
+A kan relation carries no narrative body, so a tension is recorded as two
+things: an `in-tension-with` **edge in each direction**, on the telos
+subjects, and a **claim carrying the reason**, on its own
+`tension/<a>--<b>` subject, which both edges cite.
+
+```bash
+day telos tension interface-legibility feature-depth \
+  "Every verb added for depth is one more thing to learn before the tool reads clearly."
+```
+
+The subject carries a fenced `day-tension` block naming the pair:
+
+```day-tension
+{"between": ["feature-depth", "interface-legibility"]}
+```
+
+**The slug is the two slugs sorted**, so `day telos tension b a` and
+`day telos tension a b` name the same subject — one relationship, one
+subject, whichever order it was typed in. day finds tensions by reading the
+block, **never by parsing the slug**: telos slugs contain hyphens
+themselves, so `tension/foo-bar--baz` is not reliably decomposable. The slug
+is a name; the block is the data.
+
+**Two edges, not one.** kan's relations are directed and visible only from
+the source — `kan show telos/b` does not surface an edge declared from
+`telos/a`. Tension is symmetric, so representing it faithfully in a directed
+model takes both directions; with one edge, "what is this in tension with"
+would answer from whichever side happened to be typed first.
+
+`day telos tension` writes all three claims. `session_context` and
+`day assess telos` read them back, so moving the reason off the telos does
+not make it harder to find.
+
 ## Atoms — `atom/<slug>`
 
 An atom is a composable unit of process work: generative design, generative
@@ -332,6 +378,42 @@ checkable *against*.
 
 A telos with no witnesses, or a witness with no declared probe, is named as
 not mechanically assessable rather than passed silently.
+
+### Scoping a witness to a telos
+
+A project's probe map says what a witness type *means*. It cannot say which
+instance belongs to *this* telos — and that gap produced a real false
+positive: `telos/v05-shipped` ("day v0.5 is published") reported its
+`published-artifact` witness satisfied by the **v0.4** tag, because the
+project probe was `{"tag": "v*"}`.
+
+So a telos may narrow which instances count, in its own `day-telos` block:
+
+```day-telos
+{"witnesses": ["published-artifact"],
+ "scope": {"published-artifact": "v0.5*"}}
+```
+
+```bash
+day telos declare v05-shipped "day v0.5 is published." \
+  --witness published-artifact --scope published-artifact=v0.5*
+```
+
+**A scope narrows; it does not override.** The project map still decides
+which *kind* of probe runs — the scope only replaces its pattern. Two
+consequences, both deliberate:
+
+- **Weak equivalence survives.** `v0.5*` still admits `v0.5.0-beta.1`,
+  `v0.5.0`, and `v0.5.1`, so it names a narrower equivalence class rather
+  than one artifact. A telos that named a single instance would have
+  collapsed onto it, which is the thing witnesses exist to prevent.
+- **A scope never applies to a `command` probe**, and day reports that it
+  was ignored. Honouring it would let a telos claim decide what day
+  executes; commands originate only from `schema/witness`, which is one
+  subject to review rather than every `telos/*` in the log.
+
+Scope is optional and additive: a `day-telos` block written before it
+existed is still valid and assesses identically.
 
 ## Assessments
 

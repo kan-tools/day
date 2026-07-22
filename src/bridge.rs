@@ -51,6 +51,20 @@ pub struct Witnesses {
     /// which is the weak equivalence being preserved.
     #[serde(default)]
     pub witnesses: Vec<String>,
+    /// Per-witness narrowing of *which instances count* (day#34). The
+    /// project's `schema/witness` map still decides which kind of probe
+    /// runs; this only tightens its pattern.
+    ///
+    /// It does not collapse the telos onto an instance, which is the thing
+    /// the witness design exists to prevent: `v0.5*` still admits
+    /// `v0.5.0-beta.1`, `v0.5.0` and `v0.5.1`, so it names a **narrower
+    /// equivalence class, not a point**. `telos/v05-shipped` genuinely is
+    /// about a narrower class than "day is published".
+    ///
+    /// `skip_serializing_if` keeps blocks written before this existed
+    /// byte-identical, so the change is additive rather than versioned.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub scope: std::collections::BTreeMap<String, String>,
 }
 
 impl Witnesses {

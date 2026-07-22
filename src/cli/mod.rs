@@ -22,6 +22,18 @@ use crate::{doctor, hooks, kan_client::KanClient, mcp};
 /// prose, which is why day#18 existed.
 const TENSION_RELATION: &str = "in-tension-with";
 
+/// Parses `--scope <witness>=<pattern>`. Split on the FIRST `=` only: a
+/// pattern may itself contain one, and a witness type may not.
+fn parse_scope(raw: &str) -> Result<(String, String), String> {
+    let (witness, pattern) = raw
+        .split_once('=')
+        .ok_or_else(|| format!("expected <witness>=<pattern>, got `{raw}`"))?;
+    if witness.trim().is_empty() || pattern.trim().is_empty() {
+        return Err(format!("both sides of `=` must be non-empty, got `{raw}`"));
+    }
+    Ok((witness.trim().to_string(), pattern.trim().to_string()))
+}
+
 /// Exit code for "day ran fine, but the process state it inspected has
 /// findings" — distinct from a hard failure so scripts can tell the two
 /// apart.
@@ -53,6 +65,8 @@ pub enum Error {
     Docs(#[from] crate::docs::Error),
     #[error(transparent)]
     Telos(#[from] crate::telos::Error),
+    #[error(transparent)]
+    Tension(#[from] crate::tension::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -132,6 +146,12 @@ pub enum TelosAction {
         /// satisfy the telos equally, which is the weak equivalence.
         #[arg(long = "witness")]
         witnesses: Vec<String>,
+        /// Narrow which instances of a witness count, as `<witness>=<pattern>`
+        /// (repeatable). The project's schema/witness map still decides which
+        /// kind of probe runs; this only tightens its pattern, so `v0.5*`
+        /// names a narrower class rather than one artifact.
+        #[arg(long = "scope", value_parser = parse_scope)]
+        scopes: Vec<(String, String)>,
     },
     /// Record that two teloi are in tension, and why
     Tension {
@@ -296,14 +316,19 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             title,
             kind,
             witnesses,
+            scopes,
         }) => {
             // Witnesses are appended as a block only when given, so a telos
             // stays a plain statement unless it opts into being a
             // machine-checkable bridge target.
-            let text = if witnesses.is_empty() {
+            let text = if witnesses.is_empty() && scopes.is_empty() {
                 statement.clone()
             } else {
-                crate::bridge::Witnesses { witnesses }.to_claim_text(&statement)
+                crate::bridge::Witnesses {
+                    witnesses,
+                    scope: scopes.into_iter().collect(),
+                }
+                .to_claim_text(&statement)
             };
             let outcome = crate::vocabulary::declare(
                 &client,
@@ -332,21 +357,32 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         // is this telos in tension with" would answer correctly from one side
         // and lie by omission from the other, and which side you got would
         // depend on the order the arguments happened to be typed in.
+        // The reason lands on `tension/<a>--<b>`, NOT on either telos
+        // subject (day#32). Everywhere day renders a telos it shows the
+        // newest claim carrying text, so a reason recorded here would
+        // displace the telos statement in injected session context and in
+        // assessments — which is exactly what it did for four of six teloi.
+        // A telos subject carries its declaration and its edges; the reason
+        // lives on the subject that is about the relationship.
         Command::Telos(TelosAction::Tension { a, b, why }) => {
             let prefix = crate::atoms::TELOS_PREFIX;
             let subject_a = format!("{prefix}{a}");
             let subject_b = format!("{prefix}{b}");
-            let text = format!("Tension: {subject_a} vs {subject_b}. {why}");
+            let tension = crate::tension::Tension::new(&a, &b);
+            let subject = tension.subject();
+
+            // Citing both teloi keeps `declare`'s existence check: a tension
+            // against a telos nobody declared is a claim about nothing.
             let outcome = crate::vocabulary::declare(
                 &client,
                 crate::vocabulary::Declaration {
-                    subject: &subject_a,
+                    subject: &subject,
                     verb: "decide",
-                    text: &text,
+                    text: &tension.to_claim_text(&why),
                     title: None,
                     kind: None,
-                    also_cite: std::slice::from_ref(&subject_b),
-                    act: crate::vocabulary::Act::Relate { what: "tension" },
+                    also_cite: &[subject_a.clone(), subject_b.clone()],
+                    act: crate::vocabulary::Act::Declare,
                 },
             )?;
             print!("{}", outcome.render());

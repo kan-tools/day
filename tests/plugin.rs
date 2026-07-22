@@ -204,6 +204,8 @@ fn ac9_conventions_document_the_prefixes_the_code_actually_reads() {
         day::docs::DOCS_SLUG,
         day::telos::FENCE_INFO,
         day::telos::WITNESS_SLUG,
+        day::tension::TENSION_PREFIX,
+        day::tension::FENCE_INFO,
     ] {
         assert!(
             text.contains(token),
@@ -233,4 +235,27 @@ fn ac15_claude_md_records_the_command_substrate_and_its_guardrails() {
             "CLAUDE.md should record the {guardrail:?} guardrail on command probes"
         );
     }
+}
+
+/// `.design/telos-subject-shape.md` AC-11's second half. The page must not
+/// still instruct recording a tension's reason on a telos subject — a
+/// conventions doc describing the shape day no longer implements is worse
+/// than one that says nothing, because it is followed.
+#[test]
+fn ac11_conventions_no_longer_put_a_tension_reason_on_a_telos_subject() {
+    let text = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md")).unwrap();
+    assert!(
+        text.contains("carries its declaration and its edges"),
+        "CONVENTIONS should state what a telos subject carries"
+    );
+    assert!(
+        text.contains("scope"),
+        "CONVENTIONS should document witness scoping"
+    );
+    // The old instruction, which day#32 was filed against.
+    assert!(
+        !text.contains("day telos tension interface-legibility feature-depth \\\n  \"Every verb")
+            || text.contains("tension/<a>--<b>"),
+        "the tension example should sit under the tension subject convention"
+    );
 }

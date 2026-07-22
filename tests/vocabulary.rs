@@ -151,10 +151,22 @@ fn ac3_tension_cites_both_teloi_and_refuses_when_one_is_missing() {
     );
     let log = appends(dir.path());
     assert_eq!(log.len(), 3, "a claim carrying the why, plus two edges");
-    assert!(log[0].contains("--subject telos/a"), "{}", log[0]);
+
+    // `.design/telos-subject-shape.md` AC-1: the reason lands on the tension
+    // subject, citing both teloi, and NOT on either telos. That last part is
+    // the whole of day#32 — a reason recorded on a telos subject becomes the
+    // newest text claim there and displaces the statement everywhere day
+    // renders one.
+    assert!(log[0].contains("--subject tension/a--b"), "{}", log[0]);
     assert!(log[0].contains("--cites bafyreia"), "{}", log[0]);
     assert!(log[0].contains("--cites bafyreib"), "{}", log[0]);
     assert!(log[0].contains("they pull apart"), "{}", log[0]);
+    assert!(log[0].contains("day-tension"), "{}", log[0]);
+    assert!(
+        !log[0].contains("--subject telos/"),
+        "no reason-bearing claim may land on a telos subject: {}",
+        log[0]
+    );
 
     // day#18: the tension is a queryable edge, not only prose. Two edges,
     // because kan's relation is directed and visible only from its source —
@@ -382,4 +394,133 @@ fn ac10_telos_and_atom_declarations_share_one_citation_behavior() {
     assert_eq!(log.len(), 2);
     assert!(log[0].contains("--cites bafyreitprior"), "{}", log[0]);
     assert!(log[1].contains("--cites bafyreiaprior"), "{}", log[1]);
+}
+
+/// `.design/telos-subject-shape.md` AC-2. Argument order must not decide
+/// which subject a tension lands on, or one relationship gets recorded twice
+/// under two names and neither is complete.
+#[test]
+fn ac2_tension_lands_on_the_same_subject_whichever_order_it_is_given() {
+    let claims = [
+        claim("telos/a", "bafyreia", "A."),
+        claim("telos/b", "bafyreib", "B."),
+    ];
+
+    let forward = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(forward.path(), &claims);
+    let out = day(
+        forward.path(),
+        &kan,
+        &["telos", "tension", "a", "b", "they pull apart"],
+    );
+    assert!(out.status.success());
+    let forward_log = appends(forward.path());
+
+    let reverse = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(reverse.path(), &claims);
+    let out = day(
+        reverse.path(),
+        &kan,
+        &["telos", "tension", "b", "a", "they pull apart"],
+    );
+    assert!(out.status.success());
+    let reverse_log = appends(reverse.path());
+
+    assert!(
+        forward_log[0].contains("--subject tension/a--b"),
+        "{}",
+        forward_log[0]
+    );
+    assert!(
+        reverse_log[0].contains("--subject tension/a--b"),
+        "{}",
+        reverse_log[0]
+    );
+    // And the block records the pair sorted, so a reader parsing it gets the
+    // same answer either way.
+    assert!(
+        forward_log[0].contains(r#"{"between":["a","b"]}"#),
+        "{}",
+        forward_log[0]
+    );
+    assert!(
+        reverse_log[0].contains(r#"{"between":["a","b"]}"#),
+        "{}",
+        reverse_log[0]
+    );
+}
+
+/// `.design/telos-subject-shape.md` AC-10. The scope block is generated, and
+/// a witness with no scope produces exactly the block it did before this
+/// existed (AC-9) — which is what makes the change additive rather than
+/// versioned.
+#[test]
+fn ac10_scope_is_generated_and_absent_when_not_given() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "v05-shipped",
+            "day v0.5 is published.",
+            "--witness",
+            "published-artifact",
+            "--scope",
+            "published-artifact=v0.5*",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let log = appends(dir.path());
+    assert!(
+        log[0].contains(r#""scope":{"published-artifact":"v0.5*"}"#),
+        "{}",
+        log[0]
+    );
+
+    // Without --scope, the key is absent entirely rather than empty.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "v05-shipped",
+            "day v0.5 is published.",
+            "--witness",
+            "published-artifact",
+        ],
+    );
+    assert!(out.status.success());
+    let log = appends(dir.path());
+    assert!(
+        !log[0].contains("scope"),
+        "an unscoped telos must serialize exactly as it did before scope existed: {}",
+        log[0]
+    );
+}
+
+/// A malformed `--scope` is an argument error, caught at the boundary rather
+/// than producing a claim nobody can act on.
+#[test]
+fn a_malformed_scope_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+    for bad in ["no-equals-sign", "=missing-witness", "missing-pattern="] {
+        let out = day(
+            dir.path(),
+            &kan,
+            &["telos", "declare", "t", "A telos.", "--scope", bad],
+        );
+        assert!(!out.status.success(), "{bad:?} should be refused");
+    }
 }
