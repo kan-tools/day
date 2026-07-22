@@ -91,12 +91,16 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
     let mut lines = Vec::new();
     for subject in teloi {
         let claims = client.show(subject).unwrap_or_default();
-        // The newest narrative claim is often commentary *about* the telos
-        // — a recorded tension, an assessment — not the telos itself. The
-        // declared title is what the subject is; show it first so a telos
-        // stays identifiable no matter what was last said about it.
+        // Since day#32 a tension's reason lives on `tension/<a>--<b>`, not
+        // here, so the newest text claim on a telos is the telos again. The
+        // declared title still leads, because a subject's name is an rkey
+        // and this is what it is called.
         let title = claims.iter().rev().find_map(|c| c.title.clone());
-        let latest = claims.iter().rev().find_map(|c| c.text.clone());
+        let latest = claims
+            .iter()
+            .rev()
+            .find_map(|c| c.text.as_deref().map(atoms::prose_only))
+            .filter(|s| !s.is_empty());
 
         match (title, latest) {
             (Some(title), Some(text)) => {
@@ -122,9 +126,35 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         out.push_str(&line);
         out.push('\n');
     }
+    // The tensions themselves, read from their own subjects. Without this,
+    // moving the reason off the telos (day#32) would have made it invisible
+    // in the one place day is most read.
+    if let Ok(tensions) = crate::tension::all(client) {
+        let mut lines: Vec<String> = tensions
+            .iter()
+            .map(|r| match &r.why {
+                Some(why) => format!(
+                    "- {} vs {}: {}",
+                    r.tension.between[0],
+                    r.tension.between[1],
+                    excerpt(why)
+                ),
+                None => format!("- {} vs {}", r.tension.between[0], r.tension.between[1]),
+            })
+            .collect();
+        lines.sort();
+        if !lines.is_empty() {
+            out.push_str(&format!("\nIn tension ({}):\n", lines.len()));
+            for line in lines {
+                out.push_str(&line);
+                out.push('\n');
+            }
+        }
+    }
+
     out.push_str(
         "\nThese are in tension with each other by design; when work trades one off against \
-         another, record that with `kan decide --subject <telos subject>` rather than \
+         another, record that with `day telos tension <a> <b> \"<why>\"` rather than \
          resolving it silently.\n",
     );
     out

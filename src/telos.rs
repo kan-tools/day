@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::atoms::{self, newest_fenced};
+use crate::atoms::{self, newest_fenced, prose_only};
 use crate::bridge::{self, Witnesses};
 use crate::git::Git;
 use crate::kan_client::KanClient;
@@ -45,6 +45,8 @@ pub enum Error {
     Kan(#[from] crate::kan_client::Error),
     #[error(transparent)]
     Bridge(#[from] bridge::Error),
+    #[error(transparent)]
+    Tension(#[from] crate::tension::Error),
     #[error("no telos `{0}` is declared")]
     NoSuchTelos(String),
     #[error(
@@ -98,6 +100,38 @@ impl WitnessSchema {
     }
 }
 
+/// Applies a telos's scope to the project's probe for a witness (day#34).
+///
+/// The scope narrows **which instances count**; the project map keeps
+/// deciding **which kind of probe runs**. So a scope replaces the pattern
+/// argument of a `path` or `tag` probe and leaves its kind alone.
+///
+/// **A `command` probe is returned unchanged**, with a note. Honouring a
+/// scope there would mean a telos claim determining what day executes, and
+/// commands must originate only from `schema/witness` — one subject to
+/// review rather than every `telos/*` in the log. That is the widening the
+/// day#34 decision rejected, and this is where it becomes code.
+///
+/// Lives here rather than in `src/probe.rs` deliberately: `probe.rs` is the
+/// module the no-shell guardrail greps, and scoping is a policy decision
+/// about which instances count, not a change to how a probe executes.
+fn effective_probe(probe: &Probe, scope: Option<&String>) -> (Probe, Option<String>) {
+    let Some(scope) = scope else {
+        return (probe.clone(), None);
+    };
+    match probe {
+        Probe::Path(_) => (Probe::Path(scope.clone()), None),
+        Probe::Tag(_) => (Probe::Tag(scope.clone()), None),
+        Probe::Command(_) => (
+            probe.clone(),
+            Some(format!(
+                "scope `{scope}` ignored: a command probe is not narrowed by a telos, \
+                 because that would let a telos claim decide what runs"
+            )),
+        ),
+    }
+}
+
 /// One witness type and what became of it.
 #[derive(Debug)]
 pub struct WitnessFinding {
@@ -109,6 +143,9 @@ pub struct WitnessFinding {
     /// exactly what an assessment is supposed to be checkable against
     /// rather than founded on.
     pub asserted_by: Option<String>,
+    /// Why a declared scope was not applied, when it was not. Reported so a
+    /// reader is never left believing a narrowing took effect that did not.
+    pub scope_note: Option<String>,
 }
 
 #[derive(Debug)]
@@ -172,6 +209,9 @@ impl Report {
                 // Rendered under the witness but visibly not part of the
                 // verdict, so a reader cannot mistake the log agreeing with
                 // itself for evidence.
+                if let Some(note) = &finding.scope_note {
+                    out.push_str(&format!("             {note}\n"));
+                }
                 if let Some(claim) = &finding.asserted_by {
                     out.push_str(&format!(
                         "             asserted in prose by {claim} — not material evidence\n"
@@ -217,11 +257,11 @@ fn record_tier(
         ));
     }
 
-    let tensions = claims.iter().filter(|c| c.kind == "Relation").count();
-    if tensions > 0 {
+    // REQ-4: the reason lives on a tension subject now, so day reads it back
+    // here. Moving information off the telos must not make it unfindable.
+    for line in crate::tension::render_for(slug, &crate::tension::for_telos(client, slug)?) {
         prompts.push(format!(
-            "{tensions} relation(s) on this telos — work satisfying it may have traded \
-             against something it is in tension with"
+            "{line}\n    work satisfying this telos may have traded against that one"
         ));
     }
 
@@ -263,9 +303,10 @@ pub fn assess(
         return Err(Error::NoSuchTelos(slug.to_string()));
     }
 
-    let witnesses = newest_fenced::<Witnesses>(client, &subject, bridge::TELOS_FENCE)?
-        .map(|(_cid, w)| w.witnesses)
+    let declared = newest_fenced::<Witnesses>(client, &subject, bridge::TELOS_FENCE)?
+        .map(|(_cid, w)| w)
         .unwrap_or_default();
+    let witnesses = declared.witnesses.clone();
 
     // The newest narrative claim is the closest thing to "what this telos
     // currently says". It is not always the declaration — see day#32 — so it
@@ -287,10 +328,12 @@ pub fn assess(
 
     let mut findings = Vec::new();
     for witness in &witnesses {
-        let verdict = schema
-            .probes
-            .get(witness)
-            .map(|probe| probe::evaluate(probe, git, auth));
+        let mut scope_note = None;
+        let verdict = schema.probes.get(witness).map(|probe| {
+            let (effective, note) = effective_probe(probe, declared.scope.get(witness));
+            scope_note = note;
+            probe::evaluate(&effective, git, auth)
+        });
         // Searched against prose only. The `day-telos` block naming this
         // witness is the *declaration* that it would count as evidence, not
         // a claim that it was produced — matching it would make every
@@ -308,6 +351,7 @@ pub fn assess(
             witness: witness.clone(),
             verdict,
             asserted_by,
+            scope_note,
         });
     }
 
@@ -329,29 +373,6 @@ pub fn assess(
              --cites {newest}"
         ),
     })
-}
-
-/// A claim's prose with fenced blocks removed.
-///
-/// Both uses found by dogfooding: rendering a telos statement printed the
-/// whole `day-telos` block back at the reader, and — worse — the witness
-/// scan matched every witness type against the block that *declares* it, so
-/// every telos reported its own declaration as a prose assertion that the
-/// witness had been satisfied. A declaration is not an assertion of success.
-fn prose_only(text: &str) -> String {
-    let mut out = String::new();
-    let mut in_fence = false;
-    for line in text.lines() {
-        if line.trim_start().starts_with("```") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if !in_fence {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    out.trim().to_string()
 }
 
 /// Every declared telos, for `--all`.
@@ -406,6 +427,7 @@ mod tests {
                 witness: "w".into(),
                 verdict,
                 asserted_by: None,
+                scope_note: None,
             }],
             checkable: true,
             prompts: vec![],
@@ -432,6 +454,7 @@ mod tests {
                 witness: "published-artifact".into(),
                 verdict: Some(Verdict::Unsatisfied("no tag matches".into())),
                 asserted_by: Some("bafyclaim".into()),
+                scope_note: None,
             }],
             checkable: true,
             prompts: vec![],

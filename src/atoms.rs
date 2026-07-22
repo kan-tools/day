@@ -138,6 +138,29 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
     Ok((atoms, findings))
 }
 
+/// A claim's prose with fenced blocks removed.
+///
+/// Both uses found by dogfooding: rendering a telos statement printed the
+/// whole `day-telos` block back at the reader, and — worse — the witness
+/// scan matched every witness type against the block that *declares* it, so
+/// every telos reported its own declaration as a prose assertion that the
+/// witness had been satisfied. A declaration is not an assertion of success.
+pub fn prose_only(text: &str) -> String {
+    let mut out = String::new();
+    let mut in_fence = false;
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if !in_fence {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out.trim().to_string()
+}
+
 /// Pulls the first fenced block with the given info string out of a claim's
 /// text and deserializes it. Returns `None` when the claim carries no such
 /// block at all (most claims don't), `Some(Err(..))` when it carries one

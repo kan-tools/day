@@ -26,20 +26,37 @@ fn day(dir: &Path, kan: &Path, git: &Path, args: &[&str]) -> std::process::Outpu
 }
 
 /// A stub `git` answering the two reads a probe uses.
+///
+/// It **filters by the pattern it is given**, which matters: a stub that
+/// returned everything regardless would make a scoped probe and an unscoped
+/// one indistinguishable, and AC-7 exists precisely to tell them apart. The
+/// first version of this stub did exactly that and the day#34 regression
+/// test passed against unfixed code.
 fn write_git_stub(dir: &Path, tags: &[&str], tracked: &[&str]) -> std::path::PathBuf {
     let script = dir.join("git-stub.sh");
     std::fs::write(
         &script,
         format!(
             r#"#!/bin/sh
+# `git tag --list <pattern> ...` and `git ls-files -- <pathspec>` both put
+# the pattern in $3, and `case` gives real glob matching.
+pattern="$3"
+match() {{
+  for item in $1; do
+    case "$item" in
+      $pattern) printf '%s
+' "$item" ;;
+    esac
+  done
+}}
 case "$1" in
-  tag) printf '%s' "{tags}" ;;
-  ls-files) printf '%s' "{tracked}" ;;
+  tag) match "{tags}" ;;
+  ls-files) match "{tracked}" ;;
   *) echo "git stub: unsupported read $1" >&2; exit 1 ;;
 esac
 "#,
-            tags = tags.join("\n"),
-            tracked = tracked.join("\n"),
+            tags = tags.join(" "),
+            tracked = tracked.join(" "),
         ),
     )
     .unwrap();
@@ -49,15 +66,36 @@ esac
 }
 
 fn telos_claim(slug: &str, cid: &str, witnesses: &[&str]) -> StubClaim {
+    scoped_telos_claim(slug, cid, witnesses, &[])
+}
+
+/// A telos declaring witnesses and, optionally, a scope narrowing which
+/// instances of each count.
+fn scoped_telos_claim(
+    slug: &str,
+    cid: &str,
+    witnesses: &[&str],
+    scope: &[(&str, &str)],
+) -> StubClaim {
     let list = witnesses
         .iter()
         .map(|w| format!("\"{w}\""))
         .collect::<Vec<_>>()
         .join(",");
+    let scope_json = if scope.is_empty() {
+        String::new()
+    } else {
+        let pairs = scope
+            .iter()
+            .map(|(w, p)| format!("\"{w}\":\"{p}\""))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(",\"scope\":{{{pairs}}}")
+    };
     claim(
         &format!("telos/{slug}"),
         cid,
-        &format!("A telos.\n\n```day-telos\n{{\"witnesses\":[{list}]}}\n```\n"),
+        &format!("A telos.\n\n```day-telos\n{{\"witnesses\":[{list}]{scope_json}}}\n```\n"),
     )
 }
 
@@ -384,4 +422,123 @@ fn an_unassessable_telos_does_not_exit_zero() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("telos/real"), "{stdout}");
     assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
+
+/// `.design/telos-subject-shape.md` AC-7 — day#34's false positive, inverted
+/// into a regression test.
+///
+/// The reported bug: `telos/v05-shipped` says "day v0.5 is published" and the
+/// project probe `{"tag": "v*"}` matched `v0.4.0-beta.1`, so the assessment
+/// said MATERIAL against a release that predates the telos. With a scope, the
+/// same log and the same tags must report MISSING.
+#[test]
+fn ac7_a_scope_turns_the_day34_false_positive_into_a_miss() {
+    let dir = tempfile::tempdir().unwrap();
+    // Exactly the situation that produced the bug: a v0.4 tag, no v0.5 tag.
+    let git = write_git_stub(dir.path(), &["v0.4.0-beta.1"], &[]);
+    let schema = witness_schema("bafyreiw", r#"{"published-artifact":{"tag":"v*"}}"#);
+
+    // Unscoped: the original false positive, preserved so the test shows the
+    // difference rather than asserting the fix in isolation.
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("v05-shipped", "bafyreit", &["published-artifact"]),
+            schema.clone(),
+        ],
+    );
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "v05-shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[MATERIAL]"), "{stdout}");
+    assert!(stdout.contains("v0.4.0-beta.1"), "{stdout}");
+
+    // Scoped to this milestone: same tags, same probe kind, honest answer.
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            scoped_telos_claim(
+                "v05-shipped",
+                "bafyreit",
+                &["published-artifact"],
+                &[("published-artifact", "v0.5*")],
+            ),
+            schema,
+        ],
+    );
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "v05-shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[MISSING]"), "{stdout}");
+    assert!(
+        stdout.contains("v0.5*"),
+        "the report should name the scope it probed: {stdout}"
+    );
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+}
+
+/// `.design/telos-subject-shape.md` AC-8. A scope must never reach a command
+/// probe: honouring it would let a telos claim decide what day executes, and
+/// commands originate only from `schema/witness`.
+///
+/// Asserted on the argv actually executed, not on day's description of it —
+/// the stub records what it was given.
+#[test]
+fn ac8_a_scope_never_alters_what_a_command_probe_executes() {
+    let dir = tempfile::tempdir().unwrap();
+    let git = write_git_stub(dir.path(), &[], &[]);
+    let recorded = dir.path().join("argv.log");
+
+    // The probe appends its own arguments, so the test can compare what ran.
+    let probe = dir.path().join("probe.sh");
+    std::fs::write(
+        &probe,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nexit 0\n",
+            recorded.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&probe, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let schema = witness_schema(
+        "bafyreiw",
+        &format!(
+            r#"{{"passing-tests":{{"command":"{} --flag"}}}}"#,
+            probe.display()
+        ),
+    );
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            scoped_telos_claim(
+                "shipped",
+                "bafyreit",
+                &["passing-tests"],
+                &[("passing-tests", "SCOPE-MUST-NOT-APPEAR")],
+            ),
+            schema,
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &git,
+        &["assess", "telos", "shipped", "--run"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let argv = std::fs::read_to_string(&recorded).unwrap_or_default();
+
+    assert_eq!(
+        argv.trim(),
+        "--flag",
+        "the scope changed the executed argv: {argv:?}"
+    );
+    assert!(
+        !argv.contains("SCOPE-MUST-NOT-APPEAR"),
+        "a telos scope reached a command probe's argv: {argv:?}"
+    );
+    // And the reader is told, rather than left believing the narrowing applied.
+    assert!(stdout.contains("ignored"), "{stdout}");
+    assert!(stdout.contains("decide what runs"), "{stdout}");
 }
