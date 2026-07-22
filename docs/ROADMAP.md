@@ -443,7 +443,50 @@ there is a reason it keeps losing that has not been named.
   variant, and day#18 lands the edge in v0.5, so frames arrives with tension
   already queryable rather than needing it first.
 
-## v0.8 — Atom library and meta-evaluation
+## v0.8 — Plugins: adopting a style instead of hand-declaring one
+
+Getting day useful in a new repo currently means hand-declaring a vocabulary:
+atoms, teloi, schemas, witness probes, and — after v0.6 — practice items and
+`done` criteria. That is the onboarding cost the **v1.0 bar measures
+directly**, since "a person who is not the author uses day on a project that
+is neither kan nor day" is exactly the person facing an empty log.
+
+So: bundles, installable from a git repo, following the plugin-repo format
+Claude Code already established.
+
+```
+day plugin install maxinelevesque/day-flow
+```
+
+**The insight that makes this fit rather than fight the model:** a plugin is a
+bundle of **declarations**, and installing one means **recording them as your
+own claims**. Not files day keeps, not a config directory, not a second store
+— the repo is a *source*, and afterwards the only durable artifact is claims
+in your log, signed by you. `telos/no-store-of-its-own` is preserved rather
+than strained, and it falls out for free because everything a plugin would
+carry is already a kan claim.
+
+It also gets a property monolithic plugin systems lack. Because the contents
+become ordinary claims, **adoption is per-item and revisable**: retract one
+atom, revise another, keep the rest. A plugin is not a unit you install and
+uninstall. Provenance survives by citing an `adopted <plugin>@<version>`
+claim, so the record shows both that you declared these and where they came
+from.
+
+**The risk, which is easy to understate.** A plugin is a vector for prompt
+injection *and* for command execution — its practice items reach an agent's
+context, and its witness probes can carry `command` probes. day#25 requires
+injected practice to be locally-signed, but plugin content becomes *your*
+claims signed by *you*, so it passes that check **by construction**. The trust
+boundary therefore moves to **install time**, and install must show what is
+being adopted rather than adopting silently. This is the same class of problem
+as day#25's and is emphatically not solved by it.
+
+**Why here and not sooner:** the bundle format cannot stabilize before the
+vocabulary it packages does. v0.6 adds `done` criteria, situated injection,
+and transition reporting; a format designed now gets redesigned then.
+
+## v0.9 — Atom library and meta-evaluation
 
 - The remaining atoms from `TELOS.md`: user testing, structured research and
   data extraction, formal verification before build-out, external comms and

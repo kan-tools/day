@@ -48,10 +48,43 @@ pub fn session_start(client: &KanClient) -> String {
     out.push('\n');
     out.push_str(&render_atoms(client));
     out.push_str(&render_open(client));
-    out.push_str(PRACTICE);
-    out.push_str(SAFETY);
+
+    // A project's own practice can extend day's blocks or replace them. day
+    // is advisory and disposable by design, so an opinion a project cannot
+    // refuse would be the wrong kind of opinion — but a replacement is a
+    // recorded claim, and day says when one is in effect rather than letting
+    // guidance vanish silently.
+    let projected = crate::practice::project(client);
+    if projected.replaces.practice {
+        out.push_str(REPLACED_PRACTICE);
+    } else {
+        out.push_str(PRACTICE);
+    }
+    if projected.replaces.safety {
+        out.push_str(REPLACED_SAFETY);
+    } else {
+        out.push_str(SAFETY);
+    }
+    out.push_str(&projected.render());
     out
 }
+
+/// Shown in place of [`PRACTICE`] when a project replaced it. The
+/// replacement is visible in the thing being replaced: transparency rather
+/// than enforcement.
+const REPLACED_PRACTICE: &str =
+    "\nWorking practice: this project replaced day's default process practice with its \
+     own, below.\n";
+
+/// Shown in place of [`SAFETY`] when a project replaced it.
+///
+/// Deliberately states what was dropped. The block exists because of a real
+/// incident, and its absence is otherwise silent until something
+/// irreversible happens — so a reader should be able to see that it is gone.
+const REPLACED_SAFETY: &str =
+    "\nOperational safety: this project replaced day's default safety guidance (credential \
+     handling, explicit staging, unchained commit and push, verified rotation) with its \
+     own, below.\n";
 
 /// What is still unresolved. This lives at session *start* rather than
 /// session end because only `UserPromptSubmit`, `UserPromptExpansion`, and

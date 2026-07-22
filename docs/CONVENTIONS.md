@@ -99,6 +99,46 @@ would answer from whichever side happened to be typed first.
 `day assess telos` read them back, so moving the reason off the telos does
 not make it harder to find.
 
+## Working practice — `practice`
+
+day injects its own process practice and operational-safety guidance into
+every session. A project's own practice goes on a `practice` subject, and day
+projects it into the same block.
+
+```bash
+kan observe "Run the migration check before tagging a release." --subject practice
+```
+
+**Each live claim is one item.** Appending adds one; retracting removes one.
+That is different from every other convention on this page — a `day-*` block
+is newest-claim-wins because a schema is one object, and injected practice is
+a *list*, which is exactly what kan's live fold already gives for free.
+
+**Only locally-signed claims are projected.** A claim on `practice` signed by
+another identity is not injected, and day says how many it skipped and why.
+This is an injection path: text here reaches a model's context, so it is
+scoped to the key that signs this workspace. If day cannot establish that
+identity, it projects **nothing** and says so — verification being
+unavailable is not a reason to inject unverified text.
+
+**day's own blocks are refusable.** A claim of the form:
+
+```
+day-replace: practice
+day-replace: safety
+```
+
+replaces day's corresponding block with your items instead of adding to
+them. Both are replaceable, including safety: an opinion a project cannot
+refuse is the kind of opinion `docs/TELOS.md`'s affordance-not-enforcement
+rules out, and *"this rule is too important to remove"* is what every
+blocking tool says about itself. day states which of its blocks was replaced,
+so the suppression is visible in the thing being suppressed.
+
+The projection is bounded — a per-item excerpt and a cap on item count, both
+reported when they bite. Session-start competes with your actual request for
+attention, and this is the one part of it a project can grow without limit.
+
 ## Atoms — `atom/<slug>`
 
 An atom is a composable unit of process work: generative design, generative
