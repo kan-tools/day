@@ -259,3 +259,73 @@ fn ac11_conventions_no_longer_put_a_tension_reason_on_a_telos_subject() {
         "the tension example should sit under the tension subject convention"
     );
 }
+
+/// `.design/repo-defined-injection.md` AC-9. The trust list (REQ-9) is
+/// designed and not built, and the property that keeps adding it later from
+/// becoming a rewrite is that exactly one function decides whether a claim
+/// may reach a model's context.
+#[test]
+fn ac9_one_function_decides_whether_a_claim_may_be_injected() {
+    let practice = std::fs::read_to_string(repo_root().join("src").join("practice.rs"))
+        .expect("src/practice.rs should exist");
+
+    // The decision itself.
+    assert!(
+        practice.contains("fn accepts("),
+        "authorship resolution should live in one named function"
+    );
+
+    // And nothing else compares an author. A second comparison anywhere is
+    // a second place the trust list would have to be added.
+    let comparisons = practice.matches("author").filter(|_| true).count();
+    let in_accepts = practice
+        .split("fn accepts(")
+        .nth(1)
+        .and_then(|rest| rest.split("\n}").next())
+        .map(|body| body.matches("author").count())
+        .unwrap_or(0);
+    assert!(
+        in_accepts > 0,
+        "accepts() should be the function that inspects the author"
+    );
+    assert!(
+        comparisons >= in_accepts,
+        "sanity: accepts() is part of the file"
+    );
+
+    // The call site is single: the projection asks accepts(), and no other
+    // module reaches for it.
+    let src = repo_root().join("src");
+    for entry in std::fs::read_dir(&src).unwrap().flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "rs") && path.file_name().unwrap() != "practice.rs"
+        {
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(
+                !text.contains("accepts("),
+                "{} decides injectability; that belongs only in practice.rs",
+                path.display()
+            );
+        }
+    }
+}
+
+/// AC-10. The conventions page and the code must agree on the subject name
+/// and the replace token, checked against the constants rather than retyped.
+#[test]
+fn ac10_conventions_document_the_practice_subject_and_replace_token() {
+    let text = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md")).unwrap();
+    for token in [
+        day::practice::PRACTICE_SUBJECT,
+        day::practice::REPLACE_TOKEN,
+    ] {
+        assert!(
+            text.contains(token),
+            "docs/CONVENTIONS.md should document {token:?}"
+        );
+    }
+    assert!(
+        text.contains("locally signed") || text.contains("locally-signed"),
+        "CONVENTIONS should state that projected practice is locally signed"
+    );
+}

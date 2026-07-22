@@ -11,6 +11,9 @@
 
 use std::path::{Path, PathBuf};
 
+/// The DID the stub signs claims with, and reports from `kan identity did`.
+pub const STUB_AUTHOR: &str = "did:key:zStubAuthor";
+
 /// One canned claim on one subject.
 #[derive(Clone)]
 pub struct StubClaim {
@@ -18,6 +21,9 @@ pub struct StubClaim {
     pub cid: String,
     pub kind: String,
     pub text: String,
+    /// Who signed it. Defaults to [`STUB_AUTHOR`]; set it to anything else
+    /// to model a claim from another actor.
+    pub author: String,
 }
 
 pub fn claim(subject: &str, cid: &str, text: &str) -> StubClaim {
@@ -26,7 +32,14 @@ pub fn claim(subject: &str, cid: &str, text: &str) -> StubClaim {
         cid: cid.to_string(),
         kind: "Observation".to_string(),
         text: text.to_string(),
+        author: STUB_AUTHOR.to_string(),
     }
+}
+
+/// Removes the stub's identity, modelling kan being unable to establish it —
+/// a blocked keychain, a missing key. day must fail closed here.
+pub fn without_identity(dir: &Path) {
+    let _ = std::fs::remove_file(dir.join("kan-stub-data").join("identity"));
 }
 
 /// A `Subject` claim, which carries a `title` field instead of `text` —
@@ -37,6 +50,7 @@ pub fn subject_claim(subject: &str, cid: &str, title: &str) -> StubClaim {
         cid: cid.to_string(),
         kind: "Subject".to_string(),
         text: title.to_string(),
+        author: STUB_AUTHOR.to_string(),
     }
 }
 
@@ -48,6 +62,7 @@ pub fn retraction_claim(subject: &str, cid: &str) -> StubClaim {
         cid: cid.to_string(),
         kind: "Retraction".to_string(),
         text: String::new(),
+        author: STUB_AUTHOR.to_string(),
     }
 }
 
@@ -84,6 +99,9 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     // against the previous stub are cleared — otherwise a test that stubs
     // twice sees the first phase's appends in the second phase's assertions.
     let _ = std::fs::remove_file(data.join("appends.log"));
+    // The stub signs everything as this DID, so a test can make a claim
+    // "foreign" simply by declaring it with a different author.
+    std::fs::write(data.join("identity"), STUB_AUTHOR).unwrap();
     let _ = std::fs::remove_file(data.join("append-count"));
 
     let mut subjects: Vec<&str> = claims.iter().map(|c| c.subject.as_str()).collect();
@@ -137,6 +155,12 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
 DATA="{data}"
 case "$1" in
   --help) echo "kan (test stub)"; exit 0 ;;
+  identity)
+    # `kan identity did` prints the public identifier. A stub whose identity
+    # file is absent models kan being unable to reach the keychain, which is
+    # a real state day has to fail closed on rather than guess through.
+    if [ -f "$DATA/identity" ]; then cat "$DATA/identity"; exit 0; fi
+    echo "identity unavailable" >&2; exit 1 ;;
   status) cat "$DATA/status.json"; exit 0 ;;
   show)
     f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').json"
@@ -214,7 +238,7 @@ fn claim_json(claim: &StubClaim) -> serde_json::Value {
         "cid": claim.cid,
         "kind": claim.kind,
         "subject": claim.subject,
-        "author": "did:key:zStubAuthor",
+        "author": claim.author,
     });
     let map = value.as_object_mut().unwrap();
     match claim.kind.as_str() {

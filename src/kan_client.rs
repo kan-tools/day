@@ -158,6 +158,24 @@ impl KanClient {
         self.run(&["--help"]).map(|_| ())
     }
 
+    /// This workspace's identity, via `kan identity did`.
+    ///
+    /// `did` is the public identifier and is explicitly safe to share.
+    /// **Never `kan identity phrase`**, which prints the recovery phrase for
+    /// the signing key.
+    ///
+    /// Returns `None` rather than an error on any failure, deliberately.
+    /// kan's identity access can block on a macOS keychain prompt that never
+    /// arrives non-interactively — kan's own `src/sign.rs` documents this,
+    /// and it silently emptied day's reads once already. A caller deciding
+    /// whether to trust a claim needs a value it can branch on, not an error
+    /// that aborts a hook, because the right response to "identity unknown"
+    /// is to project nothing and say so.
+    pub fn identity(&self) -> Option<String> {
+        let did = self.run(&["identity", "did"]).ok()?.trim().to_string();
+        (!did.is_empty()).then_some(did)
+    }
+
     /// Every subject in the log, via `kan status --json`.
     pub fn subjects(&self) -> Result<Vec<String>, Error> {
         self.subject_names(&["status", "--json"])
