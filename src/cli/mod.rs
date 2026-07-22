@@ -179,6 +179,10 @@ pub enum AtomAction {
         /// An atom slug this one composes into (repeatable)
         #[arg(long = "next")]
         next: Vec<String>,
+        /// A witness type that evidences this atom is done (repeatable).
+        /// Resolved through schema/witness, the same probes teloi use.
+        #[arg(long = "done")]
+        done: Vec<String>,
         /// Prose describing the atom, above the generated interface block
         #[arg(long)]
         note: Option<String>,
@@ -223,6 +227,18 @@ pub enum AssessAction {
         /// release boundary and skips the reconciliation check.
         #[arg(long)]
         since: Option<String>,
+    },
+    /// Check whether an atom's declared `done` criteria are met
+    Atom {
+        /// The atom slug, e.g. `generative-build`
+        slug: String,
+        /// Execute `command` probes. Without this they are reported but never
+        /// run, matching `assess telos`.
+        #[arg(long)]
+        run: bool,
+        /// Seconds a command probe may run before it is killed
+        #[arg(long, default_value_t = crate::probe::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
     },
     /// Check whether a telos's declared witnesses were actually produced
     Telos {
@@ -408,12 +424,14 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             inputs,
             outputs,
             next,
+            done,
             note,
         }) => {
             let interface = crate::atoms::Interface {
                 inputs,
                 outputs,
                 next,
+                done,
             };
             let outcome = crate::vocabulary::declare(
                 &client,
@@ -608,6 +626,23 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 (true, _) => ExitCode::from(EXIT_UNAVAILABLE),
                 (false, false) => ExitCode::from(EXIT_FINDINGS),
                 (false, true) => ExitCode::SUCCESS,
+            })
+        }
+        Command::Assess(AssessAction::Atom { slug, run, timeout }) => {
+            let git = crate::git::Git::new(cwd.clone());
+            let auth = if run {
+                crate::probe::Authorization::Run {
+                    timeout: std::time::Duration::from_secs(timeout),
+                }
+            } else {
+                crate::probe::Authorization::Report
+            };
+            let report = crate::telos::assess_atom(&client, &git, &slug, auth)?;
+            print!("{}", report.render());
+            Ok(if report.is_clean() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(EXIT_FINDINGS)
             })
         }
         Command::Assess(AssessAction::Docs { since }) => {

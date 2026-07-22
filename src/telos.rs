@@ -49,6 +49,8 @@ pub enum Error {
     Tension(#[from] crate::tension::Error),
     #[error("no telos `{0}` is declared")]
     NoSuchTelos(String),
+    #[error("no atom `{0}` is declared")]
+    NoSuchAtom(String),
     #[error(
         "no witness schema is declared for this project (expected a `{FENCE_INFO}` block on \
          subject `{SCHEMA_PREFIX}{WITNESS_SLUG}`).\n\nWhat would evidence a witness type is \
@@ -372,6 +374,103 @@ pub fn assess(
             "  kan result {subject} \"<what you concluded, citing the evidence above>\" \\\n    \
              --cites {newest}"
         ),
+    })
+}
+
+/// One atom's `done` criteria, evaluated against the project's probes.
+///
+/// The gateable counterpart to `day status`: `status` displays where you are,
+/// this answers "is this atom finished" with an exit code, so CI and a human
+/// can gate on it. Enforcement at the artifact level, never the action level.
+pub struct AtomReport {
+    pub atom: String,
+    pub findings: Vec<WitnessFinding>,
+    /// True when the atom declares no `done` criteria — reported, not treated
+    /// as met.
+    pub no_criteria: bool,
+}
+
+impl AtomReport {
+    /// A declared criterion that ran and was not satisfied fails the check.
+    /// Not-run, timed-out, no-probe, and no-criteria are all "unknown, go
+    /// look", not failure — the same rule `assess telos` uses, for the same
+    /// reason: exiting non-zero on absence of evidence would make every
+    /// default run look broken.
+    pub fn is_clean(&self) -> bool {
+        !self
+            .findings
+            .iter()
+            .any(|f| f.verdict.as_ref().is_some_and(Verdict::is_failure))
+    }
+
+    pub fn render(&self) -> String {
+        let mut out = format!("Atom assessment — {}{}\n", atoms::ATOM_PREFIX, self.atom);
+        if self.no_criteria {
+            out.push_str(
+                "  no `done` criteria declared, so completion cannot be checked mechanically.\n                   Declare them: day atom declare <slug> --done <witness-type>\n",
+            );
+            return out;
+        }
+        out.push_str("Completion criteria:\n");
+        for finding in &self.findings {
+            match &finding.verdict {
+                Some(verdict) => out.push_str(&format!(
+                    "  [{}] {}: {}\n",
+                    verdict.label(),
+                    finding.witness,
+                    verdict.detail()
+                )),
+                None => out.push_str(&format!(
+                    "  [NO PROBE] {}: no probe declared for this witness type\n",
+                    finding.witness
+                )),
+            }
+        }
+        out
+    }
+}
+
+/// Assesses whether an atom's `done` criteria are met. Runs command probes
+/// only under `Authorization::Run`, matching `assess telos`.
+pub fn assess_atom(
+    client: &KanClient,
+    git: &Git,
+    slug: &str,
+    auth: Authorization,
+) -> Result<AtomReport, Error> {
+    let (atoms, _) = atoms::load(client)?;
+    let atom = atoms
+        .iter()
+        .find(|a| a.name == slug)
+        .ok_or_else(|| Error::NoSuchAtom(slug.to_string()))?;
+
+    let done = &atom.interface.done;
+    if done.is_empty() {
+        return Ok(AtomReport {
+            atom: slug.to_string(),
+            findings: vec![],
+            no_criteria: true,
+        });
+    }
+
+    let schema = WitnessSchema::load(client)?;
+    let findings = done
+        .iter()
+        .map(|witness| WitnessFinding {
+            witness: witness.clone(),
+            verdict: schema
+                .probes
+                .get(witness)
+                .map(|probe| probe::evaluate(probe, git, auth)),
+            asserted_by: None,
+            scope_note: None,
+        })
+        .collect();
+
+    Ok(AtomReport {
+        atom: slug.to_string(),
+        findings,
+        no_criteria: false,
     })
 }
 
