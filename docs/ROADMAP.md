@@ -131,21 +131,83 @@ claim (day#18). This repo's own log holds several prose tensions already, so
 it is its own migration case — decide deliberately what happens to them
 rather than rewriting; they are real claims.
 
-**Still to come in v0.4:**
+**What was still to come in v0.4 now lands in v0.5**, alongside the affordance
+work that section explains — `day assess telos` and the tension edge move
+there rather than stretching this milestone further.
 
-- `day assess` — did work land inside a telos's equivalence class? Judged
-  against material evidence (builds, tests, diffs, artifacts), never against an
-  agent's own account of what it did.
-- Drift detection: teloi that shifted without the shift being recorded;
+Two items are deferred past v0.5 outright:
+
+- **Drift detection** — teloi that shifted without the shift being recorded;
   unstated teloi inferred from what the work actually optimized; trade-offs
-  made silently between teloi in tension.
-- The adversarial-review atom grows into this rather than staying a standalone
-  command — review becomes one way of producing an assessment.
+  made silently between teloi in tension. Deferred because it is more model,
+  and the v0.5 meta-evaluation found that model is already outrunning use. It
+  waits for evidence from `assess telos` about what drift here actually looks
+  like.
+- **The adversarial-review atom growing into assessment** rather than staying a
+  standalone command. Worth doing, but it should follow a version in which
+  assessment has actually been run more than once.
 
-## v0.5 — Frames
+## v0.5 — Used, not just built
+
+**This section replaced "Frames", which moved to v0.6.** The change came out of
+a meta-evaluation of the first five milestones, recorded on `process-model`
+with a **REDIRECT** verdict. The evidence, from git and the log rather than
+recollection:
+
+**Adoption tracks affordance.** Every capability with a slash command is used
+every milestone — `/design` produced six design docs, one per milestone with no
+exceptions; `/adversarial-review` produced three verdicts, one of which
+(**BLOCK** on `vocabulary-verbs`) actually stopped a release. Every capability
+that is a bare CLI verb was used **once**, by its author, in the milestone that
+built it: `day bridge check` ran for `bridge/v0.3` and has not run since;
+exactly one milestone telos has ever been declared. The `release` subject holds
+two claims against five git tags.
+
+The consequence is that day's own log cannot reconstruct what v0.4 was aiming
+at — no target telos, no bridge. `telos/legible-process` is failing on the
+repo that defines it, traded silently against `telos/composable-process`, which
+is exactly the unrecorded trade-off `/adversarial-review` names as its most
+common real finding.
+
+So this release ships **affordances for what already exists** rather than more
+model:
+
+- **Finish v0.4** — `day assess telos`, the tension edge (day#18), and the two
+  assessment atoms. The loop closes here: assessing `telos/legible-process`
+  against witnesses is the check that asks whether a milestone had a declared
+  target at all.
+- **Hang planning off the atom that already has adoption.** `/design` runs
+  every milestone without exception. If a design pass *ends* by declaring the
+  milestone's target telos and its bridge, bridges get declared because designs
+  get written — adoption is inherited rather than depending on someone
+  remembering a bare verb. The highest-leverage item here, and the cheapest.
+- **Repo-defined prompt injection** (day#25). Load-bearing rather than a
+  nicety: `PRACTICE` asks for exactly one behavior — "name which telos it
+  serves" — and that is the one declared thing that recurs. Injected text
+  determines what gets used. Gated on the trust question in day#25, which must
+  be settled before an injection path sourced from claims can ship.
+- **Record the gaps; do not backfill them.** v0.1 through v0.4 had no declared
+  targets. That absence is recorded as an observation and left visible.
+  Fabricating teloi and bridges after the fact would corrupt the substrate the
+  legibility telos depends on, to make a chart look better.
+
+**Deliberately excluded: drift detection**, though it is v0.4's remaining
+roadmap item. It is more model, which is the trap under review. It waits until
+`assess telos` has run against real milestones and there is evidence about what
+drift here actually looks like.
+
+**The honest limit on the evidence:** n is small. `bridge` is 0-for-2 and
+`assess docs` has had no release since it shipped. This is a consistent
+direction, not an established law, and it should be re-checked after v0.5
+rather than treated as settled.
+
+## v0.6 — Frames
 
 Multi-actor, and paced by kan's own sync work (a frame only bites once there is
-more than one actor with more than one log).
+more than one actor with more than one log). **Moved here from v0.5** by the
+meta-evaluation above: with one actor, shipping frames would build a model
+nobody exercises, which is the pattern that earned the REDIRECT. The roadmap's
+own pacing argument already said as much.
 
 - Frames as internal toposes: an assessment is a certificate valid inside some
   actor's own logic, not an absolute fact.
@@ -154,12 +216,13 @@ more than one actor with more than one log).
   exists) as the floor every frame factors through.
 - Genuine incommensurability held as irreconcilable rather than force-merged.
   Rare in practice, but the honest failure mode has to exist.
-- Blocked on a modeling gap in kan, not day: `RelationKind` has no edge for
-  "in tension with", so tension between teloi is currently prose rather than
-  something queryable. That needs a new `RelationKind` variant, which by
-  ADR-18's rule is kan's to own. Recorded on the `process-model` subject.
+- **No longer blocked.** This section previously recorded a modeling gap in
+  kan: `RelationKind` had no edge for "in tension with", leaving tension
+  between teloi as prose rather than something queryable. kan#60 shipped that
+  variant, and day#18 lands the edge in v0.5, so frames arrives with tension
+  already queryable rather than needing it first.
 
-## v0.6 — Atom library and meta-evaluation
+## v0.7 — Atom library and meta-evaluation
 
 - The remaining atoms from `TELOS.md`: user testing, structured research and
   data extraction, formal verification before build-out, external comms and
