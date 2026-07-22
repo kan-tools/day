@@ -106,9 +106,16 @@ day exists to avoid repeating.
 ## Install
 
 ```bash
-cargo install kan   # the memory layer day reads
-cargo install day
+cargo install kan --version 0.7.0-beta.1   # the memory layer day reads
+cargo install day --version 0.5.0-beta.1
 ```
+
+**The versions are not decoration.** Everything day has published is a
+pre-release, and cargo will not select one without `--version` — a plain
+`cargo install day` errors. kan does have one stable version, `0.1.0`, so a
+plain `cargo install kan` "succeeds" and hands you a kan six minor versions
+old that day cannot talk to, which is the worse failure because it looks like
+it worked. Tracked as day#50.
 
 Then, in a repo:
 
