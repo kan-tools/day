@@ -21,6 +21,7 @@ pub mod git;
 pub mod hooks;
 pub mod kan_client;
 pub mod mcp;
+pub mod position;
 pub mod practice;
 pub mod probe;
 pub mod record;

@@ -48,6 +48,16 @@ impl Git {
         }
     }
 
+    /// A `Git` pointed at a specific binary, so a test can supply a stub
+    /// without mutating the process environment — `DAY_GIT_BIN` is global,
+    /// and parallel tests setting it race.
+    pub fn with_bin(root: impl Into<PathBuf>, bin: impl Into<String>) -> Self {
+        Self {
+            bin: bin.into(),
+            root: root.into(),
+        }
+    }
+
     /// The repository root these reads run against. Exposed so a command
     /// probe runs in the same directory day is assessing, rather than
     /// wherever the process happened to be started.

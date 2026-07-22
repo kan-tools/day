@@ -417,6 +417,7 @@ mod tests {
                 inputs: inputs.iter().map(|s| s.to_string()).collect(),
                 outputs: outputs.iter().map(|s| s.to_string()).collect(),
                 next: vec![],
+                done: vec![],
             },
         }
     }

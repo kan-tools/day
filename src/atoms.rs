@@ -46,6 +46,16 @@ pub struct Interface {
     /// Atoms this one declares it composes into, by slug.
     #[serde(default)]
     pub next: Vec<String>,
+    /// Witness types that would evidence this atom is **done**, resolved
+    /// through the same `schema/witness` probes teloi use. `in`/`out`/`next`
+    /// say what an atom consumes, produces, and leads to; this says how you
+    /// know it finished. Absent means no completion criteria are declared —
+    /// reported as such, never treated as met.
+    ///
+    /// Additive: `skip_serializing_if` keeps every block written before this
+    /// existed byte-identical, the same mechanism `Witnesses::scope` uses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub done: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -329,6 +339,7 @@ mod tests {
                 inputs: inputs.iter().map(|s| s.to_string()).collect(),
                 outputs: outputs.iter().map(|s| s.to_string()).collect(),
                 next: next.iter().map(|s| s.to_string()).collect(),
+                done: vec![],
             },
         }
     }
@@ -339,6 +350,7 @@ mod tests {
             inputs: vec!["design-doc".into()],
             outputs: vec!["code-change".into()],
             next: vec!["adversarial-review".into()],
+            done: vec![],
         };
         let text = interface.to_claim_text("generative-build", None);
         let parsed = extract_interface(&text)
