@@ -391,17 +391,58 @@ interface."* Designing transition reporting without first reading the harness
 docs would repeat that failure in the same place, having written the lesson
 down twice.
 
-**So the first task of the v0.6 design pass is not design.** It is
+**So the first task of the v0.6 design pass was not design.** It was
 establishing, from the harness documentation rather than by inference, which
-channels can deliver to a human mid-session. Everything about transition
-reporting depends on the answer, and guessing produces a feature that silently
-reaches nobody.
+channels can deliver to a human mid-session.
 
-The status line's latency is the other thing to settle in that pass: it
-re-runs constantly, day shells out to kan, and a single `kan status` is ~1.2s.
-Unusable as-is. Making kan reads fast is upstream and not day's to schedule;
-restricting the line to git-derived facts makes it cheap and much weaker; a
-long-running `day` process is a new architecture.
+### What that verification found *(done)*
+
+**The status line is the right primary channel, and better than assumed.** It
+receives rich session JSON on stdin (~40 fields including
+`workspace.current_dir`, context-window usage, and cost), supports **multiple
+lines**, ANSI colour, and clickable OSC 8 links — and explicitly *"runs
+locally and does not consume API tokens"*, so it never enters the model's
+context. Information for the human at zero context cost, which is exactly the
+property wanted.
+
+**The latency constraint is worse than estimated, and now concrete.** The line
+re-runs on session start, every new assistant message, `/compact`,
+permission-mode changes, vim-mode toggles, and an optional `refreshInterval`.
+Claude Code debounces at 300 ms **and cancels an in-flight script when a new
+update arrives.** So a status line that shells kan does not merely lag — it
+can be cancelled before rendering anything, repeatedly, and show nothing at
+all. That raises the stakes on the baseline/cache decision rather than
+settling it. `refreshInterval` is a knob worth knowing about.
+
+**stderr reaches the human on several events, but framed as an error.**
+`SessionStart`, `SessionEnd`, `Notification`, `Setup`, `MessageDisplay`,
+`PermissionRequest` and `PermissionDenied` show stderr to the user. But a
+non-zero exit makes the transcript show `<hook name> hook error` followed by
+**only the first line** of stderr. Unsuitable for routine transition
+reporting; possibly right for a genuine warning, which off-sequence detection
+might be.
+
+**A `MessageDisplay` hook can return `displayContent`**, documented as
+affecting screen display only rather than model context. A second
+human-facing channel, and not error-framed. Worth investigating before the
+design settles.
+
+### And it corrects something day has believed since v0.2
+
+`hooks/hooks.json` and `src/hooks.rs` both state that every end-of-session
+event writes to the debug log, so a prompt registered there *"would silently
+reach nobody."* That is true of the **model** and **false of the human** —
+`SessionEnd` stderr is shown to the user.
+
+The v0.2 reasoning was sound about the audience it considered and never asked
+about the other one. Which is the *"check the other side of the interface"*
+pattern appearing inside the very decision that first recorded that lesson.
+
+**Documented gaps, so they are not mistaken for settled:** the destination of
+the universal `systemMessage` field is unspecified; stderr behaviour on a
+clean exit 0 is not stated for most events; and no documentation addresses
+whether any of this differs between the CLI, VS Code, and JetBrains surfaces.
+Each would need an empirical check before being relied on.
 
 ### Still advisory
 
