@@ -119,6 +119,37 @@ impl DayServer {
             .map(|report| report.render())
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))
     }
+
+    #[tool(
+        description = "Assess whether a telos's declared witnesses were actually produced: looks up what would evidence each witness type (declared on schema/witness) and checks it against material evidence — tracked files and git tags. Command probes are reported but NEVER executed over MCP; run `day assess telos <slug> --run` in a terminal to execute them. Assessed within a single frame. Reports; changes nothing."
+    )]
+    async fn assess_telos(
+        &self,
+        params: Parameters<AssessTelosParams>,
+    ) -> Result<String, ErrorData> {
+        let git = crate::git::Git::new(self.cwd.clone());
+        // `Authorization::Report` is hard-wired, and there is no parameter
+        // that could change it. An agent calling a read-shaped tool must not
+        // be able to execute a command this repo's log happens to name —
+        // authorizing that is a decision a person makes at a terminal, per
+        // invocation. `AssessTelosParams` deliberately has no `run` field;
+        // adding one would defeat the guarantee, and `tests/mcp_server.rs`
+        // asserts a command probe stays unexecuted through this path.
+        crate::telos::assess(
+            &self.client(),
+            &git,
+            &params.0.telos,
+            crate::probe::Authorization::Report,
+        )
+        .map(|report| report.render())
+        .map_err(|e| ErrorData::internal_error(e.to_string(), None))
+    }
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct AssessTelosParams {
+    /// The telos slug, e.g. `v05-shipped`.
+    pub telos: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]

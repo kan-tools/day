@@ -46,11 +46,23 @@ here.
 
 - Rust, matching kan's dependency choices where they overlap (clap, rmcp,
   serde, thiserror, tokio) so the two crates stay easy to read together.
-- day has **two substrates**: kan, and (since v0.4) **git, read-only**. All
-  git access lives in `src/git.rs`, restricted to read subcommands, with a
-  test whitelisting them — day never stages, commits, tags, or pushes. git
-  was taken on reluctantly, because kan does not expose claim artifacts
-  (kan-tools/kan#61); if that changes, prefer reading the record.
+- day has **three substrates**: kan; **git, read-only** (since v0.4); and
+  **project-declared commands** (since v0.5), which is the only one that
+  executes anything.
+  - All git access lives in `src/git.rs`, restricted to read subcommands,
+    with a test whitelisting them — day never stages, commits, tags, or
+    pushes. git was taken on reluctantly, because kan does not expose claim
+    artifacts (kan-tools/kan#61); if that changes, prefer reading the record.
+  - All command execution lives in `src/probe.rs`. It exists because
+    `docs/CONVENTIONS.md` defines material evidence as *builds, tests,
+    diffs*, and a witness like `passing-tests` is not expressible without
+    running something. It is bounded by four rules, each with a test in
+    `tests/assess_telos.rs` and `tests/assess.rs`: **no shell ever** (argv is
+    split and exec'd directly, so metacharacters from a claim stay literal),
+    **`--run` opt-in per invocation**, **never reachable over MCP**, and a
+    **timeout that kills**. A probe's command comes from a kan claim, so
+    these are what keep the log from being an execution path — do not relax
+    them, and do not add a fourth spawn site outside these three modules.
 - day talks to kan by **shelling out to the `kan` binary**, never by linking
   it as a library. The boundary is the public CLI on purpose: it's the same
   contract any other consumer gets, so day can't quietly depend on kan
