@@ -25,6 +25,11 @@ pub fn session_start(client: &KanClient) -> String {
         out.push_str(&format!(
             "kan is not reachable, so no telos or atom context is available this session.\n{e}\n",
         ));
+        // Still injected: nothing in SAFETY depends on kan, and a session
+        // where day's process layer is degraded is not a session where it is
+        // safe to stage blindly. Returning early here would drop the
+        // guidance exactly where the tooling is already thinnest.
+        out.push_str(SAFETY);
         return out;
     }
 
@@ -34,6 +39,7 @@ pub fn session_start(client: &KanClient) -> String {
             out.push_str(&format!(
                 "kan is installed but its log could not be read here ({e}).\nIf this repo isn't tracked by kan yet, that's expected.\n",
             ));
+            out.push_str(SAFETY);
             return out;
         }
     };
@@ -43,6 +49,7 @@ pub fn session_start(client: &KanClient) -> String {
     out.push_str(&render_atoms(client));
     out.push_str(&render_open(client));
     out.push_str(PRACTICE);
+    out.push_str(SAFETY);
     out
 }
 
@@ -155,10 +162,15 @@ fn excerpt(text: &str) -> String {
     format!("{truncated}…")
 }
 
-/// The one prescriptive block day injects — process opinions are this
-/// tool's whole job, which is exactly why they live here and not in kan
-/// (ADR-18). Kept short: a session-start hook competes for the same
-/// attention budget as the user's actual request.
+/// day's **process** opinions — the ones this tool exists to hold, which is
+/// exactly why they live here and not in kan (ADR-18). Kept short: a
+/// session-start hook competes for the same attention budget as the user's
+/// actual request.
+///
+/// One of *two* prescriptive blocks since day#30. [`SAFETY`] is the other,
+/// and they are kept separate deliberately: they are different kinds of
+/// guidance, justify their context cost on different grounds, and should be
+/// trimmable independently.
 const PRACTICE: &str = "\nWorking practice for this session:\n\
     - Before non-trivial work, name which telos it serves. If none fits, that is itself \
       worth recording — an unstated telos is how drift enters.\n\
@@ -167,6 +179,43 @@ const PRACTICE: &str = "\nWorking practice for this session:\n\
       reconstructing intent later is not.\n\
     - Assess against material evidence — builds, tests, diffs — not against your own \
       summary of what you did.\n";
+
+/// Operational safety, injected alongside the process practice (day#30).
+///
+/// Every other opinion day injects is about *process* — name the telos,
+/// record as you go, assess against evidence. This one is about actions that
+/// cannot be taken back, and it exists because of a real incident: a
+/// provisioning script printed a password into the conversation, a blanket
+/// `git add -A` chained to a push swept the file holding it into a commit
+/// that reached the remote, and the force-push that followed left the object
+/// still served by SHA. Four well-known footguns, none of them surfaced
+/// anywhere in that session's injected context.
+///
+/// **Unconditional, not gated on repo signals.** Detecting an
+/// "infra-shaped" repo would save context budget and would fail silently in
+/// exactly the repo that needed it. These four rules are near-universally
+/// correct and cost less than being wrong once.
+///
+/// It earns its share of the attention budget on a different basis than
+/// [`PRACTICE`] does: a missed telos is recoverable from the record, while a
+/// pushed credential means rotation and history rewrite. Kept to four lines
+/// regardless.
+///
+/// **Still advisory.** This is guidance in context at the moment the agent
+/// would otherwise reach for `git add -A` — not a gate, not a pre-commit
+/// hook. `telos/affordance-not-enforcement` governs it exactly as it governs
+/// everything else day injects.
+const SAFETY: &str = "\nOperational safety for this session:\n\
+    - Never print a credential into conversation. If a step produces one, write it \
+      somewhere the user controls and report only that it was stored. A secret in a \
+      transcript is a secret that now has to be rotated.\n\
+    - Stage explicitly. `git add -A`/`-u` in a repo holding secrets, config, or \
+      generated output will eventually commit something nobody read. Name paths.\n\
+    - Do not chain commit and push. They are separate decisions, and chaining them \
+      removes the last checkpoint where a bad commit is still cheap.\n\
+    - Rotation and redaction are not done until verified. Confirm the old credential \
+      fails and the new one works; after a history rewrite, confirm the object is gone \
+      from the remote — a force-push alone does not remove it.\n";
 
 /// Which harness events day answers. Kept as an explicit list so an unknown
 /// event is a clear error rather than silent empty output.
@@ -266,3 +315,72 @@ const CLOSING_PRACTICE: &str = "\
 /// Re-exported for the composition check's callers; keeps `atoms` in this
 /// module's public surface for hook consumers that want the raw set.
 pub use atoms::Atom;
+
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+
+    /// day#30. The four rules are the whole point; a paraphrase that drops
+    /// one is a regression the prose would hide.
+    #[test]
+    fn the_safety_block_covers_all_four_footguns_from_the_incident() {
+        for rule in [
+            "Never print a credential",
+            "Stage explicitly",
+            "Do not chain commit and push",
+            "not done until verified",
+        ] {
+            assert!(SAFETY.contains(rule), "SAFETY should cover {rule:?}");
+        }
+        // The specific failure that made this worth filing: a force-push
+        // looked like it had worked, and the object was still served by SHA.
+        assert!(
+            SAFETY.contains("force-push alone does not remove it"),
+            "the verification rule should name the force-push case that motivated it"
+        );
+    }
+
+    /// Advisory, like everything else day injects. If this block ever starts
+    /// telling an agent it is forbidden to act, it has become the kind of
+    /// tool `telos/affordance-not-enforcement` exists to prevent.
+    #[test]
+    fn the_safety_block_advises_and_never_forbids() {
+        let lower = SAFETY.to_lowercase();
+        for forbidden in ["you must not", "is forbidden", "do not proceed", "blocked"] {
+            assert!(
+                !lower.contains(forbidden),
+                "SAFETY reads as enforcement ({forbidden:?}); day injects practice, not gates"
+            );
+        }
+    }
+
+    /// Nothing in the safety guidance depends on kan, and a session where
+    /// day's process layer is degraded is not one where it is safe to stage
+    /// blindly. Dropping it on the error paths would remove the guidance
+    /// exactly where the tooling is thinnest.
+    #[test]
+    fn safety_is_injected_even_when_kan_is_unreachable() {
+        let dir = tempfile::tempdir().unwrap();
+        let client = KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary");
+        let out = session_start(&client);
+        assert!(out.contains("kan is not reachable"), "{out}");
+        assert!(
+            out.contains("Operational safety"),
+            "safety guidance should survive kan being unavailable: {out}"
+        );
+    }
+
+    /// Budget discipline, asserted rather than intended: this competes with
+    /// the user's actual request for attention. Four rules, and a ceiling so
+    /// the block cannot quietly grow into a policy document.
+    #[test]
+    fn the_safety_block_stays_terse() {
+        let bullets = SAFETY.lines().filter(|l| l.starts_with("- ")).count();
+        assert_eq!(bullets, 4, "four rules; adding a fifth is a deliberate act");
+        assert!(
+            SAFETY.len() < 1200,
+            "SAFETY is {} bytes and competes with the user's request for attention",
+            SAFETY.len()
+        );
+    }
+}
