@@ -201,6 +201,66 @@ drift here actually looks like.
 direction, not an established law, and it should be re-checked after v0.5
 rather than treated as settled.
 
+### What is left before v0.5 releases
+
+`day assess telos`, the tension edge (day#18), the kan-conformance test
+(day#27), and the open-question miscount (day#9) have all landed. What remains
+is ordered by one rule: **a capability that reports something false is worse
+than one that does not exist**, because v0.5's whole thesis is getting shipped
+capabilities *used*, and a tool caught lying once stops being used.
+
+1. **day#34 — witness probes are per-project, satisfaction is often
+   per-telos.** `telos/v05-shipped` says "day v0.5 is published" and the
+   assessment reports its witness satisfied by **v0.4's tag**. A false positive
+   in the headline case of the feature v0.5 exists to ship. day names the
+   instance it matched, so the evidence shown is honest where the label is not
+   — useful, not right. Blocking: releasing v0.5 with this is releasing a
+   capability whose first real use misleads.
+2. **day#32 — tension prose displaces the telos statement** in injected
+   session context. Four of six teloi affected. It degrades the record at
+   exactly the moment the record is read into a session, which is the moment
+   `telos/legible-process` is about. The fix the tension edge now makes
+   available is to move the *why* onto a `tension/<a>--<b>` subject.
+3. **day#30 — operational-safety practice in the injected context.** A real
+   incident: credentials swept into a commit by a blanket `git add -A` chained
+   with a push, and a force-push that GitHub still served by SHA afterwards.
+   The injected practice is entirely about process discipline and says nothing
+   about this. Cheap, because day authors the text itself — it needs none of
+   day#25's trust machinery, and should not wait behind it.
+4. **day#25 — repo-defined prompt injection.** Still gated on the trust
+   question: an injection path sourced from claims is inert with one signer
+   and is not once kan sync lands. That decision comes before the code.
+
+Both day#34 and day#32 are conventions changes — they alter the `day-telos`
+block's shape and where a tension's reason lives — so each wants a design pass
+rather than a patch, and each revises a REQ already recorded in kan.
+
+### Not in v0.5, and why
+
+- **day#36** — `day design record` has no incremental mode, so iterating on a
+  design doc re-appends every decide already recorded. Needs a stable id per
+  resolved question (`RQ-`, matching how `REQ-` and `AC-` already work), which
+  is a `schema/design-doc` change and its own design pass. The workaround —
+  appending the delta by hand — is legitimate under the conventions.
+- **day#20** — empty `any`/`seq` nodes in a hand-written bridge plan are
+  silently permissive. Real, narrow, and no one has hit it.
+- **day#19** — the repo is private, so `/plugin install` works for nobody
+  else. A decision rather than code, and it blocks the **v1.0** bar directly:
+  "a person who is not the author uses day on a project that is neither kan
+  nor day" is unreachable while the repo cannot be installed from.
+
+### Upstream, in kan
+
+- **kan#78** — `kan result` takes its subject positionally while
+  `observe`/`plan`/`decide` take `--subject`. The asymmetry that put a
+  non-running command into `docs/CONVENTIONS.md` for several releases. Filed
+  as a question with four options; day is not blocked either way, because
+  day#27's conformance test now catches the class.
+- **kan#61** — `kan show` exposes no artifacts or anchors. Still the reason
+  day took git as a second substrate, and it would materially improve day#34:
+  with anchors, day could tell that a tag predates a telos and downgrade a
+  false positive to a warning.
+
 ## v0.6 — Frames
 
 Multi-actor, and paced by kan's own sync work (a frame only bites once there is
@@ -256,7 +316,44 @@ what actually changes behavior versus what just consumes context budget.
 Advisory always — a hook that can block is a different tool.
 
 **Dogfood first.** Every feature gets used on day or kan before it is called
-done. The track record so far is that this finds more than testing does.
+done. The track record is not that this finds *more* than testing — it is that
+it finds a **different class**, and that class has contained every real defect
+so far.
+
+The v0.5 session is the sharpest evidence yet, because day was used to build
+day throughout and the tool found faults in itself:
+
+- Using `/design` end to end exposed that the open-question counter counted
+  the marker the template tells you to quote, so every design doc with
+  unresolved questions was miscounted (day#9). Four releases of design docs
+  had never carried an unresolved block through the checker, so no test could
+  have hit it.
+- Running `kan result` by hand exposed that `docs/CONVENTIONS.md` documented a
+  command that does not run — and that a design doc had already inherited the
+  wrong form into a requirement to *print it for the reader* (day#27, kan#78).
+- Running `day assess telos` on day's own log, before the feature was
+  committed, exposed two bugs (a raw JSON block rendered as the telos
+  statement; a witness declaration read as prose asserting its own success)
+  and one design limitation that is now blocking the release (day#34).
+- Reading day's own injected session context exposed that tension prose had
+  displaced four of six teloi (day#32).
+- Folding a bridge and a target telos into the milestone exposed that neither
+  had existed for four consecutive milestones, which produced the REDIRECT
+  that reordered this roadmap.
+
+Two patterns worth naming, because they recur:
+
+**A check that only inspects its own side of an interface will miss the
+interface.** It has now happened between day and the harness (a hook on an
+event that reaches nobody), between day and kan (a stub that accepts any
+argument shape), and between day and *itself* (a test constructing an open
+block the command never emits). The last is the most instructive: both sides
+were in this repo.
+
+**A finding recorded where it is convenient does not reach the thing that
+would act on it.** kan#78 sat as a sentence inside another issue's body;
+day#36 sat in the kan log with no issue. Both surfaced only when someone
+asked. Record the finding *and* file it where the work happens.
 
 ## Bracketed, not scheduled
 

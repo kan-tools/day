@@ -39,7 +39,9 @@ Deliberately small. The theory is ambitious; the tool is not.
   There is no `revise` verb: kan is append-only, so a revision *is* a later
   claim, and day cites the previous one for you.
 - **`day telos tension`** — record that two teloi pull against each other,
-  and why. The relation that makes teloi more than a values list.
+  and why. The relation that makes teloi more than a values list. It writes a
+  real `in-tension-with` edge so the tension is *queryable*, plus a claim
+  carrying the reason, since a kan relation has no narrative body.
 - **`day atom declare`** — declare a process unit with its input, output, and
   successor types. day generates the interface block; you never hand-write it.
 - **`day init`** — records the baseline design-doc schema, and *prints* the
@@ -57,6 +59,12 @@ Deliberately small. The theory is ambitious; the tool is not.
   declared version-carrying files, reconciles the last recorded release
   against the last git tag, and prompts when code changed and no watched doc
   did.
+- **`day assess telos`** — did work land inside a telos's equivalence class?
+  A telos declares *witnesses* (types of evidence); a project declares
+  *probes* saying what would count — a tracked file, a git tag, or a command
+  that exits zero. Two tiers: material evidence can fail the run, what the
+  log says only prompts, and prose is never counted as evidence. Command
+  probes execute only with `--run`, never over MCP, never through a shell.
 
 **Reading and checking**
 - **`day doctor`** — verifies the live atom vocabulary still composes: every
@@ -117,19 +125,29 @@ Claude Code plugin:
 
 ## Status
 
-Early. v0.4.0-beta.1 opens *assessing* with `day assess docs`, and gives day a
-second substrate: git, read-only. What remains is the larger half of
-assessment — judging whether work landed inside a telos's equivalence class
-against material evidence — and then frames, where a telos becomes something
-several actors can hold differently. The conventions are v0 and expected to
+Early. v0.4.0-beta.1 opened *assessing* with `day assess docs` and gave day a
+second substrate: git, read-only. Unreleased on `main`, heading for v0.5:
+`day assess telos`, which judges work against material evidence and brings a
+third substrate — project-declared commands, executed only on explicit
+request and never through a shell.
+
+v0.5 is **"used, not just built"**, after a meta-evaluation of the first five
+milestones returned a REDIRECT: every capability with a slash command was used
+every milestone, and every capability that was only a bare CLI verb was used
+once, by its author, in the milestone that built it. Frames moved to v0.6 on
+the roadmap's own pacing argument. The conventions are v0 and expected to
 change.
 
 Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 Every real bug so far has been found by using day on day rather than by
-testing it, including the two that blocked this release. That is the strongest
-signal available about how to sequence what comes next, and the roadmap is
-ordered on it.
+testing it. Not most — every one. Building v0.5 with day found faults in day
+itself: a design-doc checker that miscounted the marker its own template tells
+you to quote, a documented `kan` invocation that does not run, and an
+assessment that reported a telos's witness satisfied by the *previous*
+release. None were visible to a green suite. That is the strongest signal
+available about how to sequence what comes next, and the roadmap is ordered
+on it.
 
 ## License
 
