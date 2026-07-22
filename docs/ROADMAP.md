@@ -119,6 +119,18 @@ to the boundary, because `kan show` exposes no timestamps (kan-tools/kan#61) —
 and the simpler comparison is a closer match to the failure it exists to
 catch anyway.
 
+**Next up — `day assess telos`.** The machinery it needs already exists:
+teloi declare **witnesses** (v0.3), so assessing one means asking whether
+those witnesses were actually produced and by what evidence. `bridge check`
+already computes whether a plan *could* reach a telos; assessment asks
+whether it *did*, and the gap between those two is the design question.
+
+Also newly unblocked: kan v0.6 shipped `RelationKind::InTensionWith`
+(kan#60), so `day telos tension` can emit a real edge instead of a prose
+claim (day#18). This repo's own log holds several prose tensions already, so
+it is its own migration case — decide deliberately what happens to them
+rather than rewriting; they are real claims.
+
 **Still to come in v0.4:**
 
 - `day assess` — did work land inside a telos's equivalence class? Judged
