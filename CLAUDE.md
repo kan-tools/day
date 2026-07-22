@@ -78,6 +78,15 @@ here.
 - Keep the CLI small. Four verbs today. A new verb needs a design doc.
 - `DAY_KAN_BIN` exists so tests can stub kan. Every integration test uses it;
   none require a real kan install.
+  - **One deliberate exception: `tests/kan_conformance.rs`.** A stub accepts
+    whatever day sends it, so stub-based tests validate day against day's own
+    idea of kan's CLI, never against kan's contract — which is how
+    `docs/CONVENTIONS.md` documented a `kan result` invocation that does not
+    run, through several releases (day#27, kan#78). That file talks to the
+    real binary and **skips when kan is absent**, so the rule above still
+    holds. Its hermetic half — that `Write::new` is only ever used with the
+    verbs whose subject is a flag — always runs, and is the part that
+    actually protects the invariant.
 
 ## Dogfood before you trust a test
 
