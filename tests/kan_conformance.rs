@@ -167,6 +167,71 @@ fn conformance_append_shapes_are_accepted_by_real_kan() {
     client.issues().expect("real kan rejected `kan issues`");
 }
 
+/// The half day#27 left uncovered, and the reason kan's format change reached
+/// production silently.
+///
+/// That test asserted the argument shapes day *emits* are accepted. It said
+/// nothing about whether day can *parse* what comes back — so when kan
+/// changed its rendered output, day read a full log as empty and reported
+/// "the process vocabulary is empty, which is a valid starting state, not an
+/// error" against seven declared atoms, at exit 0. Half an interface was
+/// covered and the half that broke was the other one.
+///
+/// This asserts the round trip: write through day, read back through day,
+/// against a real kan.
+#[test]
+fn conformance_day_reads_back_what_it_wrote_through_a_real_kan() {
+    let Some(bin) = real_kan() else {
+        eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
+        return;
+    };
+    let dir = scratch_repo();
+    let client = KanClient::with_bin(dir.path(), bin);
+
+    let cid = client
+        .append(
+            Write::new("decide", "telos/roundtrip", "A telos statement.")
+                .declaring("Round trip", "idea"),
+        )
+        .expect("append should succeed");
+
+    let claims = client.show("telos/roundtrip").expect("show should parse");
+    assert!(
+        !claims.is_empty(),
+        "day wrote a claim through a real kan and then read the subject as empty —          exactly the failure this test exists to catch"
+    );
+
+    // Every field day actually consumes, verified against the real binary
+    // rather than against the stub's idea of it.
+    assert!(
+        claims.iter().any(|c| c.cid == cid),
+        "the CID day captured on write did not come back on read: {claims:?}"
+    );
+    assert!(
+        claims
+            .iter()
+            .any(|c| c.text.as_deref() == Some("A telos statement.")),
+        "claim text did not survive the round trip: {claims:?}"
+    );
+    assert!(
+        claims
+            .iter()
+            .any(|c| c.title.as_deref() == Some("Round trip")),
+        "a declared title did not come back — day renders teloi by title: {claims:?}"
+    );
+    assert!(
+        claims.iter().all(|c| c.author.is_some()),
+        "author is absent; day#25's locally-signed scoping depends on it: {claims:?}"
+    );
+
+    // And the subject is discoverable, which is how doctor finds atoms at all.
+    let subjects = client.subjects().expect("status should parse");
+    assert!(
+        subjects.iter().any(|s| s == "telos/roundtrip"),
+        "a subject day just wrote is not in `kan status`: {subjects:?}"
+    );
+}
+
 /// `KanClient::relate` has its own argument order — two positional subjects
 /// and a kind, no text — so `append`'s shape says nothing about whether it
 /// is right. This is the case flagged when day#27 landed as "the next place

@@ -1,9 +1,11 @@
 //! A stub `kan` binary, so day's integration tests exercise real subprocess
 //! wiring without requiring a kan install (or a kan log) in CI.
 //!
-//! The stub emits byte-exact `kan` output: claim bodies are rendered through
-//! Rust's own `Debug` formatting, which is what day's parser has to survive,
-//! so a change in kan's escaping would surface here rather than silently.
+//! The stub emits kan's **`--json` shape**, which is what day reads. kan
+//! documents that shape as versioned and additive-only, and the rendered
+//! form as free to change — day parsed the rendered form once, kan changed
+//! it, and day read a full log as empty at exit 0. The stub models the
+//! contract day actually depends on, so a divergence surfaces here.
 
 #![allow(dead_code)]
 
@@ -88,34 +90,44 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     subjects.sort_unstable();
     subjects.dedup();
 
-    // `kan status` with no argument: one line per subject.
-    let mut status = String::new();
-    for subject in &subjects {
-        let last = claims.iter().rev().find(|c| c.subject == *subject).unwrap();
-        status.push_str(&format!(
-            "[Local({:?})]: {} — {}  ({})\n",
-            subject,
-            last.kind,
-            debug_body(last),
-            last.cid,
-        ));
-    }
-    std::fs::write(data.join("status.txt"), &status).unwrap();
-    // `kan issues` prints the same line shape for the subset that isn't
-    // resolved; the stub has no status model, so every subject is open.
-    std::fs::write(data.join("issues.txt"), &status).unwrap();
+    // `kan status --json` / `kan issues --json`: an envelope of subjects.
+    // The stub has no status model, so every subject is open and issues
+    // returns the same set.
+    let status = serde_json::json!({
+        "v": 1,
+        "subjects": subjects
+            .iter()
+            .map(|s| serde_json::json!({"subject": s, "subjects": [s], "state": "Unclassified"}))
+            .collect::<Vec<_>>(),
+    });
+    let status = serde_json::to_string_pretty(&status).unwrap();
+    std::fs::write(data.join("status.json"), &status).unwrap();
+    std::fs::write(data.join("issues.json"), &status).unwrap();
 
     // `kan show <subject>`: header line, then one line per live claim,
     // oldest first — the order day relies on to pick the newest interface.
     for subject in &subjects {
         let for_subject: Vec<&StubClaim> =
             claims.iter().filter(|c| c.subject == *subject).collect();
-        let mut show = format!("{subject} ({} live claim(s)):\n", for_subject.len());
-        for c in for_subject {
-            show.push_str(&format!("  {}  {}  {}\n", c.cid, c.kind, debug_body(c)));
-        }
-        std::fs::write(data.join(show_filename(subject)), show).unwrap();
+        let show = serde_json::json!({
+            "v": 1,
+            "subject": subject,
+            "subjects": [subject],
+            "claims": for_subject.iter().map(|c| claim_json(c)).collect::<Vec<_>>(),
+            "inbound": [],
+        });
+        std::fs::write(
+            data.join(show_filename(subject)),
+            serde_json::to_string_pretty(&show).unwrap(),
+        )
+        .unwrap();
     }
+
+    // The read-back helper lives in its own file rather than inline in the
+    // shell below: it builds kan's JSON shape, and JSON braces inside a
+    // `format!` string would need doubling everywhere, which is exactly the
+    // kind of escaping that hides mistakes.
+    std::fs::write(data.join("append.py"), STUB_APPEND_PY).unwrap();
 
     let script = dir.join("kan-stub.sh");
     std::fs::write(
@@ -125,12 +137,12 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
 DATA="{data}"
 case "$1" in
   --help) echo "kan (test stub)"; exit 0 ;;
-  status) cat "$DATA/status.txt"; exit 0 ;;
+  status) cat "$DATA/status.json"; exit 0 ;;
   show)
-    f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').txt"
-    if [ -f "$f" ]; then cat "$f"; else echo "$2: no claims"; fi
+    f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').json"
+    if [ -f "$f" ]; then cat "$f"; else printf '{{"v":1,"subject":"%s","subjects":[],"claims":[],"inbound":[]}}\n' "$2"; fi
     exit 0 ;;
-  issues) cat "$DATA/issues.txt" 2>/dev/null; exit 0 ;;
+  issues) cat "$DATA/issues.json" 2>/dev/null; exit 0 ;;
   observe|plan|decide|result|resolve)
     # Log the whole invocation so tests can assert on the chain day built,
     # then print a CID the way kan does, since day chains on that output.
@@ -153,15 +165,7 @@ case "$1" in
       if [ "$1" = "--subject" ]; then subj="$2"; fi
       shift
     done
-    esc=$(printf '%s' "$text" \
-      | sed 's/\\/\\\\/g; s/"/\\"/g' \
-      | awk 'BEGIN{{ORS=""}} NR>1{{printf "\\n"}} {{print}}')
-    f="$DATA/show-$(printf '%s' "$subj" | tr '/' '_').txt"
-    [ -f "$f" ] || printf '%s (live claims):\n' "$subj" > "$f"
-    printf '  %s  Observation  Observation {{ text: "%s" }}\n' "$cid" "$esc" >> "$f"
-    grep -q "\[Local(\"$subj\")\]" "$DATA/status.txt" 2>/dev/null \
-      || printf '[Local("%s")]: Observation — Observation {{ text: "%s" }}  (%s)\n' \
-           "$subj" "$esc" "$cid" >> "$DATA/status.txt"
+    python3 "$DATA/append.py" "$DATA" "$subj" "$cid" "$text"
 
     printf '%s\n' "$cid"
     exit 0 ;;
@@ -180,10 +184,7 @@ case "$1" in
     # directed and `kan show <target>` does not surface an edge pointing at
     # it. Mirroring that here keeps the stub from implying a symmetry the
     # real binary does not have.
-    f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').txt"
-    [ -f "$f" ] || printf '%s (live claims):\n' "$2" > "$f"
-    printf '  %s  Relation  Relation {{ kind: %s, target: Local("%s") }}\n' \
-      "$cid" "$3" "$4" >> "$f"
+    python3 "$DATA/append.py" "$DATA" "$2" "$cid" "" "$3" "$4"
 
     printf '%s\n' "$cid"
     exit 0 ;;
@@ -204,24 +205,34 @@ esac
     script
 }
 
-/// kan renders each claim body with Rust's `Debug`, and the field name
-/// differs by body: narrative claims carry `text`, `Subject` claims carry
-/// `title` plus a `subject_kind`.
-fn debug_body(claim: &StubClaim) -> String {
-    if claim.kind == "Retraction" {
-        // kan renders a retraction as the CID it supersedes, with no text
-        // or title field at all.
-        return format!("Retraction {{ supersedes: Cid({}) }}", claim.cid);
+/// One claim in kan's `--json` shape. Which fields are present depends on
+/// the body: narrative claims carry `text`, `Subject` claims carry `title`,
+/// and a `Retraction` carries neither — day has to cope with all three, so
+/// the stub emits all three faithfully rather than always filling `text`.
+fn claim_json(claim: &StubClaim) -> serde_json::Value {
+    let mut value = serde_json::json!({
+        "cid": claim.cid,
+        "kind": claim.kind,
+        "subject": claim.subject,
+        "author": "did:key:zStubAuthor",
+    });
+    let map = value.as_object_mut().unwrap();
+    match claim.kind.as_str() {
+        "Retraction" => {
+            map.insert("supersedes".into(), claim.cid.clone().into());
+        }
+        "Subject" => {
+            map.insert("title".into(), claim.text.clone().into());
+        }
+        _ => {
+            map.insert("text".into(), claim.text.clone().into());
+        }
     }
-    if claim.kind == "Subject" {
-        format!("Subject {{ title: {:?}, subject_kind: Idea }}", claim.text)
-    } else {
-        format!("{} {{ text: {:?} }}", claim.kind, claim.text)
-    }
+    value
 }
 
 fn show_filename(subject: &str) -> String {
-    format!("show-{}.txt", subject.replace('/', "_"))
+    format!("show-{}.json", subject.replace('/', "_"))
 }
 
 /// Path to a binary that does not exist, for the "kan is absent" cases.
@@ -260,3 +271,51 @@ pub fn schema_claim(slug: &str, cid: &str) -> StubClaim {
 pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
+
+/// Appends a claim to the stub's JSON so a write is readable afterwards.
+///
+/// Without this the stub is write-only, and anything that writes then reads
+/// back — declaring an atom, then checking the vocabulary composes — cannot
+/// be tested against it.
+const STUB_APPEND_PY: &str = r#"
+import json, os, sys
+
+data, subj, cid, text = sys.argv[1:5]
+relation = sys.argv[5] if len(sys.argv) > 5 else None
+target = sys.argv[6] if len(sys.argv) > 6 else None
+
+path = os.path.join(data, "show-%s.json" % subj.replace("/", "_"))
+if os.path.exists(path):
+    with open(path) as fh:
+        doc = json.load(fh)
+else:
+    doc = {"v": 1, "subject": subj, "subjects": [subj], "claims": [], "inbound": []}
+
+claim = {"cid": cid, "subject": subj, "author": "did:key:zStubAuthor"}
+if relation:
+    # A relation carries no narrative body -- the property that made a
+    # tension's reason need a subject of its own.
+    claim["kind"] = "Relation"
+    claim["relation"] = relation
+    claim["target"] = target
+else:
+    claim["kind"] = "Observation"
+    claim["text"] = text
+doc["claims"].append(claim)
+
+with open(path, "w") as fh:
+    json.dump(doc, fh)
+
+status_path = os.path.join(data, "status.json")
+if os.path.exists(status_path):
+    with open(status_path) as fh:
+        status = json.load(fh)
+else:
+    status = {"v": 1, "subjects": []}
+if not any(s["subject"] == subj for s in status["subjects"]):
+    status["subjects"].append(
+        {"subject": subj, "subjects": [subj], "state": "Unclassified"}
+    )
+    with open(status_path, "w") as fh:
+        json.dump(status, fh)
+"#;
