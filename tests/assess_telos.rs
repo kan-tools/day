@@ -317,3 +317,71 @@ fn ac10_assess_telos_is_a_subcommand_of_assess() {
     let help = String::from_utf8_lossy(&out.stdout);
     assert!(help.contains("telos"), "{help}");
 }
+
+/// AC-2's second half, which the missing-schema test above does not cover:
+/// the probe map is *data*, so changing the claim changes what is checked
+/// with no code and no config file edited — the property `schema/design-doc`
+/// and `schema/docs` already have.
+#[test]
+fn ac2_changing_the_witness_claim_changes_what_is_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let git = write_git_stub(dir.path(), &["v1.0.0"], &[]);
+
+    // Probing tags: satisfied, because a tag exists.
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("shipped", "bafyreit", &["published-artifact"]),
+            witness_schema("bafyreiw", r#"{"published-artifact":{"tag":"v*"}}"#),
+        ],
+    );
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[MATERIAL]"), "{stdout}");
+    assert_eq!(out.status.code(), Some(0));
+
+    // Same telos, same binary, same working tree — only the claim changed.
+    // Now it probes tracked files, and the stub tracks none.
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("shipped", "bafyreit", &["published-artifact"]),
+            witness_schema("bafyreiw2", r#"{"published-artifact":{"path":"dist/*"}}"#),
+        ],
+    );
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[MISSING]"), "{stdout}");
+    assert!(stdout.contains("dist/*"), "{stdout}");
+    assert_eq!(out.status.code(), Some(1));
+}
+
+/// Found by the adversarial review: a telos that cannot be assessed exited 0,
+/// so a typo'd slug read as a clean assessment. "Could not check" must not be
+/// spelled the same way as "checked and found nothing wrong".
+#[test]
+fn an_unassessable_telos_does_not_exit_zero() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[claim("telos/real", "bafyreit", "A telos.")]);
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &git,
+        &["assess", "telos", "does-not-exist"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("no telos"), "{stdout}");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "a check that could not run must not be indistinguishable from a clean one: {stdout}"
+    );
+
+    // An --all sweep still reports every telos it *can* assess.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "--all"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("telos/real"), "{stdout}");
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+}

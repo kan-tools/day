@@ -543,25 +543,35 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             };
 
             let mut clean = true;
+            let mut unavailable = false;
             for (i, slug) in slugs.iter().enumerate() {
                 if i > 0 {
                     println!("{}", "-".repeat(60));
                 }
-                // One telos failing to load must not abandon the rest of an
-                // `--all` sweep: the others are still assessable, and a
-                // partial answer beats none.
                 match crate::telos::assess(&client, &git, slug, auth) {
                     Ok(report) => {
                         print!("{}", report.render());
                         clean &= report.is_clean();
                     }
-                    Err(e) => println!("{}{slug}: {e}", crate::atoms::TELOS_PREFIX),
+                    // A named telos that cannot be assessed is a failed
+                    // invocation, not a clean one: a typo'd slug exiting 0
+                    // would read as "assessed, nothing wrong" to any script.
+                    // In an `--all` sweep the others are still worth
+                    // reporting, so the error is printed and the run
+                    // continues — but the exit code still says a check did
+                    // not run.
+                    Err(e) => {
+                        println!("{}{slug}: {e}", crate::atoms::TELOS_PREFIX);
+                        unavailable = true;
+                    }
                 }
             }
-            Ok(if clean {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::from(EXIT_FINDINGS)
+            // "Could not check" outranks "checked and found something": a
+            // check that never ran is the weaker guarantee of the two.
+            Ok(match (unavailable, clean) {
+                (true, _) => ExitCode::from(EXIT_UNAVAILABLE),
+                (false, false) => ExitCode::from(EXIT_FINDINGS),
+                (false, true) => ExitCode::SUCCESS,
             })
         }
         Command::Assess(AssessAction::Docs { since }) => {
