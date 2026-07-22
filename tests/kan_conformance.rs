@@ -167,6 +167,48 @@ fn conformance_append_shapes_are_accepted_by_real_kan() {
     client.issues().expect("real kan rejected `kan issues`");
 }
 
+/// `KanClient::relate` has its own argument order — two positional subjects
+/// and a kind, no text — so `append`'s shape says nothing about whether it
+/// is right. This is the case flagged when day#27 landed as "the next place
+/// this could rot", added with the verb that needed it.
+#[test]
+fn conformance_relate_shape_is_accepted_by_real_kan() {
+    let Some(bin) = real_kan() else {
+        eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
+        return;
+    };
+    let dir = scratch_repo();
+    let client = KanClient::with_bin(dir.path(), bin);
+
+    let a = client
+        .append(Write::new("decide", "telos/a", "A."))
+        .expect("seeding telos/a");
+    client
+        .append(Write::new("decide", "telos/b", "B."))
+        .expect("seeding telos/b");
+
+    let edge = client
+        .relate("telos/a", "in-tension-with", "telos/b", &[a])
+        .expect("real kan rejected day's `relate` shape");
+    assert!(edge.starts_with("bafy"), "expected a CID, got {edge:?}");
+
+    // The asymmetry day's two-edge behaviour exists to compensate for: kan's
+    // relation is directed, and the target does not surface it. If this ever
+    // starts failing, kan has made relations bidirectional and `day telos
+    // tension` should stop writing the second edge.
+    let from_source = client.show("telos/a").expect("show source");
+    let from_target = client.show("telos/b").expect("show target");
+    assert!(
+        from_source.iter().any(|c| c.kind == "Relation"),
+        "the source subject should carry the edge"
+    );
+    assert!(
+        !from_target.iter().any(|c| c.kind == "Relation"),
+        "kan now surfaces relations from the target; day writes two edges to \
+         compensate for it not doing so, and that should be revisited"
+    );
+}
+
 /// `docs/CONVENTIONS.md` tells a reader to record an assessment with
 /// `kan result`, and `.design/assess-telos.md` REQ-12 has `day assess telos`
 /// *printing* that command. A documented command that does not run is worse
