@@ -257,10 +257,24 @@ fn conformance_relate_shape_is_accepted_by_real_kan() {
         .expect("real kan rejected day's `relate` shape");
     assert!(edge.starts_with("bafy"), "expected a CID, got {edge:?}");
 
-    // The asymmetry day's two-edge behaviour exists to compensate for: kan's
-    // relation is directed, and the target does not surface it. If this ever
-    // starts failing, kan has made relations bidirectional and `day telos
-    // tension` should stop writing the second edge.
+    // The asymmetry day's two-edge behaviour compensates for: a relation is
+    // stored on its source, and the target's own claims do not contain it.
+    //
+    // THIS ASSERTION WAS ORIGINALLY WORDED WRONG, and the mistake is worth
+    // keeping visible. It said "kan now surfaces relations from the target
+    // ... that should be revisited" — encoding the question *does kan
+    // surface this from the target?*, which is not the question that decides
+    // anything. kan answered yes within a day, via a `--json` `inbound`
+    // field, and the two-edge design still stood: `inbound` returns a
+    // RENDERED STRING (`"telos/a InTensionWith this"`, with the relation kind
+    // Debug-formatted into prose and no cid or author), while an outbound
+    // relation returns a structured claim. Consuming it would put day back to
+    // parsing prose — the coupling that broke it once already (kan#103).
+    //
+    // So the question that decides is *is the target-side representation
+    // STRUCTURED?*, not *does it exist?*. A tripwire written against the
+    // shape you know rather than the question you mean will answer the wrong
+    // question confidently.
     let from_source = client.show("telos/a").expect("show source");
     let from_target = client.show("telos/b").expect("show target");
     assert!(
@@ -269,8 +283,11 @@ fn conformance_relate_shape_is_accepted_by_real_kan() {
     );
     assert!(
         !from_target.iter().any(|c| c.kind == "Relation"),
-        "kan now surfaces relations from the target; day writes two edges to \
-         compensate for it not doing so, and that should be revisited"
+        "a target subject's own claims now include a relation asserted by another \
+         subject. If day can read target-side relations as STRUCTURED claims — not as \
+         kan's rendered `inbound` strings — then the second edge `day telos tension` \
+         writes is redundant and the design should be revisited. If this fails because \
+         `inbound` merely exists, that is not sufficient: see kan#103."
     );
 }
 
