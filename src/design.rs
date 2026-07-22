@@ -66,6 +66,39 @@ impl Document {
         }
     }
 
+    /// Prose with inline code spans removed, for the checks that must not
+    /// fire on a document *quoting* a marker rather than carrying one.
+    ///
+    /// [`Self::prose`] already excludes fenced blocks, and its comment states
+    /// the intent — "a doc explaining `TODO` markers is not itself
+    /// unfinished". Inline spans are the case that intent missed, and it bit:
+    /// `commands/design.md` tells an author to end every open question with
+    /// "remove the `<!-- OPEN -->` marker", so each genuine open question
+    /// contributed *two* matches — its real `<!-- OPEN: Qn -->` opener and
+    /// the literal marker quoted in the instruction. A doc with two open
+    /// questions reported four.
+    ///
+    /// Spans are matched per line, so an unbalanced backtick swallows at most
+    /// the rest of that line rather than the remainder of the document. Nested
+    /// or multi-backtick delimiters (``` `` ` `` ```) are not handled; they do
+    /// not occur in a design document, and guessing at them would cost more
+    /// than it returns.
+    fn prose_outside_code_spans(&self) -> String {
+        let mut out = String::with_capacity(self.prose.len());
+        for line in self.prose.lines() {
+            let mut in_span = false;
+            for c in line.chars() {
+                match c {
+                    '`' => in_span = !in_span,
+                    _ if !in_span => out.push(c),
+                    _ => {}
+                }
+            }
+            out.push('\n');
+        }
+        out
+    }
+
     pub fn section(&self, heading: &str) -> Option<&str> {
         self.sections
             .iter()
@@ -344,10 +377,15 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
         }
     }
 
+    // Quoted markers are examples, not defects — the same rule fenced blocks
+    // already got, extended to inline spans. A design doc that writes
+    // `` `TODO` `` while explaining the convention is not unfinished.
+    let unquoted = doc.prose_outside_code_spans();
+
     let present: Vec<&String> = schema
         .placeholders
         .iter()
-        .filter(|p| contains_token(&doc.prose, p))
+        .filter(|p| contains_token(&unquoted, p))
         .collect();
     for placeholder in &present {
         findings.push(Finding {
@@ -402,7 +440,7 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
 
     Report {
         findings,
-        open_questions: doc.prose.matches("<!-- OPEN").count(),
+        open_questions: unquoted.matches("<!-- OPEN").count(),
     }
 }
 
@@ -626,13 +664,55 @@ mod tests {
         assert!(report.is_clean(), "{}", report.render());
     }
 
+    /// Uses the block shape `commands/design.md` actually emits, including
+    /// its closing instruction line. The previous version of this test built
+    /// a block *without* that line, so it asserted on text the command never
+    /// produces — and the miscount below survived it.
     #[test]
     fn open_question_markers_warn_without_failing() {
-        let text = format!("{DOC}\n<!-- OPEN: Q3 -->\nstill deciding\n<!-- /OPEN -->\n");
+        let text = format!(
+            "{DOC}\n<!-- OPEN: Q3 -->\n### Q3: still deciding\ncontext and options\n\
+             **To resolve**: Edit this section with your decision and remove the \
+             `<!-- OPEN -->` marker.\n<!-- /OPEN -->\n"
+        );
         let doc = Document::parse(&text);
         let report = check(&doc, &schema(), Path::new(env!("CARGO_MANIFEST_DIR")));
         assert_eq!(report.open_questions, 1);
         assert!(report.is_clean(), "an explicit unknown is not a defect");
+    }
+
+    /// Regression for the miscount that `.design/assess-telos.md` exposed:
+    /// two genuine open questions reported as four, because each block quotes
+    /// the literal `<!-- OPEN -->` marker in the instruction telling an author
+    /// to remove it. Invisible until a design doc was recorded with unresolved
+    /// blocks still in it, which had never happened before.
+    #[test]
+    fn a_quoted_open_marker_is_not_counted_as_an_open_question() {
+        let block = |n: u8| {
+            format!(
+                "<!-- OPEN: Q{n} -->\n### Q{n}: a real question\n\
+                 **To resolve**: Edit this section and remove the `<!-- OPEN -->` marker.\n\
+                 <!-- /OPEN -->\n"
+            )
+        };
+        let text = format!("{DOC}\n{}\n{}\n", block(1), block(2));
+        let doc = Document::parse(&text);
+        let report = check(&doc, &schema(), Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert_eq!(
+            report.open_questions, 2,
+            "two blocks, each quoting the marker once, must count as two"
+        );
+    }
+
+    /// The same class, one rule over: a doc explaining the `TODO` convention
+    /// inline is not itself unfinished. `prose` already excluded fenced
+    /// blocks for this reason; inline spans are the case that intent missed.
+    #[test]
+    fn a_placeholder_inside_an_inline_code_span_does_not_count() {
+        let text = format!("{DOC}\nWe treat `TODO` and `TBD` as placeholder markers.\n");
+        let doc = Document::parse(&text);
+        let report = check(&doc, &schema(), Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert!(report.is_clean(), "{}", report.render());
     }
 
     #[test]

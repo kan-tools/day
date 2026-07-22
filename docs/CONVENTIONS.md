@@ -157,6 +157,12 @@ backtick-quoted path in `paths_section` existing on disk, and a count of
 unresolved `<!-- OPEN` blocks. Open questions warn; they do not fail — an
 explicitly-marked unknown is a feature of a design doc, not a defect.
 
+The placeholder and open-question rules ignore **both** fenced blocks and
+inline code spans, so a document that *quotes* a marker while explaining the
+convention is not treated as carrying one. The path rule deliberately does
+not: it looks for backtick-quoted paths, so stripping spans there would
+leave it nothing to read.
+
 `day design record <path>` appends the chain: an `observe` carrying the
 validation result, a `plan` for the design citing it, and one `decide` per
 bullet under `resolved_section` citing the plan. day assembles `--cites`
