@@ -377,11 +377,33 @@ approximate); or a recorded claim (task-tracking under another name).
 This is **the same question as the status line's latency cache**. Both want a
 small piece of ephemeral derived state on disk.
 
-**Decided: a disposable render cache.** `SessionStart` does the kan reads —
-it already runs, already reads kan, and has time — and writes a small
-rendered snapshot. The status line just reads that snapshot, so it can never
-be cancelled mid-flight. The same snapshot is the baseline transition
-detection needs.
+**Decided, then refined.** `SessionStart` does the kan reads — it already
+runs and has time — and writes a small rendered snapshot. The status line
+reads that snapshot, so it can never be cancelled mid-flight.
+
+**But the two problems turned out to be separable, and merging them was the
+error.** "The line must render before it is cancelled" and "a transition
+needs a baseline" are different questions. **The baseline is claims**, not
+the cache: an assessment recorded in kan is durable, attributable,
+retractable, contradictable, and scoped by the same locally-signed projection
+rule `practice` uses. A file is none of those.
+
+This is not the task-tracking `docs/CONVENTIONS.md` refuses — that refusal
+says whether a step happened *"is already derivable from claims and artifacts
+existing"*, which is exactly this. What it refuses is day-owned tracking
+state. And day **reads** those claims and never writes them, because
+`src/telos.rs` already holds that conflating *"I checked"* with *"I recorded
+that I checked"* would let the tool manufacture its own evidence.
+
+So a transition means something better than originally designed: not *"the
+cache file changed"* but *"position has changed since you last recorded an
+assessment"* — self-reinforcing, since the baseline exists only if
+assessments are actually recorded, and `assess telos` already prints the
+`kan result` that writes one.
+
+The cache is left holding **only rendered display state**, which tightens its
+guardrail structurally rather than by rule: there is no longer anything in it
+to misuse.
 
 Why that is not a store, stated so it can be argued with. This telos exists
 so *"a project can discard day entirely and lose nothing but opinions"*. A
