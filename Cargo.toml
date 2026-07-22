@@ -1,6 +1,6 @@
 [package]
 name = "day"
-version = "0.4.0-beta.1"
+version = "0.5.0-beta.1"
 edition = "2021"
 license = "MIT"
 description = "Structured process layer for AI-assisted development — teloi, atoms, and drift, recorded in kan."
