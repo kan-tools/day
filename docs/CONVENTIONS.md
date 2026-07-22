@@ -276,10 +276,16 @@ telos's equivalence class. Record it on the telos subject, citing the
 evidence:
 
 ```bash
-kan result "v0.2 shipped: interface-legibility holds -- \`day --help\` names all four verbs, \
+kan result telos/interface-legibility \
+  "v0.2 shipped: interface-legibility holds -- \`day --help\` names all four verbs, \
 tests/cli.rs::init_prints_both_install_paths covers the setup path." \
-  --subject telos/interface-legibility --cites <cid of the claim being assessed>
+  --cites <cid of the claim being assessed>
 ```
+
+Note the shape: `kan result` takes the **subject positionally**, as
+`<SUBJECT> <TEXT>`, while `observe`, `plan`, and `decide` take `<TEXT>` with
+`--subject`. This page previously documented `kan result` with `--subject`,
+which does not run. Copy the form above rather than the sibling verbs'.
 
 Assess against **material evidence** — builds, tests, diffs, deployed
 behavior — not against an agent's own account of what it did. kan's log is
