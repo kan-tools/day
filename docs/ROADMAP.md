@@ -261,7 +261,14 @@ rather than a patch, and each revises a REQ already recorded in kan.
   with anchors, day could tell that a tag predates a telos and downgrade a
   false positive to a warning.
 
-## v0.6 — Rigor as artifact
+## v0.6 — Rigor as artifact *(in progress)*
+
+**Model half shipped.** Atoms carry `done` criteria, `day assess atom` gates
+on them, and position is inferred from artifacts (`src/position.rs`). The
+**surface half** — the render cache, `day status`, the status line, wiring
+inference into session-start, and claims-based transitions — is not started.
+The full design is `.design/rigor-as-artifact.md`; the resume point is on the
+`spine` subject in kan.
 
 **day is squishy.** It describes a process well and does very little to make
 one happen. A session using day still produces test gaps, semantic drift
