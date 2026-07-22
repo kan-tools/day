@@ -165,6 +165,28 @@ case "$1" in
 
     printf '%s\n' "$cid"
     exit 0 ;;
+  relate)
+    # `kan relate <A> <KIND> <B>` — two positional subjects, no text. The
+    # shape differs from the append verbs above on purpose: that asymmetry
+    # is real in kan (kan#78), and a stub that quietly accepted day's append
+    # shape here would hide exactly the class of bug day#27 exists to catch.
+    n=$(cat "$DATA/append-count" 2>/dev/null || echo 0)
+    n=$((n + 1))
+    printf '%s' "$n" > "$DATA/append-count"
+    printf '%s\n<<<END-OF-APPEND>>>\n' "$*" >> "$DATA/appends.log"
+    cid=$(printf 'bafyreistub%08d' "$n")
+
+    # Readable afterwards, from the SOURCE subject only — kan's relation is
+    # directed and `kan show <target>` does not surface an edge pointing at
+    # it. Mirroring that here keeps the stub from implying a symmetry the
+    # real binary does not have.
+    f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').txt"
+    [ -f "$f" ] || printf '%s (live claims):\n' "$2" > "$f"
+    printf '  %s  Relation  Relation {{ kind: %s, target: Local("%s") }}\n' \
+      "$cid" "$3" "$4" >> "$f"
+
+    printf '%s\n' "$cid"
+    exit 0 ;;
   *) echo "kan stub: unsupported command $1" >&2; exit 1 ;;
 esac
 "#,

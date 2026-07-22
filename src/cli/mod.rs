@@ -17,6 +17,11 @@ use clap::{Parser, Subcommand};
 
 use crate::{doctor, hooks, kan_client::KanClient, mcp};
 
+/// kan's `RelationKind` for two subjects that pull against each other.
+/// Shipped in kan#60; before that, tension between teloi could only be
+/// prose, which is why day#18 existed.
+const TENSION_RELATION: &str = "in-tension-with";
+
 /// Exit code for "day ran fine, but the process state it inspected has
 /// findings" — distinct from a hard failure so scripts can tell the two
 /// apart.
@@ -297,6 +302,18 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             print!("{}", outcome.render());
             Ok(ExitCode::SUCCESS)
         }
+        // Emits both a claim and a pair of edges. The claim carries the
+        // *why*, because a kan relation has no narrative body; the edges make
+        // the tension queryable, which prose never was (day#18).
+        //
+        // Two edges, not one. `kan relate` is directed and the relation is
+        // visible only from its source — verified against a real kan, where
+        // `kan show telos/b` does not surface an edge declared from
+        // `telos/a`. Tension is symmetric, so representing it faithfully in a
+        // directed model takes both directions; with one edge, asking "what
+        // is this telos in tension with" would answer correctly from one side
+        // and lie by omission from the other, and which side you got would
+        // depend on the order the arguments happened to be typed in.
         Command::Telos(TelosAction::Tension { a, b, why }) => {
             let prefix = crate::atoms::TELOS_PREFIX;
             let subject_a = format!("{prefix}{a}");
@@ -310,11 +327,23 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     text: &text,
                     title: None,
                     kind: None,
-                    also_cite: &[subject_b],
+                    also_cite: std::slice::from_ref(&subject_b),
                     act: crate::vocabulary::Act::Relate { what: "tension" },
                 },
             )?;
             print!("{}", outcome.render());
+
+            let cites = [outcome.cid.clone()];
+            let mut edges = Vec::new();
+            for (from, to) in [(&subject_a, &subject_b), (&subject_b, &subject_a)] {
+                edges.push(client.relate(from, TENSION_RELATION, to, &cites)?);
+            }
+            for (edge, (from, to)) in edges
+                .iter()
+                .zip([(&subject_a, &subject_b), (&subject_b, &subject_a)])
+            {
+                println!("  {from} {TENSION_RELATION} {to} ({edge})");
+            }
             Ok(ExitCode::SUCCESS)
         }
         // Reports composition findings but records regardless: declaring a

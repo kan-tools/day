@@ -156,6 +156,28 @@ impl KanClient {
         }
         Ok(self.run(&args)?.trim().to_string())
     }
+
+    /// Asserts a domain-semantic edge between two subjects, via
+    /// `kan relate <A> <KIND> <B>`.
+    ///
+    /// Deliberately **not** routed through [`Self::append`]. That method
+    /// builds `<verb> <text> --subject <s>`, and `kan relate` takes its two
+    /// subjects positionally with no text at all — the same argument-shape
+    /// asymmetry that put a command which does not run into
+    /// `docs/CONVENTIONS.md` for several releases (day#27, kan#78). A verb
+    /// with a different shape gets its own method;
+    /// `tests/kan_conformance.rs` enforces that.
+    ///
+    /// A relation carries no narrative body, so whatever *reason* the edge
+    /// has must live in a claim the edge cites. Callers pass that CID here.
+    pub fn relate(&self, a: &str, kind: &str, b: &str, cites: &[String]) -> Result<String, Error> {
+        let mut args: Vec<&str> = vec!["relate", a, kind, b];
+        for cid in cites {
+            args.push("--cites");
+            args.push(cid);
+        }
+        Ok(self.run(&args)?.trim().to_string())
+    }
 }
 
 /// One append, as arguments rather than a long parameter list — the write

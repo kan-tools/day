@@ -150,11 +150,25 @@ fn ac3_tension_cites_both_teloi_and_refuses_when_one_is_missing() {
         String::from_utf8_lossy(&out.stderr)
     );
     let log = appends(dir.path());
-    assert_eq!(log.len(), 1);
+    assert_eq!(log.len(), 3, "a claim carrying the why, plus two edges");
     assert!(log[0].contains("--subject telos/a"), "{}", log[0]);
     assert!(log[0].contains("--cites bafyreia"), "{}", log[0]);
     assert!(log[0].contains("--cites bafyreib"), "{}", log[0]);
     assert!(log[0].contains("they pull apart"), "{}", log[0]);
+
+    // day#18: the tension is a queryable edge, not only prose. Two edges,
+    // because kan's relation is directed and visible only from its source —
+    // with one, "what is this telos in tension with" would answer from
+    // whichever side the arguments happened to be typed in and lie by
+    // omission from the other.
+    assert_eq!(
+        log[1], "relate telos/a in-tension-with telos/b --cites bafyreistub00000001",
+        "the a→b edge should cite the claim carrying the reason"
+    );
+    assert_eq!(
+        log[2], "relate telos/b in-tension-with telos/a --cites bafyreistub00000001",
+        "the b→a edge should exist too, and cite the same reason"
+    );
 
     // A tension asserted against a telos that was never declared would be a
     // claim about nothing.
