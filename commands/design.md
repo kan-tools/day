@@ -188,7 +188,59 @@ unrecorded design serves the record worse than a visibly incomplete one.
 Report the CIDs it prints. If `day` or `kan` is unavailable, say so and leave the
 document as a plain file rather than improvising a chain.
 
-### Phase 6: What comes next
+### Phase 6: Name the target, and plan the path to it
+
+A design says what to build. It does not say what state of the world the work
+is *for*, or how the steps get there — and when those go unrecorded, the record
+cannot afterwards say what the work was aiming at.
+
+**This phase exists because of measured behaviour, not principle.** Across
+day's first five milestones, every capability with a slash command was used
+every time, and every capability that was only a bare CLI verb was used once,
+by its author, in the milestone that built it. `day bridge check` ran for the
+milestone that shipped it and never again; exactly one milestone telos was ever
+declared. The fix is not to ask people to remember a verb. It is to attach the
+verb to a step that already happens — this one. (Recorded on `process-model`;
+`docs/ROADMAP.md` v0.5 carries the evidence.)
+
+1. **Establish the target telos.** Read the teloi already on record
+   (`kan status | grep 'telos/'`). Either this work serves one that exists — say
+   which, and why — or it needs a new one. A milestone-shaped design usually
+   does: the state of the world where this work is done and visible.
+
+   Declare it with **witnesses**, the artifact *types* that would evidence it.
+   Without witnesses a telos cannot be a checkable bridge target, and day will
+   say so rather than guess:
+
+   ```bash
+   day telos declare <slug> "<the state of the world this reaches>" \
+     --witness <artifact-type>
+   ```
+
+2. **Declare the bridge** — the arrangement of atoms that gets from here to
+   there. Ask the vocabulary what exists (`day doctor`) rather than assuming a
+   pipeline; `>` is sequence, `&` concurrent, `|` alternatives, and `--have`
+   names what is already available at the start:
+
+   ```bash
+   day bridge declare <slug> --telos <telos-slug> --have intent \
+     --plan "design > generative-build > adversarial-review > pull-request > release"
+   ```
+
+3. **Check it, and report what it says verbatim.** `day bridge declare` runs
+   this for you, so a separate `day bridge check <slug>` is only needed when
+   revising.
+
+   If it reports the plan cannot reach the telos, **do not quietly adjust the
+   telos until it passes.** An unreachable plan is information: either a step is
+   missing, or the target needs a witness no declared atom produces. Say which.
+
+**If the user declines any of this, record that they declined and move on.**
+This phase is advisory like everything else day does — `telos/affordance-not-enforcement`
+governs day's own commands too, and a design pass that refuses to finish
+without a bridge would be the gate this project exists to avoid.
+
+### Phase 7: What comes next
 
 Do not tell the user to run a particular command next. Ask the graph:
 
@@ -210,6 +262,8 @@ Design document written: .design/<slug>.md
 
 Validation: N requirements, N acceptance criteria, N open questions
 kan record:  <recorded as observe/plan/decide claims | skipped, kan not built>
+Target:      telos/<slug> <witnesses> | <named existing telos> | declined
+Bridge:      bridge/<slug> — <reaches | does not reach | not declared>
 
 Next steps:
   - Edit in your editor:  $EDITOR .design/<slug>.md
