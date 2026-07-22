@@ -13,5 +13,5 @@
       }
     ]
   },
-  "_why_no_session_end": "day hook session-end exists as a command but is deliberately NOT registered. Only UserPromptSubmit, UserPromptExpansion, and SessionStart add hook stdout to the model's context; every end-of-session event writes to the debug log, so a prompt registered there would silently reach nobody. The one mechanism that would deliver text at that moment is Stop's blocking decision, which affordance-not-enforcement forbids. The useful content moved into the SessionStart hook above."
+  "_why_no_session_end": "day hook session-end exists as a command but is deliberately NOT registered. Only UserPromptSubmit, UserPromptExpansion and SessionStart add hook stdout to the MODEL's context; SessionEnd stdout goes to the debug log, so a prompt for the agent registered there would reach nobody. The one mechanism that would deliver text to the model at that moment is Stop's blocking decision, which affordance-not-enforcement forbids. The useful content moved into the SessionStart hook above. CORRECTED (v0.6 harness verification): this reasoning was right about the MODEL and wrong about the HUMAN -- SessionEnd stderr IS shown to the user, so an end-of-session report aimed at a person is achievable and was ruled out by a question nobody asked. Being reconsidered in v0.6 alongside the status line."
 }
