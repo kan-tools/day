@@ -90,8 +90,13 @@ Two findings from this session sharpen the tension half:
   `bridge::Report::render` already makes — rather than being guessed at or
   silently passed.
 - REQ-12: `day assess telos` writes nothing to kan or the working tree. It
-  prints a runnable `kan result --subject telos/<slug> --cites <cid>` for the
-  reader, keeping performing an assessment separate from recording one.
+  prints a runnable `kan result telos/<slug> "<text>" --cites <cid>` for the
+  reader, keeping performing an assessment separate from recording one. Note
+  the argument shape: `kan result` takes its subject **positionally**, unlike
+  `observe`/`plan`/`decide`. The command day prints must be verified against
+  the real `kan` binary, not against a stub — the stub accepts whatever day
+  sends it, which is how the wrong form reached `docs/CONVENTIONS.md` in the
+  first place.
 - REQ-13: `day telos tension a b <why>` emits a `kan relate telos/a
   in-tension-with telos/b` edge **and** the prose claim carrying the reason,
   because a kan relation has no narrative body. The verb's argument surface
@@ -147,8 +152,10 @@ Two findings from this session sharpen the tension half:
       (REQ-11)
 - [ ] AC-12: Running `day assess telos` against a repository leaves the kan log
       and the working tree byte-identical, asserted by comparing `kan status`
-      and `git status --porcelain` before and after; the printed `kan result`
-      command is present in the output. (REQ-12)
+      and `git status --porcelain` before and after. The printed `kan result`
+      command is present in the output **and is accepted by the real `kan`
+      binary** — verified by running it in a scratch repo, since a stub would
+      accept any argument shape and prove nothing. (REQ-12)
 - [ ] AC-13: `day telos tension a b "why"` produces both an `in-tension-with`
       relation between the two subjects and a claim containing the reason text,
       with the same arguments the verb accepted before this change. (REQ-13)
