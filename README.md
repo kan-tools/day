@@ -125,18 +125,23 @@ Claude Code plugin:
 
 ## Status
 
-Early. v0.4.0-beta.1 opened *assessing* with `day assess docs` and gave day a
-second substrate: git, read-only. Unreleased on `main`, heading for v0.5:
-`day assess telos`, which judges work against material evidence and brings a
-third substrate — project-declared commands, executed only on explicit
-request and never through a shell.
+Early. **v0.5.0-beta.1** is *"used, not just built"*, after a meta-evaluation
+of the first five milestones returned a **REDIRECT**: every capability with a
+slash command was used every milestone, and every capability that was only a
+bare CLI verb was used once, by its author, in the milestone that built it.
+So this release is mostly about making what already existed get used.
 
-v0.5 is **"used, not just built"**, after a meta-evaluation of the first five
-milestones returned a REDIRECT: every capability with a slash command was used
-every milestone, and every capability that was only a bare CLI verb was used
-once, by its author, in the milestone that built it. Frames moved to v0.6 on
-the roadmap's own pacing argument. The conventions are v0 and expected to
-change.
+It ships `day assess telos` — judging work against material evidence, and
+day's third substrate: project-declared commands, executed only on explicit
+request and never through a shell. Tension becomes a real queryable edge; a
+telos may scope which instances of a witness count; and a project can project
+its **own** working practice into an agent's context instead of inheriting
+day's. `/design` now ends by declaring the milestone's target telos and
+bridge, because attaching a verb to a step that already happens is the only
+thing that reliably gets it used.
+
+Frames moved to v0.7 — its second deferral, said plainly in the roadmap
+rather than renumbered quietly. The conventions are v0 and expected to change.
 
 Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
