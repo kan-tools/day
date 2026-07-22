@@ -261,13 +261,174 @@ rather than a patch, and each revises a REQ already recorded in kan.
   with anchors, day could tell that a tag predates a telos and downgrade a
   false positive to a warning.
 
-## v0.6 — Frames
+## v0.6 — Rigor as artifact
+
+**day is squishy.** It describes a process well and does very little to make
+one happen. A session using day still produces test gaps, semantic drift
+between a design and its implementation, and a lot of doubling back — this
+repo's own v0.5 session produced all three, repeatedly, while day was running.
+
+The intuitive fix is to inject better rules, in the style of `crosslink`'s
+`rules/rigor.md`. **The evidence says that is the weak lever**, and it comes
+from this project:
+
+> day#30 shipped an injected rule — *"do not chain commit and push; chaining
+> removes the last checkpoint where a bad commit is still cheap."* About an
+> hour later, the agent that wrote it chained an inspection to an
+> irreversible `rm -rf` and destroyed kan's log. The rule was in its context
+> at the time.
+
+A rule in context did not survive contact with the moment it applied to. So
+v0.6 does not lead with injection.
+
+**What did work in that session, every time:** mutation testing (each test
+mutated and watched to fail was real; each one where that step was skipped
+turned out hollow — the kan stub, the open-question counter, a git stub
+returning all tags regardless of pattern), dogfooding against the real log,
+and guardrail tests that grep the source. None of those are rules. All of
+them are **artifacts that fail loudly when the thing they guard breaks**.
+
+### The structural gap
+
+Teloi have **witnesses** and **probes** — an evidence story, shipped in v0.5.
+Atoms have `in`, `out`, `next`: types only, and **nothing that says how you
+know the atom is done**. `generative-build` emits a `code-change`; what makes
+a code-change finished is currently vibes.
+
+So atoms get what teloi already have:
+
+```day-atom
+{"in": ["design-doc"], "out": ["code-change"], "next": ["adversarial-review"],
+ "done": ["tests-fail-when-mutated", "clippy-clean", "every-req-named-by-a-test"]}
+```
+
+`done` entries resolve through the same `schema/witness` probes v0.5 shipped.
+Atom completion becomes mechanically checkable **and per-project** — derived
+from what this project declared, not from an opinion day ships. That is also
+the difference from a rules file: `crosslink` ships general standards; day
+makes *your* declared process checkable.
+
+### Situated injection
+
+Session-start currently injects `Process atoms (7): <names>`, which tells an
+agent nothing it can act on. With `done` criteria and **position inferred from
+evidence** — a design doc with no code change means you are in
+`generative-build` — injection becomes: what this atom needs, what it
+produces, and how you will know it is finished.
+
+Inferred, never tracked. day still stores nothing, and the task-tracker line
+`docs/CONVENTIONS.md` draws stays uncrossed.
+
+### The human has never seen any of this
+
+The observation that reframes the milestone, from the person who has used day
+across several repos:
+
+> the atom sequencing has never visibly played out in any repo I've used day
+> in.
+
+Not *unclear* — **never observed**. And it follows directly from where day's
+output goes: hook stdout is injected into the **model's** context, never
+displayed, and everything else requires running a verb. The human driving the
+session sees nothing at all.
+
+So day's value proposition is legible process, and the process is invisible to
+the person it is meant to be legible to. That is also a better explanation of
+v0.5's adoption finding than v0.5 gave: bare verbs are not merely
+unmemorable — **nothing ever indicates there is anything to look at**.
+
+v0.6 adds a surface aimed at the human, not the agent:
+
+- **A status line.** Current atom, which inputs are satisfied, which `done`
+  criteria are unmet, what comes next. Continuous, and it costs **no context
+  budget** because statusline output never enters the model's context.
+- **`day status`** — the detail one line cannot carry, for when the line says
+  something is wrong.
+- **Off-sequence detection.** With position inferred, out-of-order work is
+  derivable: a `code-change` with no `design-doc`, against a bridge plan that
+  says `design > generative-build > adversarial-review`. Shown in the line,
+  and injected to the agent through `UserPromptSubmit` **only when the state
+  changes** — not every turn.
+
+That last one needs distinguishing from the day#30 evidence above, or it looks
+like a contradiction. What failed there was a **general standing rule**,
+present always and therefore background. *"You are off-sequence right now"* is
+**specific, situated, and state-triggered**. One data point against ambient
+rules does not condemn timely ones, and treating them as the same thing would
+be over-learning from a single failure.
+
+### Transitions and end-state
+
+A status line shows continuous state. **Transitions are events**, and an event
+deserves marking rather than being something you catch by watching a line
+change. So v0.6 also reports when an atom transition happens, and prints an
+atom's end-state — its `done` criteria, evaluated — when one completes.
+
+Two constraints fall out, and both must be settled *before* anything is built.
+
+**A transition is a difference, and a difference needs a baseline.** Position
+is inferred from evidence, which is stateless by design and is exactly what
+keeps day off the task-tracker line. But *"the position changed"* cannot be
+computed from current evidence alone. Candidates: remembered state in a file
+(day-owned, disposable, and still the thing `telos/no-store-of-its-own`
+forbids); the git diff against `HEAD` (stateless and evidence-derived, but
+approximate); or a recorded claim (task-tracking under another name).
+
+This is **the same question as the status line's latency cache**. Both want a
+small piece of ephemeral derived state on disk. Decide it once, deliberately —
+the easy answer to each is a cache file, and taken together they are a store.
+
+**Which hook events reach the *human* is unknown and must be verified first.**
+`hooks/hooks.json` records which events deliver stdout to the **model**;
+nothing records what reaches a person mid-session. A status line does. Whether
+any hook does is unverified.
+
+This repo has already shipped a hook wired to an event whose output reached
+nobody — the v0.2 session-end hook, which `/adversarial-review` named the most
+serious finding it ever produced, and whose lesson is in `CLAUDE.md` as *"a
+check that only inspects its own side of an interface will miss the
+interface."* Designing transition reporting without first reading the harness
+docs would repeat that failure in the same place, having written the lesson
+down twice.
+
+**So the first task of the v0.6 design pass is not design.** It is
+establishing, from the harness documentation rather than by inference, which
+channels can deliver to a human mid-session. Everything about transition
+reporting depends on the answer, and guessing produces a feature that silently
+reaches nobody.
+
+The status line's latency is the other thing to settle in that pass: it
+re-runs constantly, day shells out to kan, and a single `kan status` is ~1.2s.
+Unusable as-is. Making kan reads fast is upstream and not day's to schedule;
+restricting the line to git-derived facts makes it cheap and much weaker; a
+long-running `day` process is a new architecture.
+
+### Still advisory
+
+A hard gate was considered and rejected: a `Stop` hook or pre-commit refusing
+when criteria are unmet would be the strongest standardizing force and would
+directly contradict `telos/affordance-not-enforcement`, which `tests/plugin.rs`
+enforces and which exists because crosslink's blocking hooks caused the
+friction day was split out to avoid.
+
+The line that holds instead: **enforcement at the artifact level, not the
+action level.** day never gates an agent mid-action. It makes the state of the
+work measurable and exits non-zero. CI and humans gate; day reports.
+
+## v0.7 — Frames
 
 Multi-actor, and paced by kan's own sync work (a frame only bites once there is
-more than one actor with more than one log). **Moved here from v0.5** by the
-meta-evaluation above: with one actor, shipping frames would build a model
-nobody exercises, which is the pattern that earned the REDIRECT. The roadmap's
-own pacing argument already said as much.
+more than one actor with more than one log).
+
+**This is the second deferral** — v0.5 moved it from v0.5 to v0.6, and v0.6's
+rigor work moves it again. The reason is the same both times and is consistent
+rather than evasive: the v0.5 meta-evaluation found day's model outrunning its
+use, frames is more model, and rigor-as-artifact is use. Building frames while
+day still fails to shape a session would repeat the finding exactly.
+
+Said plainly so it can be checked: **if frames slips a third time, that is no
+longer a sequencing argument.** It would mean either the item should be cut or
+there is a reason it keeps losing that has not been named.
 
 - Frames as internal toposes: an assessment is a certificate valid inside some
   actor's own logic, not an absolute fact.
@@ -282,7 +443,7 @@ own pacing argument already said as much.
   variant, and day#18 lands the edge in v0.5, so frames arrives with tension
   already queryable rather than needing it first.
 
-## v0.7 — Atom library and meta-evaluation
+## v0.8 — Atom library and meta-evaluation
 
 - The remaining atoms from `TELOS.md`: user testing, structured research and
   data extraction, formal verification before build-out, external comms and
