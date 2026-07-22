@@ -90,7 +90,15 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // mutating verbs is both leakier (git has many) and prone to false
     // positives — the first version of this test flagged `git tag --list`,
     // which is a read, because it matched a pattern meant for `git tag -d`.
-    const ALLOWED_READS: [&str; 6] = ["tag", "diff", "log", "rev-parse", "show", "status"];
+    const ALLOWED_READS: [&str; 7] = [
+        "tag",
+        "diff",
+        "log",
+        "rev-parse",
+        "show",
+        "status",
+        "ls-files",
+    ];
     let git_rs = sources
         .iter()
         .find(|(p, _)| p.file_name().unwrap() == "git.rs")
@@ -339,4 +347,83 @@ fn ac10_assess_docs_is_a_subcommand_of_assess() {
         .expect("failed to run day assess --help");
     let help = String::from_utf8_lossy(&out.stdout);
     assert!(help.contains("docs"), "{help}");
+}
+
+/// `.design/assess-telos.md` AC-6. Command probes make the shell day's third
+/// substrate, and the no-shell rule is only worth anything if it is checkable
+/// rather than intended. Two halves: every process day spawns lives in one of
+/// three modules, and the one that runs project-declared commands never
+/// reaches for a shell.
+#[test]
+fn ac6_probe_execution_is_confined_and_never_uses_a_shell() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let sources: Vec<(std::path::PathBuf, String)> = walk(&src)
+        .into_iter()
+        .map(|p| {
+            let text = std::fs::read_to_string(&p).unwrap();
+            (p, text)
+        })
+        .collect();
+
+    // Spawning is confined to the three substrate modules. A probe executed
+    // from anywhere else would sit outside the guardrails below.
+    const MAY_SPAWN: [&str; 3] = ["git.rs", "kan_client.rs", "probe.rs"];
+    for (path, text) in &sources {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if text.contains("Command::new") {
+            assert!(
+                MAY_SPAWN.contains(&name.as_str()),
+                "{} spawns a process; day's subprocess access belongs in {MAY_SPAWN:?}",
+                path.display()
+            );
+        }
+    }
+
+    let probe = sources
+        .iter()
+        .find(|(p, _)| p.file_name().unwrap() == "probe.rs")
+        .expect("src/probe.rs should exist");
+
+    // A shell would turn `;`, `|`, `&&` and backticks arriving from a kan
+    // claim into operators. Checked against code only: the module documents
+    // the rule in prose, and a substring scan cannot tell prose from code.
+    let code: String = probe
+        .1
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for forbidden in ["\"sh\"", "\"bash\"", "\"-c\"", "\"/bin/sh\"", "sh -c"] {
+        assert!(
+            !code.contains(forbidden),
+            "src/probe.rs mentions {forbidden} in code; a command probe must be exec'd \
+             directly, never through a shell"
+        );
+    }
+    assert!(
+        code.contains("split_whitespace"),
+        "probe argv should be split and exec'd directly"
+    );
+}
+
+/// `.design/assess-telos.md` AC-8's other half. The MCP surface must not be
+/// able to execute a command probe, so the parameter that would authorize it
+/// must not exist.
+#[test]
+fn ac8_the_mcp_surface_has_no_way_to_authorize_execution() {
+    let mcp = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("mcp.rs"),
+    )
+    .unwrap();
+    assert!(
+        mcp.contains("Authorization::Report"),
+        "the MCP assess_telos tool should hard-wire report-only authorization"
+    );
+    assert!(
+        !mcp.contains("Authorization::Run"),
+        "src/mcp.rs must never construct Authorization::Run — an agent calling a \
+         read-shaped tool cannot be allowed to execute project-declared commands"
+    );
 }

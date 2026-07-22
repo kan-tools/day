@@ -51,6 +51,8 @@ pub enum Error {
     Atoms(#[from] crate::atoms::Error),
     #[error(transparent)]
     Docs(#[from] crate::docs::Error),
+    #[error(transparent)]
+    Telos(#[from] crate::telos::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -201,6 +203,22 @@ pub enum AssessAction {
         /// release boundary and skips the reconciliation check.
         #[arg(long)]
         since: Option<String>,
+    },
+    /// Check whether a telos's declared witnesses were actually produced
+    Telos {
+        /// The telos slug, e.g. `v05-shipped`. Omit with --all.
+        slug: Option<String>,
+        /// Assess every declared telos
+        #[arg(long, conflicts_with = "slug")]
+        all: bool,
+        /// Execute `command` probes. Without this they are reported but
+        /// never run, so a reader sees what would execute before
+        /// authorizing it.
+        #[arg(long)]
+        run: bool,
+        /// Seconds a command probe may run before it is killed
+        #[arg(long, default_value_t = crate::probe::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
     },
 }
 
@@ -494,6 +512,66 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 ExitCode::SUCCESS
             } else {
                 ExitCode::from(EXIT_FINDINGS)
+            })
+        }
+        // `--run` is read here and nowhere else: authorization is a decision
+        // a person makes at a terminal, per invocation. There is deliberately
+        // no environment variable and no config for it, and `src/mcp.rs`
+        // cannot reach this path.
+        Command::Assess(AssessAction::Telos {
+            slug,
+            all,
+            run,
+            timeout,
+        }) => {
+            let git = crate::git::Git::new(cwd.clone());
+            let auth = if run {
+                crate::probe::Authorization::Run {
+                    timeout: std::time::Duration::from_secs(timeout),
+                }
+            } else {
+                crate::probe::Authorization::Report
+            };
+
+            let slugs = match (all, slug) {
+                (true, _) => crate::telos::all_slugs(&client)?,
+                (false, Some(slug)) => vec![slug],
+                (false, None) => {
+                    eprintln!("error: name a telos, or pass --all to assess every declared one");
+                    return Ok(ExitCode::from(EXIT_UNAVAILABLE));
+                }
+            };
+
+            let mut clean = true;
+            let mut unavailable = false;
+            for (i, slug) in slugs.iter().enumerate() {
+                if i > 0 {
+                    println!("{}", "-".repeat(60));
+                }
+                match crate::telos::assess(&client, &git, slug, auth) {
+                    Ok(report) => {
+                        print!("{}", report.render());
+                        clean &= report.is_clean();
+                    }
+                    // A named telos that cannot be assessed is a failed
+                    // invocation, not a clean one: a typo'd slug exiting 0
+                    // would read as "assessed, nothing wrong" to any script.
+                    // In an `--all` sweep the others are still worth
+                    // reporting, so the error is printed and the run
+                    // continues — but the exit code still says a check did
+                    // not run.
+                    Err(e) => {
+                        println!("{}{slug}: {e}", crate::atoms::TELOS_PREFIX);
+                        unavailable = true;
+                    }
+                }
+            }
+            // "Could not check" outranks "checked and found something": a
+            // check that never ran is the weaker guarantee of the two.
+            Ok(match (unavailable, clean) {
+                (true, _) => ExitCode::from(EXIT_UNAVAILABLE),
+                (false, false) => ExitCode::from(EXIT_FINDINGS),
+                (false, true) => ExitCode::SUCCESS,
             })
         }
         Command::Assess(AssessAction::Docs { since }) => {

@@ -20,6 +20,7 @@ use tokio::{
 #[tokio::test]
 async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
     let dir = tempfile::tempdir().unwrap();
+    let sentinel = dir.path().join("mcp-probe-ran");
     let kan = write_kan_stub(
         dir.path(),
         &[
@@ -45,6 +46,24 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
                 &["design-doc"],
                 &["code-change"],
                 &[],
+            ),
+            // assess_telos needs a witnessed telos and a probe map. The
+            // probe is a command that would leave a sentinel file, so the
+            // "MCP never executes" guarantee is proved by the filesystem
+            // rather than by day's own output.
+            common::claim(
+                "telos/shipped",
+                "bafyreitelos",
+                "Shipped.\n\n```day-telos\n{\"witnesses\":[\"passing-tests\"]}\n```\n",
+            ),
+            common::claim(
+                "schema/witness",
+                "bafyreiwitness",
+                &format!(
+                    "Witness probes.\n\n```day-witness\n{{\"passing-tests\":\
+                     {{\"command\":\"touch {}\"}}}}\n```\n",
+                    sentinel.display()
+                ),
             ),
         ],
     );
@@ -150,6 +169,7 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         "next",
         "bridge_check",
         "assess_docs",
+        "assess_telos",
     ] {
         assert!(
             names.contains(&expected),
@@ -263,6 +283,53 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         text.trim(),
         cli_assess.trim(),
         "the MCP assess_docs tool and the CLI verb must return the same report"
+    );
+
+    // `.design/assess-telos.md` AC-8. Equivalent to the CLI verb run WITHOUT
+    // --run, and — the part that matters — incapable of executing a command
+    // probe. An agent calling a read-shaped tool must not be able to run a
+    // program this repo's log happens to name.
+    let cli = std::process::Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(["assess", "telos", "shipped"])
+        .current_dir(dir.path())
+        .env("DAY_KAN_BIN", &kan)
+        .env("DAY_GIT_BIN", &git)
+        .output()
+        .expect("failed to run day assess telos");
+    let cli_telos = String::from_utf8_lossy(&cli.stdout).into_owned();
+    assert!(
+        !sentinel.exists(),
+        "the CLI without --run should not have executed the probe either"
+    );
+
+    stdin
+        .write_all(
+            send(json!({
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "tools/call",
+                "params": {"name": "assess_telos", "arguments": {"telos": "shipped"}}
+            }))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let call = recv!();
+    let text = call["result"]["content"][0]["text"]
+        .as_str()
+        .expect("assess_telos should return text content");
+    assert_eq!(
+        text.trim(),
+        cli_telos.trim(),
+        "the MCP assess_telos tool and the CLI verb must return the same report"
+    );
+    assert!(
+        text.contains("[NOT RUN]"),
+        "a command probe should be reported, not executed, over MCP: {text}"
+    );
+    assert!(
+        !sentinel.exists(),
+        "the MCP assess_telos tool executed a command probe; it must never be able to"
     );
 }
 

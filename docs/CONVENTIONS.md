@@ -275,6 +275,64 @@ This is where day reads **git**, its second substrate, and only ever reads:
 `tag` and `diff`, behind one module, with a test whitelisting the permitted
 subcommands.
 
+## Telos assessment — `schema/witness`
+
+`day bridge check` asks whether a plan *could* reach a telos. `day assess
+telos` asks whether it **did**. The difference is that a witness is a
+*type* — `published-artifact` names a kind of evidence, not a particular
+artifact — so assessing means binding the type to an instance without
+collapsing the telos onto it.
+
+What would count is declared per project on a `schema/witness` subject
+carrying a fenced `day-witness` block: a map from witness type to **probe**.
+
+```day-witness
+{
+  "published-artifact": {"tag": "v*"},
+  "design-doc": {"path": ".design/*.md"},
+  "passing-tests": {"command": "cargo test"}
+}
+```
+
+| Probe | Satisfied when | Runs |
+| ----- | -------------- | ---- |
+| `path` | a git pathspec matches at least one **tracked** file | always |
+| `tag` | a git tag glob matches at least one tag | always |
+| `command` | the command exits zero | only with `--run` |
+
+`path` uses `git ls-files`, so an untracked build output or a stray local
+file cannot witness a telos — being committed is the stronger claim, and it
+costs no new dependency.
+
+**A `command` probe is day's third substrate**, after kan and git, and the
+only one that executes anything. Four rules bound it:
+
+- **No shell, ever.** The argv is split on whitespace and executed directly.
+  A probe declared as `true; touch /tmp/x` runs `true` with the literal
+  arguments `;`, `touch`, `/tmp/x` — metacharacters arriving from a claim
+  cannot become operators. This costs pipelines and redirection in probe
+  definitions, which is the right trade for a check whose value is being hard
+  to game.
+- **Opt in per invocation.** Without `--run`, a command probe reports
+  `NOT RUN` along with the exact argv, so you see what you would be
+  authorizing.
+- **Never over MCP.** The `assess_telos` tool has no parameter that could
+  authorize execution.
+- **Bounded.** `--timeout` (default 120s); a probe that outlives it is killed
+  and reported as `TIMEOUT`.
+
+**Not-run and timed-out are not failures.** They are absence of evidence, not
+evidence of absence; only a probe that ran and found nothing counts against
+the telos, and only that sets a non-zero exit.
+
+**Prose never counts as material.** If a claim on the telos subject mentions
+a witness type, day reports that separately and never as evidence — a project
+asserting its own success is precisely what an assessment is meant to be
+checkable *against*.
+
+A telos with no witnesses, or a witness with no declared probe, is named as
+not mechanically assessable rather than passed silently.
+
 ## Assessments
 
 An assessment is the claim that some work did (or did not) land inside a

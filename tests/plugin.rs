@@ -202,10 +202,35 @@ fn ac9_conventions_document_the_prefixes_the_code_actually_reads() {
         day::bridge::TELOS_FENCE,
         day::docs::FENCE_INFO,
         day::docs::DOCS_SLUG,
+        day::telos::FENCE_INFO,
+        day::telos::WITNESS_SLUG,
     ] {
         assert!(
             text.contains(token),
             "docs/CONVENTIONS.md should document {token:?}"
+        );
+    }
+}
+
+/// `.design/assess-telos.md` AC-15's second half. Command probes make the
+/// shell day's third substrate; `CLAUDE.md` is where a future session learns
+/// that before adding a fourth spawn site, so it has to say so.
+#[test]
+fn ac15_claude_md_records_the_command_substrate_and_its_guardrails() {
+    let text =
+        std::fs::read_to_string(repo_root().join("CLAUDE.md")).expect("CLAUDE.md should exist");
+    assert!(
+        text.contains("three substrates"),
+        "CLAUDE.md should record that day now has three substrates"
+    );
+    assert!(
+        text.contains("src/probe.rs"),
+        "CLAUDE.md should name where command execution is confined"
+    );
+    for guardrail in ["no shell", "--run", "MCP", "timeout"] {
+        assert!(
+            text.contains(guardrail),
+            "CLAUDE.md should record the {guardrail:?} guardrail on command probes"
         );
     }
 }

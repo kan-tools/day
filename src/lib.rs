@@ -21,6 +21,8 @@ pub mod git;
 pub mod hooks;
 pub mod kan_client;
 pub mod mcp;
+pub mod probe;
 pub mod record;
 pub mod schema;
+pub mod telos;
 pub mod vocabulary;

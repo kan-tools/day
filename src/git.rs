@@ -48,6 +48,13 @@ impl Git {
         }
     }
 
+    /// The repository root these reads run against. Exposed so a command
+    /// probe runs in the same directory day is assessing, rather than
+    /// wherever the process happened to be started.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn run(&self, args: &[&str]) -> Result<String, Error> {
         let output = Command::new(&self.bin)
             .args(args)
@@ -73,10 +80,37 @@ impl Git {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
+    /// Tags matching a glob, newest first by creation date.
+    pub fn tags_matching(&self, pattern: &str) -> Result<Vec<String>, Error> {
+        let out = self.run(&["tag", "--list", pattern, "--sort=-creatordate"])?;
+        Ok(out
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect())
+    }
+
     /// The most recent `v*` tag by creation date, if any.
     pub fn latest_version_tag(&self) -> Result<Option<String>, Error> {
-        let out = self.run(&["tag", "--list", "v*", "--sort=-creatordate"])?;
-        Ok(out.lines().next().map(|t| t.trim().to_string()))
+        Ok(self.tags_matching("v*")?.into_iter().next())
+    }
+
+    /// Tracked files matching a pathspec.
+    ///
+    /// Deliberately `ls-files` rather than a glob crate walking the working
+    /// tree. It adds no dependency, reuses a substrate day already reads
+    /// under the read-only whitelist, and asks a stricter question:
+    /// tracked-in-git is stronger evidence than a file merely existing, so a
+    /// build output or a stray local file cannot witness a telos.
+    pub fn tracked_files(&self, pathspec: &str) -> Result<Vec<String>, Error> {
+        let out = self.run(&["ls-files", "--", pathspec])?;
+        Ok(out
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect())
     }
 
     /// Files changed between `since` and the working tree.
