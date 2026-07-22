@@ -478,9 +478,32 @@ injection *and* for command execution — its practice items reach an agent's
 context, and its witness probes can carry `command` probes. day#25 requires
 injected practice to be locally-signed, but plugin content becomes *your*
 claims signed by *you*, so it passes that check **by construction**. The trust
-boundary therefore moves to **install time**, and install must show what is
-being adopted rather than adopting silently. This is the same class of problem
-as day#25's and is emphatically not solved by it.
+boundary therefore moves to **install time**.
+
+### Trust is a claim, not a setting
+
+The answer is internal to the model day already has. **Trust toward an author
+is itself a kan claim**, and a plugin install is evaluated against it:
+
+- No recorded trust toward the plugin's author → install **warns and asks**,
+  showing what is being adopted: which atoms, which practice items, and — most
+  importantly — any `command` probes.
+- Recorded trust toward that author → the install proceeds smoothly.
+
+This is day#25's deferred `trust/injection` list, generalised: it stops being
+injection-specific and becomes the primitive for *whose claims do I accept*.
+Being a claim rather than a config file means trust is attributable,
+retractable, syncs with everything else, and can itself be cited — you can see
+**when** you decided to trust someone and **why**.
+
+**Why a prompt here does not violate affordance-not-enforcement.** That telos
+constrains what day does to an **agent mid-flow**: no gates, no blocked
+actions, no refusals. `day plugin install` is a **human** deliberately
+adopting third-party content, and asking for confirmation before adopting
+executable content from a stranger is not the same category of act as
+refusing an agent's edit. The distinction is worth stating because it will
+come up again: day never gates the work, and may absolutely ask before it
+adopts something on your behalf.
 
 **Why here and not sooner:** the bundle format cannot stabilize before the
 vocabulary it packages does. v0.6 adds `done` criteria, situated injection,
