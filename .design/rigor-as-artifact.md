@@ -68,12 +68,18 @@ person it is meant to be legible to.
   does not lag, it shows nothing.
 - REQ-9: The render cache is written by `day hook session-start`, which
   already reads kan and has time. It is gitignored, contains nothing not
-  derivable from kan and git, its absence is never an error, and **no check,
-  assessment, or verb reads it to decide anything** — only to display.
-- REQ-10: A **transition** — the current position differing from the cached
-  snapshot — is surfaced in `day status` and the status line, and injected to
-  the model through `UserPromptSubmit` **only when it changes**, never every
-  turn.
+  derivable from kan and git, its absence is never an error, and holds
+  **only rendered display state** — no input to any decision lives in it.
+  It solves latency and nothing else.
+- REQ-10: The **transition baseline is claims**, not the cache. A transition
+  is the current inferred position differing from the position implied by the
+  **last recorded assessment** on the relevant subject. day *reads* those
+  claims and never writes them.
+- REQ-14: Because the baseline is claims, it inherits their semantics:
+  retracting an assessment removes it as a baseline, a contradicting claim is
+  visible as a contradiction rather than an overwrite, and whose assessments
+  count is answered by the same locally-signed projection rule `practice`
+  uses.
 - REQ-13: `day assess atom <slug>` reports an atom's `done` criteria against
   the project's probes and exits non-zero when a declared criterion is unmet,
   so CI can gate on it. It runs command probes only under `--run`, matching
@@ -108,8 +114,12 @@ person it is meant to be legible to.
       re-running regenerates it; with the cache absent, `day status` still
       works and no command errors. A source scan asserts the cache is read in
       exactly one module and only for rendering. (REQ-9)
-- [ ] AC-10: With a cached snapshot differing from current position, the
-      transition is named; with them equal, nothing is said. (REQ-10)
+- [ ] AC-10: With the last recorded assessment implying a different position
+      from the inferred one, the transition is named; with them agreeing,
+      nothing is said. With no assessment ever recorded, no transition is
+      claimed — absence of a baseline is not a change. (REQ-10)
+- [ ] AC-14: Retracting the assessment that formed the baseline changes what
+      day reports, with no code path and no file touched. (REQ-14)
 - [ ] AC-13: `day assess atom` exits non-zero with a declared criterion
       unmet and zero when all are met or none are declared, and executes no
       command probe without `--run`. (REQ-13)
@@ -171,6 +181,24 @@ never recorded, because recording it would make day a task tracker, which
   Claude Code cancels an in-flight status line when a new update arrives, so
   the expensive reads have to happen somewhere with time. The hook already
   reads kan.
+- **The transition baseline is claims, not the cache** — revising an earlier
+  decision that merged two problems. "The status line must render before it
+  is cancelled" and "a transition needs a baseline" are separable, and claims
+  solve exactly one: they are the right baseline and no help at all for
+  latency, since reading a claim *is* the slow read the line must avoid.
+- **This is not the task-tracking `docs/CONVENTIONS.md` refuses.** That
+  refusal says whether a step happened *"is already derivable from claims and
+  artifacts existing"* — deriving position from claims is what that sentence
+  points at. What it refuses is day-owned tracking state.
+- **day reads those claims and never writes them.** `src/telos.rs` already
+  holds that recording an assessment is a separate act, and that conflating
+  *"I checked"* with *"I recorded that I checked"* would let the tool
+  manufacture its own evidence. Auto-writing a baseline would be exactly that.
+- **So a transition means something better:** not *"position differs from the
+  last time a cache file was written"* but *"position has changed since you
+  last recorded an assessment."* Self-reinforcing, since the baseline exists
+  only if assessments are actually recorded — and `assess telos` already
+  prints the runnable `kan result` that writes one.
 - **The cache is display-only, and that is enforced by a source scan** rather
   than by intent. If day ever reads it to decide something rather than to
   display something, the line has been crossed — so a test watches the line.
