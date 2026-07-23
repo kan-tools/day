@@ -112,14 +112,8 @@ impl Document {
     pub fn declared_ids(&self, prefix: &str) -> BTreeSet<String> {
         let mut ids = BTreeSet::new();
         for line in self.prose.lines() {
-            let t = line
-                .trim_start()
-                .trim_start_matches(['-', '*', '+'])
-                .trim_start()
-                .trim_start_matches("[ ]")
-                .trim_start_matches("[x]")
-                .trim_start();
-            if let Some(rest) = t.strip_prefix(prefix) {
+            let rest = strip_list_prefix(line);
+            if let Some(rest) = rest.strip_prefix(prefix) {
                 let num: String = rest.chars().take_while(char::is_ascii_digit).collect();
                 if !num.is_empty() && rest[num.len()..].starts_with(':') {
                     ids.insert(format!("{prefix}{num}"));
@@ -127,6 +121,42 @@ impl Document {
             }
         }
         ids
+    }
+
+    /// Lines that *look* like a declaration — a list item beginning with
+    /// `<prefix><digits>` — but whose id the strict `<prefix><n>:` form cannot
+    /// parse, because a non-colon continues the id (`REQ-11a`, `REQ-11.1`).
+    ///
+    /// day#55: such a line was **silently dropped** — not rejected, dropped —
+    /// so the count came up short and coverage passed vacuously for a
+    /// requirement no criterion named. It bit twice writing this milestone's
+    /// own design doc. The fix keeps the id format strict and makes the drop
+    /// loud: the caller turns each of these into a finding. Returned as the
+    /// full offending token (`REQ-11a`) so the finding can name the exact line.
+    pub fn malformed_ids(&self, prefix: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for line in self.prose.lines() {
+            let rest = strip_list_prefix(line);
+            let Some(rest) = rest.strip_prefix(prefix) else {
+                continue;
+            };
+            let num: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            if num.is_empty() {
+                continue;
+            }
+            let after = &rest[num.len()..];
+            // A colon is the valid form; a space or other punctuation is a
+            // loose mention, not a declaration. Only an id that *continues*
+            // into a letter or dot is a declaration the strict form dropped.
+            if after.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '.') {
+                let tail: String = after
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '.')
+                    .collect();
+                out.push(format!("{prefix}{num}{tail}"));
+            }
+        }
+        out
     }
 
     /// Every occurrence of `<prefix><n>` anywhere in the given text.
@@ -329,6 +359,24 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     let requirements = doc.declared_ids(&schema.requirement_prefix);
     let criteria = doc.declared_ids(&schema.criterion_prefix);
 
+    // day#55: a declaration-shaped line whose id the strict form cannot parse
+    // used to vanish, taking its count and its coverage requirement with it.
+    // Surface each one so the silence is impossible — the id format stays
+    // strict, the checker just stops swallowing what it cannot read.
+    for prefix in [&schema.requirement_prefix, &schema.criterion_prefix] {
+        for bad in doc.malformed_ids(prefix) {
+            findings.push(Finding {
+                verdict: Verdict::Warn,
+                message: format!(
+                    "`{bad}` looks like a declaration but its id is not the strict form \
+                     `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
+                     coverage-checked. Renumber it, or the requirement it names is invisible \
+                     to validation"
+                ),
+            });
+        }
+    }
+
     findings.push(count_finding(
         requirements.len(),
         schema.min_requirements,
@@ -444,6 +492,22 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     }
 }
 
+/// Strips a line's leading list punctuation and checkbox, so `- [ ] REQ-1:`
+/// and `REQ-1:` both present their id at the start. Shared by [`declared_ids`]
+/// and [`malformed_ids`] so the two agree on what a declaration line looks
+/// like.
+///
+/// [`declared_ids`]: Document::declared_ids
+/// [`malformed_ids`]: Document::malformed_ids
+fn strip_list_prefix(line: &str) -> &str {
+    line.trim_start()
+        .trim_start_matches(['-', '*', '+'])
+        .trim_start()
+        .trim_start_matches("[ ]")
+        .trim_start_matches("[x]")
+        .trim_start()
+}
+
 /// Whether `token` appears in `text` as a standalone word rather than
 /// inside a longer one. Without this, the placeholder `TODO` matches the
 /// filename `docs/SETUP-TODO.md` — found by running this check over kan's
@@ -538,6 +602,54 @@ mod tests {
         assert_eq!(doc.declared_ids("REQ-").len(), 2);
         // AC-1 mentions REQ-1 but does not declare it.
         assert_eq!(doc.declared_ids("AC-").len(), 2);
+    }
+
+    /// day#55: `- REQ-11a: …` parses as `11` followed by `a:`, so the strict
+    /// form dropped it — silently. Now it surfaces as a warning naming the
+    /// token, and the count reflects that it was not counted.
+    #[test]
+    fn a_sub_numbered_id_is_reported_not_silently_dropped() {
+        let text = DOC.replace(
+            "- REQ-2: second",
+            "- REQ-2: second\n- REQ-11a: sub-numbered",
+        );
+        let doc = Document::parse(&text);
+
+        // It is not counted as a declared id (the strict form is unchanged).
+        assert_eq!(doc.declared_ids("REQ-").len(), 2);
+        // But it is now named as malformed rather than vanishing.
+        assert_eq!(doc.malformed_ids("REQ-"), vec!["REQ-11a"]);
+
+        let report = check(&doc, &schema(), Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert!(
+            report.render().contains("REQ-11a"),
+            "the dropped id must be named: {}",
+            report.render()
+        );
+        assert!(
+            report.render().contains("[WARN]"),
+            "a malformed id warns: {}",
+            report.render()
+        );
+    }
+
+    /// The fix must not cry wolf. A valid id, and a loose *mention* of an id in
+    /// a bullet (no colon, followed by a space) are both fine — only a
+    /// declaration-shaped line with a continued id token is malformed.
+    #[test]
+    fn valid_ids_and_loose_mentions_are_not_flagged_as_malformed() {
+        let doc = Document::parse(DOC);
+        assert!(doc.malformed_ids("REQ-").is_empty());
+        assert!(doc.malformed_ids("AC-").is_empty());
+
+        // A bullet that mentions REQ-1 without declaring it (space after the
+        // number) is not a malformed declaration.
+        let text = format!("{DOC}\n- REQ-1 is also relevant here\n");
+        let doc = Document::parse(&text);
+        assert!(
+            doc.malformed_ids("REQ-").is_empty(),
+            "a space after the number is a mention, not a malformed id"
+        );
     }
 
     #[test]
