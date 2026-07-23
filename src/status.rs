@@ -71,7 +71,10 @@ pub struct Here {
 impl Here {
     /// Criteria that ran and were satisfied, over criteria declared.
     fn done_counts(&self) -> (usize, usize) {
-        (self.done.iter().filter(|c| c.is_met()).count(), self.done.len())
+        (
+            self.done.iter().filter(|c| c.is_met()).count(),
+            self.done.len(),
+        )
     }
 }
 
@@ -412,7 +415,11 @@ mod tests {
     #[test]
     fn a_single_current_atom_names_it_and_what_follows() {
         let status = Status {
-            here: vec![here("build", vec![met("tests"), unmet("docs")], &["review"])],
+            here: vec![here(
+                "build",
+                vec![met("tests"), unmet("docs")],
+                &["review"],
+            )],
             off_sequence: vec![],
             transition: None,
             uncheckable: false,
@@ -452,7 +459,9 @@ mod tests {
             transition: None,
             uncheckable: false,
         };
-        assert!(status.render_long().contains("No atom is currently in play"));
+        assert!(status
+            .render_long()
+            .contains("No atom is currently in play"));
         assert_eq!(status.render_line(), "day · no current atom");
     }
 
@@ -464,7 +473,9 @@ mod tests {
             transition: None,
             uncheckable: true,
         };
-        assert!(status.render_long().contains("No witness probes are declared"));
+        assert!(status
+            .render_long()
+            .contains("No witness probes are declared"));
         assert_eq!(status.render_line(), "day · no witness probes declared");
     }
 
@@ -498,12 +509,16 @@ mod tests {
             uncheckable: false,
         };
         let long = status.render_long();
-        assert!(long.contains("last recorded assessment of `build`"), "{long}");
+        assert!(
+            long.contains("last recorded assessment of `build`"),
+            "{long}"
+        );
         assert!(long.contains("now: review"), "{long}");
 
         let line = status.render_line();
         assert!(
-            line.lines().any(|l| l.contains("moved past assessed `build`")),
+            line.lines()
+                .any(|l| l.contains("moved past assessed `build`")),
             "{line}"
         );
     }

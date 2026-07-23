@@ -45,7 +45,14 @@ fn write_git_stub(dir: &Path, tags: &[&str], tracked: &[&str]) -> std::path::Pat
     script
 }
 
-fn atom(slug: &str, cid: &str, inputs: &[&str], outputs: &[&str], next: &[&str], done: &[&str]) -> StubClaim {
+fn atom(
+    slug: &str,
+    cid: &str,
+    inputs: &[&str],
+    outputs: &[&str],
+    next: &[&str],
+    done: &[&str],
+) -> StubClaim {
     let list = |xs: &[&str]| {
         xs.iter()
             .map(|x| format!("\"{x}\""))
@@ -76,8 +83,22 @@ fn design_present_build_current(dir: &Path) -> (std::path::PathBuf, std::path::P
     let kan = write_kan_stub(
         dir,
         &[
-            atom("design", "bafyreid", &["intent"], &["design-doc"], &["build"], &[]),
-            atom("build", "bafyreib", &["design-doc"], &["code-change"], &["review"], &["design-doc"]),
+            atom(
+                "design",
+                "bafyreid",
+                &["intent"],
+                &["design-doc"],
+                &["build"],
+                &[],
+            ),
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &["review"],
+                &["design-doc"],
+            ),
             witness_schema(
                 "bafyreiw",
                 r#"{"design-doc":{"path":".design/*.md"},"code-change":{"path":"src/*.rs"}}"#,
@@ -131,13 +152,19 @@ fn ac9_session_start_writes_the_cache_and_it_regenerates() {
     let cache = dir.path().join(".day").join("statusline");
     assert!(cache.exists(), "session-start should write the cache");
     let first = std::fs::read_to_string(&cache).unwrap();
-    assert!(first.contains("build"), "cached line should name the atom: {first}");
+    assert!(
+        first.contains("build"),
+        "cached line should name the atom: {first}"
+    );
 
     std::fs::remove_file(&cache).unwrap();
     assert!(!cache.exists());
     let out = day(dir.path(), &kan, &git, &["hook", "session-start"]);
     assert!(out.status.success());
-    assert!(cache.exists(), "the cache should regenerate on the next session start");
+    assert!(
+        cache.exists(),
+        "the cache should regenerate on the next session start"
+    );
     assert_eq!(std::fs::read_to_string(&cache).unwrap(), first);
 }
 
@@ -165,9 +192,15 @@ fn ac8_the_status_line_reads_only_the_cache() {
 
     let missing_kan = dir.path().join("no-such-kan");
     let out = day(dir.path(), &missing_kan, &git, &["status-line"]);
-    assert!(out.status.success(), "status-line must not fail when kan is absent");
+    assert!(
+        out.status.success(),
+        "status-line must not fail when kan is absent"
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("day · build"), "should render from the cache: {stdout:?}");
+    assert!(
+        stdout.contains("day · build"),
+        "should render from the cache: {stdout:?}"
+    );
 }
 
 /// AC-8 corollary: with no cache at all, the status line prints nothing and
@@ -192,8 +225,22 @@ fn ac11_status_exits_zero_even_with_an_off_sequence_finding() {
     let kan = write_kan_stub(
         dir.path(),
         &[
-            atom("design", "bafyreid", &["intent"], &["design-doc"], &["build"], &[]),
-            atom("build", "bafyreib", &["design-doc"], &["code-change"], &[], &[]),
+            atom(
+                "design",
+                "bafyreid",
+                &["intent"],
+                &["design-doc"],
+                &["build"],
+                &[],
+            ),
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &[],
+                &[],
+            ),
             witness_schema(
                 "bafyreiw",
                 r#"{"design-doc":{"path":".design/*.md"},"code-change":{"path":"src/*.rs"}}"#,
@@ -215,11 +262,35 @@ fn ac11_status_exits_zero_even_with_an_off_sequence_finding() {
 /// A design→build→review pipeline where the code exists (so `build` is done)
 /// and inference sits at `review`. `build` has whatever assessment claims the
 /// caller adds.
-fn build_done_review_current(dir: &Path, build_assessments: &[StubClaim]) -> (std::path::PathBuf, std::path::PathBuf) {
+fn build_done_review_current(
+    dir: &Path,
+    build_assessments: &[StubClaim],
+) -> (std::path::PathBuf, std::path::PathBuf) {
     let mut claims = vec![
-        atom("design", "bafyreid", &["intent"], &["design-doc"], &["build"], &[]),
-        atom("build", "bafyreib", &["design-doc"], &["code-change"], &["review"], &[]),
-        atom("review", "bafyreir", &["code-change"], &["verdict"], &[], &[]),
+        atom(
+            "design",
+            "bafyreid",
+            &["intent"],
+            &["design-doc"],
+            &["build"],
+            &[],
+        ),
+        atom(
+            "build",
+            "bafyreib",
+            &["design-doc"],
+            &["code-change"],
+            &["review"],
+            &[],
+        ),
+        atom(
+            "review",
+            "bafyreir",
+            &["code-change"],
+            &["verdict"],
+            &[],
+            &[],
+        ),
         witness_schema(
             "bafyreiw",
             r#"{"design-doc":{"path":".design/*.md"},"code-change":{"path":"src/*.rs"}}"#,
@@ -248,7 +319,10 @@ fn ac10_a_transition_past_the_last_assessed_atom_is_named() {
     let (kan, git) = build_done_review_current(dir.path(), &[assessment]);
     let out = day(dir.path(), &kan, &git, &["status"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("last recorded assessment of `build`"), "{stdout}");
+    assert!(
+        stdout.contains("last recorded assessment of `build`"),
+        "{stdout}"
+    );
     assert!(stdout.contains("now: review"), "{stdout}");
     assert_eq!(out.status.code(), Some(0));
 }
@@ -262,7 +336,10 @@ fn ac10_no_assessment_means_no_transition() {
     let out = day(dir.path(), &kan, &git, &["status"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("Current atom: review"), "{stdout}");
-    assert!(!stdout.contains("moved on"), "no baseline, no transition: {stdout}");
+    assert!(
+        !stdout.contains("moved on"),
+        "no baseline, no transition: {stdout}"
+    );
 }
 
 /// AC-10 third case: when the assessed atom is still current, position and the
@@ -279,7 +356,10 @@ fn ac10_an_assessment_of_the_current_atom_is_not_a_transition() {
     let (kan, git) = build_done_review_current(dir.path(), &[assessment]);
     let out = day(dir.path(), &kan, &git, &["status"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(!stdout.contains("moved on"), "assessed atom is still current: {stdout}");
+    assert!(
+        !stdout.contains("moved on"),
+        "assessed atom is still current: {stdout}"
+    );
 }
 
 /// AC-14: retracting the assessment that formed the baseline changes what day
@@ -318,8 +398,18 @@ fn ac14_retracting_the_baseline_assessment_removes_the_transition() {
 #[test]
 fn the_most_recent_assessment_across_atoms_is_the_baseline() {
     let dir = tempfile::tempdir().unwrap();
-    let older = result_claim("atom/review", "bafyreio", "review noted.", 1_782_000_000_000_000);
-    let newer = result_claim("atom/design", "bafyrein", "design revisited.", 1_784_000_000_000_000);
+    let older = result_claim(
+        "atom/review",
+        "bafyreio",
+        "review noted.",
+        1_782_000_000_000_000,
+    );
+    let newer = result_claim(
+        "atom/design",
+        "bafyrein",
+        "design revisited.",
+        1_784_000_000_000_000,
+    );
     let (kan, git) = build_done_review_current(dir.path(), &[older, newer]);
     let out = day(dir.path(), &kan, &git, &["status"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -336,12 +426,17 @@ fn status_reports_uncheckable_when_no_witness_schema_is_declared() {
     let dir = tempfile::tempdir().unwrap();
     let kan = write_kan_stub(
         dir.path(),
-        &[atom("build", "bafyreib", &["design-doc"], &["code-change"], &[], &[])],
+        &[atom(
+            "build",
+            "bafyreib",
+            &["design-doc"],
+            &["code-change"],
+            &[],
+            &[],
+        )],
     );
     let git = write_git_stub(dir.path(), &[], &[]);
     let out = day(dir.path(), &kan, &git, &["status"]);
     assert!(out.status.success());
-    assert!(
-        String::from_utf8_lossy(&out.stdout).contains("No witness probes are declared"),
-    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("No witness probes are declared"),);
 }
