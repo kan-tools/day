@@ -11,23 +11,42 @@
 //! **Ambiguity is reported, not resolved.** When several atoms fit the
 //! evidence, all are named; guessing one would be a claim day cannot support.
 //!
-//! **Inference runs only `path` and `tag` probes, never `command`.** It
-//! happens on every session start, and executing project-declared commands as
-//! a side effect of *starting a session* would be a far larger widening than
-//! `--run` ever was. [`materialized`] passes [`Authorization::Report`], which
-//! is the authorization that cannot execute anything — so the rule holds by
-//! construction, not by discipline.
+//! **Inference reads; it never executes.** `path`, `tag`, and `claim` are all
+//! reads — of the working tree, of the tag list, of kan's own log — and all
+//! run here. `command` is execution and does not: inference happens on every
+//! session start, and running project-declared commands as a side effect of
+//! *starting a session* would be a far larger widening than `--run` ever was.
+//! [`materialized`] short-circuits a command probe and otherwise passes
+//! [`Authorization::Report`], the authorization that cannot execute anything,
+//! so the rule holds by construction rather than by discipline.
+//!
+//! **Position is relative to the current cycle.** On a repo with any history
+//! every artifact type exists — there is always *some* `v*` tag, *some* past
+//! verdict — so a question phrased "does one exist" can only ever answer yes,
+//! and day's own log reported four candidate atoms forever (day#60). Each
+//! probe is therefore resolved against a [`Boundary`], the last release: a
+//! path counts if it *changed since*, a tag if it was *created since*, a
+//! claim if it was *recorded since*. A repo with no release has no boundary
+//! and falls back to the cumulative reading, which is conservative rather
+//! than clever — the alternative, treating all of history as the current
+//! cycle, is exactly the failure this fixes.
+//!
+//! None of that reaches assessment. `assess telos` and `assess atom` ask
+//! whether a witness was *ever* produced and keep calling
+//! [`probe::evaluate`], which has no boundary to pass.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use crate::atoms::Atom;
-use crate::git::Git;
-use crate::probe::{self, Authorization, Probe, Verdict};
+use crate::git::{Boundary, Git};
+use crate::probe::{self, Authorization, ClaimLog, Probe, Verdict};
 
 /// Whether an artifact type is materially present, and how sure day is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Presence {
-    /// A `path` or `tag` probe found it.
+    /// A `path`, `tag`, or `claim` probe found it — in this cycle, when a
+    /// boundary is in force.
     Present,
     /// A probe ran and found nothing.
     Absent,
@@ -38,20 +57,80 @@ pub enum Presence {
     Unknown,
 }
 
+/// Resolves a probe **for position**: relative to the cycle boundary when
+/// there is one, cumulative when there is not, and never executing a command.
+///
+/// Shared with [`crate::status`] so the `done` criteria `day status` displays
+/// read the same cycle as the position above them. Two renderings of one
+/// computation, which is the same reason the status line and the long form
+/// share [`crate::status::compute`].
+pub fn resolve(
+    probe: &Probe,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    boundary: Option<&Boundary>,
+) -> Verdict {
+    match (probe, boundary) {
+        // Reported as not-run, never executed, boundary or no boundary. A
+        // cycle is a question about *when* evidence appeared; it does not
+        // make executing something any more acceptable at session start.
+        (Probe::Command(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
+        (_, None) => probe::evaluate(probe, git, log, Authorization::Report),
+        (Probe::Path(pathspec), Some(boundary)) => {
+            match git.changed_files_matching(&boundary.tag, pathspec) {
+                Ok(files) if files.is_empty() => Verdict::Unsatisfied(format!(
+                    "no file matching `{pathspec}` changed since {}",
+                    boundary.tag
+                )),
+                Ok(files) => Verdict::Satisfied(format!(
+                    "{} file(s) matching `{pathspec}` changed since {}",
+                    files.len(),
+                    boundary.tag
+                )),
+                Err(e) => Verdict::Error(format!("could not diff against {}: {e}", boundary.tag)),
+            }
+        }
+        (Probe::Tag(pattern), Some(boundary)) => match git.tags_with_dates(pattern) {
+            // Strictly after: the tag that *is* the boundary closed the last
+            // cycle, so it is not evidence of this one. That is what lets
+            // `release` stop looking finished the moment a new cycle opens.
+            Ok(tags) => match tags.iter().find(|(_, at)| *at > boundary.at_unix) {
+                Some((tag, _)) => {
+                    Verdict::Satisfied(format!("git tag {tag}, created since {}", boundary.tag))
+                }
+                None => Verdict::Unsatisfied(format!(
+                    "no tag matching `{pattern}` created since {}",
+                    boundary.tag
+                )),
+            },
+            Err(e) => Verdict::Error(format!("could not list tags: {e}")),
+        },
+        (Probe::Claim(shape), Some(boundary)) => {
+            probe::claims_matching(shape, log, Some(boundary.at_micros()))
+        }
+    }
+}
+
 /// Resolves one artifact type against the witness probes, without ever
 /// executing a command.
-fn materialized(kind: &str, probes: &BTreeMap<String, Probe>, git: &Git) -> Presence {
+fn materialized(
+    kind: &str,
+    probes: &BTreeMap<String, Probe>,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    boundary: Option<&Boundary>,
+) -> Presence {
     match probes.get(kind) {
         None => Presence::Unknown,
-        // A command probe is deliberately not run here (REQ-5). Its evidence
+        // A command probe is deliberately not run here (REQ-6). Its evidence
         // is unknowable at inference time, which is honest — the alternative
         // is executing it on every session start.
         Some(Probe::Command(_)) => Presence::Unknown,
-        Some(probe) => match probe::evaluate(probe, git, Authorization::Report) {
+        Some(probe) => match resolve(probe, git, log, boundary) {
             Verdict::Satisfied(_) => Presence::Present,
             Verdict::Unsatisfied(_) => Presence::Absent,
-            // NotRun should be unreachable for path/tag, but if it arises it
-            // is unknown rather than absent.
+            // NotRun should be unreachable for path/tag/claim, but if it
+            // arises it is unknown rather than absent.
             _ => Presence::Unknown,
         },
     }
@@ -148,9 +227,43 @@ pub struct Report {
 }
 
 /// Infers position from the atom set and the witness probes, resolving each
-/// artifact type against git (path/tag) without ever running a command.
-pub fn infer(atoms: &[Atom], probes: &BTreeMap<String, Probe>, git: &Git) -> Report {
-    infer_with(atoms, |kind| materialized(kind, probes, git))
+/// artifact type against git (`path`/`tag`) and kan (`claim`) relative to
+/// `boundary`, without ever running a command.
+///
+/// Each artifact type is resolved **at most once**. An artifact appears in
+/// several atoms' interfaces — `code-change` is an output of one atom and an
+/// input to three — and a `claim` probe scans the whole log, so resolving per
+/// mention would multiply a session-start read by the size of the vocabulary
+/// for answers that cannot differ within a single inference.
+pub fn infer(
+    atoms: &[Atom],
+    probes: &BTreeMap<String, Probe>,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    boundary: Option<&Boundary>,
+) -> Report {
+    infer_with(
+        atoms,
+        memoized(|kind| materialized(kind, probes, git, log, boundary)),
+    )
+}
+
+/// Wraps a resolver so each artifact type is looked up once per inference.
+///
+/// Its own function rather than a closure inlined above so the property can
+/// be tested against the shipped code instead of a copy of it — the caching
+/// is not cosmetic, it is what keeps a whole-log `claim` read from happening
+/// once per mention.
+fn memoized(resolve: impl Fn(&str) -> Presence) -> impl Fn(&str) -> Presence {
+    let memo: RefCell<BTreeMap<String, Presence>> = RefCell::new(BTreeMap::new());
+    move |kind| {
+        if let Some(known) = memo.borrow().get(kind) {
+            return *known;
+        }
+        let presence = resolve(kind);
+        memo.borrow_mut().insert(kind.to_string(), presence);
+        presence
+    }
 }
 
 /// The pure core of inference: it takes a function answering whether each
@@ -235,6 +348,7 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
 mod tests {
     use super::*;
     use crate::atoms::Interface;
+    use crate::kan_client::KanClient;
 
     fn atom(name: &str, inputs: &[&str], outputs: &[&str], next: &[&str]) -> Atom {
         Atom {
@@ -325,11 +439,93 @@ mod tests {
             [("passing-tests".to_string(), Probe::Command("exit 1".into()))]
                 .into_iter()
                 .collect();
-        // A Git that would error if invoked; the command arm never calls it.
+        // A Git and a kan that would error if invoked; the command arm calls
+        // neither. Checked with and without a boundary, because REQ-6 is not
+        // a property of the unbounded path — a cycle must not make execution
+        // acceptable.
         let git = Git::with_bin(".", "definitely-not-a-real-git-binary".to_string());
+        let client = KanClient::with_bin(".", "definitely-not-a-real-kan-binary".to_string());
+        let boundary = Boundary {
+            tag: "v0.6.0".into(),
+            at_unix: 1_700_000_000,
+        };
+        for bound in [None, Some(&boundary)] {
+            assert_eq!(
+                materialized(
+                    "passing-tests",
+                    &probes,
+                    &git,
+                    &ClaimLog::new(&client),
+                    bound
+                ),
+                Presence::Unknown
+            );
+        }
+    }
+
+    /// AC-6, one level up from [`materialized`]: a whole inference over a
+    /// schema whose `verdict` is a command probe executes nothing and leaves
+    /// `verdict` unknowable — so the atom producing it stays a candidate
+    /// rather than looking finished or looking skipped.
+    #[test]
+    fn inference_over_a_command_probed_schema_executes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("pwned");
+        let atoms = [
+            atom("build", &["design-doc"], &["code-change"], &["review"]),
+            atom("review", &["code-change"], &["verdict"], &[]),
+        ];
+        let probes: BTreeMap<String, Probe> = [(
+            "verdict".to_string(),
+            Probe::Command(format!("touch {}", marker.display())),
+        )]
+        .into_iter()
+        .collect();
+        let git = Git::with_bin(dir.path(), "definitely-not-a-real-git-binary".to_string());
+        let client =
+            KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary".to_string());
+
+        let report = infer(&atoms, &probes, &git, &ClaimLog::new(&client), None);
+        assert!(
+            !marker.exists(),
+            "inference executed a command probe — REQ-6 is broken"
+        );
+        let review = report
+            .standings
+            .iter()
+            .find(|s| s.atom == "review")
+            .unwrap();
+        assert_eq!(review.outputs, Outputs::Unknown);
+    }
+
+    /// The memo is not an optimization detail: a `claim` probe scans the
+    /// whole log, and `code-change` is mentioned by four of day's seven
+    /// atoms. Resolving per mention would multiply a session-start read by
+    /// the vocabulary size. Counted directly, since the cost is invisible to
+    /// every other assertion here.
+    #[test]
+    fn each_artifact_type_is_resolved_at_most_once() {
+        use std::cell::Cell;
+        let atoms = [
+            atom("design", &["intent"], &["design-doc"], &["build"]),
+            atom("build", &["design-doc"], &["code-change"], &["review"]),
+            atom("review", &["code-change"], &["verdict"], &[]),
+        ];
+        let calls = Cell::new(0usize);
+        let report = infer_with(
+            &atoms,
+            memoized(|_kind| {
+                calls.set(calls.get() + 1);
+                Presence::Unknown
+            }),
+        );
+        assert_eq!(report.standings.len(), 3);
+        // intent, design-doc, code-change, verdict — four types, though
+        // design-doc and code-change are each mentioned twice.
         assert_eq!(
-            materialized("passing-tests", &probes, &git),
-            Presence::Unknown
+            calls.get(),
+            4,
+            "each artifact type should be resolved once, not once per mention"
         );
     }
 

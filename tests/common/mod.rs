@@ -55,6 +55,20 @@ pub fn result_claim(subject: &str, cid: &str, text: &str, recorded_at: i64) -> S
     }
 }
 
+/// A `Decision` claim recorded at a given time — what `day review record`
+/// appends for a verdict, and what a `claim` probe narrowed by a text marker
+/// has to tell apart from every other decision in the log.
+pub fn decision_claim(subject: &str, cid: &str, text: &str, recorded_at: i64) -> StubClaim {
+    StubClaim {
+        subject: subject.to_string(),
+        cid: cid.to_string(),
+        kind: "Decision".to_string(),
+        text: text.to_string(),
+        author: STUB_AUTHOR.to_string(),
+        recorded_at: Some(recorded_at),
+    }
+}
+
 /// Removes the stub's identity, modelling kan being unable to establish it —
 /// a blocked keychain, a missing key. day must fail closed here.
 pub fn without_identity(dir: &Path) {

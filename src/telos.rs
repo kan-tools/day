@@ -29,7 +29,7 @@ use crate::atoms::{self, newest_fenced, prose_only};
 use crate::bridge::{self, Witnesses};
 use crate::git::Git;
 use crate::kan_client::KanClient;
-use crate::probe::{self, Authorization, Probe, Verdict};
+use crate::probe::{self, Authorization, ClaimLog, ClaimShape, Probe, Verdict};
 use crate::schema::SCHEMA_PREFIX;
 
 /// Subject slug day looks for: `schema/witness`.
@@ -61,10 +61,50 @@ pub enum Error {
 }
 
 /// What would evidence each witness type, declared per project.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Deserialization is **tolerant of probe kinds this day does not know**: an
+/// unreadable entry is set aside in [`Self::unsupported`] and the rest of the
+/// map still loads. day requires exactly this of kan — `kan_client`'s tests
+/// assert that a field day has never heard of cannot break it — and did not
+/// offer it in return until a `claim` probe recorded on this repo made the
+/// installed v0.6 binary fail the *whole* schema, and with it every hook and
+/// status line in the session. A newer probe kind now degrades a single
+/// witness to "no probe", which is an honest state day already renders,
+/// rather than taking the project's process surface down with it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct WitnessSchema {
     pub probes: BTreeMap<String, Probe>,
+    /// Witness types whose declared probe this version could not read, with
+    /// the reason. Reported, never silently dropped: a reader must not think
+    /// a witness is unprobed when it is merely unreadable *here*.
+    #[serde(skip)]
+    pub unsupported: BTreeMap<String, String>,
+}
+
+impl<'de> Deserialize<'de> for WitnessSchema {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Parsed one entry at a time through `Value`, so a kind this day
+        // cannot read costs that witness and nothing else. Parsing the map
+        // straight into `Probe` is what made a single unknown kind fatal.
+        let raw = BTreeMap::<String, serde_json::Value>::deserialize(deserializer)?;
+        let mut probes = BTreeMap::new();
+        let mut unsupported = BTreeMap::new();
+        for (witness, value) in raw {
+            match serde_json::from_value::<Probe>(value) {
+                Ok(probe) => {
+                    probes.insert(witness, probe);
+                }
+                Err(e) => {
+                    unsupported.insert(witness, e.to_string());
+                }
+            }
+        }
+        Ok(Self {
+            probes,
+            unsupported,
+        })
+    }
 }
 
 impl WitnessSchema {
@@ -81,7 +121,30 @@ impl WitnessSchema {
             Probe::Path(".design/*.md".to_string()),
         );
         probes.insert("code-change".to_string(), Probe::Path("src/*".to_string()));
-        Self { probes }
+        // The two claim-shaped witnesses. Neither is a file or a tag: a
+        // verdict is what `day review record` appends, an assessment is what
+        // `kan result` records — so before the `claim` probe kind existed,
+        // both were unprobeable and left position permanently ambiguous
+        // (day#60). The `verdict` marker is the exact prefix `record::review`
+        // writes; `Decision` alone would match every decision in the log.
+        probes.insert(
+            "verdict".to_string(),
+            Probe::Claim(ClaimShape {
+                kind: "Decision".to_string(),
+                contains: Some("adversarial review of".to_string()),
+            }),
+        );
+        probes.insert(
+            "assessment".to_string(),
+            Probe::Claim(ClaimShape {
+                kind: "Result".to_string(),
+                contains: None,
+            }),
+        );
+        Self {
+            probes,
+            unsupported: BTreeMap::new(),
+        }
     }
 
     pub fn starter_command() -> String {
@@ -90,6 +153,23 @@ impl WitnessSchema {
             "  kan observe \"$(cat <<'EOF'\nWitness probes for this project.\n\n\
              ```{FENCE_INFO}\n{json}\n```\nEOF\n)\" --subject {SCHEMA_PREFIX}{WITNESS_SLUG}"
         )
+    }
+
+    /// The verdict for a witness whose declared probe this version cannot
+    /// read.
+    ///
+    /// [`Verdict::Error`] rather than `Unsatisfied`, and the distinction is
+    /// the whole point: the evidence was not *checked*, not found *absent*.
+    /// `Error` already means "the probe could not be evaluated at all" and
+    /// does not count against a telos, so an unreadable probe cannot fail a
+    /// build — it says go look.
+    pub fn unreadable(&self, witness: &str) -> Option<Verdict> {
+        self.unsupported.get(witness).map(|reason| {
+            Verdict::Error(format!(
+                "`{witness}` declares a probe kind this version of day cannot read \
+                 ({reason}) — upgrade day, or this witness goes unchecked here"
+            ))
+        })
     }
 
     pub fn load(client: &KanClient) -> Result<Self, Error> {
@@ -129,6 +209,22 @@ fn effective_probe(probe: &Probe, scope: Option<&String>) -> (Probe, Option<Stri
             Some(format!(
                 "scope `{scope}` ignored: a command probe is not narrowed by a telos, \
                  because that would let a telos claim decide what runs"
+            )),
+        ),
+        // A scope replaces *the* pattern argument, and a claim probe has two
+        // fields rather than one — so there is no single thing to replace.
+        // Overwriting `contains` would be the wrong guess in the dangerous
+        // direction: a schema's marker is usually narrower than a telos's
+        // scope, so honouring it could *widen* which claims count. Reported
+        // rather than silently dropped, per the same rule as the command
+        // arm: a reader must never believe a narrowing took effect that did
+        // not.
+        Probe::Claim(_) => (
+            probe.clone(),
+            Some(format!(
+                "scope `{scope}` ignored: a claim probe is narrowed by its own `contains` \
+                 marker, and replacing that from a telos could widen which claims count \
+                 rather than narrow it"
             )),
         ),
     }
@@ -328,14 +424,30 @@ pub fn assess(
         WitnessSchema::load(client)?
     };
 
+    // One read of the log, shared by every claim probe. Lazy, so a telos
+    // whose witnesses are all files and tags never touches kan for this.
+    let log = ClaimLog::new(client);
+
     let mut findings = Vec::new();
     for witness in &witnesses {
         let mut scope_note = None;
-        let verdict = schema.probes.get(witness).map(|probe| {
-            let (effective, note) = effective_probe(probe, declared.scope.get(witness));
-            scope_note = note;
-            probe::evaluate(&effective, git, auth)
-        });
+        let verdict = schema
+            .probes
+            .get(witness)
+            .map(|probe| {
+                let (effective, note) = effective_probe(probe, declared.scope.get(witness));
+                scope_note = note;
+                // `probe::evaluate`, never `position::resolve`: an assessment is
+                // cumulative. A release, a review, or an assessment from any
+                // cycle is real evidence that work landed inside this telos's
+                // equivalence class, and scoping that to the current cycle would
+                // make last cycle's shipped telos start reporting as unmet.
+                probe::evaluate(&effective, git, &log, auth)
+            })
+            // A witness whose probe this version cannot read is reported as
+            // unchecked, not as unprobed — the project declared something,
+            // day just could not read it.
+            .or_else(|| schema.unreadable(witness));
         // Searched against prose only. The `day-telos` block naming this
         // witness is the *declaration* that it would count as evidence, not
         // a claim that it was produced — matching it would make every
@@ -474,6 +586,7 @@ pub fn assess_atom(
     }
 
     let schema = WitnessSchema::load(client)?;
+    let log = ClaimLog::new(client);
     let findings = done
         .iter()
         .map(|witness| WitnessFinding {
@@ -481,7 +594,10 @@ pub fn assess_atom(
             verdict: schema
                 .probes
                 .get(witness)
-                .map(|probe| probe::evaluate(probe, git, auth)),
+                // Cumulative, like `assess`: "were these criteria ever met",
+                // not "were they met this cycle".
+                .map(|probe| probe::evaluate(probe, git, &log, auth))
+                .or_else(|| schema.unreadable(witness)),
             asserted_by: None,
             scope_note: None,
         })

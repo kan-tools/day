@@ -333,12 +333,17 @@ fn conformance_the_documented_kan_result_form_runs() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    // And the form the docs used to recommend is genuinely rejected, which
-    // is what made this worth a test rather than a one-line correction. If
-    // kan#78 is resolved by accepting both spellings this will fail — that
-    // is the intended signal, not a false alarm: day's docs would then be
-    // needlessly strict and should be revisited.
-    let wrong = Command::new(bin)
+    // kan#78 is **resolved**: kan accepts `--subject` on `result` too. This
+    // test fired on that change, which is exactly what it was for — the
+    // assertion used to be that the flag form is rejected, and it was
+    // revisited rather than deleted when the signal arrived.
+    //
+    // What still matters is the direction day depends on, so that is what is
+    // asserted now: the positional form above runs. day emits only that form
+    // (`Write::new` is structurally unavailable for `result` — see the
+    // hermetic test below), so a kan that ever stopped accepting it would
+    // break every assessment day prints, and this is where that surfaces.
+    let both = Command::new(bin)
         .args([
             "result",
             "the assessment text",
@@ -349,8 +354,9 @@ fn conformance_the_documented_kan_result_form_runs() {
         .output()
         .expect("kan should run");
     assert!(
-        !wrong.status.success(),
-        "kan now accepts `result --subject`; kan#78 may have been resolved, so \
-         docs/CONVENTIONS.md and this test should be revisited"
+        both.status.success(),
+        "kan#78 was resolved by accepting both spellings; if `result --subject` \
+         is rejected again, docs/CONVENTIONS.md and this test need revisiting: {}",
+        String::from_utf8_lossy(&both.stderr)
     );
 }

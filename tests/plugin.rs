@@ -346,10 +346,25 @@ fn ac12_docs_document_the_done_field_and_the_cache() {
         "CONVENTIONS.md should name the cache path {:?}",
         day::cache::CACHE_DIR
     );
+    // The inference rule, in the form it actually takes since the `claim`
+    // probe: the line is **read vs. execute**, not a fixed list of kinds.
+    // This assertion used to name `path` and `tag` literally and had to be
+    // revisited when a third read kind arrived — so it now pins the
+    // invariant rather than the enumeration, which is what it was always
+    // for. If a fourth read kind appears, this should still pass; if
+    // `command` ever becomes runnable at inference time, it must not.
     assert!(
-        conventions.contains("only `path` and `tag` probes")
-            || conventions.contains("only `path` and `tag`"),
-        "CONVENTIONS.md should document the inference rule (path/tag only, never command)"
+        conventions.contains("It **reads; it never executes.**"),
+        "CONVENTIONS.md should document the inference rule (reads run, commands never do)"
+    );
+    assert!(
+        conventions.contains("`command` does not"),
+        "CONVENTIONS.md should say plainly that inference does not run a command probe"
+    );
+    // And the cycle boundary, the other rule bounding inference.
+    assert!(
+        conventions.contains("cycle boundary"),
+        "CONVENTIONS.md should document the cycle boundary position resolves against"
     );
 
     let claude_md = std::fs::read_to_string(repo_root().join("CLAUDE.md")).unwrap();
