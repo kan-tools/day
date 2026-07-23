@@ -67,6 +67,8 @@ pub enum Error {
     Telos(#[from] crate::telos::Error),
     #[error(transparent)]
     Tension(#[from] crate::tension::Error),
+    #[error(transparent)]
+    Status(#[from] crate::status::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -116,6 +118,17 @@ pub enum Command {
         /// The atom slug, e.g. `design`
         atom: String,
     },
+    /// Report where the work currently sits: the inferred atom, its satisfied
+    /// inputs, its met and unmet criteria, what the graph says follows, and
+    /// any off-sequence finding. Inferred from artifacts, never tracked;
+    /// always exits zero.
+    Status,
+    /// Print the cached status line. Reads **only** the render cache — never
+    /// kan, never git — because Claude Code cancels an in-flight status line
+    /// at 300ms. Written by `day hook session-start`. Hidden: it is for the
+    /// harness, not for people, who run `day status`.
+    #[command(name = "status-line", hide = true)]
+    StatusLine,
     /// Entry point harness hooks call; prints advisory context, never blocks
     Hook {
         /// The harness event: session-start or session-end
@@ -472,7 +485,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         // Always exit 0: a hook that can fail a session is a blocking hook
         // by another name. Errors are printed as context, not raised.
         Command::Hook { event } => {
-            match hooks::dispatch(&event, &client) {
+            match hooks::dispatch(&event, &client, &cwd) {
                 Ok(text) => print!("{text}"),
                 Err(e) => println!("## day\n\n{e}"),
             }
@@ -514,6 +527,34 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         }
         Command::Next { atom } => {
             print!("{}", crate::record::next(&client, &atom)?);
+            Ok(ExitCode::SUCCESS)
+        }
+        // Display only, and always exit zero: status *reports* where the work
+        // sits (AC-11): `day assess atom` is the gate that exits non-zero, so
+        // a status finding never fails a script that merely asked where it is.
+        // Runs no command probe — position and `done` are resolved with
+        // Authorization::Report inside `status::compute`.
+        Command::Status => {
+            let git = crate::git::Git::new(cwd.clone());
+            let status = crate::status::compute(&client, &git)?;
+            print!("{}", status.render_long());
+            Ok(ExitCode::SUCCESS)
+        }
+        // The one place day reads the cache. It never touches kan or git —
+        // pointing `DAY_KAN_BIN` at a nonexistent path leaves this untouched,
+        // which is what AC-8 asserts. An absent cache prints nothing, its
+        // documented empty state, not an error.
+        //
+        // Claude Code pipes session JSON to the status line on stdin and does
+        // not guarantee the command's cwd is the project root — the documented
+        // way to learn it is `workspace.current_dir` on stdin. So the root is
+        // read from there, falling back to the process cwd (which is what a
+        // person running this by hand, or a test, gets).
+        Command::StatusLine => {
+            let root = statusline_root(cwd);
+            if let Some(line) = crate::cache::read_status_line(&root) {
+                print!("{line}");
+            }
             Ok(ExitCode::SUCCESS)
         }
         // The plan is parsed and its atoms resolved before anything is
@@ -662,6 +703,37 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
     }
 }
 
+/// The directory the status line should read its cache from.
+///
+/// Claude Code delivers `workspace.current_dir` on stdin and does not promise
+/// the command runs in the project root, so stdin is the authority when
+/// present. Reading stdin is guarded by [`IsTerminal`]: a person who types
+/// `day status-line` at a prompt must not have it block waiting for EOF on
+/// their terminal, and a harness always pipes JSON (or nothing) rather than a
+/// tty. An unparseable or dir-less payload falls back to the process cwd.
+fn statusline_root(fallback: PathBuf) -> PathBuf {
+    use std::io::{IsTerminal, Read};
+
+    let mut stdin = std::io::stdin();
+    if stdin.is_terminal() {
+        return fallback;
+    }
+    let mut buf = String::new();
+    if stdin.read_to_string(&mut buf).is_err() || buf.trim().is_empty() {
+        return fallback;
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&buf) else {
+        return fallback;
+    };
+    value
+        .get("workspace")
+        .and_then(|w| w.get("current_dir"))
+        .or_else(|| value.get("cwd"))
+        .and_then(|d| d.as_str())
+        .map(PathBuf::from)
+        .unwrap_or(fallback)
+}
+
 /// Prints, never mutates — the same contract `kan mcp install` set. day
 /// touches a user's Claude Code config only by telling them what to add.
 pub fn init_instructions() -> String {
@@ -681,8 +753,22 @@ pub fn init_instructions() -> String {
     out.push_str(&format!(
         "     {{\"hooks\": {{\"SessionStart\": [{{\"hooks\": [{{\"type\": \"command\", \"command\": \"{exe} hook session-start\"}}]}}]}}}}\n\n"
     ));
+    // The status line is deliberately NOT in the plugin path above: a Claude
+    // Code plugin's settings support only the `agent` and `subagentStatusLine`
+    // keys, so a plugin cannot declare the top-level `statusLine` (verified
+    // against the plugins reference). It is opt-in, in the user's own settings,
+    // either way — so it is documented here for both paths rather than implied
+    // to come with the plugin when it cannot.
+    out.push_str("To see day's process position at a glance, add a status line to your own\n");
+    out.push_str("settings (~/.claude/settings.json) — it reads a cache the session-start\n");
+    out.push_str("hook writes, so it never shells out and never lags:\n");
+    out.push_str(&format!(
+        "     {{\"statusLine\": {{\"type\": \"command\", \"command\": \"{exe} status-line\"}}}}\n\n"
+    ));
     out.push_str("day stores nothing of its own: teloi, atoms, and assessments all live in\n");
-    out.push_str("kan as claims (docs/CONVENTIONS.md). Nothing above is written for you.\n");
+    out.push_str("kan as claims (docs/CONVENTIONS.md). The only file day writes is a\n");
+    out.push_str("gitignored, disposable render cache under .day/ (display only). Nothing\n");
+    out.push_str("above is written for you.\n");
     out
 }
 

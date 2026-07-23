@@ -57,6 +57,52 @@ fn materialized(kind: &str, probes: &BTreeMap<String, Probe>, git: &Git) -> Pres
     }
 }
 
+/// Whether an atom's declared outputs, taken together, are present. Three
+/// states rather than a bool, because "probed and absent" and "unknowable"
+/// must not collapse: off-sequence detection treats a *definitely absent*
+/// upstream as evidence of a skip, and an *unknowable* one as no evidence at
+/// all. Conflating them flags every atom with an unprobed output as skipped,
+/// which is exactly the false positive dogfooding surfaced on day's own log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outputs {
+    /// Every declared output is materially present.
+    Present,
+    /// Every output was probed and at least one was not found; none are
+    /// unknowable. The atom demonstrably has not produced its product.
+    Absent,
+    /// At least one output is unknowable (no probe, or a command probe), or
+    /// the atom declares no outputs. Nothing can be concluded either way.
+    Unknown,
+}
+
+/// Classifies an atom's declared outputs as a whole. `Present` needs every
+/// output present; a single unknowable output makes the set `Unknown`, and
+/// only a fully-probed set with something missing is `Absent`.
+fn classify_outputs(outputs: &[String], probes: &BTreeMap<String, Probe>, git: &Git) -> Outputs {
+    if outputs.is_empty() {
+        return Outputs::Unknown;
+    }
+    let mut all_present = true;
+    let mut any_unknown = false;
+    for output in outputs {
+        match materialized(output, probes, git) {
+            Presence::Present => {}
+            Presence::Absent => all_present = false,
+            Presence::Unknown => {
+                all_present = false;
+                any_unknown = true;
+            }
+        }
+    }
+    if all_present {
+        Outputs::Present
+    } else if any_unknown {
+        Outputs::Unknown
+    } else {
+        Outputs::Absent
+    }
+}
+
 /// One atom's standing against the current evidence.
 #[derive(Debug, Clone)]
 pub struct Standing {
@@ -67,17 +113,19 @@ pub struct Standing {
     pub inputs_missing: Vec<String>,
     /// Inputs whose presence is unknowable (no probe, or a command probe).
     pub inputs_unknown: Vec<String>,
-    /// Whether this atom's own outputs are already present.
-    pub outputs_present: bool,
+    /// This atom's own outputs, as a three-way presence.
+    pub outputs: Outputs,
 }
 
 impl Standing {
     /// A candidate for "current": everything a probe could check about its
-    /// inputs is present, and its outputs are not yet. Unknown inputs do not
-    /// disqualify — they are reported, and pretending they are absent would
-    /// hide a ready atom.
+    /// inputs is present, and its outputs are not already all present. Unknown
+    /// inputs do not disqualify — they are reported, and pretending they are
+    /// absent would hide a ready atom. Unknown *outputs* likewise keep an atom
+    /// a candidate: an atom whose product cannot be detected has not been
+    /// shown to be finished.
     pub fn is_current(&self) -> bool {
-        self.inputs_missing.is_empty() && !self.outputs_present
+        self.inputs_missing.is_empty() && self.outputs != Outputs::Present
     }
 
     /// Source atoms have no declared inputs; their inputs come from outside
@@ -101,8 +149,6 @@ pub struct Report {
 
 /// Infers position from the atom set and the witness probes.
 pub fn infer(atoms: &[Atom], probes: &BTreeMap<String, Probe>, git: &Git) -> Report {
-    let present = |kind: &str| materialized(kind, probes, git) == Presence::Present;
-
     let standings: Vec<Standing> = atoms
         .iter()
         .map(|atom| {
@@ -116,14 +162,13 @@ pub fn infer(atoms: &[Atom], probes: &BTreeMap<String, Probe>, git: &Git) -> Rep
                     Presence::Unknown => inputs_unknown.push(input.clone()),
                 }
             }
-            let outputs_present = !atom.interface.outputs.is_empty()
-                && atom.interface.outputs.iter().all(|o| present(o));
+            let outputs = classify_outputs(&atom.interface.outputs, probes, git);
             Standing {
                 atom: atom.name.clone(),
                 inputs_present,
                 inputs_missing,
                 inputs_unknown,
-                outputs_present,
+                outputs,
             }
         })
         .collect();
@@ -135,30 +180,34 @@ pub fn infer(atoms: &[Atom], probes: &BTreeMap<String, Probe>, git: &Git) -> Rep
         .collect();
 
     // Off-sequence: an atom produced its outputs, but an atom it lists as a
-    // predecessor (via `next`) has not produced its own. Availability
+    // predecessor (via `next`) is *demonstrably* missing its own. Availability
     // accumulates along a path, so a downstream artifact existing while an
-    // upstream one does not means a step was skipped.
-    let produced: std::collections::BTreeSet<&str> = standings
-        .iter()
-        .filter(|s| s.outputs_present)
-        .map(|s| s.atom.as_str())
-        .collect();
+    // upstream one is definitely absent means a step was skipped.
+    //
+    // "Definitely absent" is [`Outputs::Absent`], never [`Outputs::Unknown`].
+    // An upstream whose output has no probe (or a command probe) is unknowable
+    // — not evidence of a skip. Flagging it anyway was a false positive on
+    // day's own log, where `verdict` and `merged-change` are unprobed and made
+    // every probed downstream look skipped. Found by running the tool, not by
+    // the test, which only ever used probed artifacts.
+    let by_name: BTreeMap<&str, &Standing> =
+        standings.iter().map(|s| (s.atom.as_str(), s)).collect();
     let mut off_sequence = Vec::new();
     for atom in atoms {
+        let successor_produced = |name: &str| {
+            by_name
+                .get(name)
+                .is_some_and(|s| s.outputs == Outputs::Present)
+        };
+        let upstream_definitely_absent = by_name
+            .get(atom.name.as_str())
+            .is_some_and(|s| s.outputs == Outputs::Absent);
         for successor in &atom.interface.next {
-            // `atom` is upstream of `successor`. If the successor's outputs
-            // exist but the predecessor's do not, the sequence was skipped.
-            if produced.contains(successor.as_str()) && !produced.contains(atom.name.as_str()) {
-                // Only flag when the predecessor *could* have been detected —
-                // an atom whose outputs are unknowable is not evidence of a
-                // skip.
-                let upstream = standings.iter().find(|s| s.atom == atom.name);
-                if upstream.is_some_and(|s| !s.outputs_present) {
-                    off_sequence.push(format!(
-                        "{} produced its output but upstream {} did not — a step was skipped",
-                        successor, atom.name
-                    ));
-                }
+            if successor_produced(successor) && upstream_definitely_absent {
+                off_sequence.push(format!(
+                    "{} produced its output but upstream {} did not — a step was skipped",
+                    successor, atom.name
+                ));
             }
         }
     }
@@ -286,5 +335,48 @@ mod tests {
         let report = infer(&atoms, &probes, &git);
         assert_eq!(report.off_sequence.len(), 1, "{:?}", report.off_sequence);
         assert!(report.off_sequence[0].contains("design"));
+    }
+
+    /// The false positive dogfooding found on day's own log: an upstream atom
+    /// whose output has **no probe** is unknowable, not absent, and must not
+    /// read as a skipped step. Here `design`'s output `verdict` is unprobed
+    /// while `build`'s `code-change` is present; the old code flagged a skip
+    /// because it only asked "is the upstream output present", conflating
+    /// unprobed with missing. The existing off-sequence test never caught this
+    /// because both its artifacts were probed.
+    #[test]
+    fn an_unprobed_upstream_output_is_not_a_skipped_step() {
+        let atoms = [
+            atom("design", &["intent"], &["verdict"], &["build"]),
+            atom("build", &["design-doc"], &["code-change"], &[]),
+        ];
+        // Only code-change is probed; `verdict` (design's output) has no probe.
+        let probes = probes(&[("code-change", Probe::Path("src/*.rs".into()))]);
+        let (_d, git) = git_with(&["src/lib.rs"], &[]);
+        let report = infer(&atoms, &probes, &git);
+        assert!(
+            report.off_sequence.is_empty(),
+            "an unknowable upstream output must not be reported as a skip: {:?}",
+            report.off_sequence
+        );
+    }
+
+    /// The counterpart that keeps the fix honest: when the upstream output IS
+    /// probed and genuinely absent, the skip is still reported. Otherwise the
+    /// fix above could be "never flag anything".
+    #[test]
+    fn a_probed_and_absent_upstream_output_is_still_a_skip() {
+        let atoms = [
+            atom("design", &["intent"], &["design-doc"], &["build"]),
+            atom("build", &["design-doc"], &["code-change"], &[]),
+        ];
+        let probes = probes(&[
+            ("design-doc", Probe::Path(".design/*.md".into())),
+            ("code-change", Probe::Path("src/*.rs".into())),
+        ]);
+        // code-change present, design-doc probed and absent.
+        let (_d, git) = git_with(&["src/lib.rs"], &[]);
+        let report = infer(&atoms, &probes, &git);
+        assert_eq!(report.off_sequence.len(), 1, "{:?}", report.off_sequence);
     }
 }

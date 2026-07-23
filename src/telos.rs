@@ -388,6 +388,9 @@ pub struct AtomReport {
     /// True when the atom declares no `done` criteria — reported, not treated
     /// as met.
     pub no_criteria: bool,
+    /// CID of the atom's newest claim, so the printed `kan result` cites the
+    /// declaration it assesses. `None` only if the atom somehow has no claim.
+    pub newest_cid: Option<String>,
 }
 
 impl AtomReport {
@@ -426,6 +429,22 @@ impl AtomReport {
                 )),
             }
         }
+
+        // Close the loop the same way `assess telos` does. Recording an atom
+        // assessment is what gives `day status` a transition baseline (REQ-10):
+        // day reads that claim and never writes it, so the runnable command is
+        // how the human, not the tool, records having checked. Without this
+        // prompt atom assessments never get recorded and transitions stay dark
+        // on any real log.
+        let cites = self.newest_cid.as_deref().unwrap_or("<cid>");
+        out.push_str(&format!(
+            "\nThis assessment was performed, not recorded — those are separate acts.\n\
+             To record it (and give `day status` a transition baseline):\n  \
+             kan result {}{} \"<what you concluded, citing the evidence above>\" \\\n    \
+             --cites {cites}\n",
+            atoms::ATOM_PREFIX,
+            self.atom
+        ));
         out
     }
 }
@@ -450,6 +469,7 @@ pub fn assess_atom(
             atom: slug.to_string(),
             findings: vec![],
             no_criteria: true,
+            newest_cid: Some(atom.cid.clone()),
         });
     }
 
@@ -471,6 +491,7 @@ pub fn assess_atom(
         atom: slug.to_string(),
         findings,
         no_criteria: false,
+        newest_cid: Some(atom.cid.clone()),
     })
 }
 

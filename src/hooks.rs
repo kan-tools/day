@@ -7,8 +7,11 @@
 //! action is a different (and, in crosslink's experience, worse) tool — see
 //! `docs/TELOS.md` and kan's own affordance-not-enforcement house rule.
 
+use std::path::Path;
+
 use crate::atoms::{self, TELOS_PREFIX};
 use crate::doctor;
+use crate::git::Git;
 use crate::kan_client::KanClient;
 
 /// Longest telos line day will inline before truncating, so a verbose telos
@@ -18,7 +21,14 @@ const TELOS_EXCERPT: usize = 240;
 /// Assembles the session-start context block. Infallible by construction:
 /// any failure degrades to a short explanatory note, because a broken
 /// process layer must not be able to derail a coding session.
-pub fn session_start(client: &KanClient) -> String {
+///
+/// It also does the work the status line cannot afford to: it runs position
+/// inference (path/tag probes only — never a command, [`crate::position`]
+/// holds that by construction) and writes the rendered status line into the
+/// `.day/` cache, so the status line can render instantly instead of being
+/// cancelled mid-shell-out at Claude Code's 300ms cutoff. This is where the
+/// AC-5 guarantee earns real coverage: inference genuinely runs here.
+pub fn session_start(client: &KanClient, root: &Path) -> String {
     let mut out = String::from("## day — process layer\n\n");
 
     if let Err(e) = client.probe() {
@@ -47,6 +57,7 @@ pub fn session_start(client: &KanClient) -> String {
     out.push_str(&render_teloi(client, &subjects));
     out.push('\n');
     out.push_str(&render_atoms(client));
+    out.push_str(&render_position(client, root));
     out.push_str(&render_open(client));
 
     // A project's own practice can extend day's blocks or replace them. day
@@ -216,6 +227,42 @@ fn render_atoms(client: &KanClient) -> String {
     }
 }
 
+/// Runs position inference, writes the status-line cache, and returns a short
+/// block naming where the work sits for the model.
+///
+/// Two things happen here that matter beyond the returned text:
+/// - **The cache is written.** The status line reads it and never shells out,
+///   which is the whole latency story ([`crate::cache`]).
+/// - **Inference actually runs.** `AC-5` asserts it executes no command probe
+///   on session start; that assertion is only real coverage because this call
+///   exists — [`crate::status::compute`] uses `Authorization::Report`, so the
+///   guarantee holds by construction rather than by the hook happening not to
+///   ask.
+///
+/// Infallible like the rest of the hook: a failed computation degrades to
+/// nothing rather than derailing the session, and a failed cache write leaves
+/// the status line showing its documented empty state.
+fn render_position(client: &KanClient, root: &Path) -> String {
+    let git = Git::new(root);
+    let status = match crate::status::compute(client, &git) {
+        Ok(s) => s,
+        Err(_) => return String::new(),
+    };
+
+    // Display-only, latency-only. The write is best-effort: if it fails the
+    // status line simply shows nothing until the next session start.
+    let _ = crate::cache::write_status_line(root, &status.render_line());
+
+    if status.uncheckable {
+        return String::new();
+    }
+
+    let mut out = String::from("\nProcess position (inferred from artifacts, not tracked):\n");
+    out.push_str(&status.render_line());
+    out.push('\n');
+    out
+}
+
 fn excerpt(text: &str) -> String {
     let single_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if single_line.chars().count() <= TELOS_EXCERPT {
@@ -282,9 +329,9 @@ const SAFETY: &str = "\nOperational safety for this session:\n\
 
 /// Which harness events day answers. Kept as an explicit list so an unknown
 /// event is a clear error rather than silent empty output.
-pub fn dispatch(event: &str, client: &KanClient) -> Result<String, UnknownEvent> {
+pub fn dispatch(event: &str, client: &KanClient, root: &Path) -> Result<String, UnknownEvent> {
     match event {
-        "session-start" => Ok(session_start(client)),
+        "session-start" => Ok(session_start(client, root)),
         "session-end" => Ok(session_end(client)),
         other => Err(UnknownEvent(other.to_string())),
     }
@@ -425,7 +472,7 @@ mod safety_tests {
     fn safety_is_injected_even_when_kan_is_unreachable() {
         let dir = tempfile::tempdir().unwrap();
         let client = KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary");
-        let out = session_start(&client);
+        let out = session_start(&client, dir.path());
         assert!(out.contains("kan is not reachable"), "{out}");
         assert!(
             out.contains("Operational safety"),

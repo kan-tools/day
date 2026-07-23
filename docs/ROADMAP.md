@@ -264,11 +264,31 @@ rather than a patch, and each revises a REQ already recorded in kan.
 ## v0.6 — Rigor as artifact *(in progress)*
 
 **Model half shipped.** Atoms carry `done` criteria, `day assess atom` gates
-on them, and position is inferred from artifacts (`src/position.rs`). The
-**surface half** — the render cache, `day status`, the status line, wiring
-inference into session-start, and claims-based transitions — is not started.
-The full design is `.design/rigor-as-artifact.md`; the resume point is on the
-`spine` subject in kan.
+on them, and position is inferred from artifacts (`src/position.rs`).
+
+**Surface half largely shipped.** `src/cache.rs` (the `.day/` render cache,
+display-only, one-module source-scanned), `src/status.rs` (`day status` and
+the status line, two renderings of one computation), inference wired into
+`day hook session-start` (which makes AC-5 real coverage rather than vacuous,
+mutation-checked), and **claims-based transitions** (`day status` reports when
+the work has moved past the atom you last recorded assessing; baseline read
+from `kan result` claims on `atom/*`, never written; `assess atom` prints the
+runnable command that records one). Three things surfaced by *doing* it, not
+testing it: (1) off-sequence detection false-positived on unprobed upstream
+outputs on day's own log — fixed with a three-way `Outputs` presence; (2)
+`recorded_at` is an **integer** in `kan show --json`, not the RFC-3339 string
+first assumed — caught by `tests/kan_conformance.rs` against real kan before
+it could break every read; (3) a Claude Code plugin **cannot declare the
+top-level `statusLine`** (only `agent`/`subagentStatusLine`), so the design's
+"the plugin gains a statusLine entry" is not achievable — the line is set up
+in the user's own settings, and `day init` now says so.
+
+**Still to land:** the empirical check of `MessageDisplay`'s `displayContent`
+and the universal `systemMessage` field, which gates any *hook-printed*
+transition surface (a `UserPromptSubmit`-on-change hook) — deferred exactly as
+the design requires. Transitions currently surface in `day status` and the
+status line, both already-verified channels. Full design in
+`.design/rigor-as-artifact.md`.
 
 **day is squishy.** It describes a process well and does very little to make
 one happen. A session using day still produces test gaps, semantic drift

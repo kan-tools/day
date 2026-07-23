@@ -71,7 +71,7 @@ impl DayServer {
         description = "The advisory process context for this repo: the teloi currently in play, the declared process atoms, and any drift warnings. The same text day's session-start hook injects."
     )]
     async fn session_context(&self) -> Result<String, ErrorData> {
-        Ok(hooks::session_start(&self.client()))
+        Ok(hooks::session_start(&self.client(), &self.cwd))
     }
 
     #[tool(

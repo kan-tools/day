@@ -157,7 +157,7 @@ An atom claim carries a fenced `day-atom` JSON block:
 
 ````markdown
 ```day-atom
-{"in": ["design-doc"], "out": ["code-change"], "next": ["adversarial-review"]}
+{"in": ["design-doc"], "out": ["code-change"], "next": ["adversarial-review"], "done": ["passing-tests"]}
 ```
 ````
 
@@ -166,14 +166,28 @@ An atom claim carries a fenced `day-atom` JSON block:
 | `in`   | Type names this atom requires to be applicable |
 | `out`  | Type names this atom produces |
 | `next` | Slugs of atoms this one composes into |
+| `done` | Witness types that evidence this atom is finished |
 
 Type names are free-form strings. day checks that they *match*; it
 deliberately does not check what they mean. The type vocabulary is the
 project's to choose and evolve.
 
+`done` is the completion story `in`/`out`/`next` leave unstated: they say what
+an atom consumes, produces, and leads to, but nothing about *how you know it
+is finished*. Its entries are witness types resolved through the same
+`schema/witness` probes teloi use (below), so a project declares what would
+evidence completion once and both teloi and atoms draw on it. `done` is
+**additive and optional**: a `day-atom` block written before it existed parses
+and composes identically, and an atom with no `done` is reported as having no
+completion criteria — never treated as met. `day assess atom <slug>` checks
+these criteria and **exits non-zero when a declared one is unmet**, so CI can
+gate on it; it runs `command` probes only under `--run`, matching
+`assess telos`.
+
 ```bash
 day atom declare generative-build \
   --in design-doc --out code-change --next adversarial-review \
+  --done passing-tests \
   --note "An agent session turns an accepted design into code."
 ```
 
@@ -478,6 +492,59 @@ behavior — not against an agent's own account of what it did. kan's log is
 append-only, signed, and content-addressed precisely so that this kind of
 check has something non-gameable to stand on; an assessment that cites only
 another narrative claim is worth much less than one citing an artifact.
+
+## Position and the render cache — `.day/`
+
+day infers **where the work currently sits** in the atom graph, from
+artifacts alone. An atom is a *candidate* for "current" when its declared
+inputs are materially present and its outputs are not yet — the work to run it
+exists, and what it would produce does not. This reads the same
+`schema/witness` probes an assessment does, so **nothing is tracked and
+nothing is recorded**: position is recomputed each time, and
+[the refusal to track "how far along are we"](#assessments) stays intact.
+Ambiguity is *reported, not resolved* — when several atoms fit the evidence,
+all are named, because guessing one would be a claim day cannot support.
+
+Two rules bound inference:
+
+- It runs **only `path` and `tag` probes, never `command`**. Inference happens
+  on every session start; executing project-declared commands as a side effect
+  of *starting a session* would be a far larger widening than `--run`. A type
+  whose probe is a command is reported as unknowable, not silently absent.
+- **Off-sequence** is reported when a downstream atom's outputs are present
+  while an upstream atom's outputs are *demonstrably* absent (probed and not
+  found) — a skipped step. An upstream whose output is merely unprobed is
+  unknowable, not evidence of a skip.
+
+`day status` renders this for a human: the current atom or candidates, which
+inputs are satisfied, which `done` criteria are met and unmet, what the graph
+says comes next, and any off-sequence finding. It **always exits zero** — it
+reports, it does not gate; `day assess atom` is the gate.
+
+**Transitions.** `day status` also reports when the work has moved *past the
+atom you last recorded assessing*. The baseline is **claims, not the cache**:
+the most recent assessment (`kan result`) recorded on any `atom/<slug>`
+subject names the atom you last checked, and if the inferred position no
+longer includes it, the work has moved on. day **reads those claims and never
+writes them** — recording position would make day a task tracker, and
+auto-writing a baseline would let the tool manufacture its own evidence. The
+mechanism inherits claim semantics for free: retract the assessment and the
+baseline is gone; a newer one supersedes it; whose assessments count is the
+same locally-signed rule `practice` uses. `day assess atom` prints the
+runnable `kan result atom/<slug>` that records one.
+
+**The render cache** lives under `.day/`, is **gitignored**, and holds **only
+rendered display state** — the status line's text, nothing an input to any
+decision. It is written by `day hook session-start` (which already reads kan
+and has time) and read only by the status line, which cannot afford to shell
+out: Claude Code cancels an in-flight status line at 300 ms, so a line that
+read kan directly could be cancelled before rendering anything. Its **absence
+is never an error** — delete it and it regenerates next session. It is not a
+store: strictly derived from kan and git, never authoritative, it stands in
+the same relation to kan's log as kan's own disposable `.kan/index.sqlite`
+does. Exactly one module (`src/cache.rs`) touches it, and a source scan keeps
+it that way — *if day ever read the cache to decide something rather than to
+display something, the line would have been crossed*.
 
 ## Not yet conventionalized
 

@@ -24,6 +24,10 @@ pub struct StubClaim {
     /// Who signed it. Defaults to [`STUB_AUTHOR`]; set it to anything else
     /// to model a claim from another actor.
     pub author: String,
+    /// When kan recorded it, **microseconds since the epoch** — the integer
+    /// real kan emits. `None` omits the field, modelling a kan (or shape) that
+    /// does not emit it.
+    pub recorded_at: Option<i64>,
 }
 
 pub fn claim(subject: &str, cid: &str, text: &str) -> StubClaim {
@@ -33,6 +37,21 @@ pub fn claim(subject: &str, cid: &str, text: &str) -> StubClaim {
         kind: "Observation".to_string(),
         text: text.to_string(),
         author: STUB_AUTHOR.to_string(),
+        recorded_at: None,
+    }
+}
+
+/// A `Result` claim — an assessment (`kan result`) — recorded at a given time.
+/// `recorded_at` is what orders assessments across subjects, so a test that
+/// needs "the last one" sets distinct timestamps.
+pub fn result_claim(subject: &str, cid: &str, text: &str, recorded_at: i64) -> StubClaim {
+    StubClaim {
+        subject: subject.to_string(),
+        cid: cid.to_string(),
+        kind: "Result".to_string(),
+        text: text.to_string(),
+        author: STUB_AUTHOR.to_string(),
+        recorded_at: Some(recorded_at),
     }
 }
 
@@ -51,6 +70,7 @@ pub fn subject_claim(subject: &str, cid: &str, title: &str) -> StubClaim {
         kind: "Subject".to_string(),
         text: title.to_string(),
         author: STUB_AUTHOR.to_string(),
+        recorded_at: None,
     }
 }
 
@@ -63,6 +83,7 @@ pub fn retraction_claim(subject: &str, cid: &str) -> StubClaim {
         kind: "Retraction".to_string(),
         text: String::new(),
         author: STUB_AUTHOR.to_string(),
+        recorded_at: None,
     }
 }
 
@@ -251,6 +272,12 @@ fn claim_json(claim: &StubClaim) -> serde_json::Value {
         _ => {
             map.insert("text".into(), claim.text.clone().into());
         }
+    }
+    // Emitted as the integer real kan uses (microseconds since epoch), and
+    // omitted when absent — so the stub models both a kan that carries
+    // `recorded_at` and one (or a shape) that does not.
+    if let Some(at) = claim.recorded_at {
+        map.insert("recorded_at".into(), at.into());
     }
     value
 }

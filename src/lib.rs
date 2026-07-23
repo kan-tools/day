@@ -13,6 +13,7 @@
 
 pub mod atoms;
 pub mod bridge;
+pub mod cache;
 pub mod cli;
 pub mod design;
 pub mod docs;
@@ -26,6 +27,7 @@ pub mod practice;
 pub mod probe;
 pub mod record;
 pub mod schema;
+pub mod status;
 pub mod telos;
 pub mod tension;
 pub mod vocabulary;
