@@ -310,6 +310,83 @@ fn ac9_one_function_decides_whether_a_claim_may_be_injected() {
     }
 }
 
+/// `.design/rigor-as-artifact.md` AC-12: the conventions page documents the
+/// `done` key and the cache path, checked against the code's own constant so
+/// the doc and code cannot drift; and CLAUDE.md states the cache is derived
+/// and not a store.
+#[test]
+fn ac12_docs_document_the_done_field_and_the_cache() {
+    let conventions = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md")).unwrap();
+    assert!(
+        conventions.contains("`done`"),
+        "CONVENTIONS.md should document the atom `done` field"
+    );
+    assert!(
+        conventions.contains(day::cache::CACHE_DIR),
+        "CONVENTIONS.md should name the cache path {:?}",
+        day::cache::CACHE_DIR
+    );
+    assert!(
+        conventions.contains("only `path` and `tag` probes")
+            || conventions.contains("only `path` and `tag`"),
+        "CONVENTIONS.md should document the inference rule (path/tag only, never command)"
+    );
+
+    let claude_md = std::fs::read_to_string(repo_root().join("CLAUDE.md")).unwrap();
+    assert!(
+        claude_md.contains(day::cache::CACHE_DIR) && claude_md.contains("not a store"),
+        "CLAUDE.md should record that the render cache is derived and not a store"
+    );
+}
+
+/// `.design/rigor-as-artifact.md` AC-9, the load-bearing cache guardrail:
+/// the render cache is touched in **exactly one module**, and only for
+/// display. If any other module reads or writes `.day/`, "display only" has
+/// started to decay into "and also decides things" — the precise line
+/// `telos/no-store-of-its-own` draws. So the literal cache path may appear in
+/// `src/cache.rs` and nowhere else in `src/`; every other module reaches the
+/// cache through that module's two functions, whose results only ever print.
+#[test]
+fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
+    let src = repo_root().join("src");
+    let cache_dir_literal = format!("\"{}\"", day::cache::CACHE_DIR);
+
+    let mut offenders = Vec::new();
+    let mut cache_rs_has_it = false;
+    let mut stack = vec![src.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            if !text.contains(&cache_dir_literal) {
+                continue;
+            }
+            if path.file_name().unwrap() == "cache.rs" {
+                cache_rs_has_it = true;
+            } else {
+                offenders.push(path.display().to_string());
+            }
+        }
+    }
+
+    assert!(
+        cache_rs_has_it,
+        "src/cache.rs should own the cache path constant {cache_dir_literal}"
+    );
+    assert!(
+        offenders.is_empty(),
+        "the cache path {cache_dir_literal} appears outside src/cache.rs ({offenders:?}); \
+         the cache must be touched in exactly one module so 'display only' stays enforceable"
+    );
+}
+
 /// AC-10. The conventions page and the code must agree on the subject name
 /// and the replace token, checked against the constants rather than retyped.
 #[test]

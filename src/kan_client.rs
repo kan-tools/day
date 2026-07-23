@@ -79,6 +79,16 @@ pub struct Claim {
     /// whose claim it is reading.
     #[serde(default)]
     pub author: Option<String>,
+    /// When kan recorded this claim, as **microseconds since the epoch** — the
+    /// integer `kan show --json` actually emits (verified against the real
+    /// binary via `tests/kan_conformance.rs`, which caught this typed as a
+    /// string). The only field that orders claims *across* subjects: `show`
+    /// returns each subject oldest-first, but "the last recorded assessment"
+    /// among several `atom/*` subjects needs a global order, and larger is
+    /// newer. Additive and optional, so a kan that omits it degrades to no
+    /// ordering rather than failing.
+    #[serde(default)]
+    pub recorded_at: Option<i64>,
 }
 
 #[derive(Debug, serde::Deserialize)]

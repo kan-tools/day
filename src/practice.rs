@@ -194,6 +194,7 @@ mod tests {
             text: Some(text.into()),
             title: None,
             author: Some(author.into()),
+            recorded_at: None,
         }
     }
 

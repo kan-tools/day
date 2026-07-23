@@ -25,6 +25,20 @@ sidecar database, no state file. If a feature seems to need day-owned
 persistent state, that is a signal the feature is wrong or belongs in kan —
 stop and reconsider before adding a store.
 
+- **One carve-out, since v0.6: the `.day/` render cache** (`src/cache.rs`). It
+  is not a store and does not weaken the rule, because nothing *durable* lives
+  in it: it holds only the rendered status line, is gitignored, is strictly
+  derived from kan and git, regenerates on the next session start, and is never
+  read to *decide* anything — only to *display*. It exists solely because
+  Claude Code cancels an in-flight status line at 300 ms, so the kan reads must
+  happen in the session-start hook and the result be cached for the line. It
+  stands in the same relation to kan's log as kan's own disposable
+  `.kan/index.sqlite` does to it. The line that keeps it honest: exactly one
+  module touches `.day/`, and `tests/plugin.rs` greps the rest of `src/` to
+  prove it. **If day ever reads the cache to decide something rather than to
+  display it, the carve-out has been abused** — that is the boundary, and it is
+  a source-scanned invariant, not a matter of intent.
+
 **Advisory, never blocking.** Hooks inject context; they never gate, deny, or
 reject an agent's action. `tests/plugin.rs` enforces this against the shipped
 hook config and is not to be weakened. This is a direct lesson from
