@@ -548,16 +548,39 @@ The line that holds instead: **enforcement at the artifact level, not the
 action level.** day never gates an agent mid-action. It makes the state of the
 work measurable and exits non-zero. CI and humans gate; day reports.
 
-## v0.7 — Frames
+## v0.7 — Frames, and current-cycle position
+
+Two threads. **Frames is not slipping again** — it stays in v0.7, now beside
+the position work that v0.6 designed but did not build. Adding a second thread
+here rather than deferring Frames a third time is the deliberate answer to the
+tripwire below.
+
+### Current-cycle position (day#60)
+
+Designed in v0.6, recorded on subject `current-cycle-position`
+(`.design/current-cycle-position.md`): give position a **cycle boundary** — the
+last release — and a **`claim` probe kind** that reads the log rather than the
+working tree, so a witness like `verdict` or `assessment` is present when one
+was *recorded since the boundary*. It resolves the day#60 legibility gap the
+v0.6 release assessment ran into head-on: on a repo with history every artifact
+type exists from prior cycles, so `day status` reports four candidates and could
+never narrow, and a naive claim-probe would report a stale verdict as current.
+Cycle-relativity is **inference-only**; assessment stays cumulative. It is *use*,
+not model — the same axis v0.6 was ordered on — which is why it sits ahead of or
+beside Frames rather than after it. The design is validated and its next atom is
+`generative-build`; the build is the v0.7 opener.
+
+### Frames
 
 Multi-actor, and paced by kan's own sync work (a frame only bites once there is
 more than one actor with more than one log).
 
-**This is the second deferral** — v0.5 moved it from v0.5 to v0.6, and v0.6's
-rigor work moves it again. The reason is the same both times and is consistent
-rather than evasive: the v0.5 meta-evaluation found day's model outrunning its
-use, frames is more model, and rigor-as-artifact is use. Building frames while
-day still fails to shape a session would repeat the finding exactly.
+**Frames has been deferred twice** — v0.5 moved it to v0.6, v0.6's rigor work
+moved it to v0.7. It is **not moving again**: v0.7 carries it alongside the
+position work rather than bumping it. The deferral reason was consistent both
+times — the v0.5 meta-evaluation found day's model outrunning its use, frames is
+more model, rigor-as-artifact was use — and honouring the tripwire means holding
+Frames here rather than finding a third reason to slip it.
 
 Said plainly so it can be checked: **if frames slips a third time, that is no
 longer a sequencing argument.** It would mean either the item should be cut or
