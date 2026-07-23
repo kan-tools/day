@@ -10,6 +10,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "_comment": "Human-facing notice, kept SEPARATE from the context hook above so adding it cannot regress that hook's model-context injection. Emits only a systemMessage (shown to the user, verified live) on a transition or off-sequence finding, and nothing otherwise. Advisory: a systemMessage is a notice, never a decision.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "day hook session-notice",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },

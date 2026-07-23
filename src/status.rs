@@ -119,6 +119,34 @@ impl Status {
         self.here.len() > 1
     }
 
+    /// A one-line, human-facing notice of the *events* worth marking — a
+    /// transition past the last-assessed atom, or a skipped step — or `None`
+    /// when there is nothing to mark.
+    ///
+    /// This is what a `systemMessage` hook shows the human once per session: a
+    /// transition is an event, and an event deserves marking rather than being
+    /// something you catch by watching the status line change. Persistent state
+    /// (the current atom) stays in the status line; this is only the delta.
+    pub fn notice(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if let Some(t) = &self.transition {
+            let to = if t.to.is_empty() {
+                "no atom currently in play".to_string()
+            } else {
+                t.to.join(", ")
+            };
+            parts.push(format!(
+                "day: since your last recorded assessment of `{}`, the work has moved to {to} \
+                 — consider `day assess atom <slug>`",
+                t.from
+            ));
+        }
+        if let Some(first) = self.off_sequence.first() {
+            parts.push(format!("day: possible skipped step — {first}"));
+        }
+        (!parts.is_empty()).then(|| parts.join("\n"))
+    }
+
     /// `day status`: the full human report — current atom(s), satisfied and
     /// unknown inputs, met and unmet `done` criteria, what follows, and any
     /// off-sequence finding.
@@ -521,6 +549,35 @@ mod tests {
                 .any(|l| l.contains("moved past assessed `build`")),
             "{line}"
         );
+    }
+
+    /// The human notice marks events — a transition, a skipped step — and is
+    /// silent when there is nothing to mark.
+    #[test]
+    fn notice_marks_events_and_is_silent_otherwise() {
+        // Nothing to mark.
+        let quiet = Status {
+            here: vec![here("build", vec![], &["review"])],
+            off_sequence: vec![],
+            transition: None,
+            uncheckable: false,
+        };
+        assert_eq!(quiet.notice(), None);
+
+        // A transition and an off-sequence both surface.
+        let loud = Status {
+            here: vec![here("review", vec![], &[])],
+            off_sequence: vec!["build produced its output but upstream design did not".into()],
+            transition: Some(Transition {
+                from: "build".into(),
+                to: vec!["review".into()],
+            }),
+            uncheckable: false,
+        };
+        let notice = loud.notice().expect("there is something to mark");
+        assert!(notice.contains("`build`"), "{notice}");
+        assert!(notice.contains("moved to review"), "{notice}");
+        assert!(notice.contains("skipped step"), "{notice}");
     }
 
     /// A not-run command probe is neither met nor "unmet": the evidence is

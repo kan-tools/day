@@ -418,6 +418,50 @@ fn the_most_recent_assessment_across_atoms_is_the_baseline() {
     assert!(stdout.contains("assessment of `design`"), "{stdout}");
 }
 
+/// The `session-notice` hook emits a `systemMessage`-only JSON payload on a
+/// transition — the human-facing event marker — and it is valid JSON carrying
+/// the notice, never a blocking construct.
+#[test]
+fn session_notice_emits_systemmessage_json_on_a_transition() {
+    let dir = tempfile::tempdir().unwrap();
+    let assessment = result_claim(
+        "atom/build",
+        "bafyreiassess",
+        "build assessed.",
+        1_784_000_000_000_000,
+    );
+    let (kan, git) = build_done_review_current(dir.path(), &[assessment]);
+    let out = day(dir.path(), &kan, &git, &["hook", "session-notice"]);
+    assert!(out.status.success(), "hooks always exit zero");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let value: serde_json::Value = serde_json::from_str(stdout.trim())
+        .unwrap_or_else(|e| panic!("must be JSON: {e}: {stdout}"));
+    let msg = value["systemMessage"]
+        .as_str()
+        .expect("a systemMessage field");
+    assert!(msg.contains("`build`"), "names the assessed atom: {msg}");
+    assert!(msg.contains("moved to review"), "{msg}");
+    // Advisory: nothing that reads as a decision.
+    assert!(value.get("decision").is_none() && value.get("continue").is_none());
+}
+
+/// With no transition and nothing off-sequence, the notice hook is silent —
+/// a quiet session shows no notice at all, not an empty `{}`.
+#[test]
+fn session_notice_is_silent_when_there_is_nothing_to_mark() {
+    let dir = tempfile::tempdir().unwrap();
+    // No assessment recorded, so no baseline, so no transition.
+    let (kan, git) = build_done_review_current(dir.path(), &[]);
+    let out = day(dir.path(), &kan, &git, &["hook", "session-notice"]);
+    assert!(out.status.success());
+    assert!(
+        out.stdout.is_empty(),
+        "a quiet session emits nothing: {:?}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
 /// With no witness schema declared, status cannot infer position and says so
 /// rather than claiming "no current atom" — a distinction that matters,
 /// because the two have different fixes.

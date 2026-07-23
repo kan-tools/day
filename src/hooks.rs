@@ -332,14 +332,48 @@ const SAFETY: &str = "\nOperational safety for this session:\n\
 pub fn dispatch(event: &str, client: &KanClient, root: &Path) -> Result<String, UnknownEvent> {
     match event {
         "session-start" => Ok(session_start(client, root)),
+        "session-notice" => Ok(session_notice(client, root)),
         "session-end" => Ok(session_end(client)),
         other => Err(UnknownEvent(other.to_string())),
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("unknown hook event `{0}` (known events: session-start, session-end)")]
+#[error("unknown hook event `{0}` (known events: session-start, session-notice, session-end)")]
 pub struct UnknownEvent(pub String);
+
+/// The transition/off-sequence notice, as a `systemMessage`-only JSON payload
+/// for the human — or empty output when there is nothing to mark.
+///
+/// **A separate SessionStart hook from [`session_start`], on purpose.** That
+/// hook prints markdown that becomes the model's context, and its output is
+/// left byte-for-byte unchanged. This one emits only `{"systemMessage": …}`,
+/// which Claude Code shows to the *human* (verified live this session on a
+/// hook) and adds nothing to the model's context. Splitting them means adding
+/// a human notice cannot regress the context injection — the two audiences are
+/// served by two hooks rather than one hook switched to a riskier output
+/// shape.
+///
+/// **Advisory, like everything here.** A `systemMessage` is a notice, never a
+/// decision; there is no blocking construct, so `tests/plugin.rs` stays green.
+/// Emits nothing when there is no transition and no off-sequence finding, so a
+/// quiet session sees no notice at all. Infallible: any failure degrades to
+/// empty output.
+///
+/// The status line already shows a transition persistently (`day ⤳ …`); this
+/// is the once-per-session *event* marker on top of that, and the status line
+/// is the visibility floor if `systemMessage` ever renders differently on
+/// SessionStart than it did where it was verified.
+pub fn session_notice(client: &KanClient, root: &Path) -> String {
+    let git = Git::new(root);
+    let Ok(status) = crate::status::compute(client, &git) else {
+        return String::new();
+    };
+    match status.notice() {
+        Some(notice) => serde_json::json!({ "systemMessage": notice }).to_string(),
+        None => String::new(),
+    }
+}
 
 /// An end-of-session report, for a human to run by hand.
 ///

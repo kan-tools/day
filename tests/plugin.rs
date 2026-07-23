@@ -74,10 +74,30 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
 #[test]
 fn ac5_the_session_start_hook_invokes_day_and_nothing_else() {
     let hooks = read_json("hooks/hooks.json");
-    let command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-        .as_str()
-        .expect("a SessionStart command should be declared");
-    assert_eq!(command, "day hook session-start");
+    let groups = hooks["hooks"]["SessionStart"]
+        .as_array()
+        .expect("SessionStart should be an array");
+
+    // Every SessionStart command must be a `day hook …` invocation — the
+    // "nothing else" guarantee — and the two day registers must both be
+    // present: the context hook and the human-facing notice hook.
+    let commands: Vec<&str> = groups
+        .iter()
+        .flat_map(|g| g["hooks"].as_array().into_iter().flatten())
+        .filter_map(|h| h["command"].as_str())
+        .collect();
+    assert!(!commands.is_empty(), "at least one SessionStart command");
+    for command in &commands {
+        assert!(
+            command.starts_with("day hook "),
+            "SessionStart must invoke day and nothing else; found {command:?}"
+        );
+    }
+    assert!(commands.contains(&"day hook session-start"), "{commands:?}");
+    assert!(
+        commands.contains(&"day hook session-notice"),
+        "{commands:?}"
+    );
 }
 
 /// Guards the adversarial review's blocking finding. Only

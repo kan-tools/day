@@ -749,9 +749,13 @@ pub fn init_instructions() -> String {
     out.push_str("     /plugin install <path to the day repo, or its marketplace entry>\n\n");
     out.push_str("2. Piecemeal, without the plugin:\n");
     out.push_str(&format!("     claude mcp add day -- {exe} mcp\n"));
-    out.push_str("   plus a SessionStart hook in .claude/settings.json:\n");
+    out.push_str("   plus two SessionStart hooks in .claude/settings.json — one injects\n");
+    out.push_str("   process context to the model, one shows the human a notice when the\n");
+    out.push_str("   work has moved past its last assessment:\n");
     out.push_str(&format!(
-        "     {{\"hooks\": {{\"SessionStart\": [{{\"hooks\": [{{\"type\": \"command\", \"command\": \"{exe} hook session-start\"}}]}}]}}}}\n\n"
+        "     {{\"hooks\": {{\"SessionStart\": [\n       \
+         {{\"hooks\": [{{\"type\": \"command\", \"command\": \"{exe} hook session-start\"}}]}},\n       \
+         {{\"hooks\": [{{\"type\": \"command\", \"command\": \"{exe} hook session-notice\"}}]}}\n     ]}}}}\n\n"
     ));
     // The status line is deliberately NOT in the plugin path above: a Claude
     // Code plugin's settings support only the `agent` and `subagentStatusLine`

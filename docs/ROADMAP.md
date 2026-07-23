@@ -283,12 +283,23 @@ top-level `statusLine`** (only `agent`/`subagentStatusLine`), so the design's
 "the plugin gains a statusLine entry" is not achievable — the line is set up
 in the user's own settings, and `day init` now says so.
 
-**Still to land:** the empirical check of `MessageDisplay`'s `displayContent`
-and the universal `systemMessage` field, which gates any *hook-printed*
-transition surface (a `UserPromptSubmit`-on-change hook) — deferred exactly as
-the design requires. Transitions currently surface in `day status` and the
-status line, both already-verified channels. Full design in
-`.design/rigor-as-artifact.md`.
+**Transition notice shipped, on a live-verified channel.** The step-5 gate —
+which human channel a transition can print to — was closed by *observation*,
+not docs: in a real Claude Code session, a hook's `systemMessage` field
+displayed to the user, and the status line rendered from the cache. So the
+transition/off-sequence notice lands as a `systemMessage` from a **second,
+separate** SessionStart hook (`day hook session-notice`), leaving the context
+hook's output byte-for-byte unchanged — adding the human notice cannot regress
+the model-context injection. `displayContent` was ruled out (it *replaces* the
+assistant's on-screen text; wrong tool). The status line's persistent `day ⤳`
+marker is the visibility floor if `systemMessage` ever renders differently on
+SessionStart than where it was verified.
+
+**What remains for v0.6** is the schema-legibility gap (day#60): day's own
+witness schema does not probe intermediate atom outputs (`verdict`,
+`assessment`), so position stays ambiguous and transitions stay quiet on this
+repo until the schema is richer — likely needing a claim-existence probe kind,
+which is its own design pass. Full design in `.design/rigor-as-artifact.md`.
 
 **day is squishy.** It describes a process well and does very little to make
 one happen. A session using day still produces test gaps, semantic drift
