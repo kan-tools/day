@@ -77,6 +77,16 @@ here.
     **timeout that kills**. A probe's command comes from a kan claim, so
     these are what keep the log from being an execution path — do not relax
     them, and do not add a fourth spawn site outside these three modules.
+  - **Not every probe is a command, and the `claim` probe (since v0.7) is
+    bound by none of those four rules.** It reads the kan log through the
+    same public read verbs `atoms::load` uses, so there is nothing to
+    shell-escape, nothing for `--run` to gate, and no reason to withhold it
+    over MCP. The guardrails above are about *executing what a claim names*,
+    which is narrower and sharper than "probes are dangerous" — folding
+    `claim` into them would be a category error, and a test asserts it never
+    reaches `run_command`. **The line is read vs. execute**, and position
+    inference draws it in exactly that place: `path`, `tag`, and `claim` all
+    run at session start; `command` never does.
 - day talks to kan by **shelling out to the `kan` binary**, never by linking
   it as a library. The boundary is the public CLI on purpose: it's the same
   contract any other consumer gets, so day can't quietly depend on kan
