@@ -78,14 +78,14 @@ pub enum Outputs {
 /// Classifies an atom's declared outputs as a whole. `Present` needs every
 /// output present; a single unknowable output makes the set `Unknown`, and
 /// only a fully-probed set with something missing is `Absent`.
-fn classify_outputs(outputs: &[String], probes: &BTreeMap<String, Probe>, git: &Git) -> Outputs {
+fn classify_outputs(outputs: &[String], presence: &impl Fn(&str) -> Presence) -> Outputs {
     if outputs.is_empty() {
         return Outputs::Unknown;
     }
     let mut all_present = true;
     let mut any_unknown = false;
     for output in outputs {
-        match materialized(output, probes, git) {
+        match presence(output) {
             Presence::Present => {}
             Presence::Absent => all_present = false,
             Presence::Unknown => {
@@ -147,8 +147,18 @@ pub struct Report {
     pub off_sequence: Vec<String>,
 }
 
-/// Infers position from the atom set and the witness probes.
+/// Infers position from the atom set and the witness probes, resolving each
+/// artifact type against git (path/tag) without ever running a command.
 pub fn infer(atoms: &[Atom], probes: &BTreeMap<String, Probe>, git: &Git) -> Report {
+    infer_with(atoms, |kind| materialized(kind, probes, git))
+}
+
+/// The pure core of inference: it takes a function answering whether each
+/// artifact type is present and computes standings, candidates, and
+/// off-sequence findings. Split from [`infer`] so this logic is tested by
+/// injecting presences directly — no git subprocess, so the position tests are
+/// deterministic rather than depending on spawning a stub under load (day#64).
+fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
     let standings: Vec<Standing> = atoms
         .iter()
         .map(|atom| {
@@ -156,13 +166,13 @@ pub fn infer(atoms: &[Atom], probes: &BTreeMap<String, Probe>, git: &Git) -> Rep
             let mut inputs_missing = Vec::new();
             let mut inputs_unknown = Vec::new();
             for input in &atom.interface.inputs {
-                match materialized(input, probes, git) {
+                match presence(input) {
                     Presence::Present => inputs_present.push(input.clone()),
                     Presence::Absent => inputs_missing.push(input.clone()),
                     Presence::Unknown => inputs_unknown.push(input.clone()),
                 }
             }
-            let outputs = classify_outputs(&atom.interface.outputs, probes, git);
+            let outputs = classify_outputs(&atom.interface.outputs, &presence);
             Standing {
                 atom: atom.name.clone(),
                 inputs_present,
@@ -239,34 +249,20 @@ mod tests {
         }
     }
 
-    /// A git that answers path/tag probes from fixed sets. Returns the
-    /// `TempDir` too, so the caller keeps the stub alive — and uses
-    /// `Git::with_bin` rather than mutating the git-binary env var, which is
-    /// process global and races when tests run in parallel (found the hard
-    /// way: this test flaked until the env mutation was removed).
-    fn git_with(tracked: &[&str], tags: &[&str]) -> (tempfile::TempDir, Git) {
-        let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join("git-stub.sh");
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\npattern=\"$3\"\nmatch() {{ for i in $1; do case \"$i\" in $pattern) printf '%s\\n' \"$i\";; esac; done; }}\ncase \"$1\" in\n  ls-files) match \"{}\" ;;\n  tag) match \"{}\" ;;\n  *) exit 1 ;;\nesac\n",
-                tracked.join(" "),
-                tags.join(" "),
-            ),
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let git = Git::with_bin(".", script.display().to_string());
-        (dir, git)
-    }
-
-    fn probes(pairs: &[(&str, Probe)]) -> BTreeMap<String, Probe> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone()))
-            .collect()
+    /// Resolves each artifact type from a fixed table — the presence a probe
+    /// *would* report, injected directly. This is what lets the inference logic
+    /// be tested without spawning a git stub: day#64 was a lib unit test
+    /// flaking because it exec'd a freshly-written script under CI parallelism,
+    /// and the logic under test never needed a real process. Anything not in
+    /// the table is `Unknown`, matching a type with no probe.
+    fn presences<'a>(pairs: &'a [(&'a str, Presence)]) -> impl Fn(&str) -> Presence + 'a {
+        move |kind| {
+            pairs
+                .iter()
+                .find(|(k, _)| *k == kind)
+                .map(|(_, p)| *p)
+                .unwrap_or(Presence::Unknown)
+        }
     }
 
     #[test]
@@ -275,14 +271,14 @@ mod tests {
             atom("design", &["intent"], &["design-doc"], &["build"]),
             atom("build", &["design-doc"], &["code-change"], &[]),
         ];
-        let probes = probes(&[
-            ("design-doc", Probe::Path(".design/*.md".into())),
-            ("code-change", Probe::Path("src/*.rs".into())),
-            // intent has no probe: unknowable, and a source atom's inputs are
-            // not evidence anyway.
-        ]);
-        let (_d, git) = git_with(&[".design/x.md"], &[]);
-        let report = infer(&atoms, &probes, &git);
+        // design-doc present, code-change absent; intent has no probe.
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("design-doc", Presence::Present),
+                ("code-change", Presence::Absent),
+            ]),
+        );
         assert_eq!(report.current, vec!["build"], "{:?}", report.standings);
     }
 
@@ -292,12 +288,13 @@ mod tests {
             atom("design", &["intent"], &["design-doc"], &["build"]),
             atom("build", &["design-doc"], &["code-change"], &[]),
         ];
-        let probes = probes(&[
-            ("design-doc", Probe::Path(".design/*.md".into())),
-            ("code-change", Probe::Path("src/*.rs".into())),
-        ]);
-        let (_d, git) = git_with(&[".design/x.md", "src/lib.rs"], &[]);
-        let report = infer(&atoms, &probes, &git);
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("design-doc", Presence::Present),
+                ("code-change", Presence::Present),
+            ]),
+        );
         assert!(
             !report.current.contains(&"build".to_string()),
             "build's output exists, so it is not current: {:?}",
@@ -306,17 +303,34 @@ mod tests {
     }
 
     #[test]
-    fn a_command_probed_input_is_unknown_not_absent() {
+    fn an_unknown_input_leaves_an_atom_a_candidate() {
         let atoms = [atom("check", &["passing-tests"], &["verdict"], &[])];
-        let probes = probes(&[("passing-tests", Probe::Command("exit 1".into()))]);
-        let (_d, git) = git_with(&[], &[]);
-        let report = infer(&atoms, &probes, &git);
-        // The command is never run, so its input is unknown -- and an atom
-        // whose only input is unknowable is still a candidate rather than
-        // being silently ruled out.
+        // passing-tests is unknowable (e.g. a command probe, never run here).
+        let report = infer_with(&atoms, presences(&[("passing-tests", Presence::Unknown)]));
         let s = &report.standings[0];
         assert_eq!(s.inputs_unknown, vec!["passing-tests"]);
-        assert!(s.inputs_missing.is_empty());
+        assert!(
+            s.inputs_missing.is_empty(),
+            "an unknowable input is not missing, so the atom stays a candidate"
+        );
+    }
+
+    /// The command-probe path of [`materialized`] specifically: it must return
+    /// `Unknown` without ever running the command. Constructed so no process is
+    /// spawned — `materialized` short-circuits a command probe before touching
+    /// git — so this stays deterministic too.
+    #[test]
+    fn a_command_probe_is_unknown_and_never_run() {
+        let probes: BTreeMap<String, Probe> =
+            [("passing-tests".to_string(), Probe::Command("exit 1".into()))]
+                .into_iter()
+                .collect();
+        // A Git that would error if invoked; the command arm never calls it.
+        let git = Git::with_bin(".", "definitely-not-a-real-git-binary".to_string());
+        assert_eq!(
+            materialized("passing-tests", &probes, &git),
+            Presence::Unknown
+        );
     }
 
     #[test]
@@ -325,35 +339,39 @@ mod tests {
             atom("design", &["intent"], &["design-doc"], &["build"]),
             atom("build", &["design-doc"], &["code-change"], &[]),
         ];
-        let probes = probes(&[
-            ("design-doc", Probe::Path(".design/*.md".into())),
-            ("code-change", Probe::Path("src/*.rs".into())),
-        ]);
-        // code-change exists, design-doc does not: the build ran without a
-        // design.
-        let (_d, git) = git_with(&["src/lib.rs"], &[]);
-        let report = infer(&atoms, &probes, &git);
+        // code-change present, design-doc probed and absent: build ran without
+        // a design.
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("design-doc", Presence::Absent),
+                ("code-change", Presence::Present),
+            ]),
+        );
         assert_eq!(report.off_sequence.len(), 1, "{:?}", report.off_sequence);
         assert!(report.off_sequence[0].contains("design"));
     }
 
     /// The false positive dogfooding found on day's own log: an upstream atom
     /// whose output has **no probe** is unknowable, not absent, and must not
-    /// read as a skipped step. Here `design`'s output `verdict` is unprobed
-    /// while `build`'s `code-change` is present; the old code flagged a skip
-    /// because it only asked "is the upstream output present", conflating
-    /// unprobed with missing. The existing off-sequence test never caught this
-    /// because both its artifacts were probed.
+    /// read as a skipped step. `design`'s output `verdict` is unprobed while
+    /// `build`'s `code-change` is present; the old code flagged a skip because
+    /// it only asked "is the upstream output present", conflating unprobed with
+    /// missing.
     #[test]
     fn an_unprobed_upstream_output_is_not_a_skipped_step() {
         let atoms = [
             atom("design", &["intent"], &["verdict"], &["build"]),
             atom("build", &["design-doc"], &["code-change"], &[]),
         ];
-        // Only code-change is probed; `verdict` (design's output) has no probe.
-        let probes = probes(&[("code-change", Probe::Path("src/*.rs".into()))]);
-        let (_d, git) = git_with(&["src/lib.rs"], &[]);
-        let report = infer(&atoms, &probes, &git);
+        // verdict unknowable (no probe), code-change present.
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("verdict", Presence::Unknown),
+                ("code-change", Presence::Present),
+            ]),
+        );
         assert!(
             report.off_sequence.is_empty(),
             "an unknowable upstream output must not be reported as a skip: {:?}",
@@ -370,13 +388,13 @@ mod tests {
             atom("design", &["intent"], &["design-doc"], &["build"]),
             atom("build", &["design-doc"], &["code-change"], &[]),
         ];
-        let probes = probes(&[
-            ("design-doc", Probe::Path(".design/*.md".into())),
-            ("code-change", Probe::Path("src/*.rs".into())),
-        ]);
-        // code-change present, design-doc probed and absent.
-        let (_d, git) = git_with(&["src/lib.rs"], &[]);
-        let report = infer(&atoms, &probes, &git);
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("design-doc", Presence::Absent),
+                ("code-change", Presence::Present),
+            ]),
+        );
         assert_eq!(report.off_sequence.len(), 1, "{:?}", report.off_sequence);
     }
 }
