@@ -51,19 +51,30 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
             // probe is a command that would leave a sentinel file, so the
             // "MCP never executes" guarantee is proved by the filesystem
             // rather than by day's own output.
+            // `verdict` sits beside it as a **claim** probe. The two together
+            // are the whole of `.design/current-cycle-position.md` REQ-8 over
+            // MCP: a read resolves, an execution does not, and the difference
+            // is visible in one report.
             common::claim(
                 "telos/shipped",
                 "bafyreitelos",
-                "Shipped.\n\n```day-telos\n{\"witnesses\":[\"passing-tests\"]}\n```\n",
+                "Shipped.\n\n```day-telos\n{\"witnesses\":[\"passing-tests\",\"verdict\"]}\n```\n",
             ),
             common::claim(
                 "schema/witness",
                 "bafyreiwitness",
                 &format!(
                     "Witness probes.\n\n```day-witness\n{{\"passing-tests\":\
-                     {{\"command\":\"touch {}\"}}}}\n```\n",
+                     {{\"command\":\"touch {}\"}},\"verdict\":\
+                     {{\"claim\":{{\"kind\":\"Decision\",\"contains\":\"adversarial review of\"}}}}}}\n```\n",
                     sentinel.display()
                 ),
+            ),
+            common::decision_claim(
+                "rigor",
+                "bafyreiverdict",
+                "adversarial review of rigor: APPROVE — the design holds",
+                1_700_000_000_000_000,
             ),
         ],
     );
@@ -330,6 +341,21 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
     assert!(
         !sentinel.exists(),
         "the MCP assess_telos tool executed a command probe; it must never be able to"
+    );
+
+    // `.design/current-cycle-position.md` AC-8. A `claim` probe is a kan
+    // read, so it is *supposed* to resolve over MCP — the constraint that
+    // keeps a command probe out is about executing what a claim names, not
+    // about probes in general. Asserting both in one report is what stops
+    // the two being conflated in either direction: a later change that
+    // withheld claim probes from MCP "for symmetry" would fail here.
+    assert!(
+        text.contains("[MATERIAL] verdict"),
+        "a claim probe reads kan and must resolve over MCP: {text}"
+    );
+    assert!(
+        text.contains("adversarial review of"),
+        "the verdict probe should report which shape it matched: {text}"
     );
 }
 

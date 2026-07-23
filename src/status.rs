@@ -10,10 +10,16 @@
 //!
 //! **Nothing here executes a command probe.** Status is a *display*, and a
 //! display that runs project-declared commands would be the same widening
-//! position inference refuses — [`Authorization::Report`] holds the line by
-//! construction, exactly as it does in `src/position.rs`. The gateable check
-//! that *does* run commands (under `--run`) is `day assess atom`, which exists
+//! position inference refuses — [`position::resolve`] holds the line by
+//! construction, exactly as it does for inference. The gateable check that
+//! *does* run commands (under `--run`) is `day assess atom`, which exists
 //! precisely so status can stay safe to run on every keystroke.
+//!
+//! **Everything here is relative to the current cycle.** The boundary — the
+//! last release — is computed once in [`compute`] and threaded through both
+//! the position and the `done` criteria shown under it, so the whole display
+//! answers one question ("where is *this* cycle") rather than mixing it with
+//! "what has this repo ever produced". Assessment answers the other one.
 //!
 //! **Nothing here writes a claim.** Position is inferred and displayed, never
 //! recorded — recording it would make day the task tracker
@@ -22,10 +28,10 @@
 use std::collections::BTreeMap;
 
 use crate::atoms::{self, Atom};
-use crate::git::Git;
+use crate::git::{Boundary, Git};
 use crate::kan_client::KanClient;
 use crate::position::{self, Standing};
-use crate::probe::{self, Authorization, Probe, Verdict};
+use crate::probe::{ClaimLog, Verdict};
 use crate::telos::WitnessSchema;
 
 #[derive(Debug, thiserror::Error)]
@@ -315,13 +321,13 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // A missing witness schema is not an error here: it means position is
     // uncheckable, which the report says plainly. `assess` needs the schema
     // and errors without it; `status` degrades to "cannot infer".
-    let probes = match WitnessSchema::load(client) {
-        Ok(schema) => schema.probes,
-        Err(crate::telos::Error::NotDeclared { .. }) => BTreeMap::new(),
+    let schema = match WitnessSchema::load(client) {
+        Ok(schema) => schema,
+        Err(crate::telos::Error::NotDeclared { .. }) => WitnessSchema::default(),
         Err(e) => return Err(e.into()),
     };
 
-    if probes.is_empty() {
+    if schema.probes.is_empty() && schema.unsupported.is_empty() {
         return Ok(Status {
             here: Vec::new(),
             off_sequence: Vec::new(),
@@ -330,7 +336,16 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         });
     }
 
-    let report = position::infer(&atoms, &probes, git);
+    // The cycle boundary, computed once and threaded through. A git read that
+    // fails leaves it `None`, which is the same state a repo with no release
+    // is in — position falls back to its cumulative reading rather than
+    // failing, because "where am I" degrading is better than not answering.
+    let boundary = git.cycle_boundary().unwrap_or(None);
+
+    // One read of the log, shared by every claim probe below.
+    let log = ClaimLog::new(client);
+
+    let report = position::infer(&atoms, &schema.probes, git, &log, boundary.as_ref());
     let by_name: BTreeMap<&str, &Atom> = atoms.iter().map(|a| (a.name.as_str(), a)).collect();
 
     let here: Vec<Here> = report
@@ -339,7 +354,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         .filter_map(|name| {
             let atom = by_name.get(name.as_str())?;
             let standing = report.standings.iter().find(|s| &s.atom == name)?;
-            Some(here_for(atom, standing, &probes, git))
+            Some(here_for(atom, standing, &schema, git, &log, boundary.as_ref()))
         })
         .collect();
 
@@ -388,18 +403,31 @@ fn last_assessed_atom(client: &KanClient, atoms: &[Atom]) -> Result<Option<Strin
     Ok(best.map(|(_, slug)| slug))
 }
 
-fn here_for(atom: &Atom, standing: &Standing, probes: &BTreeMap<String, Probe>, git: &Git) -> Here {
+fn here_for(
+    atom: &Atom,
+    standing: &Standing,
+    schema: &WitnessSchema,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    boundary: Option<&Boundary>,
+) -> Here {
     let done = atom
         .interface
         .done
         .iter()
         .map(|witness| Criterion {
             witness: witness.clone(),
-            // Authorization::Report: a command probe is reported as not-run,
-            // never executed. Status displays; it does not run the build.
-            verdict: probes
+            // Resolved the same way the position above it was: cycle-relative
+            // and never executing a command. A `done` criterion met by last
+            // cycle's artifact is exactly the stale reading day#60 is about,
+            // and it would be incoherent for the criteria under an atom to
+            // answer a different question than the atom's own standing.
+            // Status displays; it does not run the build.
+            verdict: schema
+                .probes
                 .get(witness)
-                .map(|p| probe::evaluate(p, git, Authorization::Report)),
+                .map(|p| position::resolve(p, git, log, boundary))
+                .or_else(|| schema.unreadable(witness)),
         })
         .collect();
 

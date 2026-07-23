@@ -101,9 +101,52 @@ impl Git {
             .collect())
     }
 
+    /// Tags matching a glob with their creation dates (unix seconds), newest
+    /// first.
+    ///
+    /// The dates are what makes "was this tag created *this* cycle"
+    /// answerable. Same `git tag --list` read as [`Self::tags_matching`],
+    /// with a format string — no new subcommand, so the read-only whitelist
+    /// in `tests/assess.rs` still covers it.
+    pub fn tags_with_dates(&self, pattern: &str) -> Result<Vec<(String, i64)>, Error> {
+        let out = self.run(&[
+            "tag",
+            "--list",
+            pattern,
+            "--sort=-creatordate",
+            "--format=%(refname:strip=2)\t%(creatordate:unix)",
+        ])?;
+        Ok(out
+            .lines()
+            .filter_map(|line| {
+                let (name, date) = line.trim_end().split_once('\t')?;
+                // A tag whose date git could not render is skipped rather
+                // than defaulted to 0: an epoch date would make it look
+                // older than every boundary and silently never count.
+                Some((name.to_string(), date.trim().parse().ok()?))
+            })
+            .filter(|(name, _)| !name.is_empty())
+            .collect())
+    }
+
     /// The most recent `v*` tag by creation date, if any.
     pub fn latest_version_tag(&self) -> Result<Option<String>, Error> {
         Ok(self.tags_matching("v*")?.into_iter().next())
+    }
+
+    /// The current **cycle boundary**: the last release, as a tag and the
+    /// moment it was cut.
+    ///
+    /// `None` in a repo with no release — which is a real state, not an
+    /// error, and one position must handle by falling back to its cumulative
+    /// behaviour. Treating an unbounded repo as "everything is the current
+    /// cycle" would make a fresh clone report every atom as current.
+    pub fn cycle_boundary(&self) -> Result<Option<Boundary>, Error> {
+        Ok(self
+            .tags_with_dates("v*")?
+            .into_iter()
+            .next()
+            .map(|(tag, at_unix)| Boundary { tag, at_unix }))
     }
 
     /// Tracked files matching a pathspec.
@@ -132,6 +175,49 @@ impl Git {
             .filter(|l| !l.is_empty())
             .map(str::to_string)
             .collect())
+    }
+
+    /// Files matching a pathspec that changed between `since` and the working
+    /// tree — [`Self::tracked_files`] scoped to one cycle.
+    ///
+    /// The pathspec goes to git rather than being matched in day, so a
+    /// `path` probe means exactly the same thing bounded as unbounded. Doing
+    /// the glob here instead would need a matcher of day's own, and it would
+    /// disagree with `ls-files` at the edges — which is the sort of drift
+    /// that makes a probe report differently depending on which question
+    /// asked it.
+    pub fn changed_files_matching(&self, since: &str, pathspec: &str) -> Result<Vec<String>, Error> {
+        let out = self.run(&["diff", "--name-only", since, "--", pathspec])?;
+        Ok(out
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect())
+    }
+}
+
+/// The boundary of the current cycle: the last release.
+///
+/// Derived from git on every read, never stored — day owns no state, and a
+/// boundary that went stale in a cache would be worse than no boundary at
+/// all. Carries both the tag (for a diff) and its time (for a claim's
+/// `recorded_at`), because a cycle has to be expressible in both substrates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Boundary {
+    /// The tag naming the release, e.g. `v0.6.0-beta.1`.
+    pub tag: String,
+    /// When it was created, in seconds since the epoch.
+    pub at_unix: i64,
+}
+
+impl Boundary {
+    /// The boundary in the unit kan stamps claims with: **microseconds**
+    /// since the epoch. Verified against the real binary rather than assumed
+    /// — `recorded_at` is an integer, and `tests/kan_conformance.rs` is what
+    /// caught day typing it as a string.
+    pub fn at_micros(&self) -> i64 {
+        self.at_unix.saturating_mul(1_000_000)
     }
 }
 

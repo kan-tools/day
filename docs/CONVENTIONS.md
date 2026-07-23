@@ -390,22 +390,64 @@ carrying a fenced `day-witness` block: a map from witness type to **probe**.
 {
   "published-artifact": {"tag": "v*"},
   "design-doc": {"path": ".design/*.md"},
-  "passing-tests": {"command": "cargo test"}
+  "passing-tests": {"command": "cargo test"},
+  "verdict": {"claim": {"kind": "Decision", "contains": "adversarial review of"}},
+  "assessment": {"claim": {"kind": "Result"}}
 }
 ```
 
-| Probe | Satisfied when | Runs |
-| ----- | -------------- | ---- |
-| `path` | a git pathspec matches at least one **tracked** file | always |
-| `tag` | a git tag glob matches at least one tag | always |
-| `command` | the command exits zero | only with `--run` |
+| Probe | Satisfied when | Reads | Runs |
+| ----- | -------------- | ----- | ---- |
+| `path` | a git pathspec matches at least one **tracked** file | git | always |
+| `tag` | a git tag glob matches at least one tag | git | always |
+| `claim` | a live claim of the given kind exists (and contains the marker, if one is declared) | kan | always |
+| `command` | the command exits zero | — | only with `--run` |
 
 `path` uses `git ls-files`, so an untracked build output or a stray local
 file cannot witness a telos — being committed is the stronger claim, and it
 costs no new dependency.
 
+**A `claim` probe is how a record-shaped witness becomes checkable.** Some
+artifacts are not files or tags: a `verdict` is what `day review record`
+appends, an `assessment` is what `kan result` records. Until v0.7 neither was
+probeable at all, and day's own position could never narrow (day#60).
+
+`kind` is a kan claim kind exactly as `kan show --json` renders it —
+`Observation`, `Plan`, `Decision`, `Result`. `contains` is an optional plain
+substring the claim's text must include; it **narrows** which claims count,
+the same job a telos's `scope` does, and it is a substring rather than a
+pattern language because probe definitions arrive from claims. A `Decision`
+alone would match every decision in the log, which is why `verdict` carries
+a marker and `assessment` does not need one.
+
+Two cautions, both real:
+
+- A marker matches **any** claim text containing it, including a claim that
+  merely quotes it. The decision that *defined* `"adversarial review of"` is
+  itself a `Decision` containing that string, and does match.
+- `{"kind": "Result"}` matches every `kan result`, not only atom
+  assessments — a release note or a session handoff recorded with `result`
+  counts too. Narrow it if that is not what you mean.
+
+**A `claim` probe is a read, and has none of `command`'s three constraints.**
+It performs only kan's read verbs, so there is nothing to shell-escape,
+nothing for `--run` to gate, and no reason to withhold it over MCP. The rules
+below are about *executing what a claim names*, which a `claim` probe never
+does. Its one cost is breadth: a claim witness is not tied to a subject, so
+answering one reads the whole log. Every claim probe in a single command
+shares one such read.
+
+**A probe kind day does not recognize costs that witness, not the schema.**
+An entry this version cannot parse is reported as `ERROR` — unchecked, not
+absent, so it never counts against a telos — and the rest of the map still
+resolves. This mirrors what day requires of kan's `--json` shape, and it was
+added after a `claim` probe recorded on day's own log made the installed
+older binary fail the entire witness map, taking the session hook and status
+line with it.
+
 **A `command` probe is day's third substrate**, after kan and git, and the
-only one that executes anything. Four rules bound it:
+only one that executes anything — `path`, `tag`, and `claim` are all reads.
+Four rules bound it, and they bound it alone:
 
 - **No shell, ever.** The argv is split on whitespace and executed directly.
   A probe declared as `true; touch /tmp/x` runs `true` with the literal
@@ -461,6 +503,11 @@ consequences, both deliberate:
   `v0.5.0`, and `v0.5.1`, so it names a narrower equivalence class rather
   than one artifact. A telos that named a single instance would have
   collapsed onto it, which is the thing witnesses exist to prevent.
+- **A scope never applies to a `claim` probe** either, and day says so. A
+  scope replaces *the* pattern argument, and a claim probe has two fields
+  rather than one; overwriting its `contains` from a telos could *widen*
+  which claims count rather than narrow them, since a schema's marker is
+  usually the more specific of the two.
 - **A scope never applies to a `command` probe**, and day reports that it
   was ignored. Honouring it would let a telos claim decide what day
   executes; commands originate only from `schema/witness`, which is one
@@ -484,8 +531,11 @@ tests/cli.rs::init_prints_both_install_paths covers the setup path." \
 
 Note the shape: `kan result` takes the **subject positionally**, as
 `<SUBJECT> <TEXT>`, while `observe`, `plan`, and `decide` take `<TEXT>` with
-`--subject`. This page previously documented `kan result` with `--subject`,
-which does not run. Copy the form above rather than the sibling verbs'.
+`--subject`. This page once documented `kan result` with `--subject`, which
+did not run at the time — the asymmetry was kan#78. kan has since resolved it
+by accepting **both** spellings, so the `--subject` form now works too; the
+positional form above is what day emits and what `tests/kan_conformance.rs`
+exercises against the real binary. Copy the form above.
 
 Assess against **material evidence** — builds, tests, diffs, deployed
 behavior — not against an agent's own account of what it did. kan's log is
@@ -505,16 +555,65 @@ nothing is recorded**: position is recomputed each time, and
 Ambiguity is *reported, not resolved* — when several atoms fit the evidence,
 all are named, because guessing one would be a claim day cannot support.
 
-Two rules bound inference:
+Three rules bound inference:
 
-- It runs **only `path` and `tag` probes, never `command`**. Inference happens
-  on every session start; executing project-declared commands as a side effect
-  of *starting a session* would be a far larger widening than `--run`. A type
-  whose probe is a command is reported as unknowable, not silently absent.
+- It **reads; it never executes.** `path`, `tag`, and `claim` are all reads
+  and all run. `command` does not: inference happens on every session start,
+  and executing project-declared commands as a side effect of *starting a
+  session* would be a far larger widening than `--run`. A type whose probe is
+  a command is reported as unknowable, not silently absent. The line is
+  read vs. execute, not probe vs. probe.
+- It is **relative to the current cycle** (below).
 - **Off-sequence** is reported when a downstream atom's outputs are present
   while an upstream atom's outputs are *demonstrably* absent (probed and not
   found) — a skipped step. An upstream whose output is merely unprobed is
   unknowable, not evidence of a skip.
+
+### The cycle boundary
+
+On a repo with any history, *every* artifact type exists: there is always some
+`v*` tag, some past verdict, some old assessment. So "does one exist" can only
+ever answer yes, and day's own log reported four candidate atoms permanently
+(day#60). Position therefore resolves each probe against a **cycle boundary**
+— the last release, taken as the newest `v*` tag:
+
+| Probe | Present, for position, when it |
+| ----- | ------------------------------ |
+| `path` | **changed since** the boundary (`git diff --name-only <tag> -- <pathspec>`) |
+| `tag` | was **created since** the boundary |
+| `claim` | was **recorded since** the boundary (`recorded_at` strictly greater) |
+
+The boundary is derived from git on every read and **never stored** — day owns
+no state, and a stale cached boundary would be worse than none.
+
+Consequences worth stating, because each is easy to mistake for a bug:
+
+- **No release means no boundary**, and inference falls back to the
+  cumulative, tracked-ever reading. Treating an unbounded repo as "everything
+  is the current cycle" would make a fresh clone report every atom as current.
+- **The boundary tag does not witness its own cycle** — it closed the previous
+  one. Since the boundary is always the *newest* `v*` tag, a `tag` witness is
+  absent under every boundary. `release` stops being current not by observing
+  its own output but because cutting the tag opens a new cycle in which its
+  input has not changed yet. Releasing ends a cycle, so it cannot also be
+  evidence within it.
+- **An undated claim is not this cycle's.** `recorded_at` is optional in kan's
+  shape; a claim without one cannot be placed in a cycle, and reads as not
+  current rather than as current work.
+- **Work committed before the tag is last cycle's**, even if it was meant for
+  this one. Cutting a release after next-cycle work has already landed on the
+  default branch puts that work behind the boundary. This is the tree talking,
+  and it is accurate about the repository even when it is surprising.
+
+**Cycle-relativity is confined to position** — `day status`, the status line,
+and the session hooks, including the `done` criteria status displays.
+`day assess telos` and `day assess atom` are **cumulative and unchanged**:
+they ask whether a witness was *ever* produced, and a release or a review from
+any time is real evidence that work landed inside a telos's equivalence class.
+Bounding assessment would make last cycle's shipped telos start reporting as
+unmet the moment a new tag was cut — a regression invented entirely by the
+tool. The two paths are separate functions rather than one function with a
+flag, so this holds by construction.
 
 `day status` renders this for a human: the current atom or candidates, which
 inputs are satisfied, which `done` criteria are met and unmet, what the graph
