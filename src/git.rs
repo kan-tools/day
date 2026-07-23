@@ -186,7 +186,11 @@ impl Git {
     /// disagree with `ls-files` at the edges — which is the sort of drift
     /// that makes a probe report differently depending on which question
     /// asked it.
-    pub fn changed_files_matching(&self, since: &str, pathspec: &str) -> Result<Vec<String>, Error> {
+    pub fn changed_files_matching(
+        &self,
+        since: &str,
+        pathspec: &str,
+    ) -> Result<Vec<String>, Error> {
         let out = self.run(&["diff", "--name-only", since, "--", pathspec])?;
         Ok(out
             .lines()

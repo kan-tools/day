@@ -327,7 +327,12 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         Err(e) => return Err(e.into()),
     };
 
-    if schema.probes.is_empty() && schema.unsupported.is_empty() {
+    // Readable probes, not declared ones. A schema whose every entry is a
+    // kind this version cannot read leaves inference with nothing to resolve,
+    // and proceeding would report every atom as a candidate — noise dressed
+    // as an answer. "Uncheckable" is the honest reading, and it is the same
+    // one an empty schema gets.
+    if schema.probes.is_empty() {
         return Ok(Status {
             here: Vec::new(),
             off_sequence: Vec::new(),
@@ -354,7 +359,14 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         .filter_map(|name| {
             let atom = by_name.get(name.as_str())?;
             let standing = report.standings.iter().find(|s| &s.atom == name)?;
-            Some(here_for(atom, standing, &schema, git, &log, boundary.as_ref()))
+            Some(here_for(
+                atom,
+                standing,
+                &schema,
+                git,
+                &log,
+                boundary.as_ref(),
+            ))
         })
         .collect();
 

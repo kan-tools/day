@@ -203,7 +203,10 @@ fn ac2_a_claim_probe_finds_claims_by_kind_and_marker() {
 
     // Neither exists: both witnesses report missing.
     let dir = tempfile::tempdir().unwrap();
-    let kan = write_kan_stub(dir.path(), &[telos.clone(), witness_schema("bafyw", probes)]);
+    let kan = write_kan_stub(
+        dir.path(),
+        &[telos.clone(), witness_schema("bafyw", probes)],
+    );
     let git = write_git_stub(dir.path(), &[], &[], &[]);
     let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
     let stdout = String::from_utf8_lossy(&out.stdout);

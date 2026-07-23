@@ -435,14 +435,14 @@ pub fn assess(
             .probes
             .get(witness)
             .map(|probe| {
-            let (effective, note) = effective_probe(probe, declared.scope.get(witness));
-            scope_note = note;
-            // `probe::evaluate`, never `position::resolve`: an assessment is
-            // cumulative. A release, a review, or an assessment from any
-            // cycle is real evidence that work landed inside this telos's
-            // equivalence class, and scoping that to the current cycle would
-            // make last cycle's shipped telos start reporting as unmet.
-            probe::evaluate(&effective, git, &log, auth)
+                let (effective, note) = effective_probe(probe, declared.scope.get(witness));
+                scope_note = note;
+                // `probe::evaluate`, never `position::resolve`: an assessment is
+                // cumulative. A release, a review, or an assessment from any
+                // cycle is real evidence that work landed inside this telos's
+                // equivalence class, and scoping that to the current cycle would
+                // make last cycle's shipped telos start reporting as unmet.
+                probe::evaluate(&effective, git, &log, auth)
             })
             // A witness whose probe this version cannot read is reported as
             // unchecked, not as unprobed — the project declared something,

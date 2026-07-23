@@ -429,10 +429,20 @@ mod tests {
         };
         let git = Git::new(std::env::temp_dir());
         assert!(matches!(
-            evaluate(&Probe::Command("true".into()), &git, &ClaimLog::new(&no_kan()), run),
+            evaluate(
+                &Probe::Command("true".into()),
+                &git,
+                &ClaimLog::new(&no_kan()),
+                run
+            ),
             Verdict::Satisfied(_)
         ));
-        let failed = evaluate(&Probe::Command("false".into()), &git, &ClaimLog::new(&no_kan()), run);
+        let failed = evaluate(
+            &Probe::Command("false".into()),
+            &git,
+            &ClaimLog::new(&no_kan()),
+            run,
+        );
         assert!(matches!(failed, Verdict::Unsatisfied(_)), "{failed:?}");
         assert!(failed.is_failure());
     }
@@ -469,7 +479,12 @@ mod tests {
             format!("true && touch {}", marker.display()),
             format!("true | touch {}", marker.display()),
         ] {
-            let _ = evaluate(&Probe::Command(argv.clone()), &git, &ClaimLog::new(&no_kan()), run);
+            let _ = evaluate(
+                &Probe::Command(argv.clone()),
+                &git,
+                &ClaimLog::new(&no_kan()),
+                run,
+            );
             assert!(
                 !marker.exists(),
                 "metacharacters in {argv:?} reached a shell"
@@ -572,7 +587,12 @@ mod tests {
                 timeout: Duration::from_secs(10),
             },
         ] {
-            let verdict = evaluate(&Probe::Claim(shape.clone()), &git, &ClaimLog::new(&no_kan()), auth);
+            let verdict = evaluate(
+                &Probe::Claim(shape.clone()),
+                &git,
+                &ClaimLog::new(&no_kan()),
+                auth,
+            );
             let detail = verdict.detail();
             assert!(matches!(verdict, Verdict::Error(_)), "{verdict:?}");
             assert!(

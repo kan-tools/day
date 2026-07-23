@@ -451,7 +451,13 @@ mod tests {
         };
         for bound in [None, Some(&boundary)] {
             assert_eq!(
-                materialized("passing-tests", &probes, &git, &ClaimLog::new(&client), bound),
+                materialized(
+                    "passing-tests",
+                    &probes,
+                    &git,
+                    &ClaimLog::new(&client),
+                    bound
+                ),
                 Presence::Unknown
             );
         }
@@ -476,14 +482,19 @@ mod tests {
         .into_iter()
         .collect();
         let git = Git::with_bin(dir.path(), "definitely-not-a-real-git-binary".to_string());
-        let client = KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary".to_string());
+        let client =
+            KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary".to_string());
 
         let report = infer(&atoms, &probes, &git, &ClaimLog::new(&client), None);
         assert!(
             !marker.exists(),
             "inference executed a command probe — REQ-6 is broken"
         );
-        let review = report.standings.iter().find(|s| s.atom == "review").unwrap();
+        let review = report
+            .standings
+            .iter()
+            .find(|s| s.atom == "review")
+            .unwrap();
         assert_eq!(review.outputs, Outputs::Unknown);
     }
 
