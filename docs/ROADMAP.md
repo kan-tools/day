@@ -261,7 +261,13 @@ rather than a patch, and each revises a REQ already recorded in kan.
   with anchors, day could tell that a tag predates a telos and downgrade a
   false positive to a warning.
 
-## v0.6 — Rigor as artifact *(in progress)*
+## v0.6 — Rigor as artifact *(shipped: v0.6.0-beta.1)*
+
+**Shipped and verified against the published artifact.** v0.6.0-beta.1 is live
+on crates.io; the cargo-installed binary reads this repo's log (`doctor`
+composes) and drives the v0.6 surface (`day status`, the status-line/cache
+round-trip). The one open item, day#60, is designed
+(`.design/current-cycle-position.md`) and deliberately not built here.
 
 **Model half shipped.** Atoms carry `done` criteria, `day assess atom` gates
 on them, and position is inferred from artifacts (`src/position.rs`).
