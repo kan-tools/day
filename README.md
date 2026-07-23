@@ -107,7 +107,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.7.0-beta.1   # the memory layer day reads
-cargo install day --version 0.5.0-beta.1
+cargo install day --version 0.6.0-beta.1
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -132,20 +132,19 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.5.0-beta.1** is *"used, not just built"*, after a meta-evaluation
-of the first five milestones returned a **REDIRECT**: every capability with a
-slash command was used every milestone, and every capability that was only a
-bare CLI verb was used once, by its author, in the milestone that built it.
-So this release is mostly about making what already existed get used.
+Early. **v0.6.0-beta.1** is *"rigor as artifact"*: it leads with checkable
+artifacts rather than injected rules, because this project has direct evidence
+that a rule in an agent's own context did not survive the moment it applied to.
 
-It ships `day assess telos` — judging work against material evidence, and
-day's third substrate: project-declared commands, executed only on explicit
-request and never through a shell. Tension becomes a real queryable edge; a
-telos may scope which instances of a witness count; and a project can project
-its **own** working practice into an agent's context instead of inheriting
-day's. `/design` now ends by declaring the milestone's target telos and
-bridge, because attaching a verb to a step that already happens is the only
-thing that reliably gets it used.
+Atoms now carry `done` criteria — witness types checked through the same probes
+teloi use — and `day assess atom` exits non-zero when one is unmet, so CI or a
+human can gate on it. day **infers where the work sits** from artifacts alone,
+reports it in `day status` and a **status line**, and marks a transition when
+the work moves past its last recorded assessment — the first time day's process
+has been visible to the *human* it is meant to be legible to, on a channel
+verified by watching it render rather than by trusting the docs. Enforcement
+stays at the artifact level, never the action: day makes the state of the work
+measurable and reports it; it never gates an agent mid-action.
 
 Frames moved to v0.7 — its second deferral, said plainly in the roadmap
 rather than renumbered quietly. The conventions are v0 and expected to change.
