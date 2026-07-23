@@ -555,6 +555,13 @@ the position work that v0.6 designed but did not build. Adding a second thread
 here rather than deferring Frames a third time is the deliberate answer to the
 tripwire below.
 
+**v0.7 ships across betas rather than in one cut.** `v0.7.0-beta.1` is the
+position work; Frames lands in a later v0.7 beta. This is the mechanism that
+lets the position work reach a real log — where every defect in day so far has
+been found — without renumbering Frames out of the milestone. Shipping a beta
+is not the same act as closing a milestone, and only the second one would be a
+third deferral.
+
 ### Current-cycle position (day#60)
 
 Designed in v0.6, recorded on subject `current-cycle-position`
@@ -570,6 +577,22 @@ not model — the same axis v0.6 was ordered on — which is why it sits ahead o
 beside Frames rather than after it. The design is validated and its next atom is
 `generative-build`; the build is the v0.7 opener.
 
+**Shipped in `v0.7.0-beta.1`.** Built, adversarially reviewed
+(APPROVE-WITH-FOLLOW-UPS), and merged in day#69. Position on day's own log went
+from four candidates to two, and recording the milestone's own review verdict
+then made `pull-request` current with `inputs satisfied: code-change, verdict` —
+the claim probe closing the loop on a real log rather than in a fixture.
+
+Two defects came from running it rather than testing it, which is now the
+expected rather than the surprising outcome: the installed v0.6 binary failed
+the *whole* witness schema on meeting a `claim` probe (day now tolerates a probe
+kind it cannot read, costing that witness and nothing else), and resolving a
+witness per mention made `day status` take 5.7s on a 38-subject log.
+
+Follow-ups are day#70 (the `assessment` probe is broader than an atom
+assessment) and day#71 (a claim probe reads the whole log; the right fix is a
+bulk read upstream, since kan owns folds over the claim graph).
+
 ### Frames
 
 Multi-actor, and paced by kan's own sync work (a frame only bites once there is
@@ -577,7 +600,9 @@ more than one actor with more than one log).
 
 **Frames has been deferred twice** — v0.5 moved it to v0.6, v0.6's rigor work
 moved it to v0.7. It is **not moving again**: v0.7 carries it alongside the
-position work rather than bumping it. The deferral reason was consistent both
+position work rather than bumping it. `v0.7.0-beta.1` shipping without it is a
+beta, not a milestone close — Frames is still v0.7, and the tripwire below
+fires on it moving to v0.8, not on it landing in a later beta. The deferral reason was consistent both
 times — the v0.5 meta-evaluation found day's model outrunning its use, frames is
 more model, rigor-as-artifact was use — and honouring the tripwire means holding
 Frames here rather than finding a third reason to slip it.

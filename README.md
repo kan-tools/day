@@ -107,7 +107,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.7.0-beta.1   # the memory layer day reads
-cargo install day --version 0.6.0-beta.1
+cargo install day --version 0.7.0-beta.1
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -132,22 +132,27 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.6.0-beta.1** is *"rigor as artifact"*: it leads with checkable
-artifacts rather than injected rules, because this project has direct evidence
-that a rule in an agent's own context did not survive the moment it applied to.
+Early. **v0.7.0-beta.1** is the first beta of v0.7, and it makes day's own
+position *legible* rather than merely computed.
 
-Atoms now carry `done` criteria — witness types checked through the same probes
-teloi use — and `day assess atom` exits non-zero when one is unmet, so CI or a
-human can gate on it. day **infers where the work sits** from artifacts alone,
-reports it in `day status` and a **status line**, and marks a transition when
-the work moves past its last recorded assessment — the first time day's process
-has been visible to the *human* it is meant to be legible to, on a channel
-verified by watching it render rather than by trusting the docs. Enforcement
-stays at the artifact level, never the action: day makes the state of the work
-measurable and reports it; it never gates an agent mid-action.
+Position inference used to ask "does an artifact of this type exist", and on
+any repo with history the answer is always yes — some `v*` tag, some past
+verdict. day reported four candidate atoms on its own log and could never
+narrow. Position now resolves each probe against a **cycle boundary** (the last
+release): a path counts if it *changed since*, a tag if it was *created since*,
+and — via a new **`claim` probe**, the first that reads the kan log rather than
+the working tree — a witness like `verdict` or `assessment` counts if it was
+*recorded since*. Assessment stays cumulative, because "was this ever produced"
+is the right question for a telos and the wrong one for "where is the work now".
 
-Frames moved to v0.7 — its second deferral, said plainly in the roadmap
-rather than renumbered quietly. The conventions are v0 and expected to change.
+v0.6 remains the foundation this stands on: atoms carry `done` criteria,
+`day assess atom` exits non-zero when one is unmet, and `day status` plus a
+**status line** put the inferred position in front of the human. Enforcement
+stays at the artifact level, never the action.
+
+**Frames is still in v0.7**, targeted for a later beta rather than deferred a
+third time. The roadmap says why in the open. The conventions are v0 and
+expected to change.
 
 Where it's going, and why in that order: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
