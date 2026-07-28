@@ -589,11 +589,22 @@ the *whole* witness schema on meeting a `claim` probe (day now tolerates a probe
 kind it cannot read, costing that witness and nothing else), and resolving a
 witness per mention made `day status` take 5.7s on a 38-subject log.
 
-Follow-ups are day#70 (the `assessment` probe is broader than an atom
-assessment — **now designed**, `.design/claim-probe-narrowing.md`, and doubling
-as the day-side seam for Frames below) and day#71 (a claim probe reads the whole
-log; the right fix is a bulk read upstream, since kan owns folds over the claim
-graph).
+Follow-ups: day#70 (the `assessment` probe is broader than an atom assessment)
+is **built** — `.design/claim-probe-narrowing.md`; `ClaimShape` is now a
+conjunction of independent predicates, narrowable by an anchored `starts_with`
+and a glob-lite `subject`, and it doubles as the day-side seam for Frames
+below. Running it on day's own log is what sized the defect: 14 live `Result`
+claims here and **zero** on an `atom/*` subject, so the old `{kind: Result}`
+probe matched 14 claims none of which was an atom assessment.
+
+Still open: day#71 (a claim probe reads the whole log; the right fix is a bulk
+read upstream, since kan owns folds over the claim graph) and day#78, which
+day#70's review surfaced — a narrowed `ClaimShape` read by a *pre*-day#70
+binary silently widens rather than reporting itself unreadable, the opposite of
+what day does for an unknown probe *kind*. The question it raises is broader
+than one struct: which fenced-block schemas are descriptive (ignore unknown
+fields, as day requires of kan) and which are restrictive (an unknown field is
+a narrowing predicate, so ignoring it changes the answer).
 
 ### Frames
 
@@ -624,12 +635,16 @@ kan#114's agentic research loop (PI + director + prover, machine-checked in Lean
 states "the trust parameterization *is* the role hierarchy" — day's frames
 arrived at from a live multi-actor workload, not day's single-actor log.
 
-**The day-side seam is `day#70`** (`.design/claim-probe-narrowing.md`, designed;
-build pending). Its `claim`-probe generalization makes `ClaimShape`'s matching a
-conjunction of independent predicates, so the frame-relative *author/enrichment*
-dimension slots in additively later — against kan#117's contract — rather than
-re-litigating the probe language. The heavy day-Frames design is written once
-that contract exists, not guessed ahead of it.
+**The day-side seam is `day#70`** (`.design/claim-probe-narrowing.md`, **built**).
+Its `claim`-probe generalization makes `ClaimShape`'s matching a conjunction of
+independent predicates, so the frame-relative *author/enrichment* dimension
+slots in additively later — against kan#117's contract — rather than
+re-litigating the probe language. A day-side `author` predicate was
+deliberately *not* built with it: a flat `author == did` filter is not even a
+correct `Solo`, since it misses the keys kan's fold merges via `SameAs`, and it
+would pre-commit a frame representation kan owns. The heavy day-Frames design is
+written once that contract exists, not guessed ahead of it. **Nothing further
+toward Frames is buildable here until kan#117 lands.**
 
 **Frames has been deferred twice** — v0.5 moved it to v0.6, v0.6's rigor work
 moved it to v0.7. It is **not moving again**: v0.7 carries it alongside the
