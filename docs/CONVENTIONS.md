@@ -391,8 +391,8 @@ carrying a fenced `day-witness` block: a map from witness type to **probe**.
   "published-artifact": {"tag": "v*"},
   "design-doc": {"path": ".design/*.md"},
   "passing-tests": {"command": "cargo test"},
-  "verdict": {"claim": {"kind": "Decision", "contains": "adversarial review of"}},
-  "assessment": {"claim": {"kind": "Result"}}
+  "verdict": {"claim": {"kind": "Decision", "starts_with": "adversarial review of"}},
+  "assessment": {"claim": {"kind": "Result", "subject": "atom/*"}}
 }
 ```
 
@@ -400,7 +400,7 @@ carrying a fenced `day-witness` block: a map from witness type to **probe**.
 | ----- | -------------- | ----- | ---- |
 | `path` | a git pathspec matches at least one **tracked** file | git | always |
 | `tag` | a git tag glob matches at least one tag | git | always |
-| `claim` | a live claim of the given kind exists (and contains the marker, if one is declared) | kan | always |
+| `claim` | a live claim exists satisfying **every** declared predicate | kan | always |
 | `command` | the command exits zero | — | only with `--run` |
 
 `path` uses `git ls-files`, so an untracked build output or a stray local
@@ -412,22 +412,41 @@ artifacts are not files or tags: a `verdict` is what `day review record`
 appends, an `assessment` is what `kan result` records. Until v0.7 neither was
 probeable at all, and day's own position could never narrow (day#60).
 
-`kind` is a kan claim kind exactly as `kan show --json` renders it —
-`Observation`, `Plan`, `Decision`, `Result`. `contains` is an optional plain
-substring the claim's text must include; it **narrows** which claims count,
-the same job a telos's `scope` does, and it is a substring rather than a
-pattern language because probe definitions arrive from claims. A `Decision`
-alone would match every decision in the log, which is why `verdict` carries
-a marker and `assessment` does not need one.
+A claim shape is a **conjunction of independent predicates**. `kind` is
+required; the rest are optional, each narrows on a different dimension, and a
+claim must satisfy **every** one that is declared. An omitted predicate
+constrains nothing.
 
-Two cautions, both real:
+| Field | Required | Matches when the claim… |
+| ----- | -------- | ----------------------- |
+| `kind` | yes | is of that kan claim kind, exactly as `kan show --json` renders it — `Observation`, `Plan`, `Decision`, `Result` |
+| `contains` | no | has text containing this substring **anywhere** |
+| `starts_with` | no | has text **beginning** with this prefix |
+| `subject` | no | lives on a subject this **glob-lite** pattern admits |
 
-- A marker matches **any** claim text containing it, including a claim that
-  merely quotes it. The decision that *defined* `"adversarial review of"` is
-  itself a `Decision` containing that string, and does match.
-- `{"kind": "Result"}` matches every `kan result`, not only atom
-  assessments — a release note or a session handoff recorded with `result`
-  counts too. Narrow it if that is not what you mean.
+`kind` alone is almost always too broad — a `Decision` alone matches every
+decision in the log — so narrowing is the normal case, and picking *which*
+dimension to narrow on is the part worth thinking about:
+
+- **`starts_with` is anchored; `contains` is not.** That is the whole reason
+  both exist. `day review record` writes its marker at the *start* of a
+  verdict's text, so `{"starts_with": "adversarial review of"}` matches real
+  verdicts and not the decision that merely *defined* that marker mid-sentence
+  — which a `contains` probe cannot tell apart, and did not (day#70).
+- **`subject` is glob-lite, not a glob.** A value ending in `*` is a prefix
+  match on the part before it (`"atom/*"` is any `atom/…` subject, bare `"*"`
+  is any subject); a value without one is exact (`"release"` is only the
+  `release` subject). A `*` anywhere else is a literal character. This is why
+  `assessment` is `{"kind": "Result", "subject": "atom/*"}` rather than a bare
+  `Result`: a release note or a session handoff recorded with `kan result` is
+  a `Result` too, and used to count as an atom assessment.
+
+Every predicate is a plain string operation rather than a pattern language,
+for the reason a telos's `scope` is: a probe definition arrives from a claim,
+and a regex engine reading claim-supplied input is a wider surface than this
+needs. The conjunction is also the extension point — a further narrowing
+dimension arrives as one more optional field and one more conjunct, without
+changing how the existing ones are written or read.
 
 **A `claim` probe is a read, and has none of `command`'s three constraints.**
 It performs only kan's read verbs, so there is nothing to shell-escape,
@@ -504,10 +523,11 @@ consequences, both deliberate:
   than one artifact. A telos that named a single instance would have
   collapsed onto it, which is the thing witnesses exist to prevent.
 - **A scope never applies to a `claim` probe** either, and day says so. A
-  scope replaces *the* pattern argument, and a claim probe has two fields
-  rather than one; overwriting its `contains` from a telos could *widen*
-  which claims count rather than narrow them, since a schema's marker is
-  usually the more specific of the two.
+  scope replaces *the* pattern argument, and a claim shape has no single one
+  — it is a conjunction of several predicates, so there is nothing for one
+  string to replace, and picking one for it would let a telos *widen* which
+  claims count rather than narrow them, since a schema's predicate is usually
+  the more specific.
 - **A scope never applies to a `command` probe**, and day reports that it
   was ignored. Honouring it would let a telos claim decide what day
   executes; commands originate only from `schema/witness`, which is one

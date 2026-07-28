@@ -80,49 +80,117 @@ pub enum Probe {
 }
 
 /// Which claims count as evidence: a kan `ClaimKind`, optionally narrowed by
-/// a text marker.
+/// any combination of a substring marker, an anchored prefix, and a subject
+/// scope.
 ///
-/// The marker exists because `kind` alone is often far too broad — every
+/// Narrowing exists because `kind` alone is often far too broad — every
 /// `day review record` writes a `Decision`, but so does every other decision
-/// in the log. It narrows *which instances count*, the same job day#34 gave a
-/// telos's `scope`, and it is deliberately a plain substring rather than a
-/// pattern language: a probe definition arrives from a claim, and a regex
-/// engine reading claim-supplied input is a wider surface than this needs.
+/// in the log. It picks out *which instances count*, the same job day#34 gave
+/// a telos's `scope`, and every predicate here is deliberately a plain
+/// string operation rather than a pattern language: a probe definition
+/// arrives from a claim, and a regex engine reading claim-supplied input is a
+/// wider surface than this needs.
+///
+/// The predicates are **independent and conjunctive** (day#70). Each is
+/// optional, an absent one constrains nothing, and [`Self::matches`] requires
+/// every present one. That shape is load-bearing rather than incidental: the
+/// frame-relative dimension (whose evidence counts, deferred to kan#117)
+/// arrives later as one more optional field and one more conjunct, without
+/// re-litigating how the existing predicates are expressed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClaimShape {
     /// A kan claim kind as `kan show --json` renders it — `Observation`,
     /// `Plan`, `Decision`, `Result`, `Subject`, `Relation`. Matched exactly,
     /// against kan's rendering rather than day's idea of it.
     pub kind: String,
-    /// A substring the claim's text must contain, when narrowing is needed.
+    /// A substring the claim's text must contain, **anywhere** in it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contains: Option<String>,
+    /// A prefix the claim's text must **begin** with.
+    ///
+    /// Distinct from [`Self::contains`], and the distinction is the whole
+    /// reason it exists: `contains` is substring-anywhere, so a probe for
+    /// `"adversarial review of"` matched the very decision that *defined*
+    /// that marker as well as every real verdict. `day review record` anchors
+    /// the marker at the start of the text, so an anchored predicate
+    /// separates the two where no other dimension can — a real verdict and
+    /// the decision quoting it can share both subject and author.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starts_with: Option<String>,
+    /// Which subjects a matching claim may live on, **glob-lite**: a value
+    /// ending in `*` is a prefix match on the part before it (`atom/*` is any
+    /// `atom/…` subject, bare `*` is any subject at all), and a value without
+    /// one is exact (`release` is only the `release` subject).
+    ///
+    /// Not a glob engine, for day#34's reason: a trailing-`*` prefix covers
+    /// the real need (namespace scoping), and a pattern language over
+    /// claim-supplied input is a wider surface than that need justifies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
 }
 
 impl ClaimShape {
-    /// Whether one claim matches this shape, ignoring when it was recorded.
-    /// Time is the caller's business — [`claims_matching`] applies the cycle
-    /// boundary — because the same shape means "ever" for an assessment and
-    /// "this cycle" for position.
-    fn matches(&self, claim: &crate::kan_client::Claim) -> bool {
+    /// Whether one claim on `subject` matches this shape, ignoring when it was
+    /// recorded. Time is the caller's business — [`claims_matching`] applies
+    /// the cycle boundary — because the same shape means "ever" for an
+    /// assessment and "this cycle" for position.
+    ///
+    /// The subject is passed in rather than read off the claim because
+    /// `kan show --json` renders a claim within a subject rather than on one;
+    /// [`ClaimLog`] already carries the `(subject, claim)` pair, so scoping
+    /// costs no extra read.
+    fn matches(&self, subject: &str, claim: &crate::kan_client::Claim) -> bool {
         if claim.kind != self.kind {
             return false;
         }
-        match &self.contains {
-            None => true,
-            // A claim carrying no text (a `Status` claim, a relation) cannot
-            // contain a marker, so a narrowed probe never matches one.
-            Some(marker) => claim.text.as_deref().is_some_and(|t| t.contains(marker)),
+        // A conjunction of independent predicates: every present one must
+        // hold, an absent one is vacuously satisfied. Written as a chain of
+        // early returns rather than a single expression so a new dimension is
+        // an insertion, not a rewrite.
+        if let Some(scope) = &self.subject {
+            if !subject_matches(scope, subject) {
+                return false;
+            }
         }
+        // A claim carrying no text (a retraction, a relation) cannot satisfy
+        // a text predicate, so a narrowed probe never matches one.
+        if let Some(marker) = &self.contains {
+            if !claim.text.as_deref().is_some_and(|t| t.contains(marker)) {
+                return false;
+            }
+        }
+        if let Some(prefix) = &self.starts_with {
+            if !claim.text.as_deref().is_some_and(|t| t.starts_with(prefix)) {
+                return false;
+            }
+        }
+        true
     }
 
-    /// How this shape reads in a verdict, e.g. ``Decision` containing
-    /// `adversarial review of``.
+    /// How this shape reads in a verdict, e.g. ``Decision` claim(s) starting
+    /// with `adversarial review of``.
     fn describe(&self) -> String {
-        match &self.contains {
-            None => format!("`{}` claim", self.kind),
-            Some(marker) => format!("`{}` claim containing `{marker}`", self.kind),
+        let mut described = format!("`{}` claim(s)", self.kind);
+        if let Some(marker) = &self.contains {
+            described.push_str(&format!(" containing `{marker}`"));
         }
+        if let Some(prefix) = &self.starts_with {
+            described.push_str(&format!(" starting with `{prefix}`"));
+        }
+        if let Some(scope) = &self.subject {
+            described.push_str(&format!(" on `{scope}`"));
+        }
+        described
+    }
+}
+
+/// Glob-lite subject scoping: a trailing `*` makes the rest a prefix,
+/// anything else is an exact match. Deliberately not a glob crate — see
+/// [`ClaimShape::subject`].
+fn subject_matches(pattern: &str, subject: &str) -> bool {
+    match pattern.strip_suffix('*') {
+        Some(prefix) => subject.starts_with(prefix),
+        None => subject == pattern,
     }
 }
 
@@ -304,7 +372,7 @@ pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64
     let mut found = 0usize;
     let mut newest: Option<&str> = None;
     for (subject, claim) in claims {
-        if !shape.matches(claim) {
+        if !shape.matches(subject, claim) {
             continue;
         }
         if let Some(boundary) = since {
@@ -323,7 +391,7 @@ pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64
     match found {
         0 => Verdict::Unsatisfied(format!("no live {}{window}", shape.describe())),
         n => Verdict::Satisfied(format!(
-            "{n} {}(s){window}, newest on `{}`",
+            "{n} {}{window}, newest on `{}`",
             shape.describe(),
             newest.unwrap_or_default()
         )),
@@ -537,9 +605,33 @@ mod tests {
         assert_eq!(serde_json::to_string(&probe).unwrap(), json);
     }
 
-    /// AC-7's serialization half: a `claim` probe round-trips, and its
-    /// `contains` is omitted when absent so an unnarrowed probe stays the
-    /// short form a person would write by hand.
+    /// A shape with nothing but a kind, for tests that narrow one dimension
+    /// at a time. Written as a constructor rather than a `Default` impl
+    /// because a shape with no `kind` is not a thing a probe may be.
+    fn shape(kind: &str) -> ClaimShape {
+        ClaimShape {
+            kind: kind.into(),
+            contains: None,
+            starts_with: None,
+            subject: None,
+        }
+    }
+
+    fn a_claim(kind: &str, text: Option<&str>) -> crate::kan_client::Claim {
+        crate::kan_client::Claim {
+            cid: "bafy".into(),
+            kind: kind.into(),
+            text: text.map(str::to_string),
+            title: None,
+            author: None,
+            recorded_at: Some(10),
+        }
+    }
+
+    /// AC-4 (and day#60's AC-7 before it): a `claim` probe round-trips, and
+    /// every optional predicate is omitted when absent so an unnarrowed probe
+    /// stays the short form a person would write by hand — which is also what
+    /// makes a block written before day#70 still the block day would write.
     #[test]
     fn a_claim_probe_round_trips_through_its_declared_form() {
         let narrowed = r#"{"claim":{"kind":"Decision","contains":"adversarial review of"}}"#;
@@ -547,22 +639,54 @@ mod tests {
         assert_eq!(
             probe,
             Probe::Claim(ClaimShape {
-                kind: "Decision".into(),
                 contains: Some("adversarial review of".into()),
+                ..shape("Decision")
             })
         );
         assert_eq!(serde_json::to_string(&probe).unwrap(), narrowed);
 
         let bare = r#"{"claim":{"kind":"Result"}}"#;
         let probe: Probe = serde_json::from_str(bare).unwrap();
+        assert_eq!(probe, Probe::Claim(shape("Result")));
+        assert_eq!(serde_json::to_string(&probe).unwrap(), bare);
+
+        let scoped = r#"{"claim":{"kind":"Result","subject":"atom/*"}}"#;
+        let probe: Probe = serde_json::from_str(scoped).unwrap();
         assert_eq!(
             probe,
             Probe::Claim(ClaimShape {
-                kind: "Result".into(),
-                contains: None,
+                subject: Some("atom/*".into()),
+                ..shape("Result")
             })
         );
-        assert_eq!(serde_json::to_string(&probe).unwrap(), bare);
+        assert_eq!(serde_json::to_string(&probe).unwrap(), scoped);
+
+        let anchored = r#"{"claim":{"kind":"Decision","starts_with":"adversarial review of"}}"#;
+        let probe: Probe = serde_json::from_str(anchored).unwrap();
+        assert_eq!(
+            probe,
+            Probe::Claim(ClaimShape {
+                starts_with: Some("adversarial review of".into()),
+                ..shape("Decision")
+            })
+        );
+        assert_eq!(serde_json::to_string(&probe).unwrap(), anchored);
+
+        // All three at once, to pin the field order the serialized form takes
+        // and prove no predicate is dropped on the way through.
+        let every =
+            r#"{"claim":{"kind":"Decision","contains":"c","starts_with":"s","subject":"x/*"}}"#;
+        let probe: Probe = serde_json::from_str(every).unwrap();
+        assert_eq!(
+            probe,
+            Probe::Claim(ClaimShape {
+                kind: "Decision".into(),
+                contains: Some("c".into()),
+                starts_with: Some("s".into()),
+                subject: Some("x/*".into()),
+            })
+        );
+        assert_eq!(serde_json::to_string(&probe).unwrap(), every);
     }
 
     /// REQ-8, at the level the guardrail actually lives: a `claim` probe is
@@ -577,10 +701,7 @@ mod tests {
     #[test]
     fn a_claim_probe_never_spawns_a_command() {
         let git = Git::new(std::env::temp_dir());
-        let shape = ClaimShape {
-            kind: "Result".into(),
-            contains: None,
-        };
+        let shape = shape("Result");
         for auth in [
             Authorization::Report,
             Authorization::Run {
@@ -610,33 +731,183 @@ mod tests {
     /// claim with no text can never satisfy a narrowed probe.
     #[test]
     fn a_marker_narrows_which_claims_count() {
-        use crate::kan_client::Claim;
-        let claim = |kind: &str, text: Option<&str>| Claim {
-            cid: "bafy".into(),
-            kind: kind.into(),
-            text: text.map(str::to_string),
-            title: None,
-            author: None,
-            recorded_at: Some(10),
-        };
+        let claim = a_claim;
         let narrowed = ClaimShape {
-            kind: "Decision".into(),
             contains: Some("adversarial review of".into()),
+            ..shape("Decision")
         };
-        assert!(narrowed.matches(&claim(
-            "Decision",
-            Some("adversarial review of foo: APPROVE — ok")
-        )));
-        assert!(!narrowed.matches(&claim("Decision", Some("an unrelated decision"))));
-        assert!(!narrowed.matches(&claim("Result", Some("adversarial review of foo"))));
+        assert!(narrowed.matches(
+            "rigor",
+            &claim("Decision", Some("adversarial review of foo: APPROVE — ok"))
+        ));
+        assert!(!narrowed.matches("rigor", &claim("Decision", Some("an unrelated decision"))));
+        assert!(!narrowed.matches("rigor", &claim("Result", Some("adversarial review of foo"))));
         // A relation carries no text, so it cannot contain a marker.
-        assert!(!narrowed.matches(&claim("Decision", None)));
+        assert!(!narrowed.matches("rigor", &claim("Decision", None)));
 
-        let bare = ClaimShape {
-            kind: "Result".into(),
-            contains: None,
+        let bare = shape("Result");
+        assert!(bare.matches("atom/build", &claim("Result", None)));
+        assert!(!bare.matches("atom/build", &claim("Decision", Some("anything"))));
+    }
+
+    /// AC-2: `starts_with` is **anchored** where `contains` is not, and that
+    /// difference is the whole of its reason to exist. The two claims here are
+    /// the real pair off day's own log: a verdict `day review record` wrote,
+    /// and the decision that *defined* the marker by quoting it mid-sentence.
+    /// A `contains` probe cannot tell them apart; an anchored one can.
+    #[test]
+    fn an_anchored_prefix_and_a_substring_are_different_predicates() {
+        let marker = "adversarial review of";
+        let verdict = a_claim(
+            "Decision",
+            Some("adversarial review of rigor: APPROVE — holds"),
+        );
+        let quoting = a_claim(
+            "Decision",
+            Some("The `verdict` marker is the prefix adversarial review of that record::review writes."),
+        );
+
+        let anchored = ClaimShape {
+            starts_with: Some(marker.into()),
+            ..shape("Decision")
         };
-        assert!(bare.matches(&claim("Result", None)));
-        assert!(!bare.matches(&claim("Decision", Some("anything"))));
+        assert!(anchored.matches("rigor", &verdict));
+        assert!(
+            !anchored.matches("current-cycle-position", &quoting),
+            "a claim that merely quotes the marker must not satisfy an anchored probe"
+        );
+
+        // The same value as `contains` matches both — which is what makes the
+        // assertion above about anchoring rather than about these fixtures.
+        let substring = ClaimShape {
+            contains: Some(marker.into()),
+            ..shape("Decision")
+        };
+        assert!(substring.matches("rigor", &verdict));
+        assert!(substring.matches("current-cycle-position", &quoting));
+
+        // And a claim with no text satisfies neither.
+        assert!(!anchored.matches("rigor", &a_claim("Decision", None)));
+    }
+
+    /// AC-1: glob-lite subject scoping — a trailing `*` is a prefix, anything
+    /// else is exact, and the pattern is *not* a glob (`atom/*` does not
+    /// mean "one path segment", and a `*` in the middle is a literal).
+    #[test]
+    fn a_subject_scope_is_glob_lite() {
+        let scoped = ClaimShape {
+            subject: Some("atom/*".into()),
+            ..shape("Result")
+        };
+        let assessed = a_claim("Result", Some("assessed"));
+        assert!(scoped.matches("atom/build", &assessed));
+        assert!(scoped.matches("atom/generative-build", &assessed));
+        // The two false positives day#70 recorded on day's own log.
+        assert!(!scoped.matches("release", &assessed));
+        assert!(!scoped.matches("spine", &assessed));
+        // A prefix, not a path-segment glob: nested subjects still match.
+        assert!(scoped.matches("atom/a/b", &assessed));
+        // And the prefix must be a prefix, not a substring.
+        assert!(!scoped.matches("my-atom/build", &assessed));
+
+        // No `*`: an exact subject.
+        let exact = ClaimShape {
+            subject: Some("release".into()),
+            ..shape("Result")
+        };
+        assert!(exact.matches("release", &assessed));
+        assert!(!exact.matches("release-notes", &assessed));
+        assert!(!exact.matches("atom/build", &assessed));
+
+        // Bare `*`: every subject, the same as declaring no scope at all.
+        let any = ClaimShape {
+            subject: Some("*".into()),
+            ..shape("Result")
+        };
+        for subject in ["release", "atom/build", ""] {
+            assert!(any.matches(subject, &assessed), "{subject:?}");
+        }
+
+        // A `*` anywhere but the end is a literal character, not a wildcard —
+        // the honest consequence of not shipping a glob engine.
+        let literal = ClaimShape {
+            subject: Some("a*b".into()),
+            ..shape("Result")
+        };
+        assert!(literal.matches("a*b", &assessed));
+        assert!(!literal.matches("axb", &assessed));
+    }
+
+    /// AC-3: `matches` is a conjunction — every present predicate must hold,
+    /// and an absent one constrains nothing.
+    ///
+    /// Each case below flips exactly one dimension away from a claim that
+    /// matches on all four, so a predicate that had been dropped from the
+    /// conjunction would fail precisely one assertion here.
+    #[test]
+    fn every_present_predicate_must_hold() {
+        let all = ClaimShape {
+            kind: "Decision".into(),
+            contains: Some("APPROVE".into()),
+            starts_with: Some("adversarial review of".into()),
+            subject: Some("atom/*".into()),
+        };
+        let matching = a_claim(
+            "Decision",
+            Some("adversarial review of build: APPROVE — holds"),
+        );
+        assert!(all.matches("atom/build", &matching));
+
+        // Wrong kind.
+        assert!(!all.matches(
+            "atom/build",
+            &a_claim(
+                "Result",
+                Some("adversarial review of build: APPROVE — holds")
+            )
+        ));
+        // Right kind, right text, wrong subject.
+        assert!(!all.matches("release", &matching));
+        // Right everywhere but the substring.
+        assert!(!all.matches(
+            "atom/build",
+            &a_claim("Decision", Some("adversarial review of build: REVISE — no"))
+        ));
+        // Right everywhere but the anchor.
+        assert!(!all.matches(
+            "atom/build",
+            &a_claim("Decision", Some("re: adversarial review of build: APPROVE"))
+        ));
+
+        // And omitting a predicate imposes nothing from it: the same claim
+        // that failed the subject test above matches once the scope is gone.
+        let unscoped = ClaimShape {
+            subject: None,
+            ..all.clone()
+        };
+        assert!(unscoped.matches("release", &matching));
+    }
+
+    /// The rendered form names every predicate in force, so a reader of a
+    /// verdict can see what was actually asked rather than inferring it.
+    #[test]
+    fn a_verdict_describes_the_predicates_in_force() {
+        assert_eq!(shape("Result").describe(), "`Result` claim(s)");
+        assert_eq!(
+            ClaimShape {
+                subject: Some("atom/*".into()),
+                ..shape("Result")
+            }
+            .describe(),
+            "`Result` claim(s) on `atom/*`"
+        );
+        assert_eq!(
+            ClaimShape {
+                starts_with: Some("adversarial review of".into()),
+                ..shape("Decision")
+            }
+            .describe(),
+            "`Decision` claim(s) starting with `adversarial review of`"
+        );
     }
 }

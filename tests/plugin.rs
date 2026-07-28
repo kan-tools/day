@@ -280,6 +280,53 @@ fn ac11_conventions_no_longer_put_a_tension_reason_on_a_telos_subject() {
     );
 }
 
+/// `.design/claim-probe-narrowing.md` AC-7. The conventions page documents
+/// both new claim-shape predicates, **and** no longer carries the day#70
+/// cautions they resolved.
+///
+/// The negative half is the load-bearing one. A caution telling a reader that
+/// `{"kind": "Result"}` matches release notes describes behaviour day's own
+/// starter no longer has, and the failure mode of a conventions doc is that it
+/// is followed: someone would narrow a probe day already narrows, or trust a
+/// warning about a marker matching mid-text after the anchored predicate that
+/// fixes it shipped.
+#[test]
+fn ac7_conventions_document_the_claim_predicates_and_drop_the_resolved_cautions() {
+    let text = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md")).unwrap();
+    for token in [
+        "`starts_with`",
+        "`subject`",
+        "glob-lite",
+        // The predicates as a claim shape actually declares them, so the doc
+        // shows a form that parses rather than prose about one.
+        r#""starts_with": "adversarial review of""#,
+        r#""subject": "atom/*""#,
+    ] {
+        assert!(
+            text.contains(token),
+            "docs/CONVENTIONS.md should document {token:?}"
+        );
+    }
+    // And the conjunction, which is what makes "declare two predicates and
+    // both must hold" true rather than a guess.
+    assert!(
+        text.contains("conjunction of independent predicates"),
+        "CONVENTIONS.md should state that a claim shape is a conjunction"
+    );
+
+    // The two day#70 cautions, now resolved rather than warned about.
+    for caution in [
+        "The decision that *defined* `\"adversarial review of\"` is",
+        "matches every `kan result`, not only atom",
+    ] {
+        assert!(
+            !text.contains(caution),
+            "CONVENTIONS.md still carries the day#70 caution {caution:?}, \
+             which the narrowed starter resolved"
+        );
+    }
+}
+
 /// `.design/repo-defined-injection.md` AC-9. The trust list (REQ-9) is
 /// designed and not built, and the property that keeps adding it later from
 /// becoming a rewrite is that exactly one function decides whether a claim
