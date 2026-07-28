@@ -736,6 +736,317 @@ fn the_boundary_tag_does_not_witness_its_own_cycle() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// `.design/claim-probe-narrowing.md` (day#70) — the claim shape narrows on
+// more than `kind` and a substring.
+//
+// The unit tests in `src/probe.rs` cover the predicates themselves (AC-1 to
+// AC-4). These cover what only an end-to-end run can: that the narrowing
+// reaches an actual `day assess` / `day status`, that day's own starter
+// schema is the narrowed one, and that both evaluation paths agree.
+// ---------------------------------------------------------------------------
+
+/// AC-1 and AC-2, end to end: a `subject`-scoped probe and an anchored one
+/// change what `day assess telos` reports on a log carrying both the real
+/// evidence and its near-miss.
+///
+/// The fixture is day's own log in miniature — a `Result` on `atom/build`
+/// beside `Result`s on `release` and `spine`, and a real verdict beside the
+/// decision that defined its marker. Under the pre-day#70 shapes every one of
+/// those counts; the point is that they no longer do.
+#[test]
+fn narrowing_ac1_a_subject_scope_and_an_anchor_change_what_assess_reports() {
+    let telos = claim(
+        "telos/shipped",
+        "bafyreitelos",
+        "Shipped.\n\n```day-telos\n{\"witnesses\":[\"verdict\",\"assessment\"]}\n```\n",
+    );
+    // Every claim below is live and of the right *kind*. Only the predicates
+    // tell them apart, which is what gives the assertions teeth.
+    let log = |extra: Vec<StubClaim>, probes: &str| {
+        let mut claims = vec![telos.clone(), witness_schema("bafyw", probes)];
+        claims.extend(extra);
+        claims
+    };
+    let noise = || {
+        vec![
+            result_claim(
+                "release",
+                "bafyrel",
+                "v0.7.0-beta.1 notes",
+                AFTER_BOUNDARY_US,
+            ),
+            result_claim("spine", "bafyspi", "session handoff", AFTER_BOUNDARY_US),
+            decision_claim(
+                "current-cycle-position",
+                "bafyredef",
+                "The `verdict` marker is the prefix adversarial review of \
+                 that record::review writes at the start of its text.",
+                AFTER_BOUNDARY_US,
+            ),
+        ]
+    };
+
+    let assess = |claims: &[StubClaim]| {
+        let dir = tempfile::tempdir().unwrap();
+        let kan = write_kan_stub(dir.path(), claims);
+        let git = write_git_stub(dir.path(), &[], &[], &[]);
+        let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    // The broad shapes day shipped in v0.7: the noise alone satisfies both
+    // witnesses. Asserting this first is what makes the narrowed run below a
+    // statement about the predicates rather than about an empty log.
+    let broad = r#"{"verdict":{"claim":{"kind":"Decision","contains":"adversarial review of"}},"assessment":{"claim":{"kind":"Result"}}}"#;
+    let stdout = assess(&log(noise(), broad));
+    assert!(
+        stdout.contains("[MATERIAL] assessment") && stdout.contains("[MATERIAL] verdict"),
+        "the pre-day#70 shapes should be satisfied by the noise — that is the defect: {stdout}"
+    );
+
+    // Narrowed, same noise: neither witness resolves.
+    let narrow = r#"{"verdict":{"claim":{"kind":"Decision","starts_with":"adversarial review of"}},"assessment":{"claim":{"kind":"Result","subject":"atom/*"}}}"#;
+    let stdout = assess(&log(noise(), narrow));
+    assert!(
+        stdout.contains("[MISSING] assessment"),
+        "a `Result` on `release` or `spine` is not an atom assessment: {stdout}"
+    );
+    assert!(
+        stdout.contains("[MISSING] verdict"),
+        "the decision that defined the marker is not a verdict: {stdout}"
+    );
+
+    // And the real evidence, added to that same noise, does resolve both —
+    // so the narrowing excludes rather than merely rejects everything.
+    let mut real = noise();
+    real.push(result_claim(
+        "atom/build",
+        "bafyres",
+        "assessed",
+        AFTER_BOUNDARY_US,
+    ));
+    real.push(decision_claim(
+        "rigor",
+        "bafyrev",
+        "adversarial review of rigor: APPROVE — holds",
+        AFTER_BOUNDARY_US,
+    ));
+    let stdout = assess(&log(real, narrow));
+    assert!(stdout.contains("[MATERIAL] assessment"), "{stdout}");
+    assert!(stdout.contains("[MATERIAL] verdict"), "{stdout}");
+    // The verdict's rendering should name the predicate in force, so a reader
+    // can see what was asked rather than inferring it.
+    assert!(
+        stdout.contains("starting with `adversarial review of`"),
+        "the verdict should describe the anchored predicate: {stdout}"
+    );
+}
+
+/// AC-4, on the surface that matters to somebody who already has a log: a
+/// `schema/witness` block written before day#70 parses and resolves exactly as
+/// it did, matching the noise it always matched.
+///
+/// Round-trip serialization is asserted in `src/probe.rs`. This is the half
+/// that says an existing project's schema needs no touching — and, less
+/// comfortably, that day#70 changes nothing for a project until it updates
+/// its own block. The narrowing lives in the *starter*, not in the code's
+/// reading of a bare `{"kind": …}`.
+#[test]
+fn narrowing_ac4_a_pre_day70_claim_shape_resolves_unchanged() {
+    let legacy = r#"{"verdict":{"claim":{"kind":"Decision","contains":"adversarial review of"}},"assessment":{"claim":{"kind":"Result"}}}"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "telos/shipped",
+                "bafyreitelos",
+                "Shipped.\n\n```day-telos\n{\"witnesses\":[\"verdict\",\"assessment\"]}\n```\n",
+            ),
+            witness_schema("bafyw", legacy),
+            result_claim("release", "bafyrel", "v0.7.0 notes", AFTER_BOUNDARY_US),
+            decision_claim(
+                "roadmap",
+                "bafyredef",
+                "we quote adversarial review of here mid-sentence",
+                AFTER_BOUNDARY_US,
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains("[MATERIAL] assessment") && stdout.contains("[MATERIAL] verdict"),
+        "an unchanged block must keep its unchanged (broad) meaning: {stdout}"
+    );
+}
+
+/// AC-5: day's **own starter** carries the narrowed shapes, so a project that
+/// takes day's suggestion gets the fix rather than having to know about it.
+///
+/// Read out of `WitnessSchema::starter` rather than restated here — a fixture
+/// copy of the starter would pass while the starter itself stayed broad,
+/// which is precisely the defect day#70 records.
+#[test]
+fn narrowing_ac5_days_own_starter_is_the_narrowed_one() {
+    let starter = day::telos::WitnessSchema::starter();
+    let json = serde_json::to_string(&starter).unwrap();
+    assert!(
+        json.contains(r#""assessment":{"claim":{"kind":"Result","subject":"atom/*"}}"#),
+        "the starter `assessment` should be scoped to atom subjects: {json}"
+    );
+    assert!(
+        json.contains(
+            r#""verdict":{"claim":{"kind":"Decision","starts_with":"adversarial review of"}}"#
+        ),
+        "the starter `verdict` should be anchored, not a substring: {json}"
+    );
+
+    // And it resolves that way against a log carrying only the near-misses.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "telos/shipped",
+                "bafyreitelos",
+                "Shipped.\n\n```day-telos\n{\"witnesses\":[\"verdict\",\"assessment\"]}\n```\n",
+            ),
+            witness_schema("bafyw", &json),
+            result_claim("release", "bafyrel", "v0.7.0 notes", AFTER_BOUNDARY_US),
+            result_claim("spine", "bafyspi", "session handoff", AFTER_BOUNDARY_US),
+            decision_claim(
+                "current-cycle-position",
+                "bafyredef",
+                "the marker is the prefix adversarial review of that review writes",
+                AFTER_BOUNDARY_US,
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[MISSING] assessment") && stdout.contains("[MISSING] verdict"),
+        "day's own starter should reject both of day#70's false positives: {stdout}"
+    );
+}
+
+/// AC-6: the narrowing is honoured identically by the cumulative path
+/// (`assess telos`) and the cycle-relative one (`day status`), because both
+/// route through the single `claims_matching` site.
+///
+/// Position does not print a witness table, so the two paths are compared on
+/// the decision each makes with the same claim: whether `review` has produced
+/// this cycle's `verdict`. The near-miss decision is recorded **after** the
+/// boundary, so the cycle filter cannot be what excludes it — only the
+/// anchored predicate can. That is what stops this from passing for the wrong
+/// reason.
+#[test]
+fn narrowing_ac6_both_evaluation_paths_honour_the_same_predicates() {
+    let probes = r#"{"code-change":{"path":"src/*.rs"},"verdict":{"claim":{"kind":"Decision","starts_with":"adversarial review of"}},"assessment":{"claim":{"kind":"Result","subject":"atom/*"}}}"#;
+    let vocabulary = |evidence: Vec<StubClaim>| {
+        move |dir: &Path| {
+            let mut claims = vec![
+                atom(
+                    "build",
+                    "bafyreib",
+                    &["design-doc"],
+                    &["code-change"],
+                    &["review"],
+                    &[],
+                ),
+                atom(
+                    "review",
+                    "bafyrer",
+                    &["code-change"],
+                    &["verdict"],
+                    &[],
+                    &["verdict"],
+                ),
+                claim(
+                    "telos/reviewed",
+                    "bafyreitelos",
+                    "Reviewed.\n\n```day-telos\n{\"witnesses\":[\"verdict\",\"assessment\"]}\n```\n",
+                ),
+                witness_schema("bafyreiw", probes),
+            ];
+            claims.extend(evidence.clone());
+            write_kan_stub(dir, &claims)
+        }
+    };
+    let git_for = |dir: &Path| {
+        write_git_stub(
+            dir,
+            &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+            &["src/lib.rs"],
+            &["src/lib.rs"],
+        )
+    };
+
+    // Both claims are of the right kind, on a subject the probe admits, and
+    // recorded **this** cycle. Only the predicates exclude them.
+    let near_misses = vec![
+        decision_claim(
+            "current-cycle-position",
+            "bafyredef",
+            "the marker is the prefix adversarial review of, written at the start",
+            AFTER_BOUNDARY_US,
+        ),
+        result_claim("release", "bafyrel", "v0.7.0 notes", AFTER_BOUNDARY_US),
+    ];
+    let mut real = near_misses.clone();
+    real.push(decision_claim(
+        "rigor",
+        "bafyrev",
+        "adversarial review of rigor: APPROVE — holds",
+        AFTER_BOUNDARY_US,
+    ));
+    real.push(result_claim(
+        "atom/build",
+        "bafyres",
+        "assessed",
+        AFTER_BOUNDARY_US,
+    ));
+
+    for (evidence, verdict_present, label) in [
+        (near_misses, false, "near-misses only"),
+        (real, true, "the real evidence too"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let kan = vocabulary(evidence)(dir.path());
+        let git = git_for(dir.path());
+
+        let status = day(dir.path(), &kan, &git, &["status"]);
+        let status = String::from_utf8_lossy(&status.stdout).into_owned();
+        let assess = day(dir.path(), &kan, &git, &["assess", "telos", "reviewed"]);
+        let assess = String::from_utf8_lossy(&assess.stdout).into_owned();
+
+        // Cumulative path: the witness table says it outright.
+        assert_eq!(
+            assess.contains("[MATERIAL] verdict"),
+            verdict_present,
+            "assess telos disagreed on the verdict with {label}: {assess}"
+        );
+        assert_eq!(
+            assess.contains("[MATERIAL] assessment"),
+            verdict_present,
+            "assess telos disagreed on the assessment with {label}: {assess}"
+        );
+        // Cycle-relative path: `review` is current exactly while its output
+        // is absent, so its presence is the same decision read off position.
+        assert_eq!(
+            status.contains("Current atom: review"),
+            !verdict_present,
+            "day status disagreed with assess telos on the same claim \
+             with {label}: {status}"
+        );
+    }
+}
+
 /// An undated claim cannot be placed in a cycle, so it does not count as
 /// *this* one — while still counting cumulatively, where "ever" is the
 /// question and a missing timestamp says nothing about it.

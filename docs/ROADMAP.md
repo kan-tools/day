@@ -589,14 +589,62 @@ the *whole* witness schema on meeting a `claim` probe (day now tolerates a probe
 kind it cannot read, costing that witness and nothing else), and resolving a
 witness per mention made `day status` take 5.7s on a 38-subject log.
 
-Follow-ups are day#70 (the `assessment` probe is broader than an atom
-assessment) and day#71 (a claim probe reads the whole log; the right fix is a
-bulk read upstream, since kan owns folds over the claim graph).
+Follow-ups: day#70 (the `assessment` probe is broader than an atom assessment)
+is **built** — `.design/claim-probe-narrowing.md`; `ClaimShape` is now a
+conjunction of independent predicates, narrowable by an anchored `starts_with`
+and a glob-lite `subject`, and it doubles as the day-side seam for Frames
+below. Running it on day's own log is what sized the defect: 14 live `Result`
+claims here and **zero** on an `atom/*` subject, so the old `{kind: Result}`
+probe matched 14 claims none of which was an atom assessment.
+
+Still open: day#71 (a claim probe reads the whole log; the right fix is a bulk
+read upstream, since kan owns folds over the claim graph) and day#78, which
+day#70's review surfaced — a narrowed `ClaimShape` read by a *pre*-day#70
+binary silently widens rather than reporting itself unreadable, the opposite of
+what day does for an unknown probe *kind*. The question it raises is broader
+than one struct: which fenced-block schemas are descriptive (ignore unknown
+fields, as day requires of kan) and which are restrictive (an unknown field is
+a narrowing predicate, so ignoring it changes the answer).
 
 ### Frames
 
-Multi-actor, and paced by kan's own sync work (a frame only bites once there is
-more than one actor with more than one log).
+Multi-actor. The shape is now understood well enough to say precisely what it
+depends on, which is narrower than "kan's sync epic" (recorded on the `frames`
+subject in kan; kan issues #114/#115/#117).
+
+**A frame factors along the kan/day seam.** Reading kan's source, a day-frame —
+an actor's internal logic in which a certificate for "telos satisfied" is or
+isn't valid — *is* a kan **enrichment / `TrustBase`**: the same construction in
+two vocabularies. And it factors into two halves that land on opposite sides of
+the boundary: (i) *whose attestations count, and how much* = kan's enrichment;
+(ii) *what counts as a satisfying certificate* = day's witness criteria. **day
+already ships half a frame** — `schema/witness` is (ii), currently global /
+single-frame. So Frames is not a new model to invent; it is: kan generalizes the
+enrichment half and exposes it, day indexes the witness half by frame and
+orchestrates the comparison. Per ADR-18, day never re-implements the fold — a
+trust-weighted fold over the claim graph is kan's.
+
+**The dependency is `kan#117`, not the whole transport layer.** kan's fold is
+already `fold(claims, enrichment)`, pure in the enrichment; `PeerContested` is
+built and tested — only the read surface hardcodes `solo_trust()`. So the
+reconciliation *semantics* are ungated, not unbuilt. kan#117 (enrichment
+selection at the read surface + enrichment-as-signed-record) is the substrate
+day folds under; it rides on kan#114 (consume another actor's published claims)
+and kan#115 (per-role signing identities). A **real dogfood vehicle now exists**:
+kan#114's agentic research loop (PI + director + prover, machine-checked in Lean)
+states "the trust parameterization *is* the role hierarchy" — day's frames
+arrived at from a live multi-actor workload, not day's single-actor log.
+
+**The day-side seam is `day#70`** (`.design/claim-probe-narrowing.md`, **built**).
+Its `claim`-probe generalization makes `ClaimShape`'s matching a conjunction of
+independent predicates, so the frame-relative *author/enrichment* dimension
+slots in additively later — against kan#117's contract — rather than
+re-litigating the probe language. A day-side `author` predicate was
+deliberately *not* built with it: a flat `author == did` filter is not even a
+correct `Solo`, since it misses the keys kan's fold merges via `SameAs`, and it
+would pre-commit a frame representation kan owns. The heavy day-Frames design is
+written once that contract exists, not guessed ahead of it. **Nothing further
+toward Frames is buildable here until kan#117 lands.**
 
 **Frames has been deferred twice** — v0.5 moved it to v0.6, v0.6's rigor work
 moved it to v0.7. It is **not moving again**: v0.7 carries it alongside the

@@ -125,13 +125,23 @@ impl WitnessSchema {
         // verdict is what `day review record` appends, an assessment is what
         // `kan result` records — so before the `claim` probe kind existed,
         // both were unprobeable and left position permanently ambiguous
-        // (day#60). The `verdict` marker is the exact prefix `record::review`
-        // writes; `Decision` alone would match every decision in the log.
+        // (day#60).
+        //
+        // Both are narrowed by more than `kind`, and day#70 found out why by
+        // running them: `{kind: Decision, contains: …}` matched the very
+        // decision that *defined* the marker, and a bare `{kind: Result}`
+        // matched release notes and session handoffs as readily as an atom
+        // assessment. Each is narrowed on the dimension that actually
+        // separates the real thing — a verdict by the prefix `record::review`
+        // anchors at the start of its text, an assessment by the `atom/*`
+        // namespace it is recorded on.
         probes.insert(
             "verdict".to_string(),
             Probe::Claim(ClaimShape {
                 kind: "Decision".to_string(),
-                contains: Some("adversarial review of".to_string()),
+                contains: None,
+                starts_with: Some("adversarial review of".to_string()),
+                subject: None,
             }),
         );
         probes.insert(
@@ -139,6 +149,12 @@ impl WitnessSchema {
             Probe::Claim(ClaimShape {
                 kind: "Result".to_string(),
                 contains: None,
+                starts_with: None,
+                // Not `starts_with`: an assessment's text is free prose, so
+                // there is no prefix to anchor. And no subject scope on
+                // `verdict` for the mirror reason — a verdict lands on
+                // whatever subject was reviewed.
+                subject: Some(format!("{}*", atoms::ATOM_PREFIX)),
             }),
         );
         Self {
