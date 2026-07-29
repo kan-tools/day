@@ -556,11 +556,47 @@ here rather than deferring Frames a third time is the deliberate answer to the
 tripwire below.
 
 **v0.7 ships across betas rather than in one cut.** `v0.7.0-beta.1` is the
-position work; Frames lands in a later v0.7 beta. This is the mechanism that
-lets the position work reach a real log — where every defect in day so far has
-been found — without renumbering Frames out of the milestone. Shipping a beta
-is not the same act as closing a milestone, and only the second one would be a
-third deferral.
+position work; Frames closes the milestone. This is the mechanism that lets the
+position work reach a real log — where every defect in day so far has been
+found — without renumbering Frames out of the milestone. Shipping a beta is not
+the same act as closing a milestone, and only the second one would be a third
+deferral.
+
+**Two more betas landed between them, and naming why matters more than naming
+them.** `beta.2` and `beta.3` below are not new scope competing with Frames —
+they are Frames' day-side precondition, arrived at from the opposite direction.
+Frames factors into *whose attestations count* (kan's enrichment) × *what counts
+as a satisfying certificate* (day's witness criteria); day already ships the
+second half, globally, on `schema/witness`. Making it frame-indexable means the
+declared-vocabulary layer underneath it has to be worth indexing, and running
+day against a real log showed it was not: **day silently drops declarations it
+cannot account for, and four of the things a project reasonably differs on are
+still Rust constants rather than claims.**
+
+So there is one through-line under `beta.2`, `beta.3`, Frames and v0.8, and it
+is worth stating once. Every durable thing day does is driven by
+**project-declared vocabulary read back from kan claims**. That read path needs
+four properties, and they can only be built in this order:
+
+| | property | milestone |
+| --- | --- | --- |
+| 1 | **honest** — what it cannot account for is reported, never dropped | `beta.2` |
+| 2 | **complete** — everything a project may differ on is declarable | `beta.3` |
+| 3 | **transportable** — a vocabulary can be handed to another repo | v0.8 |
+| 4 | **frame-relative** — the same vocabulary read under several frames | v0.7.0 |
+
+Honest strictly precedes complete: every surface made declarable before the
+degradation contract exists inherits the silent-dropping bug, which is day#78
+against day#74 exactly. And it must *ship* before, not merely land before — the
+fix only helps a binary that has it, so `beta.2` is released before `beta.3`
+introduces fields older binaries cannot read.
+
+**None of this is Frames losing again.** Frames is fourth in that table only
+because its kan half — enrichment selection at the read surface — is kan's v0.8
+REQ-3, specced and unbuilt at the time of writing. day is not choosing to
+deprioritise it; day is building the half it owns while the other half is built,
+which is the opposite of a deferral. Stated here rather than left inferable from
+a beta number, because that is what the tripwire below is for.
 
 ### Current-cycle position (day#60)
 
@@ -605,6 +641,76 @@ what day does for an unknown probe *kind*. The question it raises is broader
 than one struct: which fenced-block schemas are descriptive (ignore unknown
 fields, as day requires of kan) and which are restrictive (an unknown field is
 a narrowing predicate, so ignoring it changes the answer).
+
+### Honest reads (`v0.7.0-beta.2`)
+
+Found by running day, not by reading it. Two demonstrations, both against the
+shipped binary:
+
+- An atom declaring `{"in":…,"out":…,"next":…,"requires":["approval"]}` — a
+  field this day has never heard of — loads as though `requires` were absent,
+  prints without it, and reports `composition: ok` at exit 0.
+- A project declaring `forbidden_sections: ["Scratch Notes"]` in its
+  `schema/design-doc` gets nine `[PASS]` lines and exit 0 on a document that
+  **contains** a "Scratch Notes" section. day certified conformance to a
+  declaration it had silently truncated.
+
+Seven fenced vocabularies, none with `deny_unknown_fields`, and every one of
+them exists to *constrain or narrow* something day then reports on — which is
+what makes ignoring an unknown field unsafe here in a way it is not for kan's
+claim JSON. An extra fact is extra information; an extra constraint dropped is a
+false certification. day's tolerance of kan is underwritten by a version
+contract (`SCHEMA_VERSION`, additive-only, and day pins `SHAPE_VERSION` against
+it); day's own blocks carry no version at all, so their tolerance is unbacked.
+
+So: `deny_unknown_fields` on day's built-in blocks, **plus** a block version, so
+the message is *"this day reads `day-atom` v1, this block declares v2"* rather
+than a parse error that reads as the project's mistake. Versioning is the
+load-bearing half — the v0.6 binary that took the session hook down failed
+loudly and misdirected the reader, and detection without an actionable message
+repeats that.
+
+Degradation granularity needed less work than expected: atoms already degrade
+per-atom and name the cascade, a `--all` telos sweep already reports the bad one
+and assesses the rest at exit 2, and a single-object schema failing the whole
+command *is* its smallest unit. What was missing is the **hook**, which lists an
+unreadable telos beside the readable ones and says nothing — the channel that
+reaches the model, silent, which is day#60's pattern precisely. Reported to both
+audiences per day's existing allocation: the model gets the caveat attached to
+the item it undermines, the human gets a `systemMessage` differentiated by cause
+(upgrade day, or fix the claim).
+
+Also here: `UserPromptSubmit` wired at last — designed in v0.6, allowlisted in
+`tests/plugin.rs`, never registered. Measured, `day status` is 2.76 s of which
+1.99 s is 41 `kan` invocations, while the git half is 0.03 s — so `path`- and
+`tag`-driven transitions are affordable per prompt today and the `claim`-probe
+half waits for day#71. State-triggered display and a bounded periodic
+re-display are kept as *separate* triggers: a recurring reminder is much closer
+to the ambient standing rule that failed in day#30 than an event notice is, so
+the periodic channel carries only standing conditions that affect the
+correctness of what day already said.
+
+### The vocabulary substrate (`v0.7.0-beta.3`)
+
+Six hand-rolled fenced vocabularies collapse onto one declared-block mechanism
+(day#74), with `day-atom` as its first instance and one less special case. Then
+everything day hardcodes that a project may reasonably differ on becomes a
+declaration on it: verdict vocabularies (day#77), the cycle boundary (day#76),
+resolved-question ids (day#36), practice items (day#43/#44), the injection
+cadence above, and design-check-against-recorded-decisions (day#41).
+
+Net *simplifying* in code while adding capability, and it strengthens
+`telos/no-store-of-its-own` rather than straining it — four things move out of
+Rust and into claims.
+
+It also resolves a conflict rather than splitting it. day#74 asks for
+"generated blocks only, never hand-written," which contradicts the conventions'
+standing rule that a hand-written claim following them is exactly as valid. The
+resolution is that generation-only is **unenforceable by construction** in a
+multi-actor log: day cannot control what another actor's binary wrote, so the
+moment claims arrive over sync from a second key, writer-side guarantees
+evaporate. The guarantee that survives is reader-side validation — which is
+`beta.2`. The ask is right; its mechanism was the wrong one.
 
 ### Frames
 
@@ -692,8 +798,24 @@ bundle of **declarations**, and installing one means **recording them as your
 own claims**. Not files day keeps, not a config directory, not a second store
 — the repo is a *source*, and afterwards the only durable artifact is claims
 in your log, signed by you. `telos/no-store-of-its-own` is preserved rather
-than strained, and it falls out for free because everything a plugin would
-carry is already a kan claim.
+than strained.
+
+**This section used to end "and it falls out for free because everything a
+plugin would carry is already a kan claim." That sentence was false, and it was
+this milestone's load-bearing assumption.** Four of the things a real pack needs
+to carry — review verdicts, the cycle boundary, the block schemas themselves,
+and `schema/design-doc`'s own conventions — were Rust constants, not claims. A
+pack can only transport what is declarable, so v0.8 was not buildable as
+written.
+
+It was not found by re-reading the roadmap. A research program distilled its
+process into a spec, tried to compile it to day vocabulary, and filed four
+issues from that one attempt — day#73/#74/#76/#77 — each one a part that would
+not move into claims. `v0.7.0-beta.3` is that precondition, and it is why the
+substrate is named as a milestone rather than left implicit here: **v0.8 is the
+payoff of beta.3, not a feature standing on its own.** Corrected in place rather
+than quietly rewritten, because a roadmap that silently stops having been wrong
+is worth less than one that records the correction.
 
 It also gets a property monolithic plugin systems lack. Because the contents
 become ordinary claims, **adoption is per-item and revisable**: retract one
@@ -708,6 +830,19 @@ context, and its witness probes can carry `command` probes. day#25 requires
 injected practice to be locally-signed, but plugin content becomes *your*
 claims signed by *you*, so it passes that check **by construction**. The trust
 boundary therefore moves to **install time**.
+
+**And the most dangerous payload a pack can carry is not a command probe.** Once
+Frames lands, a pack can reasonably declare a **frame** — which roles exist and
+whose claims count — and a research pack arguably should: kan#114's field report
+puts it plainly, *"the trust parameterization IS the role hierarchy."* But a
+frame declaration changes what you can **see**, not what runs. A pack that
+weights your own key to zero makes your own claims vanish from your own reads,
+at exit 0, in a view that looks complete — verified as reachable behaviour while
+wiring the day/kan bridge, on a workspace with two local identities. A command
+probe is loud and reviewable in one line of argv; this is silent and its effect
+is an absence. So whatever install-time review guards `command` probes must
+guard trust declarations *more*, and a frame must never be applied without being
+shown.
 
 ### Trust is a claim, not a setting
 
