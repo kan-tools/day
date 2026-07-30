@@ -301,13 +301,11 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     // for the expensive computation and has time to. A failed write costs the
     // next prompt a recompute, which is correct-but-slower — never wrong.
     if let Ok(fingerprint) = git.position_fingerprint() {
-        // The declared cadence is resolved HERE, not per prompt. A kan-backed
-        // declaration read on every `UserPromptSubmit` would reintroduce the
-        // 3s-per-turn regression the beta.2 review blocked — a declared value is
-        // only cheap if it is resolved where day already pays for a read.
-        let cadence = crate::blocks::InjectionSchema::load(client)
-            .map(|i| i.cadence)
-            .unwrap_or(crate::cache::DEFAULT_CADENCE);
+        // The cadence comes off `status`, which resolved it with the other
+        // declarations and reported it if unreadable. Loading it here instead
+        // meant an unreadable `schema/injection` silently became the default —
+        // the same defect as day#81, on a value nobody would notice was wrong.
+        let cadence = status.cadence;
         let _ = crate::cache::write_standing(
             root,
             &crate::cache::Standing {
@@ -534,9 +532,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     let Ok(status) = crate::status::compute(client, &git) else {
         return String::new();
     };
-    let cadence = crate::blocks::InjectionSchema::load(client)
-        .map(|i| i.cadence)
-        .unwrap_or(crate::cache::DEFAULT_CADENCE);
+    let cadence = status.cadence;
     if let Some(fp) = fingerprint {
         let _ = crate::cache::write_standing(
             root,

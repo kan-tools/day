@@ -195,11 +195,35 @@ thing that checks the test. All of them are from one milestone
   the thing that gates position.
 - **A rule written in one module's doc comment does not propagate to the
   others.** `src/probe.rs` states plainly that a subject day cannot read is an
-  error and never a silently empty result. Three other modules did exactly that
-  anyway — `docs.rs` (day#81), `hooks.rs`'s `render_teloi`, and
-  `status::compute` discarding `atoms::load`'s findings. Prose in the right place
-  is not a constraint. If a rule matters, it wants a source-scanned test, the way
-  the `.day/` carve-out has one.
+  error and never a silently empty result. It then happened **five times**:
+  `docs.rs` (day#81), `hooks.rs`'s `render_teloi`, `status::compute` discarding
+  `atoms::load`'s findings, `BlockSchemas::load(…).unwrap_or_default()`, and
+  `InjectionSchema::load(…).unwrap_or(DEFAULT_CADENCE)` — the last written *after*
+  this file gained a rule naming it. Prose in the right place is not a
+  constraint.
+
+  **It is now a source scan that fails the build**
+  (`a_failed_kan_read_is_never_swallowed` in `tests/plugin.rs`), with an explicit
+  `kan-read-may-degrade: <why>` escape hatch, because a test with no way out gets
+  deleted the first time it is wrong. Verified by reintroducing all five defects.
+  If a rule matters, this is the shape it wants — the `.day/` carve-out has the
+  same treatment for the same reason.
+
+## Two tools, already written — use them rather than reinventing them
+
+- **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says
+  nothing about whether a test *asserts* anything, so a claim of coverage wants a
+  mutation. Use this rather than an inline loop: the inline version was
+  reinvented at least three times in one session and had a different defect each
+  time, all failing toward false confidence. It reports **CAUGHT / SURVIVED /
+  DID-NOT-COMPILE / ANCHOR-MISSING** as distinct outcomes — a build error is not
+  a survived mutation, and a stale anchor is not a passing test — and restores the
+  file visibly (`copy`, not `copy2`, then `touch`, because preserving mtime hides
+  the restore from cargo and corrupts the *next* run).
+- **`scripts/capture-block-corpus.sh`** — regenerates the backward-compatibility
+  corpus by building every released tag and driving that tag's own binary. Run it
+  by hand after changing a block shape; `tests/block_corpus.rs` consumes the
+  committed output on every push.
 
 ## Working practice
 

@@ -118,6 +118,12 @@ pub struct Status {
     /// True when no witness probes are declared, so position cannot be
     /// inferred at all — reported plainly rather than as "no current atom".
     pub uncheckable: bool,
+    /// The declared injection cadence (`schema/injection`), resolved here
+    /// because this is where day already reads declarations and already reports
+    /// the ones it could not read. Resolving it in the hook instead meant an
+    /// unreadable declaration silently became the default — the same defect as
+    /// day#81, on a value nobody would have noticed was wrong.
+    pub cadence: u32,
     /// Declarations this build could not read, so every field above is
     /// **partial** and a reader must be told rather than left to assume.
     ///
@@ -402,6 +408,19 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // `compute` discarding `atoms::load`'s findings were the others), written
     // *after* CLAUDE.md gained a rule naming it. A rule in prose is not a
     // constraint.
+    // The declared cadence, resolved with the other declarations. An ABSENT
+    // declaration is day's default; one that could not be READ is reported.
+    let (cadence, cadence_unreadable) = match crate::blocks::InjectionSchema::load(client) {
+        Ok(i) => (i.cadence, None),
+        Err(e) => (
+            crate::cache::DEFAULT_CADENCE,
+            Some(Unreadable {
+                message: format!("injection settings could not be read: {e}"),
+                version_skew: false,
+            }),
+        ),
+    };
+
     let (blocks, blocks_unreadable) = match crate::blocks::BlockSchemas::load(client) {
         Ok(blocks) => (blocks, None),
         Err(e) => (
@@ -435,7 +454,13 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             off_sequence: Vec::new(),
             transition: None,
             uncheckable: true,
-            unreadable: unreadable_from(&findings, &schema, &blocks, blocks_unreadable.clone()),
+            cadence,
+            unreadable: unreadable_from(
+                &findings,
+                &schema,
+                &blocks,
+                [blocks_unreadable.clone(), cadence_unreadable.clone()],
+            ),
         });
     }
 
@@ -483,7 +508,13 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         off_sequence: report.off_sequence,
         transition,
         uncheckable: false,
-        unreadable: unreadable_from(&findings, &schema, &blocks, blocks_unreadable.clone()),
+        cadence,
+        unreadable: unreadable_from(
+            &findings,
+            &schema,
+            &blocks,
+            [blocks_unreadable.clone(), cadence_unreadable.clone()],
+        ),
     })
 }
 
@@ -500,9 +531,12 @@ fn unreadable_from(
     findings: &[atoms::Finding],
     schema: &WitnessSchema,
     blocks: &crate::blocks::BlockSchemas,
-    blocks_unreadable: Option<Unreadable>,
+    // Failures to READ a declaration, as opposed to findings within one that was
+    // read. They lead the list because "day could not read your declaration"
+    // outranks anything day found inside the declarations it could.
+    declaration_errors: [Option<Unreadable>; 2],
 ) -> Vec<Unreadable> {
-    let mut out: Vec<Unreadable> = blocks_unreadable.into_iter().collect::<Vec<_>>();
+    let mut out: Vec<Unreadable> = declaration_errors.into_iter().flatten().collect();
     out.extend(
         findings
             .iter()
@@ -646,6 +680,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(long.contains("Current atom: build"), "{long}");
@@ -665,6 +700,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(long.contains("2 atoms are consistent"), "{long}");
@@ -683,6 +719,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert!(status
             .render_long()
@@ -698,6 +735,7 @@ mod tests {
             transition: None,
             uncheckable: true,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert!(status
             .render_long()
@@ -715,6 +753,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert!(status.render_long().contains("Off-sequence:"));
         let line = status.render_line();
@@ -735,6 +774,7 @@ mod tests {
             }),
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(
@@ -762,6 +802,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert_eq!(quiet.notice(), None);
 
@@ -775,6 +816,7 @@ mod tests {
             }),
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let notice = loud.notice().expect("there is something to mark");
         assert!(notice.contains("`build`"), "{notice}");
@@ -798,6 +840,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(long.contains("[not run] passing-tests"), "{long}");
