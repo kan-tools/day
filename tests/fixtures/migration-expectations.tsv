@@ -1,0 +1,35 @@
+# What each RELEASED version of day does when handed the block shapes this
+# commit writes. One row per tag; the tag being released is excluded, since a
+# version cannot be a historical reader of its own release.
+#
+# These are CHARACTERIZATIONS, not correctness assertions. A released binary
+# cannot be fixed, so the matrix's job is to make the blast radius of a
+# block-shape change visible *before* it ships rather than after, which is the
+# thing day#78 needed and did not have.
+#
+# Outcomes:
+#   refused-honestly   said it could not read the block
+#   silently-widened   loaded it as though the unreadable part were absent, and
+#                      certified the result -- day#78's shape
+#   unbuildable        does not build with the current toolchain, so nobody is
+#                      running it
+#   errored            failed some other way
+#
+# Every version below predates the `_version` gate, so every one of them
+# silently widens. That is not a list of bugs to fix -- it is day#78's residue,
+# quantified. `v0.7.0-beta.2` is the first version that will read
+# `refused-honestly`, and it will appear here as a row the release after it.
+#
+# Changing a block shape and changing a row below belong in the SAME commit. A
+# row that moved on its own is the matrix telling you something you did not
+# intend.
+#
+# tag	expected-outcome
+v0.1.1-beta.1	silently-widened
+v0.1.2-beta.1	silently-widened
+v0.2.0-beta.1	silently-widened
+v0.3.0-beta.1	silently-widened
+v0.4.0-beta.1	silently-widened
+v0.5.0-beta.1	silently-widened
+v0.6.0-beta.1	silently-widened
+v0.7.0-beta.1	silently-widened

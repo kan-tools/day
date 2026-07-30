@@ -1,0 +1,24 @@
+[
+  {
+    "subject": "atom/from-the-future",
+    "fence": "day-atom",
+    "note": "An atom declared by a day newer than the reader.",
+    "body": {
+      "_version": 2,
+      "in": ["intent"],
+      "out": ["design-doc"],
+      "next": ["build"],
+      "requires": ["approval"]
+    }
+  },
+  {
+    "subject": "atom/plain",
+    "fence": "day-atom",
+    "note": "An atom every version can read, so a cell that reports nothing readable is distinguishable from one that read what it could.",
+    "body": {
+      "in": ["design-doc"],
+      "out": ["code-change"],
+      "next": []
+    }
+  }
+]

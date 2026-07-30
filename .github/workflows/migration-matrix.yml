@@ -1,0 +1,164 @@
+name: Migration matrix
+
+# What every *released* version of day does when it meets the block shapes this
+# commit writes.
+#
+# This exists because day#78 was found after shipping: v0.7.0-beta.1 silently
+# drops the narrowing predicates day#70 added, so it reads a narrowed probe as a
+# broad one and reports evidence that is not there. Nothing tested it, because
+# every test runs one binary against its own shapes. A released binary cannot be
+# fixed — so the value here is not that old versions behave well, it is knowing
+# *what they do* before writing a log they will read.
+#
+# The assertion is therefore a characterization, not a correctness check: each
+# version's outcome is compared against a committed expectation in
+# `tests/fixtures/migration-expectations.tsv`. A change in the blast radius of a
+# block-shape change fails the release rather than being learned from a user.
+#
+# The forward direction — this build reading historical shapes — is a *guarantee*
+# rather than a characterization, so it lives in `tests/block_corpus.rs` and runs
+# on every push instead of here.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # Also runnable by hand, so the matrix can be consulted while deciding whether
+  # a block-shape change is safe rather than only after tagging one.
+  workflow_dispatch:
+
+jobs:
+  # The reader side of every cache key. A released tag is immutable, so its
+  # commit sha never changes; only the corpus and the toolchain move.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.tags.outputs.json }}
+      corpus: ${{ steps.hash.outputs.corpus }}
+      rustc: ${{ steps.hash.outputs.rustc }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - id: tags
+        name: Enumerate released tags
+        run: |
+          # Every released tag except the one being released now: a version
+          # cannot be a historical reader of its own release.
+          current="${GITHUB_REF_NAME}"
+          json=$(git tag --list 'v*.*.*' --sort=creatordate \
+                 | grep -v "^${current}$" \
+                 | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "json=$json" >> "$GITHUB_OUTPUT"
+          echo "matrix: $json"
+
+      - id: hash
+        name: Hash the destination side of the key
+        run: |
+          # The *destination* is what a historical reader will be handed: the
+          # block shapes this commit writes. Hashing the modules that define
+          # them plus the fixture corpus means a shape change invalidates every
+          # cell, and nothing else does.
+          corpus=$(cat src/atoms.rs src/bridge.rs src/schema.rs src/docs.rs \
+                       src/telos.rs src/tension.rs src/probe.rs \
+                       tests/fixtures/migration-blocks.json \
+                   | sha256sum | cut -d' ' -f1)
+          echo "corpus=$corpus" >> "$GITHUB_OUTPUT"
+          # The toolchain is part of the key too: "we already ran this" is only
+          # true if the thing that compiled the reader is also unchanged.
+          echo "rustc=$(rustc --version | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+  matrix:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: ${{ fromJSON(needs.plan.outputs.tags) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: reader
+        name: Resolve the reader's immutable sha
+        run: echo "sha=$(git rev-parse "${{ matrix.tag }}")" >> "$GITHUB_OUTPUT"
+
+      # The cache the whole design rests on. Key = (reader sha, destination
+      # hash, toolchain). All three are immutable inputs to a deterministic
+      # outcome, so a hit means the answer cannot have changed and the build is
+      # pure waste. Adding a tag costs one cell; changing a block shape costs
+      # all of them; changing neither costs nothing.
+      - id: cached
+        uses: actions/cache@v4
+        with:
+          path: migration-outcome.txt
+          key: >-
+            migration-v1-${{ steps.reader.outputs.sha }}-${{
+            needs.plan.outputs.corpus }}-${{ needs.plan.outputs.rustc }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.cached.outputs.cache-hit != 'true'
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.cached.outputs.cache-hit != 'true'
+        with:
+          key: reader-${{ matrix.tag }}
+
+      - name: Build the historical reader
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: |
+          git worktree add --detach /tmp/reader "${{ matrix.tag }}"
+          cd /tmp/reader
+          # An old tag may not build with a current toolchain. That is a real
+          # outcome, not a CI failure: a version nobody can build is a version
+          # nobody is running.
+          if cargo build --release --quiet 2>/tmp/build.log; then
+            echo "built" > /tmp/reader-status
+          else
+            echo "unbuildable" > /tmp/reader-status
+            tail -5 /tmp/build.log || true
+          fi
+
+      - name: Run it against this commit's block shapes
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: |
+          if [ "$(cat /tmp/reader-status)" = "unbuildable" ]; then
+            echo "unbuildable" > migration-outcome.txt
+            exit 0
+          fi
+          scripts/run-migration-cell.sh /tmp/reader/target/release/day \
+            > migration-outcome.txt
+          cat migration-outcome.txt
+
+      - name: Compare against the committed expectation
+        run: |
+          outcome=$(cat migration-outcome.txt)
+          expected=$(awk -v t="${{ matrix.tag }}" '$1==t {print $2}' \
+                     tests/fixtures/migration-expectations.tsv)
+          echo "::notice title=${{ matrix.tag }}::$outcome"
+          if [ -z "$expected" ]; then
+            echo "::error::${{ matrix.tag }} has no committed expectation. Add a row to tests/fixtures/migration-expectations.tsv — a new version's behaviour against current blocks is a decision, not a default."
+            exit 1
+          fi
+          if [ "$outcome" != "$expected" ]; then
+            echo "::error::${{ matrix.tag }}: expected '$expected', got '$outcome'. The blast radius of a block-shape change moved. If that is intended, update the expectation in the same commit that changed the shape."
+            exit 1
+          fi
+
+  report:
+    needs: [plan, matrix]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarise
+        run: |
+          echo "### Migration matrix" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Result: ${{ needs.matrix.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Each cell is one released version reading the block shapes this commit writes." >> "$GITHUB_STEP_SUMMARY"
+          echo "Outcomes are characterizations, not correctness: a released binary cannot be fixed." >> "$GITHUB_STEP_SUMMARY"
