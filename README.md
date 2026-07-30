@@ -106,8 +106,8 @@ day exists to avoid repeating.
 ## Install
 
 ```bash
-cargo install kan --version 0.7.0-beta.1   # the memory layer day reads
-cargo install day --version 0.7.0-beta.1
+cargo install kan --version 0.7.1-beta.1   # the memory layer day reads
+cargo install day --version 0.7.0-beta.2
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -132,8 +132,30 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.7.0-beta.1** is the first beta of v0.7, and it makes day's own
-position *legible* rather than merely computed.
+Early. **v0.7.0-beta.2** makes day honest about the declarations it cannot
+read — which sounds small and was not: day was certifying conformance to
+declarations it had silently truncated.
+
+Two runs against the previous release show it. An atom declaring a field this
+day had never heard of loaded as though the field were absent and reported
+`composition: ok` at exit 0. A project declaring `forbidden_sections` got nine
+`[PASS]` lines and exit 0 on a document containing that section. Seven fenced
+vocabularies, none rejecting unknown fields — and every one of them exists to
+*constrain* something day then reports on, so a dropped field was never lost
+information, it was a false certification.
+
+Blocks now refuse what they cannot account for, and carry a `_version` so the
+refusal can say **why**: *this day reads `day-atom` v1, this block declares v2 —
+upgrade day* rather than a parse error that reads as the project's mistake. A
+failed kan read reports as `[UNCHECKED]` rather than as an absent artifact. The
+session hooks say when their own lists are partial, on both the model's channel
+and the human's. And a **version-migration matrix** in CI records what every
+released version does with the block shapes the current commit writes — because
+the answer turned out to be "silently widens", for every version that can read
+them at all, and nobody knew.
+
+**v0.7.0-beta.1** remains the foundation: it made day's own position *legible*
+rather than merely computed.
 
 Position inference used to ask "does an artifact of this type exist", and on
 any repo with history the answer is always yes — some `v*` tag, some past
