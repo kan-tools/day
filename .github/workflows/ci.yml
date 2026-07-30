@@ -11,7 +11,7 @@ env:
   #
   # `.github/workflows/kan-compat.yml` is what covers the *other* versions —
   # this pin is the one pairing every push checks.
-  KAN_TAG: v0.8.0-beta.1
+  KAN_TAG: v0.9.1-beta.1
 
 jobs:
   test:
