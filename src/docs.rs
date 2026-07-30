@@ -160,6 +160,17 @@ pub enum Level {
     Pass,
     Warn,
     Fail,
+    /// The check could not be performed at all — a read that failed, not a
+    /// question that was answered.
+    ///
+    /// **Distinct from `Fail` on purpose** (day#81). `Fail` means day looked and
+    /// found the thing wrong; `Unchecked` means day could not look. Collapsing
+    /// them loses the difference `docs/CONVENTIONS.md` makes the exit codes
+    /// carry — could-not-check outranks checked-and-found-something — and
+    /// collapsing it into the *absent* case is worse still, which is what
+    /// day#81 was: an unreadable release subject reported as "a release nobody
+    /// wrote down".
+    Unchecked,
 }
 
 #[derive(Debug, Clone)]
@@ -183,6 +194,13 @@ impl Report {
         !self.findings.iter().any(|f| f.level == Level::Fail)
     }
 
+    /// Whether some check could not be performed. Reported separately from
+    /// [`Self::is_clean`] because it outranks it: an assessment that could not
+    /// run is a weaker guarantee than one that ran and found something.
+    pub fn unchecked(&self) -> bool {
+        self.findings.iter().any(|f| f.level == Level::Unchecked)
+    }
+
     pub fn render(&self) -> String {
         let mut out = format!("Docs assessment (version {}):\n", self.version);
         for finding in &self.findings {
@@ -190,6 +208,7 @@ impl Report {
                 Level::Pass => "PASS",
                 Level::Warn => "WARN",
                 Level::Fail => "FAIL",
+                Level::Unchecked => "UNCHECKED",
             };
             out.push_str(&format!("  [{label}] {}\n", finding.message));
         }
@@ -256,8 +275,27 @@ fn reconcile_boundary(
     findings: &mut Vec<Finding>,
 ) -> Result<Option<String>, Error> {
     let tag = git.latest_version_tag()?;
-    let release_claims = client.show(subject).unwrap_or_default();
-    let recorded = release_claims.iter().rev().find_map(|c| c.text.clone());
+
+    // day#81: this used to be `client.show(subject).unwrap_or_default()`, which
+    // turned "day could not read the release subject" into "no release has been
+    // recorded" — a false negative dressed as evidence, and the exact failure
+    // `probe.rs`'s `ClaimLog` refuses by name. A read that failed is reported as
+    // unchecked and the rest of the assessment continues; what must not happen
+    // is falling through to the (Some(tag), None) arm below and announcing a
+    // release nobody wrote down, on the strength of a read that never happened.
+    let recorded = match client.show(subject) {
+        Ok(claims) => claims.iter().rev().find_map(|c| c.text.clone()),
+        Err(e) => {
+            findings.push(Finding {
+                level: Level::Unchecked,
+                message: format!(
+                    "could not read `{subject}`, so the tag and the record could not be \
+                     reconciled: {e}"
+                ),
+            });
+            return Ok(tag);
+        }
+    };
 
     match (&tag, &recorded) {
         (Some(tag), Some(text)) => {

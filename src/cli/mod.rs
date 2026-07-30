@@ -694,10 +694,14 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             let git = crate::git::Git::new(cwd.clone());
             let report = crate::docs::assess(&client, &git, &cwd, since.as_deref())?;
             print!("{}", report.render());
-            Ok(if report.is_clean() {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::from(EXIT_FINDINGS)
+            // Same precedence the telos sweep uses, and for the same reason
+            // (day#81): "could not check" outranks "checked and found
+            // something", because a check that never ran is the weaker
+            // guarantee of the two.
+            Ok(match (report.unchecked(), report.is_clean()) {
+                (true, _) => ExitCode::from(EXIT_UNAVAILABLE),
+                (false, false) => ExitCode::from(EXIT_FINDINGS),
+                (false, true) => ExitCode::SUCCESS,
             })
         }
         Command::Mcp => {
