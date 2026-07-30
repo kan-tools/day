@@ -620,6 +620,11 @@ ever answer yes, and day's own log reported four candidate atoms permanently
 The boundary is derived from git on every read and **never stored** — day owns
 no state, and a stale cached boundary would be worse than none.
 
+`v*` is the **default**, not a rule: a project that does not release on `v*`
+tags declares its own pattern on `schema/cycle` (see *Other declarations day
+reads*), and position and `day assess docs` both resolve against the declared
+boundary — one boundary, or the two would answer "since when" differently.
+
 Consequences worth stating, because each is easy to mistake for a bug:
 
 - **No release means no boundary**, and inference falls back to the
@@ -678,6 +683,145 @@ the same relation to kan's log as kan's own disposable `.kan/index.sqlite`
 does. Exactly one module (`src/cache.rs`) touches it, and a source scan keeps
 it that way — *if day ever read the cache to decide something rather than to
 display something, the line would have been crossed*.
+
+## Declared block types — `schema/blocks`
+
+day owns seven fenced block types and, until v0.7, a project could invent
+none. A research program instantiating day's process for a non-software domain
+needed exactly one more — `research-claim`, carrying a claim's evidential
+station — and had nowhere to put it (day#74).
+
+A project declares a block type by recording a `day-blocks` block on a
+`schema/blocks` subject: a map from block name to its field spec.
+
+```
+kan observe "Our block vocabulary" --subject schema/blocks
+```
+
+````
+```day-blocks
+{
+  "research-claim": {
+    "required": ["medium", "anchor_ref"],
+    "optional": ["decay_note", "scope_coords", "situated_verdict"]
+  }
+}
+```
+````
+
+A claim then carries an instance in a fence of that name:
+
+````
+```research-claim
+{"medium": "anchor-verified", "anchor_ref": "lean:Thm1"}
+```
+````
+
+**The spec is names and required/optional only** — no value types, no pattern
+language. A schema arrives from a claim, and a richer language is a wider
+surface than the declared need (day#34, and the same line `subject` holds in a
+claim probe). day validates that every required field is present and that
+nothing undeclared appears; it will **not** catch `medium: 7` where a station
+name was meant. A project that needs values interpreted interprets them in its
+own linter.
+
+**A declared block is validated wherever day reads one, on the same terms as a
+built-in.** A missing required field or an undeclared field is refused, and the
+refusal names the field. Declared blocks carry the same `_version` gate, so a
+project can version its own vocabulary and an older day says *"this day reads
+`research-claim` v1, this block declares v2"* rather than reporting the
+project's claim as malformed. An unreadable declaration is reported through
+the same channels a built-in's is — a vocabulary day silently ignored would be
+a decorative declaration.
+
+**day reads a declared block because a witness asks it to.** The `claim` probe
+takes a `block` predicate:
+
+```json
+{"claim": {"kind": "Observation", "subject": "claim/*", "block": "research-claim"}}
+```
+
+which is satisfied by a claim carrying a **valid** instance of that declared
+type. The verdicts follow the rule the rest of day follows — day never reports
+an absence it did not check:
+
+| state | verdict |
+|---|---|
+| the declaration could not be read | `ERROR` |
+| the witness names a block type nobody declared | `ERROR` |
+| an instance declares a `_version` this day does not read | `ERROR` |
+| an instance is present and violates the spec | `MISSING` |
+| an instance is present and valid | `MATERIAL` |
+
+**The seven built-in fences are reserved.** Declaring `day-atom`,
+`day-telos`, `day-bridge`, `day-witness`, `day-schema`, `day-docs`, or
+`day-tension` in `schema/blocks` is refused by name rather than silently
+shadowing the built-in.
+
+### Why day's own blocks are not declared this way
+
+The obvious symmetry — make `day-atom` the first instance of the mechanism,
+one less special case — is **deliberately declined**, and the reason is
+concrete rather than conservative.
+
+day's built-in blocks are struct-defined: the Rust struct *is* the schema,
+`deny_unknown_fields` and the `Versioned` trait make it strict at compile
+time, and `tests/block_corpus.rs` checks the current reader against every
+block shape a released day ever wrote. Declaring them instead would put a
+declaration beside the struct **with no compiler between them** — two sources
+of truth for one fact, kept in agreement by nobody. That is not hypothetical:
+it is exactly the defect v0.7.0-beta.2's adversarial review found in
+`extract_fenced`, where a `fence` parameter and the type's own `FENCE`
+constant could disagree, and the fix was to delete the parameter.
+
+So: **one mechanism for what day writes, one for what a project invents, and
+neither pretends to be the other.** The two are not symmetric because their
+guarantees are not symmetric — day can compile-check its own vocabulary and
+cannot compile-check yours, and a declaration is the best available answer for
+the second case rather than a better answer for the first.
+
+### Other declarations day reads
+
+Three more subjects let a project override a day default. They are **not**
+declared block types — their fences are day's own, struct-defined for the
+reason above. They are listed here because they are the rest of what `day init`
+offers, and each has a working default, so declaring none of them is a complete
+configuration.
+
+**`schema/verdicts`** — which verdicts `day review record` accepts. day ships a
+default vocabulary; a project whose review process uses different words
+declares them rather than being told its own verdict is invalid.
+
+````
+```day-verdicts
+{"verdicts": ["SHIP", "BLOCK", "COLLISION"]}
+```
+````
+
+**`schema/cycle`** — which tags bound a cycle, replacing the default `v*`. A
+project that releases on `pass/*` or `sprint-*` would otherwise have every
+probe measured against a boundary it does not use.
+
+````
+```day-cycle
+{"tags": "pass/*"}
+```
+````
+
+**`schema/injection`** — how many prompts pass before day re-shows a standing
+condition mid-session. A standing condition is not an event, so it is rationed;
+an always-present rule becomes background (day#30).
+
+````
+```day-injection
+{"cadence": 5}
+```
+````
+
+Each is read where it is used and falls back to the shipped default when
+absent. An unreadable declaration is reported rather than silently replaced by
+the default — a project that configured something and got the default anyway
+has no way to notice.
 
 ## Not yet conventionalized
 

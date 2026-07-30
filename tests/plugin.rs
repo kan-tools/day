@@ -598,3 +598,67 @@ fn a_failed_kan_read_is_never_swallowed() {
          mark the site `{MARKER} <why this one is genuinely different>`."
     );
 }
+
+/// `.design/declared-blocks.md` AC-7. A mechanism a project is meant to *use*
+/// is documented or it does not exist, and the reserved-fence list is exactly
+/// the kind of rule someone hits at the worst moment.
+///
+/// Reads the constants rather than restating the strings, for the reason
+/// [`ac9_conventions_document_the_prefixes_the_code_actually_reads`] does: a
+/// doc check that hardcodes what it checks can pass while the code moves.
+#[test]
+fn ac7_conventions_document_the_declared_block_mechanism() {
+    let text = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md"))
+        .expect("docs/CONVENTIONS.md should exist");
+
+    for token in [
+        day::blocks::FENCE_INFO,
+        day::blocks::INJECTION_FENCE,
+        day::blocks::CYCLE_FENCE,
+        day::blocks::VERDICTS_FENCE,
+    ] {
+        assert!(
+            text.contains(token),
+            "docs/CONVENTIONS.md should document {token:?}"
+        );
+    }
+
+    // Every reserved fence must appear, or a project learns the list by
+    // being refused.
+    for fence in day::blocks::RESERVED_FENCES {
+        assert!(
+            text.contains(*fence),
+            "docs/CONVENTIONS.md should name {fence:?} as reserved"
+        );
+    }
+
+    // The field-spec vocabulary a project actually writes.
+    for token in ["required", "optional", "schema/blocks"] {
+        assert!(
+            text.contains(token),
+            "docs/CONVENTIONS.md should document the field spec's {token:?}"
+        );
+    }
+
+    // REQ-7's second half, and the part a summary would drop: *why* day's own
+    // blocks are not declared this way. Asserted on the reasoning rather than
+    // a heading, because the heading is not the content.
+    assert!(
+        text.contains("Why day's own blocks are not declared this way"),
+        "CONVENTIONS.md should answer why the built-ins are struct-defined"
+    );
+    assert!(
+        text.contains("no compiler between them"),
+        "the reason is that a declaration beside a struct has no compiler \
+         between them — CONVENTIONS.md should say so, since that is the whole \
+         argument"
+    );
+
+    // The `block` predicate is the read path that makes declared blocks
+    // matter; documenting the declaration without it would describe a
+    // vocabulary nothing consults.
+    assert!(
+        text.contains("\"block\": \"research-claim\""),
+        "CONVENTIONS.md should show the claim probe's `block` predicate"
+    );
+}

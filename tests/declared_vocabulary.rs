@@ -378,3 +378,209 @@ fn a_declared_cadence_changes_how_often_the_channel_speaks() {
         day::cache::DEFAULT_CADENCE
     );
 }
+
+/// The declaration for the `block` predicate tests: `research-claim` with two
+/// required fields and one optional.
+fn blocks_schema() -> StubClaim {
+    claim(
+        "schema/blocks",
+        "bafybs",
+        "B.\n\n```day-blocks\n{\"research-claim\":{\"required\":[\"medium\",\"anchor_ref\"],\
+         \"optional\":[\"decay_note\"]}}\n```\n",
+    )
+}
+
+/// A witness schema with the predicate under test **and its negative control**:
+/// `loose` is `stationed` with the `block` conjunct removed and nothing else
+/// changed, so any difference between the two verdicts is the predicate's doing.
+fn station_witnesses() -> StubClaim {
+    claim(
+        "schema/witness",
+        "bafyw",
+        "W.\n\n```day-witness\n{\
+         \"stationed\":{\"claim\":{\"kind\":\"Observation\",\"subject\":\"claim/*\",\
+         \"block\":\"research-claim\"}},\
+         \"loose\":{\"claim\":{\"kind\":\"Observation\",\"subject\":\"claim/*\"}}}\n```\n",
+    )
+}
+
+fn telos_for(slug: &str, cid: &str, witness: &str) -> StubClaim {
+    claim(
+        &format!("telos/{slug}"),
+        cid,
+        &format!("T.\n\n```day-telos\n{{\"witnesses\":[\"{witness}\"]}}\n```\n"),
+    )
+}
+
+fn research_claim(body: &str) -> StubClaim {
+    claim(
+        "claim/one",
+        "bafyc1",
+        &format!("A claim.\n\n```research-claim\n{body}\n```\n"),
+    )
+}
+
+/// AC-8, and the reason REQ-2 is not nominal: a **declared** block is
+/// witnessable, so day validates one because something asked, not because a
+/// `doctor` pass was added to make the requirement true.
+///
+/// The two runs differ only in the instance's body. The negative control is the
+/// `loose` witness, identical but for the `block` conjunct — it matches both
+/// claims, which is what proves the discrimination belongs to the predicate and
+/// not to some other difference in the fixture.
+#[test]
+fn a_declared_block_decides_whether_a_witness_is_material() {
+    let verdicts = |body: &str| -> (String, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let kan = write_kan_stub(
+            dir.path(),
+            &[
+                blocks_schema(),
+                station_witnesses(),
+                telos_for("stationed", "bafyt1", "stationed"),
+                telos_for("loose", "bafyt2", "loose"),
+                research_claim(body),
+            ],
+        );
+        let line = |slug: &str| {
+            let out = day(dir.path(), &kan, &["assess", "telos", slug]);
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .find(|l| {
+                    l.contains("[MATERIAL]") || l.contains("[MISSING]") || l.contains("[ERROR]")
+                })
+                .unwrap_or("<no verdict>")
+                .to_string()
+        };
+        (line("stationed"), line("loose"))
+    };
+
+    let (valid, valid_control) =
+        verdicts("{\"medium\":\"anchor-verified\",\"anchor_ref\":\"lean:Thm1\"}");
+    let (violating, violating_control) =
+        verdicts("{\"medium\":\"anchor-verified\",\"anchor_ref\":\"lean:Thm1\",\"undeclared\":1}");
+
+    assert!(
+        valid.contains("[MATERIAL]"),
+        "a claim carrying a valid instance should satisfy the witness: {valid}"
+    );
+    assert!(
+        violating.contains("[MISSING]"),
+        "an instance violating the declaration should not satisfy it: {violating}"
+    );
+    // The control: without the `block` conjunct, both claims match. If this
+    // failed, the test above would be measuring the fixture rather than the
+    // predicate.
+    assert!(
+        valid_control.contains("[MATERIAL]") && violating_control.contains("[MATERIAL]"),
+        "the same probe without `block` should match both claims, or the \
+         discrimination above is not the predicate's: valid={valid_control}, \
+         violating={violating_control}"
+    );
+}
+
+/// The other half of AC-8, and `v0.7.0-beta.2`'s contract applied to the new
+/// path: **day cannot check what it could not read**, and says so rather than
+/// reporting the absence it would otherwise infer. Both cases would render as
+/// `MISSING` under a lazier mapping, and both would be a lie — one about a
+/// project that never declared the type, one about a claim from a newer day.
+#[test]
+fn a_block_day_could_not_check_is_an_error_not_an_absence() {
+    let verdict = |claims: &[StubClaim], slug: &str| -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let kan = write_kan_stub(dir.path(), claims);
+        let out = day(dir.path(), &kan, &["assess", "telos", slug]);
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .find(|l| l.contains("[MATERIAL]") || l.contains("[MISSING]") || l.contains("[ERROR]"))
+            .unwrap_or("<no verdict>")
+            .to_string()
+    };
+
+    // A witness naming a block type this project never declared.
+    let undeclared = verdict(
+        &[
+            blocks_schema(),
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"ghost\":{\"claim\":{\"kind\":\"Observation\",\
+                 \"block\":\"never-declared\"}}}\n```\n",
+            ),
+            telos_for("ghosted", "bafyt", "ghost"),
+        ],
+        "ghosted",
+    );
+    assert!(
+        undeclared.contains("[ERROR]") && undeclared.contains("never-declared"),
+        "a witness naming an undeclared block type should error and name it: {undeclared}"
+    );
+
+    // An instance from a newer day. day cannot tell whether it would have
+    // matched, so neither MATERIAL nor MISSING is honest.
+    let skewed = verdict(
+        &[
+            blocks_schema(),
+            station_witnesses(),
+            telos_for("stationed", "bafyt1", "stationed"),
+            research_claim("{\"_version\":2,\"medium\":\"a\",\"anchor_ref\":\"r\"}"),
+        ],
+        "stationed",
+    );
+    assert!(
+        skewed.contains("[ERROR]") && skewed.contains("upgrade day"),
+        "a version-skewed instance should be unchecked, not absent: {skewed}"
+    );
+}
+
+/// day#77 ask #2, and the adversarial review's F2: four `starter_command()`
+/// methods existed and **nothing called them**, so a project adopting day got
+/// no hint that `schema/blocks`, `schema/verdicts`, `schema/cycle`, or
+/// `schema/injection` exist at all.
+///
+/// The answer is *offer*, not *record* — each has a working default, and
+/// `schema/blocks`'s starter carries the research loop's `research-claim`,
+/// which is an example of the shape rather than a vocabulary another project
+/// wants. So `day init` prints them and writes nothing, which the second
+/// assertion pins.
+#[test]
+fn init_offers_every_declaration_a_project_can_make() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+    let out = day(dir.path(), &kan, &["init", "--print"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    for subject in [
+        "schema/blocks",
+        "schema/verdicts",
+        "schema/cycle",
+        "schema/injection",
+    ] {
+        assert!(
+            text.contains(subject),
+            "`day init` should offer {subject}, or a project cannot discover it: {text}"
+        );
+    }
+
+    // The fences, not just the subject names — a starter a user cannot run is
+    // not an offer.
+    for fence in [
+        day::blocks::FENCE_INFO,
+        day::blocks::VERDICTS_FENCE,
+        day::blocks::CYCLE_FENCE,
+        day::blocks::INJECTION_FENCE,
+    ] {
+        assert!(
+            text.contains(fence),
+            "`day init` should print a runnable starter carrying {fence}: {text}"
+        );
+    }
+
+    // Each default is stated, because "optional" without the fallback tells a
+    // reader nothing about what declining costs.
+    assert!(
+        text.contains(day::blocks::DEFAULT_BOUNDARY_TAGS)
+            && text.contains(&day::cache::DEFAULT_CADENCE.to_string()),
+        "`day init` should state what each default is: {text}"
+    );
+}

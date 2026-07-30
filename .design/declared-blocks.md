@@ -30,6 +30,30 @@ to assert and this milestone makes true.
   built-in gets. Extending `v0.7.0-beta.2`'s contract rather than leaving the
   declarable path the tolerant one is the point: an inconsistency there would be
   day#78 again, with day's own seven strict and everything a project invents lax.
+
+  **The first implementation of this was nominal, and the review blocked it.**
+  The validator existed and nothing called it: day validated a *declaration* and
+  never an *instance*, because day had no reason to read one. A pass added to
+  `doctor` would have satisfied the wording while day still had no stake in a
+  `research-claim` — a check that exists to make a requirement true.
+
+  So day gains a **reason** rather than a place: REQ-8 makes a declared block
+  *witnessable*, and validation happens on that read path. "Wherever it reads
+  one" then describes something day does rather than something it might.
+- REQ-8: `ClaimShape` gains an optional **`block`** predicate — one more conjunct
+  in the conjunction day#70 built to receive exactly this. `{"kind":
+  "Observation", "subject": "claim/*", "block": "research-claim"}` is satisfied
+  by a claim carrying a **valid** instance of that declared type. It is evaluated
+  **last**, because it costs a substring search and a JSON parse per claim while
+  `kind` and `subject` are comparisons — the cheap conjuncts must short-circuit
+  first.
+
+  The verdict mapping is `v0.7.0-beta.2`'s contract applied, and getting it wrong
+  would undo that milestone: an unreadable *declaration* is `Error` (day could
+  not check); an instance declaring a `_version` this build does not read is also
+  `Error` (unchecked — day cannot tell whether it would have matched); an
+  instance that is present and **violates** the spec is `Unsatisfied`, which is a
+  real answer rather than an absence; a valid instance matches.
 - REQ-3: A declared block carries the same **`_version` gate** as a built-in, via
   the same `atoms::parse_block` path, so a project can version its own vocabulary
   and an older day says *"this day reads `research-claim` v1, this block declares
@@ -68,6 +92,14 @@ to assert and this milestone makes true.
       control:** the same block against a declaration that *does* name that field
       resolves, so the refusal tracks the declaration rather than a fixed list.
       (REQ-2)
+- [ ] AC-8: A witness declared as `{"claim": {"block": "research-claim", …}}`
+      resolves **MATERIAL** against a claim carrying a valid instance and
+      **MISSING** against one whose instance violates the declaration — end to
+      end through `day assess telos`, not through a library call. A witness
+      naming a block type the project never declared reports **ERROR**, not
+      missing, because day cannot check what was not declared. **Negative
+      control:** the same probe without the `block` predicate matches both
+      claims, proving the predicate is what discriminates. (REQ-2, REQ-8)
 - [ ] AC-3: A declared block carrying `_version: 2` against a declaration this
       build reads at v1 is refused with the version-skew message ("upgrade day"),
       distinguishably from a block that violates its field spec ("the claim needs

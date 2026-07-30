@@ -289,11 +289,7 @@ impl BlockSchemas {
         name: &'a str,
     ) -> Option<Result<serde_json::Value, BlockError>> {
         let spec = self.blocks.get(name)?;
-        // Leaked deliberately: `BlockError` carries `&'static str` because
-        // day's own fences are constants, and a declared name is not. The leak
-        // is bounded by the number of distinct declared block types a process
-        // reads, which is the size of this map.
-        let fence: &'static str = Box::leak(name.to_string().into_boxed_str());
+        let fence = atoms::Fence::Owned(name.to_string());
 
         let open = format!("```{name}");
         let start = text.find(&open)? + open.len();
@@ -302,7 +298,7 @@ impl BlockSchemas {
         let body = rest[..end].trim();
 
         Some(
-            atoms::version_gate(body, fence, Self::SUPPORTED_VERSION).and_then(|value| {
+            atoms::version_gate(body, fence.clone(), Self::SUPPORTED_VERSION).and_then(|value| {
                 spec.check(name, &value)
                     .map_err(|reason| BlockError::Invalid { fence, reason })
                     .map(|()| value)

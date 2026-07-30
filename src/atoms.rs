@@ -86,6 +86,16 @@ pub trait Versioned {
     }
 }
 
+/// The fence a [`BlockError`] concerns.
+///
+/// `Cow` because day's own seven fences are `&'static str` constants and a
+/// project-declared block's name is not. Borrowed costs nothing for the
+/// built-ins; owned avoids the `Box::leak` the first implementation used, which
+/// was bounded only because the leaking function was unreachable — and day ships
+/// a long-running MCP server, so a per-call leak on a reachable path is a real
+/// one.
+pub type Fence = std::borrow::Cow<'static, str>;
+
 /// Why a fenced block could not be read into its type.
 #[derive(Debug, thiserror::Error)]
 pub enum BlockError {
@@ -96,7 +106,7 @@ pub enum BlockError {
          up to {supported} — upgrade day to read it"
     )]
     TooNew {
-        fence: &'static str,
+        fence: Fence,
         declared: u64,
         supported: u64,
     },
@@ -105,7 +115,7 @@ pub enum BlockError {
     /// claim's problem**, and the message points at the claim.
     #[error("`{fence}` block could not be read: {source}")]
     Malformed {
-        fence: &'static str,
+        fence: Fence,
         #[source]
         source: serde_json::Error,
     },
@@ -114,7 +124,7 @@ pub enum BlockError {
     /// reader's, so it is reported the same way `Malformed` is rather than as
     /// version skew.
     #[error("`{fence}` block is not a valid {fence}: {reason}")]
-    Invalid { fence: &'static str, reason: String },
+    Invalid { fence: Fence, reason: String },
 }
 
 impl BlockError {
@@ -334,13 +344,13 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
 pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
     json: &str,
 ) -> Result<T, BlockError> {
-    let value = version_gate(json, T::FENCE, T::SUPPORTED_VERSION)?;
+    let value = version_gate(json, Fence::Borrowed(T::FENCE), T::SUPPORTED_VERSION)?;
     let parsed: T = serde_json::from_value(value).map_err(|source| BlockError::Malformed {
-        fence: T::FENCE,
+        fence: Fence::Borrowed(T::FENCE),
         source,
     })?;
     parsed.validate().map_err(|reason| BlockError::Invalid {
-        fence: T::FENCE,
+        fence: Fence::Borrowed(T::FENCE),
         reason,
     })?;
     Ok(parsed)
@@ -368,10 +378,13 @@ pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
 ///    approach that works for a block whose body is a map rather than a struct.
 pub(crate) fn version_gate(
     json: &str,
-    fence: &'static str,
+    fence: Fence,
     supported: u64,
 ) -> Result<serde_json::Value, BlockError> {
-    let malformed = |source| BlockError::Malformed { fence, source };
+    let malformed = |source| BlockError::Malformed {
+        fence: fence.clone(),
+        source,
+    };
     let mut value: serde_json::Value = serde_json::from_str(json).map_err(malformed)?;
 
     // A non-object block (a bare array, say) carries no metadata and cannot be
@@ -389,7 +402,7 @@ pub(crate) fn version_gate(
             };
             if declared > supported {
                 return Err(BlockError::TooNew {
-                    fence,
+                    fence: fence.clone(),
                     declared,
                     supported,
                 });
