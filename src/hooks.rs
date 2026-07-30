@@ -296,6 +296,20 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     // status line simply shows nothing until the next session start.
     let _ = crate::cache::write_status_line(root, &status.render_line());
 
+    // And what the per-prompt hook needs, so it can re-display without repeating
+    // this read. Recorded here because this is the one place that already pays
+    // for the expensive computation and has time to. A failed write costs the
+    // next prompt a recompute, which is correct-but-slower — never wrong.
+    if let Ok(fingerprint) = git.position_fingerprint() {
+        let _ = crate::cache::write_standing(
+            root,
+            &crate::cache::Standing {
+                fingerprint,
+                unreadable: status.unreadable.len(),
+            },
+        );
+    }
+
     // The caveat comes before the early return, not after it. A schema whose
     // every probe is a kind this build cannot read makes position `uncheckable`
     // — and that is exactly the state where staying silent is worst, because
@@ -477,28 +491,69 @@ pub fn session_notice(client: &KanClient, root: &Path) -> String {
 /// gate `telos/affordance-not-enforcement` forbids.
 pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
+
+    // The cheap gate, and the whole point of this function's shape. The
+    // expensive path costs 3.0s on day's own log; this costs 0.03s. An earlier
+    // version of this hook simply called `status::compute` on every prompt while
+    // its own doc comment, `hooks/hooks.json`, and the design all said it did
+    // not — a 3-second-per-turn regression that three artifacts described as its
+    // opposite, which is the failure this whole milestone exists to stop day
+    // committing.
+    let fingerprint = git.position_fingerprint().ok();
+    let cached = crate::cache::standing(root);
+
+    // Unchanged git state AND a cached reading: nothing a `path`/`tag` probe
+    // sees has moved, so the expensive read cannot have changed the answer.
+    // Re-display the standing condition on the cadence and read nothing.
+    //
+    // A missing cache means *recompute*, never "all clear" — that is what keeps
+    // deleting `.day/` a cost in redundant work rather than a change in answer.
+    if let (Some(fp), Some(standing)) = (&fingerprint, &cached) {
+        if *fp == standing.fingerprint {
+            if standing.unreadable > 0
+                && crate::cache::cadence_allows(root, crate::cache::DEFAULT_CADENCE)
+            {
+                return format!(
+                    "day: {} declaration(s) could not be read at session start, so day's \
+                     telos and atom lists are partial — `day doctor` for detail.\n",
+                    standing.unreadable
+                );
+            }
+            return String::new();
+        }
+    }
+
+    // Git state moved (or there is nothing cached): pay for the real answer
+    // once, and re-cache it so the next prompts are cheap again.
     let Ok(status) = crate::status::compute(client, &git) else {
         return String::new();
     };
+    if let Some(fp) = fingerprint {
+        let _ = crate::cache::write_standing(
+            root,
+            &crate::cache::Standing {
+                fingerprint: fp,
+                unreadable: status.unreadable.len(),
+            },
+        );
+    }
 
     let mut parts = Vec::new();
 
     // The event half. Always emitted when true — an event that fired is not
-    // something to ration.
+    // something to ration, and reaching here means the state genuinely moved.
     if let Some(notice) = status.notice_for_model() {
         parts.push(notice);
     }
 
-    // The standing half, rationed. `cadence_allows` records this prompt either
-    // way, and failing open means a broken cache makes day noisier rather than
-    // silent — the right direction when the condition being suppressed is one
-    // that makes day's other output partial.
+    // The standing half, still rationed even on a recompute: it is a condition
+    // rather than an event, and a git change is not a reason to repeat it.
     if !status.unreadable.is_empty()
         && crate::cache::cadence_allows(root, crate::cache::DEFAULT_CADENCE)
     {
         parts.push(format!(
-            "day: {} declaration(s) could not be read at session start, so day's telos \
-             and atom lists are partial — `day doctor` for detail.",
+            "day: {} declaration(s) could not be read, so day's telos and atom lists \
+             are partial — `day doctor` for detail.",
             status.unreadable.len()
         ));
     }

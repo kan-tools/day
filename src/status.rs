@@ -476,7 +476,14 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
 fn unreadable_from(findings: &[atoms::Finding], schema: &WitnessSchema) -> Vec<Unreadable> {
     let mut out: Vec<Unreadable> = findings
         .iter()
-        .filter(|f| f.message.contains("could not be read") || f.version_skew)
+        // `f.unreadable`, not a substring of `f.message`. This filtered on
+        // `contains("could not be read")` and broke the moment day#20 added a
+        // second unreadable wording: `BlockError::Invalid` renders "is not a
+        // valid …", so a structurally-empty plan node passed the filter and
+        // reached neither hook channel. The typed flag exists precisely so a
+        // caller never decides this by matching prose — a rule this function was
+        // violating two definitions after the flag that states it.
+        .filter(|f| f.unreadable)
         .map(|f| Unreadable {
             message: f.message.clone(),
             version_skew: f.version_skew,

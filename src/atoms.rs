@@ -196,6 +196,14 @@ pub struct Finding {
     /// mismatch rather than just the source.
     pub atoms: Vec<String>,
     pub message: String,
+    /// True when this finding is a declaration day **could not read at all**,
+    /// as opposed to one it read and found wrong.
+    ///
+    /// This is the flag that decides whether the rest of day's report is
+    /// *partial*. A dangling `next` edge is day reporting something it did read;
+    /// an unreadable block means the vocabulary is incomplete and every
+    /// conclusion drawn from it is qualified.
+    pub unreadable: bool,
     /// True when this finding is a declaration **this build is too old to
     /// read**, rather than one that is wrong.
     ///
@@ -244,11 +252,20 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
             // JSON: …)" — the same thing twice, in two vocabularies.
             Some((claim, Err(e))) => findings.push(Finding {
                 atoms: vec![name.clone()],
+                // Every `BlockError` variant means unreadable, including
+                // `Invalid` — a structurally-empty plan node is as unreadable as
+                // a malformed one. Set from the error's type rather than by
+                // matching its wording, which is the bug this replaced: callers
+                // grepped for "could not be read", so `Invalid` ("is not a
+                // valid …") slipped past and day#20's refusal reached no hook
+                // channel at all.
+                unreadable: true,
                 version_skew: e.is_version_skew(),
                 message: format!("{subject}: {e} — claim {}", claim.cid),
             }),
             None => findings.push(Finding {
                 atoms: vec![name.clone()],
+                unreadable: false,
                 version_skew: false,
                 message: format!(
                     "{subject}: no `{FENCE_INFO}` interface block on any live claim, so it can't be composition-checked"
@@ -293,9 +310,16 @@ pub fn prose_only(text: &str) -> String {
 /// embedded-block convention, not two, so a project learns the pattern once.
 pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
     text: &str,
-    fence: &str,
 ) -> Option<Result<T, BlockError>> {
-    let open = format!("```{fence}");
+    // The fence comes from `T::FENCE`, not from a parameter. It used to be both:
+    // a caller passed a fence string to locate the block, and the diagnostics
+    // reported `T::FENCE` — two sources of truth for one fact, so a mismatch
+    // would find a block by one name and blame another. Every call site passed a
+    // constant equal to the type's own fence, so nothing was broken; removing
+    // the parameter makes that true by construction instead of by nine call
+    // sites continuing to agree. Diagnostics naming the right cause is the whole
+    // point of the error split.
+    let open = format!("```{}", T::FENCE);
     let start = text.find(&open)? + open.len();
     let rest = &text[start..];
     let end = rest.find("```")?;
@@ -358,7 +382,7 @@ pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
 
 /// [`extract_fenced`] specialized to an atom's `day-atom` interface block.
 pub fn extract_interface(text: &str) -> Option<Result<Interface, BlockError>> {
-    extract_fenced(text, FENCE_INFO)
+    extract_fenced(text)
 }
 
 /// Reads the newest claim on `subject` carrying a `fence` block, returning
@@ -367,14 +391,13 @@ pub fn extract_interface(text: &str) -> Option<Result<Interface, BlockError>> {
 pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
     client: &KanClient,
     subject: &str,
-    fence: &str,
 ) -> Result<Option<(String, T)>, Error> {
     let claims = client.show(subject)?;
     for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
-        match extract_fenced::<T>(text, fence) {
+        match extract_fenced::<T>(text) {
             Some(Ok(value)) => return Ok(Some((claim.cid.clone(), value))),
             // An unreadable block on the newest claim is not silently skipped
             // in favour of an older good one — that would hide the error, and
@@ -418,6 +441,7 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
             if !atoms.iter().any(|a| &a.name == successor) {
                 findings.push(Finding {
                     atoms: vec![atom.name.clone(), successor.clone()],
+                    unreadable: false,
                     version_skew: false,
                     message: format!(
                         "{} declares next: {successor}, but no {ATOM_PREFIX}{successor} subject exists in the live vocabulary",
@@ -451,6 +475,7 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
             implicated.push(atom.name.clone());
             findings.push(Finding {
                 atoms: implicated,
+                unreadable: false,
                 version_skew: false,
                 message: format!(
                     "{}: interfaces do not compose — needs input(s) [{}] that nothing upstream produces (upstream {} produce [{}])",

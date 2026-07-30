@@ -52,8 +52,65 @@ fn status_line_path(root: &Path) -> PathBuf {
     root.join(CACHE_DIR).join(STATUS_LINE_FILE)
 }
 
+/// The file holding the standing conditions session-start found, and the git
+/// fingerprint it found them under. **Display state, not process state** — see
+/// [`standing`].
+pub const STANDING_FILE: &str = "standing";
+
 fn cadence_path(root: &Path) -> PathBuf {
     root.join(CACHE_DIR).join(CADENCE_FILE)
+}
+
+fn standing_path(root: &Path) -> PathBuf {
+    root.join(CACHE_DIR).join(STANDING_FILE)
+}
+
+/// What session-start found, so a per-prompt hook can re-display it without
+/// repeating the read that found it.
+///
+/// The reason this exists is a measurement. `status::compute` costs **3.0 s** on
+/// day's own 40-subject log, of which 2.0 s is 41 `kan` invocations, while the
+/// git half of the same computation costs **0.03 s**. A `UserPromptSubmit` hook
+/// runs on every prompt, so recomputing there makes every turn 3 s slower — which
+/// is exactly what shipped before this, while three separate artifacts claimed it
+/// did not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Standing {
+    /// A cheap fingerprint of the git state the conditions were found under.
+    /// When it still matches, nothing a `path`/`tag` probe reads has moved, so
+    /// the expensive kan read cannot have changed the answer.
+    pub fingerprint: String,
+    /// How many declarations session-start could not read.
+    pub unreadable: usize,
+}
+
+/// Records what session-start found. Best-effort, like the status line.
+pub fn write_standing(root: &Path, standing: &Standing) -> io::Result<()> {
+    let dir = root.join(CACHE_DIR);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        standing_path(root),
+        format!("{}\n{}\n", standing.fingerprint, standing.unreadable),
+    )
+}
+
+/// Reads what session-start found, or `None` when there is nothing cached.
+///
+/// **The carve-out boundary, restated because this is the second thing stored
+/// here.** A caller must treat `None` as "recompute", never as "nothing is
+/// wrong". Then deleting `.day/` costs a redundant read and never changes an
+/// answer, which is the test `CLAUDE.md` sets for whether the cache is being
+/// *displayed* from or *decided* from. Returning `None` as "all clear" is
+/// precisely how this would become a store.
+pub fn standing(root: &Path) -> Option<Standing> {
+    let text = std::fs::read_to_string(standing_path(root)).ok()?;
+    let mut lines = text.lines();
+    let fingerprint = lines.next()?.to_string();
+    let unreadable = lines.next()?.trim().parse().ok()?;
+    Some(Standing {
+        fingerprint,
+        unreadable,
+    })
 }
 
 /// Whether enough prompts have passed to re-display a standing condition, and

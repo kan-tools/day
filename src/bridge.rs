@@ -317,6 +317,7 @@ fn walk(
             if !missing.is_empty() {
                 findings.push(Finding {
                     atoms: vec![name.clone()],
+                    unreadable: false,
                     version_skew: false,
                     message: format!(
                         "{}{name} needs [{}] which nothing before it makes available",
@@ -418,7 +419,7 @@ impl Report {
 /// Loads a bridge and its target telos, and checks realizability.
 pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     let subject = format!("{BRIDGE_PREFIX}{slug}");
-    let plan = atoms::newest_fenced::<Plan>(client, &subject, FENCE_INFO)?
+    let plan = atoms::newest_fenced::<Plan>(client, &subject)?
         .map(|(_cid, plan)| plan)
         .ok_or_else(|| Error::NoSuchBridge(slug.to_string()))?;
 
@@ -438,7 +439,7 @@ pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     findings.extend(walk_findings);
 
     let telos_subject = format!("{}{}", atoms::TELOS_PREFIX, plan.telos);
-    let witnesses = atoms::newest_fenced::<Witnesses>(client, &telos_subject, TELOS_FENCE)?
+    let witnesses = atoms::newest_fenced::<Witnesses>(client, &telos_subject)?
         .map(|(_cid, w)| w.witnesses)
         .unwrap_or_default();
 
@@ -533,7 +534,7 @@ mod tests {
             plan: parse("design > build").unwrap(),
         };
         let text = plan.to_claim_text("v1", None);
-        let parsed: Plan = atoms::extract_fenced(&text, FENCE_INFO).unwrap().unwrap();
+        let parsed: Plan = atoms::extract_fenced(&text).unwrap().unwrap();
         assert_eq!(parsed, plan);
     }
 

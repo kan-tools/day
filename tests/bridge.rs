@@ -89,10 +89,9 @@ fn ac1_a_telos_records_its_declared_witnesses() {
         String::from_utf8_lossy(&out.stderr)
     );
     let log = appends(dir.path());
-    let witnesses =
-        day::atoms::extract_fenced::<day::bridge::Witnesses>(&log[0], day::bridge::TELOS_FENCE)
-            .expect("a day-telos block should be written")
-            .expect("it should parse");
+    let witnesses = day::atoms::extract_fenced::<day::bridge::Witnesses>(&log[0])
+        .expect("a day-telos block should be written")
+        .expect("it should parse");
     assert_eq!(witnesses.witnesses, vec!["published-artifact"]);
 
     // A telos without witnesses still records, and carries no block.
@@ -138,7 +137,7 @@ fn ac2_and_ac7_a_bridge_records_its_plan() {
     );
 
     let log = appends(dir.path());
-    let plan = day::atoms::extract_fenced::<day::bridge::Plan>(&log[0], day::bridge::FENCE_INFO)
+    let plan = day::atoms::extract_fenced::<day::bridge::Plan>(&log[0])
         .expect("a day-bridge block should be written")
         .expect("it should parse");
     assert_eq!(plan.telos, "shipped");

@@ -167,6 +167,29 @@ impl Git {
     }
 
     /// Files changed between `since` and the working tree.
+    /// A cheap fingerprint of the state a `path`/`tag` probe reads: the cycle
+    /// boundary tag plus the set of files changed since it.
+    ///
+    /// **0.03 s against `status::compute`'s 3.0 s.** That ratio is the whole
+    /// reason it exists: a `UserPromptSubmit` hook runs on every prompt, so it
+    /// can afford this and cannot afford that. When the fingerprint is unchanged,
+    /// nothing a git-backed probe reads has moved.
+    ///
+    /// It deliberately does **not** cover `claim` probes, which read the kan log
+    /// — those need the expensive path (day#71), and day says so rather than
+    /// implying live coverage it does not have.
+    pub fn position_fingerprint(&self) -> Result<String, Error> {
+        let boundary = self
+            .cycle_boundary()?
+            .map(|b| b.tag)
+            .unwrap_or_else(|| "no-boundary".to_string());
+        // No boundary to diff against is a real state, not a failure: the
+        // fingerprint is then just the absence of one.
+        let mut changed = self.changed_files(&boundary).unwrap_or_default();
+        changed.sort();
+        Ok(format!("{boundary}:{}", changed.join(",")))
+    }
+
     pub fn changed_files(&self, since: &str) -> Result<Vec<String>, Error> {
         let out = self.run(&["diff", "--name-only", since])?;
         Ok(out

@@ -112,7 +112,7 @@ impl DocsSchema {
 
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{DOCS_SLUG}");
-        newest_fenced::<Self>(client, &subject, FENCE_INFO)?
+        newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, schema)| schema)
             .ok_or_else(|| Error::NotDeclared {
                 starter: Self::starter_command(),
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn starter_round_trips_through_its_own_block() {
         let command = DocsSchema::starter_command();
-        let parsed: DocsSchema = atoms::extract_fenced(&command, FENCE_INFO)
+        let parsed: DocsSchema = atoms::extract_fenced(&command)
             .expect("the starter command should carry a block")
             .expect("it should parse");
         assert_eq!(parsed, DocsSchema::starter());

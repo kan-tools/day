@@ -208,7 +208,7 @@ impl WitnessSchema {
 
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{WITNESS_SLUG}");
-        newest_fenced::<Self>(client, &subject, FENCE_INFO)?
+        newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, schema)| schema)
             .ok_or_else(|| Error::NotDeclared {
                 starter: Self::starter_command(),
@@ -404,7 +404,7 @@ fn record_tier(
         let Some(bridge_slug) = subject.strip_prefix(bridge::BRIDGE_PREFIX) else {
             continue;
         };
-        let plan = newest_fenced::<bridge::Plan>(client, &subject, bridge::FENCE_INFO)?;
+        let plan = newest_fenced::<bridge::Plan>(client, &subject)?;
         if plan.is_some_and(|(_cid, p)| p.telos == slug) {
             let reachable = bridge::check(client, bridge_slug)
                 .map(|r| r.is_reachable())
@@ -435,7 +435,7 @@ pub fn assess(
         return Err(Error::NoSuchTelos(slug.to_string()));
     }
 
-    let declared = newest_fenced::<Witnesses>(client, &subject, bridge::TELOS_FENCE)?
+    let declared = newest_fenced::<Witnesses>(client, &subject)?
         .map(|(_cid, w)| w)
         .unwrap_or_default();
     let witnesses = declared.witnesses.clone();
@@ -663,7 +663,7 @@ mod tests {
     #[test]
     fn the_starter_round_trips_through_its_own_block() {
         let command = WitnessSchema::starter_command();
-        let parsed: WitnessSchema = atoms::extract_fenced(&command, FENCE_INFO)
+        let parsed: WitnessSchema = atoms::extract_fenced(&command)
             .expect("the starter command should carry a block")
             .expect("it should parse");
         assert_eq!(parsed, WitnessSchema::starter());

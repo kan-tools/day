@@ -215,6 +215,27 @@ because a recurring reminder is much closer to the ambient standing rule that
 failed in day#30 than an event notice is; the periodic channel therefore carries
 only standing conditions affecting the correctness of what day already said.
 
+**The first implementation did not do this, and the adversarial review blocked
+it.** It called `status::compute` unconditionally — measured 3.03 s on every
+prompt — while the function's own doc comment and `hooks/hooks.json` both claimed
+it read what session-start had already computed. Three-second-per-turn
+degradation, under a 10 s hook timeout so it never failed, described by its own
+documentation as its opposite: the precise defect this milestone exists to stop
+day committing, committed by the milestone.
+
+Recorded here rather than silently corrected, and worth being exact about who was
+wrong: **this paragraph was right**. The design specified the gate; the
+implementation ignored it and its comments asserted compliance. That is a
+different failure from a bad design, and the useful lesson is narrower — a
+comment claiming a performance property is worth nothing without a measurement
+beside it, and there was none until the review took one.
+
+The rule that keeps the cache honest for this: **a missing fingerprint means
+recompute, never all-clear.** Then deleting `.day/` costs one redundant read and
+never changes an answer, which is REQ-7's test applied to the second thing stored
+there. Verified: cold 3.2 s, warm 0.02 s, slow again after a tracked file changes,
+slow again after `rm -rf .day/`.
+
 **`src/cache.rs` remains the only module touching `.day/`**, and the turn counter
 and last-displayed marker go there. They are display state by REQ-7's test:
 delete them and day re-displays sooner, never differently. The boundary that

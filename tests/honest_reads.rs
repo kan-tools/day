@@ -565,3 +565,172 @@ fn a_schema_whose_every_probe_is_unreadable_is_still_reported() {
         "the model should know its witness map was only partly read: {context}"
     );
 }
+
+/// A `kan` stub that counts how many times it was invoked, so a test can assert
+/// that a code path did **not** read the log — which is the only honest way to
+/// pin a cost claim. Timing assertions are flaky and measure the machine; the
+/// invocation count measures the design.
+fn write_counting_kan_stub(dir: &Path, claims: &[StubClaim]) -> (PathBuf, PathBuf) {
+    let real = write_kan_stub(dir, claims);
+    let counter = dir.join("kan-calls");
+    let wrapper = dir.join("kan-counting.sh");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nprintf 'x' >> {}\nexec {} \"$@\"\n",
+            counter.display(),
+            real.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (wrapper, counter)
+}
+
+fn kan_calls(counter: &Path) -> usize {
+    std::fs::read_to_string(counter)
+        .map(|s| s.len())
+        .unwrap_or(0)
+}
+
+/// The adversarial review's BLOCK finding: `day hook user-prompt` called
+/// `status::compute` on **every** prompt — 3.03 s measured on day's own log —
+/// while its doc comment and `hooks/hooks.json` both said it read what
+/// session-start had already computed.
+///
+/// Asserted as an invocation count rather than a duration. A timing assertion
+/// would measure the machine and flake in CI; "this path reads the log zero
+/// times" is the actual property, and it cannot pass by accident.
+#[test]
+fn user_prompt_does_not_read_kan_when_git_has_not_moved() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    // First prompt: nothing cached, so it must pay for the real answer. A hook
+    // that stayed silent here would be reporting "all clear" from an absent
+    // cache, which is the carve-out abuse REQ-7 forbids.
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let after_cold = kan_calls(&counter);
+    assert!(
+        after_cold > 0,
+        "a cold cache must mean recompute, never all-clear"
+    );
+
+    // Subsequent prompts, git unchanged: zero further reads.
+    for _ in 0..5 {
+        day(dir.path(), &kan, &["hook", "user-prompt"]);
+    }
+    assert_eq!(
+        kan_calls(&counter),
+        after_cold,
+        "user-prompt read kan again despite an unchanged git fingerprint — this is \
+         the 3s-per-turn regression the review blocked, back again"
+    );
+}
+
+/// REQ-7's boundary, applied to the fingerprint: **a missing cache means
+/// recompute, never all-clear.**
+///
+/// This is the assertion that keeps the fix above from becoming a store. If a
+/// deleted `.day/` made the hook go quiet, day would be treating absent display
+/// state as a process fact — and the cost of the mistake is silence in exactly
+/// the case where something is wrong.
+#[test]
+fn a_deleted_cache_makes_user_prompt_recompute_not_go_quiet() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let warm = kan_calls(&counter);
+
+    std::fs::remove_dir_all(dir.path().join(day::cache::CACHE_DIR)).unwrap();
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    assert!(
+        kan_calls(&counter) > warm,
+        "a deleted cache must make the hook recompute; going quiet would treat \
+         absent display state as evidence that nothing is wrong"
+    );
+}
+
+/// The review's second finding: `unreadable_from` classified by substring
+/// (`message.contains("could not be read")`), so day#20's `BlockError::Invalid`
+/// — which renders "is not a valid …" — did not match, and a structurally
+/// invalid block reached **neither** hook channel.
+///
+/// The fix is a typed `Finding::unreadable` flag. This test pins the behaviour a
+/// substring match cannot deliver: both wordings reach both channels.
+#[test]
+fn every_unreadable_cause_reaches_both_channels() {
+    let witness = claim(
+        "schema/witness",
+        "bafyw",
+        "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+    );
+
+    // Three distinct causes, each rendering differently: too-new (skew),
+    // unknown field, and — the one that used to slip past — an empty `next`
+    // list is fine, so use a genuinely invalid *structure* via a bad JSON shape.
+    for (label, body, expect_skew) in [
+        ("too-new", r#"{"_version":2,"in":["a"],"out":["b"]}"#, true),
+        ("unknown-field", r#"{"in":["a"],"nope":1}"#, false),
+        ("malformed", r#"{"in":["a"],}"#, false),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let kan = write_kan_stub(
+            dir.path(),
+            &[witness.clone(), atom_block("bad", "bafyb", body)],
+        );
+
+        let human =
+            String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-notice"]).stdout)
+                .into_owned();
+        assert!(
+            human.contains("could not be read"),
+            "{label}: the human channel must hear about it: {human}"
+        );
+        assert_eq!(
+            human.contains("older than the log"),
+            expect_skew,
+            "{label}: the cause must decide the message, so a malformed block never \
+             tells the reader to upgrade: {human}"
+        );
+
+        let model =
+            String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-start"]).stdout)
+                .into_owned();
+        assert!(
+            model.contains("could not be read") || model.contains("partial"),
+            "{label}: the model channel must hear about it too: {model}"
+        );
+    }
+}

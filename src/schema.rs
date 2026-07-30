@@ -120,7 +120,7 @@ impl Schema {
     /// Loads the live schema for `slug` from kan.
     pub fn load(client: &KanClient, slug: &str) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{slug}");
-        match newest_fenced::<Self>(client, &subject, FENCE_INFO)? {
+        match newest_fenced::<Self>(client, &subject)? {
             Some((_cid, schema)) => Ok(schema),
             None => Err(Error::NotDeclared {
                 starter: Self::starter_command(slug),
@@ -131,7 +131,7 @@ impl Schema {
     /// Whether a schema is already declared for `slug`.
     pub fn is_declared(client: &KanClient, slug: &str) -> Result<bool, Error> {
         let subject = format!("{SCHEMA_PREFIX}{slug}");
-        Ok(newest_fenced::<Self>(client, &subject, FENCE_INFO)?.is_some())
+        Ok(newest_fenced::<Self>(client, &subject)?.is_some())
     }
 
     /// Records this schema as a claim. Used by `day init` so a fresh repo
@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn starter_round_trips_through_its_own_fenced_block() {
         let command = Schema::starter_command(DEFAULT_SLUG);
-        let parsed: Schema = atoms::extract_fenced(&command, FENCE_INFO)
+        let parsed: Schema = atoms::extract_fenced(&command)
             .expect("the starter command should contain a schema block")
             .expect("the starter command's block should be valid schema JSON");
         assert_eq!(parsed, Schema::starter());
