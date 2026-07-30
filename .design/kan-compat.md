@@ -38,9 +38,29 @@ satisfy, and the adversarial review runs against them the same as any other.
   `migration-matrix.yml`'s design on the other axis: that one varies *day* and
   holds the block shapes fixed; this varies *kan* and holds day fixed.
 - REQ-3: Outcomes are compared against a **committed expectation** in
-  `tests/fixtures/kan-compat.tsv`. A pairing with no row fails the build,
-  because whether a pairing is supported is a decision rather than a default —
-  the rule `migration-expectations.tsv` already holds.
+  `tests/fixtures/kan-compat.tsv`. An outcome that **differs** from its row
+  fails the build: a committed pairing changing its answer, against a kan tag
+  that is immutable, means day moved.
+
+  **A pairing with no row warns and does not fail** — revised from the original
+  requirement, which said it should fail on the reasoning that a pairing is a
+  decision rather than a default. That reasoning was right about the decision
+  and wrong about the moment. This workflow runs on day's **release tag**, and
+  `plan` enumerates kan's tags live, so kan publishing anything turned *day's*
+  next release red — after the tag was pushed, when the fix is a source change
+  (`NEWEST_MEASURED`) that the tag no longer points at.
+
+  The deciding argument is that a missing row **cannot falsify what day tells
+  users**. The compiled range is derived from the `ok` rows that are present and
+  `tests/kan_compat.rs` fails if they disagree, so an unmeasured kan leaves
+  day's claim ("measured through X") true, and a user on that kan gets the
+  `Newer` verdict — the designed benign path. An expected event in another
+  repo must not be a defect in this one. The decision is still forced, by a
+  warning annotation and a step-summary line rather than by a broken release.
+
+  This is where it differs from `migration-expectations.tsv`, which does fail:
+  there the axis is **day's own tags**, so a new row is always within the same
+  commit as the release that creates it.
 - REQ-4: day **reads kan's version** (`kan --version`) and classifies it. An
   unreadable version is `Unknown`, **never a mismatch**: claiming
   incompatibility from a failed read would break day against any kan whose
@@ -79,9 +99,13 @@ satisfy, and the adversarial review runs against them the same as any other.
       hardcoded list, so a kan release appears without anyone remembering to add
       it; a second run with no change to day's read surface is a full cache hit.
       (REQ-2)
-- [ ] AC-3: A kan tag absent from `kan-compat.tsv` fails with a message naming
-      the file and what to do; an outcome differing from its row fails naming
-      both values. (REQ-3)
+- [ ] AC-3: An outcome differing from its committed row **fails**, naming both
+      values. A kan tag absent from the table **warns and exits zero**, naming
+      the file, the measured outcome, and both things to change to adopt it —
+      and the run stays green, so a kan release cannot block a day release.
+      The table lookup ignores comment lines: the header block documents the
+      `ok` outcome on a line whose second field is literally `ok`, so an
+      unguarded `awk '$2=="ok"'` yields `#` as a tag. (REQ-3)
 - [ ] AC-4: `Version::parse` accepts what kan actually prints
       (`kan 0.8.0-beta.1`) and returns `None` — classified `Unknown`, not
       `TooOld` — for empty output, a missing version, and two- or

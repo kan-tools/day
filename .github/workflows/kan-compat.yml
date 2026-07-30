@@ -132,14 +132,39 @@ jobs:
       - name: Compare against the committed expectation
         run: |
           outcome=$(cat kan-compat-outcome.txt)
-          expected=$(awk -v t="${{ matrix.kan }}" '$1==t {print $2}' \
-                     tests/fixtures/kan-compat.tsv)
-          echo "::notice title=${{ matrix.kan }}::$outcome"
+          # `!/^#/` matters: the header block contains a line describing the
+          # `ok` outcome, whose second field is literally "ok". Without it, a
+          # comment becomes a data row.
+          expected=$(awk -v t="${{ matrix.kan }}" \
+                     '!/^#/ && $1==t {print $2}' tests/fixtures/kan-compat.tsv)
+
           if [ -z "$expected" ]; then
-            echo "::error::${{ matrix.kan }} has no committed expectation. Add a row to tests/fixtures/kan-compat.tsv — whether a pairing is supported is a decision, not a default. If this is a new kan release that works, add it and widen NEWEST_MEASURED in src/compat.rs in the same commit."
-            exit 1
+            # A missing row CANNOT falsify what day tells users. The compiled
+            # range is derived from the `ok` rows that are present, and
+            # tests/kan_compat.rs fails if the two disagree — so an unmeasured
+            # kan leaves day's claim ("measured through X") true, and a user on
+            # that kan gets the `Newer` verdict, which is the designed benign
+            # path.
+            #
+            # So this warns rather than failing. It used to exit 1, on the
+            # reasoning that a pairing is a decision rather than a default.
+            # That reasoning was right about the decision and wrong about the
+            # moment: this workflow runs on day's release tag, so kan
+            # publishing anything turned DAY's next release red — after the tag
+            # was already pushed, when the fix is a source change
+            # (NEWEST_MEASURED) that the tag no longer points at. An expected
+            # event in another repo must not be a defect in this one.
+            echo "::warning title=${{ matrix.kan }} unmeasured::No row in tests/fixtures/kan-compat.tsv. Measured outcome was '$outcome'. This does not block: day's reported range is derived from the rows that ARE present, so it stays true. To adopt this kan, add the row and move NEWEST_MEASURED in src/compat.rs to match."
+            echo "- \`${{ matrix.kan }}\` — **unmeasured**, ran as \`$outcome\`" \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+
+          echo "::notice title=${{ matrix.kan }}::$outcome"
           if [ "$outcome" != "$expected" ]; then
+            # This one DOES fail. A committed row changing its answer is a real
+            # behavioural change between day and a kan that is immutable, which
+            # means day moved.
             echo "::error::${{ matrix.kan }}: expected '$expected', got '$outcome'. A pairing changed. If day dropped support deliberately, move OLDEST_SUPPORTED in src/compat.rs and update the table in the same commit — the constant and this table must never disagree."
             exit 1
           fi
