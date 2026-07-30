@@ -247,7 +247,7 @@ fn ac7_review_record_rejects_a_bad_verdict_and_an_uncited_one() {
 
 #[test]
 fn ac7_review_record_accepts_each_permitted_verdict() {
-    for verdict in day::record::VERDICTS {
+    for verdict in day::record::DEFAULT_VERDICTS {
         let dir = workspace(DOC);
         let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafyreischema")]);
         let out = day(

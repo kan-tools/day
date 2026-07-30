@@ -421,6 +421,21 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         ),
     };
 
+    // What ends a cycle is declared (day#76); absent, it is a release. An
+    // unreadable declaration is reported rather than silently falling back —
+    // silently reverting to release semantics on a repo whose cycles are passes
+    // would report position confidently and wrongly.
+    let (cycle, cycle_unreadable) = match crate::blocks::CycleSchema::load(client) {
+        Ok(c) => (c, None),
+        Err(e) => (
+            crate::blocks::CycleSchema::default(),
+            Some(Unreadable {
+                message: format!("cycle declaration could not be read: {e}"),
+                version_skew: false,
+            }),
+        ),
+    };
+
     let (blocks, blocks_unreadable) = match crate::blocks::BlockSchemas::load(client) {
         Ok(blocks) => (blocks, None),
         Err(e) => (
@@ -459,7 +474,11 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 &findings,
                 &schema,
                 &blocks,
-                [blocks_unreadable.clone(), cadence_unreadable.clone()],
+                [
+                    blocks_unreadable.clone(),
+                    cadence_unreadable.clone(),
+                    cycle_unreadable.clone(),
+                ],
             ),
         });
     }
@@ -468,7 +487,10 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // fails leaves it `None`, which is the same state a repo with no release
     // is in — position falls back to its cumulative reading rather than
     // failing, because "where am I" degrading is better than not answering.
-    let boundary = git.cycle_boundary().unwrap_or(None);
+    // A git read that fails leaves it `None`, which is the same state a repo
+    // with no boundary is in — position falls back to its cumulative reading
+    // rather than failing.
+    let boundary = git.cycle_boundary_matching(&cycle.tags).unwrap_or(None);
 
     // One read of the log, shared by every claim probe below.
     let log = ClaimLog::new(client);
@@ -513,7 +535,11 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             &findings,
             &schema,
             &blocks,
-            [blocks_unreadable.clone(), cadence_unreadable.clone()],
+            [
+                blocks_unreadable.clone(),
+                cadence_unreadable.clone(),
+                cycle_unreadable.clone(),
+            ],
         ),
     })
 }
@@ -534,7 +560,7 @@ fn unreadable_from(
     // Failures to READ a declaration, as opposed to findings within one that was
     // read. They lead the list because "day could not read your declaration"
     // outranks anything day found inside the declarations it could.
-    declaration_errors: [Option<Unreadable>; 2],
+    declaration_errors: [Option<Unreadable>; 3],
 ) -> Vec<Unreadable> {
     let mut out: Vec<Unreadable> = declaration_errors.into_iter().flatten().collect();
     out.extend(

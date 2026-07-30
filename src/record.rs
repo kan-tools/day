@@ -12,10 +12,15 @@ use crate::design::{self, Document, Report};
 use crate::kan_client::{KanClient, Write};
 use crate::schema::Schema;
 
-/// The four permitted adversarial-review verdicts. A closed set, checked at
-/// the argument boundary — a verdict outside it is a malformed argument, not
-/// a workflow gate.
-pub const VERDICTS: [&str; 4] = ["APPROVE", "APPROVE-WITH-FOLLOW-UPS", "REDIRECT", "BLOCK"];
+/// day's own four adversarial-review verdicts — the **default** vocabulary, not
+/// the only one (day#77).
+///
+/// A closed set, checked at the argument boundary: a verdict outside it is a
+/// malformed argument, not a workflow gate. What day#77 changes is *which*
+/// closed set, moving it from code to a claim on `schema/verdicts`; the
+/// closedness itself is the property both vocabularies exist to preserve, since
+/// free text is what forces adjudication to be optional.
+pub const DEFAULT_VERDICTS: [&str; 4] = ["APPROVE", "APPROVE-WITH-FOLLOW-UPS", "REDIRECT", "BLOCK"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -31,11 +36,10 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
-    #[error(
-        "verdict must be one of {}, got `{got}`",
-        VERDICTS.join(", ")
-    )]
-    BadVerdict { got: String },
+    #[error("verdict must be one of {permitted}, got `{got}`")]
+    BadVerdict { got: String, permitted: String },
+    #[error(transparent)]
+    Blocks(#[from] crate::blocks::Error),
     #[error("a review verdict must cite the design claim it audits (--cites <cid>)")]
     UncitedVerdict,
     #[error("no atom named `{0}` is declared in this project")]
@@ -143,8 +147,9 @@ pub fn design(
     })
 }
 
-/// Appends an adversarial-review verdict. The verdict must be one of
-/// [`VERDICTS`] and must cite the claim it audits.
+/// Appends an adversarial-review verdict. The verdict must be in the project's
+/// declared vocabulary — [`DEFAULT_VERDICTS`] when none is declared — and must
+/// cite the claim it audits.
 pub fn review(
     client: &KanClient,
     subject: &str,
@@ -152,10 +157,12 @@ pub fn review(
     rationale: &str,
     cites: &[String],
 ) -> Result<String, Error> {
-    let normalized = verdict.trim().to_uppercase().replace(' ', "-");
-    if !VERDICTS.contains(&normalized.as_str()) {
+    let vocabulary = crate::blocks::VerdictVocabulary::load(client)?;
+    let normalized = crate::blocks::normalize(verdict);
+    if !vocabulary.permits(&normalized) {
         return Err(Error::BadVerdict {
             got: verdict.to_string(),
+            permitted: vocabulary.verdicts.join(", "),
         });
     }
     if cites.is_empty() {

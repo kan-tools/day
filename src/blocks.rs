@@ -370,8 +370,186 @@ impl InjectionSchema {
     }
 }
 
+/// Subject slug for a declared cycle boundary: `schema/cycle`.
+pub const CYCLE_SLUG: &str = "cycle";
+/// Fence info string marking a cycle declaration inside a claim's text.
+pub const CYCLE_FENCE: &str = "day-cycle";
+
+/// The default tag pattern day treats as a cycle boundary when none is
+/// declared: a release.
+pub const DEFAULT_BOUNDARY_TAGS: &str = "v*";
+
+/// What ends a cycle, declared per project (day#76).
+///
+/// Position inference asks "since when", and day#60 answered it with *the last
+/// release* — which is right for software and wrong for everything else. A
+/// research program's cycle is the **pass**, a paper's is a freeze, a review's is
+/// an arc boundary. day#76 put the general point well: the insight that "does an
+/// artifact of this type exist" needs bounding is process-generic, and only the
+/// *default binding* to releases is software-specific.
+///
+/// So this declares the binding. Absent, day keeps release semantics, which is
+/// what every existing project already relies on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CycleSchema {
+    /// Git tag glob whose newest match ends a cycle. `pass/*` for the research
+    /// loop, `v*` (the default) for a project whose cycle is a release.
+    #[serde(default = "default_boundary_tags")]
+    pub tags: String,
+}
+
+fn default_boundary_tags() -> String {
+    DEFAULT_BOUNDARY_TAGS.to_string()
+}
+
+impl Default for CycleSchema {
+    fn default() -> Self {
+        Self {
+            tags: default_boundary_tags(),
+        }
+    }
+}
+
+impl Versioned for CycleSchema {
+    const SUPPORTED_VERSION: u64 = atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = CYCLE_FENCE;
+
+    /// An empty pattern matches no tag, which is not "every cycle" — it is a
+    /// project silently losing its boundary and falling back to the cumulative
+    /// reading day#60 exists to prevent. Refused rather than tolerated, because
+    /// the failure would look exactly like working.
+    fn validate(&self) -> Result<(), String> {
+        if self.tags.trim().is_empty() {
+            return Err(
+                "an empty tag pattern matches nothing, so position would silently \
+                 fall back to the cumulative reading day#60 replaced — declare a \
+                 pattern, or omit the declaration to keep release semantics"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+impl CycleSchema {
+    /// Reads the project's declaration, or release semantics when none is
+    /// recorded.
+    pub fn load(client: &KanClient) -> Result<Self, Error> {
+        let subject = format!("{SCHEMA_PREFIX}{CYCLE_SLUG}");
+        Ok(atoms::newest_fenced::<Self>(client, &subject)?
+            .map(|(_cid, c)| c)
+            .unwrap_or_default())
+    }
+
+    pub fn starter_command() -> String {
+        let json = serde_json::to_string_pretty(&Self::default()).unwrap_or_default();
+        format!(
+            "  kan observe \"$(cat <<'EOF'\nWhat ends a cycle in this project.\n\n\
+             ```{CYCLE_FENCE}\n{json}\n```\nEOF\n)\" --subject {SCHEMA_PREFIX}{CYCLE_SLUG}"
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    /// day#76: the boundary binding is declared, and absent it is a release.
+    ///
+    /// The insight day#60 encoded — that "does an artifact of this type exist" is
+    /// always-yes on a repo with history and needs bounding — is process-generic;
+    /// only the binding to `v*` was software-specific.
+    #[test]
+    fn a_declared_cycle_replaces_the_release_binding() {
+        let declared = parse_block::<CycleSchema>(r#"{"tags":"pass/*"}"#).unwrap();
+        assert_eq!(declared.tags, "pass/*");
+
+        // Absent means release semantics, so every existing project is unaffected.
+        assert_eq!(CycleSchema::default().tags, DEFAULT_BOUNDARY_TAGS);
+        assert_eq!(
+            parse_block::<CycleSchema>(r#"{}"#).unwrap().tags,
+            DEFAULT_BOUNDARY_TAGS
+        );
+    }
+
+    /// An empty pattern matches no tag — which is not "every cycle", it is a
+    /// project silently losing its boundary and reverting to the cumulative
+    /// reading day#60 replaced. Refused, because the failure would look exactly
+    /// like working.
+    #[test]
+    fn an_empty_cycle_pattern_is_refused() {
+        for empty in [r#"{"tags":""}"#, r#"{"tags":"   "}"#] {
+            let e = parse_block::<CycleSchema>(empty).unwrap_err();
+            assert!(matches!(e, BlockError::Invalid { .. }), "{empty}: {e:?}");
+            assert!(!e.is_version_skew(), "the project's to fix: {e}");
+        }
+        // Negative control.
+        assert!(parse_block::<CycleSchema>(r#"{"tags":"pass/*"}"#).is_ok());
+    }
+
+    /// day#77: a project moves WHICH closed set from code to a claim, without
+    /// gaining free text. The closedness is the property both vocabularies exist
+    /// to preserve.
+    #[test]
+    fn a_declared_vocabulary_replaces_days_four_without_opening_them_up() {
+        let loop_vocab: VerdictVocabulary = serde_json::from_str(
+            r#"{"verdicts":["NOVEL-AS-SEARCHED","REDISCOVERED+\u0394","SPECIALIZATION","COLLISION","SUBSUMED"]}"#,
+        )
+        .unwrap();
+
+        assert!(loop_vocab.permits(&normalize("novel-as-searched")));
+        assert!(loop_vocab.permits(&normalize("Novel As Searched")));
+        // day's own four are NOT permitted here, which is the point: a declared
+        // vocabulary replaces the set rather than extending it.
+        assert!(!loop_vocab.permits(&normalize("APPROVE")));
+        // And nothing outside it is.
+        assert!(!loop_vocab.permits(&normalize("looks good to me")));
+    }
+
+    /// The default is day's four, so a project that declares nothing is
+    /// unaffected — the backward-compatibility half of day#77.
+    #[test]
+    fn the_default_vocabulary_is_days_own_four() {
+        let d = VerdictVocabulary::default();
+        for v in crate::record::DEFAULT_VERDICTS {
+            assert!(d.permits(v), "{v} should be permitted by default");
+        }
+        assert_eq!(d.verdicts.len(), 4);
+    }
+
+    /// An empty vocabulary accepts nothing, which locks a project out of its own
+    /// review verb. Refused at parse, like day#20's empty plan nodes — a
+    /// declaration that cannot mean anything is not a declaration.
+    #[test]
+    fn an_empty_or_duplicated_vocabulary_is_refused() {
+        let empty = parse_block::<VerdictVocabulary>(r#"{"verdicts":[]}"#).unwrap_err();
+        assert!(matches!(empty, BlockError::Invalid { .. }), "{empty:?}");
+        assert!(!empty.is_version_skew(), "the project's to fix: {empty}");
+
+        let dupe = parse_block::<VerdictVocabulary>(r#"{"verdicts":["A","B","A"]}"#).unwrap_err();
+        assert!(matches!(dupe, BlockError::Invalid { .. }), "{dupe:?}");
+        assert!(
+            dupe.to_string().contains('A'),
+            "names the duplicate: {dupe}"
+        );
+
+        // Negative control: a normal vocabulary parses.
+        assert!(parse_block::<VerdictVocabulary>(r#"{"verdicts":["A","B"]}"#).is_ok());
+    }
+
+    /// Normalization is one function, shared by the declaration and the
+    /// recorder. Two would be a second source of truth for what a verdict *is* —
+    /// the divergence class this milestone keeps finding.
+    #[test]
+    fn normalization_is_shared_so_declaration_and_argument_cannot_disagree() {
+        assert_eq!(normalize("  novel as searched "), "NOVEL-AS-SEARCHED");
+        let v: VerdictVocabulary =
+            serde_json::from_str(r#"{"verdicts":["Novel As Searched"]}"#).unwrap();
+        assert!(
+            v.permits(&normalize("NOVEL-AS-SEARCHED")),
+            "a declaration written in prose must match the argument form"
+        );
+    }
+
     use super::*;
     use crate::atoms::parse_block;
 
@@ -586,4 +764,107 @@ mod tests {
         // And an undeclared field is refused, like every other struct-shaped block.
         assert!(parse_block::<InjectionSchema>(r#"{"cadance":10}"#).is_err());
     }
+}
+
+/// Subject slug for declared review-verdict vocabularies: `schema/verdicts`.
+pub const VERDICTS_SLUG: &str = "verdicts";
+/// Fence info string marking a verdict vocabulary inside a claim's text.
+pub const VERDICTS_FENCE: &str = "day-verdicts";
+
+/// The closed set of verdicts `day review record` accepts, declared per project.
+///
+/// **The value of a closed set is that it forces adjudication**, and that
+/// survives being declared: a project moves *which* set from code to a claim
+/// without gaining free text. day#77 put it well — free text is the thing both
+/// vocabularies exist to prevent.
+///
+/// day's own four are the default, so nothing changes for a project that
+/// declares nothing. The research loop's positioning reviews need a different
+/// fixed set with the same discipline
+/// (`NOVEL-AS-SEARCHED` / `REDISCOVERED+Δ` / `SPECIALIZATION` / `COLLISION` /
+/// `SUBSUMED`), which is what this is for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VerdictVocabulary {
+    /// The permitted verdicts, in the order a reader should see them.
+    pub verdicts: Vec<String>,
+}
+
+impl Default for VerdictVocabulary {
+    fn default() -> Self {
+        Self {
+            verdicts: crate::record::DEFAULT_VERDICTS
+                .iter()
+                .map(|v| v.to_string())
+                .collect(),
+        }
+    }
+}
+
+impl Versioned for VerdictVocabulary {
+    const SUPPORTED_VERSION: u64 = atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = VERDICTS_FENCE;
+
+    /// An empty vocabulary would accept nothing, which is not a vocabulary — it
+    /// is a project locking itself out of its own review verb. Refused for the
+    /// same reason day#20's empty plan nodes are: a declaration that cannot mean
+    /// anything is not a declaration.
+    fn validate(&self) -> Result<(), String> {
+        if self.verdicts.is_empty() {
+            return Err(
+                "a verdict vocabulary must permit at least one verdict — an empty set \
+                 accepts nothing, which locks the project out of `day review record`"
+                    .to_string(),
+            );
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        let dupes: Vec<&str> = self
+            .verdicts
+            .iter()
+            .filter(|v| !seen.insert(v.as_str()))
+            .map(String::as_str)
+            .collect();
+        if !dupes.is_empty() {
+            return Err(format!(
+                "declared twice: {}. A verdict set is a set — a duplicate means one \
+                 of the two was meant to be something else",
+                dupes.join(", ")
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl VerdictVocabulary {
+    /// Reads the project's declaration, or day's four when none is recorded.
+    pub fn load(client: &KanClient) -> Result<Self, Error> {
+        let subject = format!("{SCHEMA_PREFIX}{VERDICTS_SLUG}");
+        Ok(atoms::newest_fenced::<Self>(client, &subject)?
+            .map(|(_cid, v)| v)
+            .unwrap_or_default())
+    }
+
+    /// Whether a verdict is permitted, comparing in the normalized form
+    /// `day review record` writes.
+    pub fn permits(&self, normalized: &str) -> bool {
+        self.verdicts.iter().any(|v| normalize(v) == normalized)
+    }
+
+    pub fn starter_command() -> String {
+        let json = serde_json::to_string_pretty(&Self::default()).unwrap_or_default();
+        format!(
+            "  kan observe \"$(cat <<'EOF'\nReview verdict vocabulary for this project.\n\n\
+             ```{VERDICTS_FENCE}\n{json}\n```\nEOF\n)\" --subject {SCHEMA_PREFIX}{VERDICTS_SLUG}"
+        )
+    }
+}
+
+/// The form a verdict is stored in: upper-cased, spaces to hyphens.
+///
+/// Shared by the declaration and the recorder so a project can declare
+/// `Novel As Searched` and have `--verdict novel-as-searched` match it. One
+/// function, because two would be a second source of truth for what a verdict
+/// *is* — the divergence class this milestone keeps finding.
+pub fn normalize(verdict: &str) -> String {
+    verdict.trim().to_uppercase().replace(' ', "-")
 }
