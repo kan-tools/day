@@ -734,3 +734,85 @@ fn every_unreadable_cause_reaches_both_channels() {
         );
     }
 }
+
+/// A second-round defect, found by reviewing the fix for the first: on a repo
+/// with **no `v*` tag** the position fingerprint never changed, so the
+/// mid-session channel was permanently dead.
+///
+/// The fingerprint covered only files changed *since the boundary*. With no
+/// boundary there is nothing to diff against, so it was the constant
+/// `"no-boundary:"` — while position, in that same state, falls back to
+/// tracked-ever. So the gate could never notice work happening.
+///
+/// It bites the default case, which is what makes it worth a test rather than a
+/// note: **every fresh clone has no `v*` tag**, and that is precisely the
+/// population the v1.0 bar is about ("a person who is not the author uses day on
+/// a project that is neither kan nor day").
+#[test]
+fn the_fingerprint_moves_on_a_repo_with_no_release_tag() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+
+    // A real git repo with no tags — the fingerprint has to come from the
+    // tracked set, because there is no boundary to diff against.
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@e")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@e")
+            .output()
+            .expect("git");
+    };
+    git(&["init", "-q", "."]);
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    std::fs::write(repo.join("src/lib.rs"), "fn a() {}\n").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "one"]);
+
+    let kan = write_kan_stub(
+        repo,
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block("build", "bafyb", r#"{"in":[],"out":["code"],"next":[]}"#),
+        ],
+    );
+
+    // Real git here, not the stub: the whole point is what git reports.
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_day"))
+            .args(args)
+            .current_dir(repo)
+            .env("DAY_KAN_BIN", &kan)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("day")
+    };
+
+    run(&["hook", "session-start"]);
+    let standing = repo.join(day::cache::CACHE_DIR).join("standing");
+    let before = std::fs::read_to_string(&standing).expect("session-start records a fingerprint");
+
+    // Work happens: a new tracked file, which on a no-boundary repo is exactly
+    // what moves position.
+    std::fs::write(repo.join("src/other.rs"), "fn b() {}\n").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "two"]);
+
+    run(&["hook", "user-prompt"]);
+    let after = std::fs::read_to_string(&standing).unwrap();
+
+    assert_ne!(
+        before.lines().next(),
+        after.lines().next(),
+        "the fingerprint did not move when a tracked file was added to a repo with \
+         no release tag, so the gate can never notice work there — and every fresh \
+         clone is in that state"
+    );
+}

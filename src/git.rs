@@ -167,27 +167,47 @@ impl Git {
     }
 
     /// Files changed between `since` and the working tree.
-    /// A cheap fingerprint of the state a `path`/`tag` probe reads: the cycle
-    /// boundary tag plus the set of files changed since it.
+    /// A cheap fingerprint of everything a `path`/`tag` probe reads.
     ///
-    /// **0.03 s against `status::compute`'s 3.0 s.** That ratio is the whole
+    /// **0.04 s against `status::compute`'s 3.0 s.** That ratio is the whole
     /// reason it exists: a `UserPromptSubmit` hook runs on every prompt, so it
     /// can afford this and cannot afford that. When the fingerprint is unchanged,
     /// nothing a git-backed probe reads has moved.
+    ///
+    /// It covers **both** reading modes, which the first version did not. With a
+    /// boundary, position reads files changed *since* it; with no `v*` tag it
+    /// falls back to tracked-ever (`git ls-files`). A fingerprint of only the
+    /// changed-since set was therefore the constant `"no-boundary:"` on any repo
+    /// without a release — so it never moved, and the mid-session channel was
+    /// permanently dead on **every fresh clone**, which is exactly the population
+    /// the v1.0 bar is about. Found by the review of the fix that introduced it.
     ///
     /// It deliberately does **not** cover `claim` probes, which read the kan log
     /// — those need the expensive path (day#71), and day says so rather than
     /// implying live coverage it does not have.
     pub fn position_fingerprint(&self) -> Result<String, Error> {
+        use std::hash::{Hash, Hasher};
+
         let boundary = self
             .cycle_boundary()?
             .map(|b| b.tag)
             .unwrap_or_else(|| "no-boundary".to_string());
         // No boundary to diff against is a real state, not a failure: the
-        // fingerprint is then just the absence of one.
+        // changed-since half is then simply empty.
         let mut changed = self.changed_files(&boundary).unwrap_or_default();
         changed.sort();
-        Ok(format!("{boundary}:{}", changed.join(",")))
+        // The tracked set, which is what the no-boundary fallback reads. Hashed
+        // rather than inlined: a repo's file list is long, and this value is
+        // written to the cache and compared, not read by a person.
+        let mut tracked = self.tracked_files("*").unwrap_or_default();
+        tracked.sort();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        tracked.hash(&mut hasher);
+        Ok(format!(
+            "{boundary}:{}:{:x}",
+            changed.join(","),
+            hasher.finish()
+        ))
     }
 
     pub fn changed_files(&self, since: &str) -> Result<Vec<String>, Error> {
