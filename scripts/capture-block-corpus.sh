@@ -14,18 +14,13 @@
 # version wrote. Driving each tag's own binary records what it *did* write, so a
 # shape nobody ever emitted cannot get into the corpus and pass for history.
 #
-# **Known coverage gap, stated rather than left to be discovered.** The stub
-# below is write-only: it records appends and serves nothing back. So any verb
-# that reads its own writes fails, and the blocks those verbs would have written
-# are missing from the corpus. In practice that means `day-bridge` (declaring a
-# bridge reads the atoms its plan names) and `day-witness` (the starter is
-# printed by a path that first reads the telos). What *is* captured is
-# `day-atom`, `day-telos`, `day-schema` and `day-docs`.
-#
-# Closing the gap means giving the stub read-back, the way `tests/common`'s does.
-# Tracked rather than done here, because a partial corpus that says which parts
-# are partial is honest, and a complete-looking one that quietly omits two block
-# types is the failure this whole milestone is about.
+# The stub **serves back what it was given** (day#87). It has to: a verb that
+# reads its own writes -- `bridge declare` resolves the atoms its plan names,
+# `telos tension` reads both subjects -- fails against a write-only stub, and the
+# blocks it would have written never reach the corpus. That was the original
+# coverage gap, and it left `day-bridge` and `day-witness` out precisely because
+# those are the block types whose readers changed most recently (day#34's scope,
+# day#70's ClaimShape), so the uncaptured half was the half with the most history.
 #
 # Usage: scripts/capture-block-corpus.sh [output-dir]
 set -euo pipefail
@@ -37,24 +32,61 @@ trap 'rm -rf "$WORK"; git -C "$REPO" worktree prune' EXIT
 
 mkdir -p "$REPO/$OUT"
 
-# A kan stub that records every append and serves nothing back. Deliberately
-# minimal: the point is to capture what day *wrote*, so the read side only has
-# to be well-formed enough not to abort the verb.
+# A kan stub that records every append AND serves it back, so a verb which reads
+# its own writes works. The read-back is what makes `day-bridge` and
+# `day-witness` capturable at all (day#87); the same mechanism exists in
+# `tests/common` for the same reason.
 make_stub() {
   local dir="$1"
   mkdir -p "$dir/data"
+  cat > "$dir/data/append.py" <<'APPEND'
+import json, os, sys
+data, subj, cid, text = sys.argv[1:5]
+path = os.path.join(data, "show-%s.json" % subj.replace("/", "_"))
+if os.path.exists(path):
+    doc = json.load(open(path))
+else:
+    doc = {"v": 1, "subject": subj, "subjects": [subj], "claims": [], "inbound": []}
+doc["claims"].append({
+    "cid": cid, "subject": subj, "author": "did:key:zCorpusStub",
+    "kind": "Observation", "text": text,
+})
+json.dump(doc, open(path, "w"))
+
+status_path = os.path.join(data, "status.json")
+status = json.load(open(status_path)) if os.path.exists(status_path) else {"v": 1, "subjects": []}
+if not any(s["subject"] == subj for s in status["subjects"]):
+    status["subjects"].append({"subject": subj, "subjects": [subj], "state": "Unclassified"})
+    json.dump(status, open(status_path, "w"))
+APPEND
+  printf '{"v":1,"subjects":[]}\n' > "$dir/data/status.json"
   cat > "$dir/kan-stub.sh" <<'STUB'
 #!/bin/sh
 D="$(dirname "$0")/data"
 case "$1" in
   --help) echo "kan (corpus stub)"; exit 0 ;;
   identity) echo "did:key:zCorpusStub"; exit 0 ;;
-  status) printf '{"v":1,"subjects":[]}\n'; exit 0 ;;
-  show) printf '{"v":1,"subject":"%s","subjects":[],"claims":[],"inbound":[]}\n' "$2"; exit 0 ;;
-  issues) printf '{"v":1,"subjects":[]}\n'; exit 0 ;;
-  observe|plan|decide|result|resolve|relate)
+  status|issues) cat "$D/status.json"; exit 0 ;;
+  show)
+    f="$D/show-$(printf '%s' "$2" | tr '/' '_').json"
+    if [ -f "$f" ]; then cat "$f"
+    else printf '{"v":1,"subject":"%s","subjects":[],"claims":[],"inbound":[]}\n' "$2"; fi
+    exit 0 ;;
+  observe|plan|decide|result|resolve)
+    n=$(cat "$D/n" 2>/dev/null || echo 0); n=$((n + 1)); printf '%s' "$n" > "$D/n"
     printf '%s\n<<<REC>>>\n' "$*" >> "$D/appends.log"
-    printf 'bafyreicorpusstub\n'; exit 0 ;;
+    cid=$(printf 'bafyreicorpus%08d' "$n")
+    shift; text="$1"; subj="general"
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "--subject" ]; then subj="$2"; fi
+      shift
+    done
+    python3 "$D/append.py" "$D" "$subj" "$cid" "$text"
+    printf '%s\n' "$cid"; exit 0 ;;
+  relate)
+    n=$(cat "$D/n" 2>/dev/null || echo 0); n=$((n + 1)); printf '%s' "$n" > "$D/n"
+    printf '%s\n<<<REC>>>\n' "$*" >> "$D/appends.log"
+    printf 'bafyreicorpusrel\n'; exit 0 ;;
   *) exit 0 ;;
 esac
 STUB
@@ -107,12 +139,18 @@ for tag in $(git -C "$REPO" tag --list 'v*' --sort=creatordate); do
   # attempted and a failure is fine — the corpus records what this version
   # could write, which is the thing being captured.
   export DAY_KAN_BIN="$run/kan-stub.sh"
-  ( cd "$run" && "$bin" atom declare corpus-atom --in intent --out design-doc --next build ) >/dev/null 2>&1 || true
-  ( cd "$run" && "$bin" atom declare corpus-done --in a --out b --done published-artifact ) >/dev/null 2>&1 || true
-  ( cd "$run" && "$bin" telos declare corpus-telos "A captured telos." --witness published-artifact ) >/dev/null 2>&1 || true
+  # Atom names must be the ones the bridge plan below references, and the
+  # tension must name teloi that exist. Getting either wrong is silent: the verb
+  # is refused, no block is written, and that block type just quietly does not
+  # appear in the corpus -- which is exactly how `day-bridge` and `day-tension`
+  # went missing the first time this ran.
+  ( cd "$run" && "$bin" atom declare design --in intent --out design-doc --next build ) >/dev/null 2>&1 || true
+  ( cd "$run" && "$bin" atom declare build --in design-doc --out code-change --done published-artifact ) >/dev/null 2>&1 || true
+  ( cd "$run" && "$bin" telos declare corpus-telos "A captured telos." --witness code-change ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" telos declare corpus-scoped "A scoped telos." --witness published-artifact --scope 'published-artifact=v9*' ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" bridge declare corpus-bridge --telos corpus-telos --have intent --plan "design > build" ) >/dev/null 2>&1 || true
-  ( cd "$run" && "$bin" telos tension corpus-a corpus-b "A captured tension." ) >/dev/null 2>&1 || true
+  ( cd "$run" && "$bin" bridge declare corpus-branch --telos corpus-telos --have intent --plan "design > (build | build)" ) >/dev/null 2>&1 || true
+  ( cd "$run" && "$bin" telos tension corpus-telos corpus-scoped "A captured tension." ) >/dev/null 2>&1 || true
   unset DAY_KAN_BIN
 
   # The starters are the other shapes a version wrote: day prints them for a

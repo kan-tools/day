@@ -12,6 +12,10 @@
 #   refused-honestly   the reader said it could not read the block
 #   silently-widened   the reader loaded it as though the unreadable part were
 #                      absent, and certified the result
+#   protocol-mismatch  the reader predates day's `kan --json` migration, so it
+#                      parses kan's RENDERED output and a JSON-serving stub
+#                      cannot drive it at all. Says nothing about how it reads
+#                      blocks -- the matrix simply cannot reach it.
 #   errored            the reader failed in some other way
 #
 # Usage: scripts/run-migration-cell.sh /path/to/day
@@ -100,10 +104,30 @@ code=$?
 # refusal from an unrelated failure.
 if printf '%s' "$out" | grep -qiE "could not be read|upgrade day|unknown field|_version"; then
   echo "refused-honestly"
-elif printf '%s' "$out" | grep -q "composition: ok"; then
-  # The reader accepted a declaration it could only partly read, and certified
-  # the result. This is day#78's shape, and for every version released before
+elif printf '%s' "$out" | grep -qiE "none declared yet|atoms: 0 declared|atoms: none"; then
+  # A reader from before day's `--json` migration (everything up to
+  # v0.4.0-beta.1) parses kan's *rendered* output, so a JSON-serving stub hands
+  # it text it cannot read and it sees an empty log. Classifying that as
+  # `errored` would file a limit of the HARNESS as a fact about how that version
+  # reads blocks, which is the same category error the missing-binary guard
+  # above exists to prevent.
+  #
+  # Verified rather than assumed: v0.4.0-beta.1 handed this stub prints
+  # "atoms: none declared yet ... composition: ok" and exits 0 — it reports a
+  # clean vocabulary over a log it could not read a single byte of. Alarming in
+  # its own right, and *not* what this matrix measures.
+  echo "protocol-mismatch"
+elif printf '%s' "$out" | grep -qE "from-the-future[^\n]*in\["; then
+  # The reader rendered the too-new atom's INTERFACE, which means it loaded a
+  # declaration it could only partly read and presented the result as complete.
+  # This is day#78's shape, and for every version released before
   # `v0.7.0-beta.2` it is the expected outcome rather than a surprise.
+  #
+  # Keyed on the interface being rendered rather than on `composition: ok`,
+  # because that phrase is suppressed by ANY composition finding — so an
+  # unrelated one (a dangling `next` edge in the fixture, as it happens) made a
+  # reader that widened silently classify as `errored`. The question is what the
+  # reader did with the block, not whether the whole vocabulary was clean.
   echo "silently-widened"
 elif [ "$code" -ne 0 ]; then
   echo "errored"

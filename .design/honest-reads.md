@@ -19,6 +19,14 @@ a binary that has it.
 
 ## Requirements
 
+- REQ-0: A block that deserializes but **violates an invariant its type cannot
+  encode** is refused in the same place, and with the same diagnostics, as one
+  that will not deserialize. `deny_unknown_fields` (REQ-1) catches a block saying
+  *more* than its type allows; nothing caught a block saying *less than it needs
+  to mean anything*. day#20 is the instance: `{"any": []}` in a bridge plan is
+  valid JSON and a valid `Vec<Node>`, and an empty alternative contributed
+  nothing to reachability while reporting nothing — so `bridge check` could call
+  a plan reachable on the strength of a branch that says nothing.
 - REQ-1: day's built-in fenced blocks are **restrictive**: an unrecognised field
   is refused rather than ignored. Applies to all seven (`day-atom`,
   `day-telos`, `day-bridge`, `day-witness`, `day-schema`, `day-docs`,
@@ -82,6 +90,14 @@ a binary that has it.
 
 ## Acceptance Criteria
 
+- [ ] AC-0: An empty `seq`, `all`, or `any` node in a `day-bridge` plan is
+      refused, naming the path to the offending node, and reported as the
+      *claim's* problem rather than as version skew. Nested empty nodes are
+      caught too, since a check reading only the root would pass a plan whose
+      branch says nothing. **Negative control:** every shape day's own plan
+      grammar produces still parses, and a plan day writes passes its own
+      validation — so the invariant cannot be tightened past what day emits.
+      (REQ-0)
 - [ ] AC-1: For each of the seven built-in blocks, a block carrying an
       unrecognised field is refused rather than parsed with the field dropped.
       **Negative control:** the same block without that field parses, and its

@@ -141,24 +141,35 @@ fn ac10_the_corpus_spans_the_release_history_it_claims_to() {
         );
     }
 
-    // The block types the write-only capture stub can reach. `day-bridge` and
-    // `day-witness` are absent because declaring a bridge reads the atoms its
-    // plan names, and the witness starter is printed by a path that first reads
-    // the telos — see the note in scripts/capture-block-corpus.sh. Asserted as a
-    // known gap rather than left implicit, so closing it is a visible change
-    // here and not a silent improvement nobody notices.
-    for expected in ["day-atom", "day-telos", "day-schema", "day-docs"] {
+    // **All seven** block types day owns (day#87). The corpus reached only four
+    // until the capture stub could serve its own writes back: `bridge declare`
+    // resolves the atoms its plan names and `telos tension` reads both subjects,
+    // so against a write-only stub those verbs were refused and the blocks they
+    // would have written never existed to capture. The gap mattered more than its
+    // size suggested — `day-bridge` and `day-witness` are the block types whose
+    // readers changed most recently (day#34's scope, day#70's `ClaimShape`, which
+    // is what day#78 is about), so the uncaptured half was the half with the most
+    // history.
+    //
+    // Listed exhaustively rather than as a count: a count would still pass if one
+    // fence were swapped for another.
+    for expected in [
+        "day-atom",
+        "day-telos",
+        "day-bridge",
+        "day-witness",
+        "day-schema",
+        "day-docs",
+        "day-tension",
+    ] {
         assert!(
             fences.contains(expected),
-            "the corpus lost coverage of `{expected}`: {fences:?}"
+            "the corpus lost coverage of `{expected}`: {fences:?}. If a capture verb \
+             stopped writing this block, it fails SILENTLY — the verb is refused, \
+             nothing is appended, and the fence simply does not appear. That is how \
+             this gap opened the first time."
         );
     }
-    assert!(
-        !fences.contains("day-bridge") && !fences.contains("day-witness"),
-        "the corpus now covers a fence the capture stub could not reach — good, \
-         but update this assertion and the note in the capture script, so the \
-         documented gap does not outlive the gap: {fences:?}"
-    );
 }
 
 /// The shapes in the corpus must be the ones a released version actually wrote,

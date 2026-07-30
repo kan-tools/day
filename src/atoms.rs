@@ -64,6 +64,26 @@ pub trait Versioned {
     const SUPPORTED_VERSION: u64;
     /// The fence info string this block is declared under, for diagnostics.
     const FENCE: &'static str;
+
+    /// Structural invariants **serde cannot express**, checked immediately after
+    /// the typed parse so a block that is well-typed but meaningless is refused
+    /// in the same place, and with the same diagnostics, as one that will not
+    /// deserialize.
+    ///
+    /// This exists because `deny_unknown_fields` catches a block saying *more*
+    /// than the type allows, and nothing caught a block saying *less than it
+    /// needs to mean anything*. day#20 is the case: `{"any": []}` in a bridge
+    /// plan is valid JSON and a valid `Vec<Node>`, and an empty alternative set
+    /// contributed nothing and reported nothing. A plan grammar day writes can
+    /// never produce one, but a hand-written block can — and hand-written blocks
+    /// are supported deliberately, which makes this a real path rather than a
+    /// hypothetical one.
+    ///
+    /// Default is `Ok`: most blocks have no invariant beyond their types, and a
+    /// trait method nobody implements is cheaper than a second mechanism.
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// Why a fenced block could not be read into its type.
@@ -89,6 +109,12 @@ pub enum BlockError {
         #[source]
         source: serde_json::Error,
     },
+    /// The block deserialized, but violates an invariant its type cannot
+    /// encode — see [`Versioned::validate`]. Also the claim's problem, not the
+    /// reader's, so it is reported the same way `Malformed` is rather than as
+    /// version skew.
+    #[error("`{fence}` block is not a valid {fence}: {reason}")]
+    Invalid { fence: &'static str, reason: String },
 }
 
 impl BlockError {
@@ -290,7 +316,9 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
 ///    type to probe. A `_version` *field* there would be read as a witness type
 ///    literally named `_version`; stripping it first is the only approach that
 ///    works for a block whose body is a map rather than a struct.
-fn parse_block<T: serde::de::DeserializeOwned + Versioned>(json: &str) -> Result<T, BlockError> {
+pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
+    json: &str,
+) -> Result<T, BlockError> {
     let malformed = |source| BlockError::Malformed {
         fence: T::FENCE,
         source,
@@ -320,7 +348,12 @@ fn parse_block<T: serde::de::DeserializeOwned + Versioned>(json: &str) -> Result
         }
     }
 
-    serde_json::from_value(value).map_err(malformed)
+    let parsed: T = serde_json::from_value(value).map_err(malformed)?;
+    parsed.validate().map_err(|reason| BlockError::Invalid {
+        fence: T::FENCE,
+        reason,
+    })?;
+    Ok(parsed)
 }
 
 /// [`extract_fenced`] specialized to an atom's `day-atom` interface block.
