@@ -279,6 +279,7 @@ fn walk(
             if !missing.is_empty() {
                 findings.push(Finding {
                     atoms: vec![name.clone()],
+                    version_skew: false,
                     message: format!(
                         "{}{name} needs [{}] which nothing before it makes available",
                         atoms::ATOM_PREFIX,

@@ -118,6 +118,24 @@ pub struct Status {
     /// True when no witness probes are declared, so position cannot be
     /// inferred at all — reported plainly rather than as "no current atom".
     pub uncheckable: bool,
+    /// Declarations this build could not read, so every field above is
+    /// **partial** and a reader must be told rather than left to assume.
+    ///
+    /// `compute` used to discard these: it called `atoms::load` and threw the
+    /// findings away, so an unreadable atom reached neither the status line nor
+    /// the human notice. Position was computed over a vocabulary day knew was
+    /// incomplete, and said so nowhere.
+    pub unreadable: Vec<Unreadable>,
+}
+
+/// One declaration this build could not read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unreadable {
+    pub message: String,
+    /// Whether the *reader* is behind the log, rather than the log being wrong.
+    /// Decides which of two different actions, for two different people, the
+    /// human notice asks for.
+    pub version_skew: bool,
 }
 
 impl Status {
@@ -149,6 +167,62 @@ impl Status {
         }
         if let Some(first) = self.off_sequence.first() {
             parts.push(format!("day: possible skipped step — {first}"));
+        }
+        // The third event type (`.design/honest-reads.md` REQ-5), and the one
+        // whose *cause* decides the message. Version skew is the reader's
+        // problem and is fixed by upgrading; a malformed block is the claim's
+        // and is fixed by editing it. Telling someone to upgrade over a typo,
+        // or to edit a claim that is fine, are both worse than saying nothing —
+        // which is day#60's lesson, where the v0.6 binary failed loudly and
+        // pointed the reader the wrong way.
+        if !self.unreadable.is_empty() {
+            let n = self.unreadable.len();
+            let plural = if n == 1 {
+                "declaration"
+            } else {
+                "declarations"
+            };
+            let fix = if self.unreadable.iter().all(|u| u.version_skew) {
+                "this day is older than the log — upgrading day should read them"
+            } else if self.unreadable.iter().any(|u| u.version_skew) {
+                "some need a newer day, others need the claim fixed"
+            } else {
+                "the blocks are malformed — the claims need fixing"
+            };
+            parts.push(format!(
+                "day: {n} {plural} could not be read, so what day reported is partial: \
+                 {fix}. `day doctor` for detail."
+            ));
+        }
+        (!parts.is_empty()).then(|| parts.join("\n"))
+    }
+
+    /// The **event** half of [`Self::notice`], for the model's mid-session
+    /// channel rather than the human's.
+    ///
+    /// Split from `notice` because the two audiences need different things from
+    /// the same state: the human gets an actionable instruction (upgrade day, fix
+    /// the claim), the model gets an epistemic qualifier on what day told it.
+    /// Sharing one string would have meant telling the model to run a command it
+    /// cannot run, and telling the human something only a reasoner needs.
+    pub fn notice_for_model(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if let Some(t) = &self.transition {
+            let to = if t.to.is_empty() {
+                "no atom currently in play".to_string()
+            } else {
+                t.to.join(", ")
+            };
+            parts.push(format!(
+                "day: the work has moved past `{}`, the last atom whose assessment was \
+                 recorded — it now sits at {to}.",
+                t.from
+            ));
+        }
+        if let Some(first) = self.off_sequence.first() {
+            parts.push(format!(
+                "day: a step may have been skipped — {first}. Advisory; nothing is blocked."
+            ));
         }
         (!parts.is_empty()).then(|| parts.join("\n"))
     }
@@ -317,7 +391,7 @@ fn unmet_mark(verdict: &Verdict) -> &'static str {
 /// Assembles the status from kan and git. Reads only — appends nothing, runs
 /// no command probe.
 pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
-    let (atoms, _findings) = atoms::load(client)?;
+    let (atoms, findings) = atoms::load(client)?;
     // A missing witness schema is not an error here: it means position is
     // uncheckable, which the report says plainly. `assess` needs the schema
     // and errors without it; `status` degrades to "cannot infer".
@@ -338,6 +412,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             off_sequence: Vec::new(),
             transition: None,
             uncheckable: true,
+            unreadable: unreadable_from(&findings, &schema),
         });
     }
 
@@ -385,7 +460,38 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         off_sequence: report.off_sequence,
         transition,
         uncheckable: false,
+        unreadable: unreadable_from(&findings, &schema),
     })
+}
+
+/// Collects the declarations this build could not read, from both places they
+/// surface: an atom whose block would not parse, and a witness probe of a kind
+/// this build does not know.
+///
+/// Deliberately **not** every composition finding. A dangling `next` edge is
+/// day reporting something it *did* read and found wrong; only a declaration it
+/// could not read at all makes the rest of the report partial, and conflating
+/// them would make the "treat this as partial" caveat fire on states that are
+/// fully known.
+fn unreadable_from(findings: &[atoms::Finding], schema: &WitnessSchema) -> Vec<Unreadable> {
+    let mut out: Vec<Unreadable> = findings
+        .iter()
+        .filter(|f| f.message.contains("could not be read") || f.version_skew)
+        .map(|f| Unreadable {
+            message: f.message.clone(),
+            version_skew: f.version_skew,
+        })
+        .collect();
+    for (witness, reason) in &schema.unsupported {
+        out.push(Unreadable {
+            message: format!("witness `{witness}`: {reason}"),
+            // An unreadable probe *kind* is the same situation as a too-new
+            // block — this build is behind what the project declared — so it
+            // asks for the same action.
+            version_skew: true,
+        });
+    }
+    out
 }
 
 /// The atom named by the most recent assessment (`kan result`) recorded on any
@@ -491,6 +597,7 @@ mod tests {
             off_sequence: vec![],
             transition: None,
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         let long = status.render_long();
         assert!(long.contains("Current atom: build"), "{long}");
@@ -509,6 +616,7 @@ mod tests {
             off_sequence: vec![],
             transition: None,
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         let long = status.render_long();
         assert!(long.contains("2 atoms are consistent"), "{long}");
@@ -526,6 +634,7 @@ mod tests {
             off_sequence: vec![],
             transition: None,
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         assert!(status
             .render_long()
@@ -540,6 +649,7 @@ mod tests {
             off_sequence: vec![],
             transition: None,
             uncheckable: true,
+            unreadable: Vec::new(),
         };
         assert!(status
             .render_long()
@@ -556,6 +666,7 @@ mod tests {
             off_sequence: vec!["review produced its output but upstream build did not".into()],
             transition: None,
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         assert!(status.render_long().contains("Off-sequence:"));
         let line = status.render_line();
@@ -575,6 +686,7 @@ mod tests {
                 to: vec!["review".into()],
             }),
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         let long = status.render_long();
         assert!(
@@ -601,6 +713,7 @@ mod tests {
             off_sequence: vec![],
             transition: None,
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         assert_eq!(quiet.notice(), None);
 
@@ -613,6 +726,7 @@ mod tests {
                 to: vec!["review".into()],
             }),
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         let notice = loud.notice().expect("there is something to mark");
         assert!(notice.contains("`build`"), "{notice}");
@@ -635,6 +749,7 @@ mod tests {
             off_sequence: vec![],
             transition: None,
             uncheckable: false,
+            unreadable: Vec::new(),
         };
         let long = status.render_long();
         assert!(long.contains("[not run] passing-tests"), "{long}");

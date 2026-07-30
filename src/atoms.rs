@@ -170,6 +170,14 @@ pub struct Finding {
     /// mismatch rather than just the source.
     pub atoms: Vec<String>,
     pub message: String,
+    /// True when this finding is a declaration **this build is too old to
+    /// read**, rather than one that is wrong.
+    ///
+    /// Carried as a flag rather than left for a caller to grep out of
+    /// `message`, because the two need different actions from different people
+    /// — upgrade the binary, or fix the claim — and a caller deciding that by
+    /// substring match would break the first time the wording changed.
+    pub version_skew: bool,
 }
 
 /// Reads every `atom/<slug>` subject's live claims and takes the newest
@@ -210,10 +218,12 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
             // JSON: …)" — the same thing twice, in two vocabularies.
             Some((claim, Err(e))) => findings.push(Finding {
                 atoms: vec![name.clone()],
+                version_skew: e.is_version_skew(),
                 message: format!("{subject}: {e} — claim {}", claim.cid),
             }),
             None => findings.push(Finding {
                 atoms: vec![name.clone()],
+                version_skew: false,
                 message: format!(
                     "{subject}: no `{FENCE_INFO}` interface block on any live claim, so it can't be composition-checked"
                 ),
@@ -375,6 +385,7 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
             if !atoms.iter().any(|a| &a.name == successor) {
                 findings.push(Finding {
                     atoms: vec![atom.name.clone(), successor.clone()],
+                    version_skew: false,
                     message: format!(
                         "{} declares next: {successor}, but no {ATOM_PREFIX}{successor} subject exists in the live vocabulary",
                         atom.subject()
@@ -407,6 +418,7 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
             implicated.push(atom.name.clone());
             findings.push(Finding {
                 atoms: implicated,
+                version_skew: false,
                 message: format!(
                     "{}: interfaces do not compose — needs input(s) [{}] that nothing upstream produces (upstream {} produce [{}])",
                     atom.subject(),

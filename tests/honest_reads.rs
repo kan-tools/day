@@ -279,3 +279,289 @@ fn ac9_an_unreadable_subject_is_unchecked_not_absent() {
         "a check that ran must not exit as one that could not: {stdout}"
     );
 }
+
+/// AC-6: the hook reports unreadable declarations on **both** of day's
+/// audiences, and the counts it prints are true.
+///
+/// Before this, two statements in the session-start output were false on a log
+/// with one unreadable telos and one unreadable atom: `Teloi in play (1)` where
+/// there were two, and `No process atoms are declared yet` where there was one.
+/// The telos vanished because a failed read became an empty claim list; the atom
+/// vanished because `render_atoms` matched `atoms.is_empty()` first and threw
+/// away the findings that would have said so.
+#[test]
+fn ac6_the_hook_reports_unreadable_declarations_to_the_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let claims = [
+        claim("telos/readable", "bafyok", "A readable telos."),
+        claim("telos/unreadable", "bafybad", "An unreadable telos."),
+        atom_block("broken", "bafyab", r#"{"in":["a"],"requires":["x"]}"#),
+    ];
+    let kan = write_failing_kan_stub(dir.path(), &claims, &["telos/unreadable"]);
+
+    let out = day(dir.path(), &kan, &["hook", "session-start"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("Teloi in play (2)"),
+        "the count must include the telos day could not read, or it contradicts \
+         its own list: {stdout}"
+    );
+    assert!(
+        stdout.contains("telos/unreadable"),
+        "an unreadable telos must not vanish from the model's context: {stdout}"
+    );
+    assert!(
+        stdout.contains("partial"),
+        "and the list must be marked partial: {stdout}"
+    );
+    assert!(
+        !stdout.contains("No process atoms are declared yet"),
+        "declared-but-unreadable is not 'none declared': {stdout}"
+    );
+    assert!(
+        stdout.contains("requires"),
+        "the unreadable atom's cause should reach the model: {stdout}"
+    );
+    // Advisory always: a hook must never be able to fail a session.
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
+
+/// AC-6's human half: the `systemMessage` channel differentiates by **cause**,
+/// and stays silent when there is nothing wrong.
+///
+/// Version skew is the reader's problem, fixed by upgrading; a malformed block is
+/// the claim's, fixed by editing it. Telling someone to upgrade over a typo is
+/// day#60's misdirection repeated, so the two messages must differ.
+#[test]
+fn ac6_the_human_notice_differentiates_by_cause() {
+    let witness = claim(
+        "schema/witness",
+        "bafyw",
+        "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+    );
+
+    // Skew only.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness.clone(),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+    let skew = String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-notice"]).stdout)
+        .into_owned();
+    assert!(skew.contains("older than the log"), "{skew}");
+
+    // Malformed only — must NOT tell the reader to upgrade.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness.clone(),
+            atom_block("bad", "bafyx", r#"{"in":["a"],"nope":1}"#),
+        ],
+    );
+    let bad = String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-notice"]).stdout)
+        .into_owned();
+    assert!(bad.contains("claims need fixing"), "{bad}");
+    assert!(
+        !bad.contains("older than the log"),
+        "a malformed block must not be reported as version skew: {bad}"
+    );
+
+    // Negative control: everything readable emits nothing at all.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness,
+            atom_block("ok", "bafyo", r#"{"in":["a"],"out":["b"]}"#),
+        ],
+    );
+    let quiet = String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-notice"]).stdout)
+        .into_owned();
+    assert!(
+        quiet.trim().is_empty(),
+        "a healthy session must see no notice: {quiet}"
+    );
+}
+
+/// AC-7: the mid-session channel is rationed, not per-turn, and silent when
+/// there is nothing to say.
+///
+/// A standing condition is specific in content but *ambient in cadence*, which
+/// is the trigger closest to day#30's failure — a rule present always becomes
+/// background. So the assertion is as much that it stays quiet as that it fires.
+#[test]
+fn ac7_the_mid_session_channel_is_rationed_and_quiet_when_healthy() {
+    let witness = claim(
+        "schema/witness",
+        "bafyw",
+        "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness.clone(),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    let cadence = day::cache::DEFAULT_CADENCE;
+    let mut fired = 0;
+    for _ in 0..(cadence * 2) {
+        let out = day(dir.path(), &kan, &["hook", "user-prompt"]);
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "a hook must never fail a prompt"
+        );
+        if !String::from_utf8_lossy(&out.stdout).trim().is_empty() {
+            fired += 1;
+        }
+    }
+    assert_eq!(
+        fired,
+        2,
+        "a standing condition should be re-displayed on the cadence, not every \
+         turn: fired {fired} times in {} prompts",
+        cadence * 2
+    );
+
+    // Negative control: with everything readable there is no standing condition,
+    // so the channel is silent however many prompts pass.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness,
+            atom_block("ok", "bafyo", r#"{"in":["a"],"out":["b"]}"#),
+        ],
+    );
+    for _ in 0..(cadence + 2) {
+        let out = day(dir.path(), &kan, &["hook", "user-prompt"]);
+        assert!(
+            String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+            "a healthy session must see no mid-session injection"
+        );
+    }
+}
+
+/// AC-8: the `.day/` carve-out stays bounded. **Deleting the cache changes only
+/// *when* day repeats itself, never what it reports.**
+///
+/// This is the test that keeps the extension honest. `CLAUDE.md` holds that the
+/// carve-out is abused the moment the cache is read to *decide* rather than to
+/// *display*, and the cadence counter is the first thing stored there that a
+/// code path branches on — so the boundary needs an assertion, not an intention.
+#[test]
+fn ac8_deleting_the_cache_changes_nothing_day_reports() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+            atom_block("ok", "bafyo", r#"{"in":["code"],"out":["b"]}"#),
+        ],
+    );
+
+    let report =
+        |args: &[&str]| String::from_utf8_lossy(&day(dir.path(), &kan, args).stdout).into_owned();
+
+    let doctor_before = report(&["doctor"]);
+    let status_before = report(&["status"]);
+
+    // Advance the cadence so the cache genuinely holds something.
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let cache = dir.path().join(day::cache::CACHE_DIR);
+    assert!(
+        cache.exists(),
+        "the cadence counter should have been written"
+    );
+
+    std::fs::remove_dir_all(&cache).unwrap();
+
+    assert_eq!(
+        doctor_before,
+        report(&["doctor"]),
+        "deleting the cache changed what `day doctor` reports — the carve-out has \
+         been abused: day is deciding from the cache, not displaying from it"
+    );
+    assert_eq!(
+        status_before,
+        report(&["status"]),
+        "deleting the cache changed what `day status` reports"
+    );
+}
+
+/// The case a surviving mutation surfaced: a witness schema whose **every**
+/// probe is a kind this build cannot read.
+///
+/// That state short-circuits `status::compute` — with no readable probe there is
+/// nothing to resolve, so position is `uncheckable` and returns early. The early
+/// return has to carry the unreadable declarations too, or day goes silent in
+/// exactly the situation that took the v0.6 session hook down (day#60): a `claim`
+/// probe recorded on this repo made the installed binary fail the whole witness
+/// map. "Position is uncheckable" and "this day could not read your schema" are
+/// different statements, and only the second tells anyone what to do.
+///
+/// Found by mutation rather than by design: replacing the early return's
+/// `unreadable` with an empty vector left the suite green, because every other
+/// test in this file has at least one readable probe and so never reaches it.
+#[test]
+fn a_schema_whose_every_probe_is_unreadable_is_still_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyw",
+            "W.\n\n```day-witness\n{\"code\":{\"future-kind\":{\"x\":1}}}\n```\n",
+        )],
+    );
+
+    let notice =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-notice"]).stdout)
+            .into_owned();
+    assert!(
+        notice.contains("could not be read"),
+        "a schema with no readable probe must still be reported, not merely leave \
+         position uncheckable: {notice}"
+    );
+    assert!(
+        notice.contains("older than the log"),
+        "an unreadable probe kind means this build is behind what the project \
+         declared, which is the same action as version skew: {notice}"
+    );
+
+    // And the model's side says the same thing rather than only the human's.
+    let context =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-start"]).stdout)
+            .into_owned();
+    assert!(
+        context.contains("future-kind") || context.contains("cannot read"),
+        "the model should know its witness map was only partly read: {context}"
+    );
+}

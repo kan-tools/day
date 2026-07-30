@@ -21,6 +21,18 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "_comment": "day's mid-session channel to the MODEL, designed in v0.6 (docs/ROADMAP.md, Situated injection) and wired in v0.7.0-beta.2. Emits plain text on stdout, which UserPromptSubmit adds to the model's context -- and deliberately NO hookSpecificOutput and no decision field, so there is no shape here that could deny a prompt. Two triggers: a state transition (an event, always emitted) and a standing condition that day's report is partial because a declaration could not be read (not an event, so rationed to a bounded cadence -- day#30 found that an always-present rule becomes background, and a periodic re-display is the trigger closest to that failure). Emits nothing when there is nothing to say, so a healthy session sees no injection at all. Reads what session-start already computed rather than recomputing: this hook runs on every prompt, and day status costs 2.76s on day's own log of which 1.99s is 41 kan invocations (day#71).",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "day hook user-prompt",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "_why_no_session_end": "day hook session-end exists as a command but is deliberately NOT registered. Only UserPromptSubmit, UserPromptExpansion and SessionStart add hook stdout to the MODEL's context; SessionEnd stdout goes to the debug log, so a prompt for the agent registered there would reach nobody. The one mechanism that would deliver text to the model at that moment is Stop's blocking decision, which affordance-not-enforcement forbids. The useful content moved into the SessionStart hook above. CORRECTED (v0.6 harness verification): this reasoning was right about the MODEL and wrong about the HUMAN -- SessionEnd stderr IS shown to the user, so an end-of-session report aimed at a person is achievable and was ruled out by a question nobody asked. Being reconsidered in v0.6 alongside the status line."

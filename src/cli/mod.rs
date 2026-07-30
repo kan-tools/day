@@ -131,7 +131,7 @@ pub enum Command {
     StatusLine,
     /// Entry point harness hooks call; prints advisory context, never blocks
     Hook {
-        /// The harness event: session-start or session-end
+        /// The harness event: session-start, session-notice, user-prompt, or session-end
         event: String,
     },
     /// MCP server over stdio

@@ -33,8 +33,61 @@ pub const CACHE_DIR: &str = ".day";
 /// state only** — a string to print, never data to parse for a decision.
 pub const STATUS_LINE_FILE: &str = "statusline";
 
+/// The file holding how many prompts have passed since day last re-displayed a
+/// standing condition. **Display state, not process state** — see
+/// [`cadence_allows`].
+pub const CADENCE_FILE: &str = "cadence";
+
+/// How many user prompts pass before a *standing* condition is re-displayed.
+///
+/// A guess, and marked as one: day#82 exists to tune it against measured recall
+/// rather than intuition, and `v0.7.0-beta.3` makes it declarable. day#30 found
+/// that a general standing rule injected always becomes background — a periodic
+/// re-display is specific in content but ambient in cadence, so this number is
+/// the whole lever between re-orienting a drifting session and becoming that
+/// noise. Erring quiet would be defensible too; 10 is chosen to produce data.
+pub const DEFAULT_CADENCE: u32 = 10;
+
 fn status_line_path(root: &Path) -> PathBuf {
     root.join(CACHE_DIR).join(STATUS_LINE_FILE)
+}
+
+fn cadence_path(root: &Path) -> PathBuf {
+    root.join(CACHE_DIR).join(CADENCE_FILE)
+}
+
+/// Whether enough prompts have passed to re-display a standing condition, and
+/// records this prompt either way.
+///
+/// **This is the one place the carve-out is extended, and the boundary it keeps
+/// is a stated test: delete `.day/` and day's answer must not change — only
+/// *when* it next repeats itself.** The counter is not consulted to decide
+/// anything day reports. It decides whether to say something again, which is a
+/// display decision in the same sense the status line is: losing it costs a
+/// repetition, never a fact. `docs/CONVENTIONS.md` and `CLAUDE.md` say the
+/// carve-out is abused the moment the cache is read to *decide* rather than to
+/// *display*, so the distinction is drawn here explicitly rather than left to a
+/// reader's judgement.
+///
+/// Infallible: any IO problem returns `true`, so a broken cache makes day
+/// slightly noisier rather than silent. Failing *open* is the right direction —
+/// the condition being re-displayed is one that makes day's other output
+/// partial, and losing it is worse than repeating it.
+pub fn cadence_allows(root: &Path, cadence: u32) -> bool {
+    let path = cadence_path(root);
+    let seen: u32 = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+
+    let next = seen.saturating_add(1);
+    let fire = next >= cadence.max(1);
+    let record = if fire { 0 } else { next };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, record.to_string());
+    fire
 }
 
 /// Writes the rendered status line into the cache, creating `.day/` if
