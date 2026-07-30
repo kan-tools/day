@@ -19,6 +19,10 @@ use crate::kan_client::KanClient;
 /// Subject-name prefix for schema declarations.
 pub const SCHEMA_PREFIX: &str = "schema/";
 /// Fence info string marking a schema block inside a claim's text.
+fn default_resolution_prefix() -> String {
+    "RQ-".to_string()
+}
+
 pub const FENCE_INFO: &str = "day-schema";
 /// The schema `day design check` uses unless told otherwise.
 pub const DEFAULT_SLUG: &str = "design-doc";
@@ -65,6 +69,18 @@ pub struct Schema {
     /// design is recorded.
     #[serde(default)]
     pub resolved_section: String,
+    /// Prefix marking a **stable id** on a resolved-question bullet, e.g.
+    /// `RQ-1`. Declared alongside `requirement_prefix` and `criterion_prefix`
+    /// because it is the same mechanism for the same reason (day#36).
+    ///
+    /// Ids exist so re-recording a design is incremental. `day design record`
+    /// appends one `decide` per resolved-question bullet, and `/design`
+    /// explicitly supports iterating — so without ids, every iteration
+    /// re-appends every decision already recorded. Keying on *text* was the
+    /// obvious alternative and breaks the moment a bullet is reworded, which is
+    /// exactly what iterating on a design does.
+    #[serde(default = "default_resolution_prefix")]
+    pub resolution_prefix: String,
 }
 
 impl crate::atoms::Versioned for Schema {
@@ -103,6 +119,7 @@ impl Schema {
             placeholders: ["TODO", "TBD"].iter().map(|s| s.to_string()).collect(),
             paths_section: "Architecture".to_string(),
             resolved_section: "Resolved Questions".to_string(),
+            resolution_prefix: default_resolution_prefix(),
         }
     }
 

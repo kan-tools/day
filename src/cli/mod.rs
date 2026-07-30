@@ -494,7 +494,35 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         Command::Design(DesignAction::Check { path, schema }) => {
             let schema = crate::schema::Schema::load(&client, &schema)?;
             let doc = crate::record::read_document(&path)?;
-            let report = crate::design::check(&doc, &schema, &cwd);
+            let mut report = crate::design::check(&doc, &schema, &cwd);
+
+            // day#41: validate against the decisions already on the subject, not
+            // only against the document's own structure. The subject is the
+            // document's filename stem, the same inference `design record` uses.
+            //
+            // A read failure is reported, not swallowed: "day could not check
+            // the record" and "the record holds nothing" are different, which is
+            // the rule `a_failed_kan_read_is_never_swallowed` now enforces.
+            let subject = crate::record::slug_for(&path);
+            match client.show(&subject) {
+                Ok(claims) => {
+                    let recorded: Vec<String> = claims
+                        .iter()
+                        .filter(|c| c.kind == "Decision")
+                        .filter_map(|c| c.text.clone())
+                        .collect();
+                    report.findings.extend(crate::design::check_against_record(
+                        &doc, &schema, &recorded,
+                    ));
+                }
+                Err(e) => report.findings.push(crate::design::Finding {
+                    verdict: crate::design::Verdict::Warn,
+                    message: format!(
+                        "could not read `{subject}`, so decisions already recorded there \
+                         were not checked against this document: {e}"
+                    ),
+                }),
+            }
             print!("{}", report.render());
             Ok(if report.is_clean() {
                 ExitCode::SUCCESS

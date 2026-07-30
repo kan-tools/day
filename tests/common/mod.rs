@@ -203,6 +203,7 @@ case "$1" in
     exit 0 ;;
   issues) cat "$DATA/issues.json" 2>/dev/null; exit 0 ;;
   observe|plan|decide|result|resolve)
+    verb="$1"
     # Log the whole invocation so tests can assert on the chain day built,
     # then print a CID the way kan does, since day chains on that output.
     # Records are separated by a marker, not by newlines: claim text is
@@ -224,7 +225,7 @@ case "$1" in
       if [ "$1" = "--subject" ]; then subj="$2"; fi
       shift
     done
-    python3 "$DATA/append.py" "$DATA" "$subj" "$cid" "$text"
+    python3 "$DATA/append.py" "$DATA" "$subj" "$cid" "$text" "" "" "$verb"
 
     printf '%s\n' "$cid"
     exit 0 ;;
@@ -346,8 +347,22 @@ const STUB_APPEND_PY: &str = r#"
 import json, os, sys
 
 data, subj, cid, text = sys.argv[1:5]
-relation = sys.argv[5] if len(sys.argv) > 5 else None
-target = sys.argv[6] if len(sys.argv) > 6 else None
+relation = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else None
+target = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else None
+verb = sys.argv[7] if len(sys.argv) > 7 else "observe"
+
+# The ClaimKind kan actually produces for each write verb. The stub used to
+# record EVERYTHING as an Observation, which is a fidelity gap of exactly the
+# kind `tests/kan_conformance.rs` exists to catch: day filters claims by kind,
+# so a stub that flattens every kind lets a kind-sensitive bug pass. Found when
+# day#36's incremental recording read back its own `decide` claims and saw none.
+KIND_FOR_VERB = {
+    "observe": "Observation",
+    "plan": "Plan",
+    "decide": "Decision",
+    "result": "Result",
+    "resolve": "Result",
+}
 
 path = os.path.join(data, "show-%s.json" % subj.replace("/", "_"))
 if os.path.exists(path):
@@ -364,7 +379,7 @@ if relation:
     claim["relation"] = relation
     claim["target"] = target
 else:
-    claim["kind"] = "Observation"
+    claim["kind"] = KIND_FOR_VERB.get(verb, "Observation")
     claim["text"] = text
 doc["claims"].append(claim)
 
