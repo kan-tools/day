@@ -332,17 +332,39 @@ fn conformance_the_documented_kan_result_form_runs() {
         "the `kan result` form documented in docs/CONVENTIONS.md was rejected: {}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
 
-    // kan#78 is **resolved**: kan accepts `--subject` on `result` too. This
-    // test fired on that change, which is exactly what it was for — the
-    // assertion used to be that the flag form is rejected, and it was
-    // revisited rather than deleted when the signal arrived.
-    //
-    // What still matters is the direction day depends on, so that is what is
-    // asserted now: the positional form above runs. day emits only that form
-    // (`Write::new` is structurally unavailable for `result` — see the
-    // hermetic test below), so a kan that ever stopped accepting it would
-    // break every assessment day prints, and this is where that surfaces.
+/// kan#78 is **resolved**: kan accepts `--subject` on `result` too.
+///
+/// **Split out of [`conformance_the_documented_kan_result_form_runs`], and the
+/// reason is worth stating** — folding it in there made day's compatibility
+/// floor wrong by five releases. This asserts a property of *kan*, not a
+/// dependency of *day*: day emits only the positional form (`Write::new` is
+/// structurally unavailable for `result` — see the hermetic test below), so a
+/// kan without kan#78 serves day perfectly well. Measured as one suite, every
+/// kan through v0.7.0 looked `incompatible` when what they actually lacked was
+/// a convenience day does not use.
+///
+/// `scripts/run-kan-compat-cell.sh` therefore excludes this test: the cell's
+/// question is "does day work against this kan", and a kan characterization
+/// cannot be allowed to answer it. It still runs in normal CI against the
+/// pinned kan, where it does its real job — telling us if kan ever revokes the
+/// spelling `docs/CONVENTIONS.md` mentions.
+#[test]
+fn conformance_kan_78_result_accepts_both_spellings() {
+    let Some(bin) = real_kan() else {
+        eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
+        return;
+    };
+    let dir = scratch_repo();
+
+    let seed = Command::new(bin)
+        .args(["observe", "seed", "--subject", "telos/conformance"])
+        .current_dir(dir.path())
+        .output()
+        .expect("kan should run");
+    assert!(seed.status.success(), "seeding the subject failed");
+
     let both = Command::new(bin)
         .args([
             "result",

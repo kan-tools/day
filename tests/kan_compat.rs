@@ -113,21 +113,29 @@ fn every_row_records_a_known_outcome() {
     assert!(rows > 0, "the table should have rows");
 }
 
-/// The reason the floor is where it is, pinned so that moving it silently is
-/// not possible. kan v0.7.0 rejects `kan result --subject` — the spelling
-/// `docs/CONVENTIONS.md` documents — and kan#78 landed the fix in v0.7.1. If
-/// this ever fails, the floor moved and the *why* column needs to move with it.
+/// The reason the floor is where it is, pinned so it cannot move silently.
+///
+/// kan v0.6.0 and earlier have **no `kan show --json`** — day reads the
+/// structured form for everything, because it parsed the rendered form once,
+/// kan changed it, and day read a full log as empty while reporting success.
+/// They also lack the `in-tension-with` relation kind (kan#60). Neither is
+/// workaroundable: falling back to rendered output would reintroduce the exact
+/// defect day migrated away from, so this floor is **hard**, not incidental.
+///
+/// It is deliberately *not* kan#78. The first version of this table said it
+/// was, and was wrong by one release, because the conformance suite asserted
+/// kan#78's resolution alongside day's actual dependencies — a property of kan
+/// deciding a fact about day. See `conformance_kan_78_result_accepts_both_spellings`.
 #[test]
-fn the_floor_is_where_kan_78_landed() {
+fn the_floor_is_where_show_json_landed() {
     let ok = measured_ok();
     let oldest = ok.first().unwrap();
     assert_eq!(
         (oldest.major, oldest.minor, oldest.patch),
-        (0, 7, 1),
-        "day's oldest supported kan is expected to be 0.7.1, where kan#78 made \
-         `result --subject` work. If the floor moved, update this test and the \
-         `why` column in the table — the floor is a fact about a specific kan \
-         change, not a number."
+        (0, 7, 0),
+        "day's oldest supported kan is expected to be 0.7.0, the first with \
+         `show --json`. If the floor moved, update this test and the `why` \
+         column — the floor is a fact about specific kan changes, not a number."
     );
 }
 

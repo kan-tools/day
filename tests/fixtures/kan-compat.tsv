@@ -4,26 +4,38 @@
 # tests/kan_conformance.rs — the only suite in this repo that talks to a real
 # kan rather than a DAY_KAN_BIN stub.
 #
+# The cell SKIPS `conformance_kan_78_*`, which asserts a property of kan rather
+# than a dependency of day. Including it made this table wrong by one release:
+# day emits `kan result` with its subject positionally and never with
+# `--subject`, so a kan predating kan#78 serves day fine. Only tests of day's
+# own dependencies may set the floor.
+#
 # src/compat.rs's OLDEST_SUPPORTED and NEWEST_MEASURED are DERIVED from the
-# `ok` rows here, and the `range-matches-measurements` job fails if they drift
-# apart. Do not edit one without the other.
+# `ok` rows here, and tests/kan_compat.rs fails if they drift apart. Do not
+# edit one without the other.
 #
 # Outcomes:
 #   ok            every conformance test passed
-#   incompatible  at least one failed — day's documented invocations do not run
+#   incompatible  at least one failed — day depends on something absent
 #   unbuildable   the tag does not build with the current toolchain; says
 #                 nothing about the pairing
 #
 # A tag with no row here fails the build. Whether a pairing is supported is a
 # decision, not a default.
 #
+# The floor is HARD, not incidental: below v0.7.0 there is no `kan show --json`
+# at all, and day reads the structured form for everything because it parsed
+# the rendered form once, kan changed it, and day read a full log as empty
+# while reporting success. Falling back would reintroduce that defect, not
+# widen support.
+#
 # tag	outcome	why
-v0.1.1-beta.1	incompatible	predates the read surface day depends on
-v0.2.0-beta.1	incompatible	predates the read surface day depends on
-v0.3.0-beta.1	incompatible	predates the read surface day depends on
-v0.4.0-beta.1	incompatible	predates the read surface day depends on
-v0.5.0-beta.1	incompatible	predates the read surface day depends on
-v0.6.0-beta.1	incompatible	predates the read surface day depends on
-v0.7.0-beta.1	incompatible	`kan result --subject` rejected; positional-only until kan#78
-v0.7.1-beta.1	ok	kan#78 landed: `result --subject` accepted, which is the spelling docs/CONVENTIONS.md documents
+v0.1.1-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
+v0.2.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
+v0.3.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
+v0.4.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
+v0.5.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
+v0.6.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind (kan#60)
+v0.7.0-beta.1	ok	`show --json` and kan#60's relation kind both present; lacks kan#78, which day does not use
+v0.7.1-beta.1	ok	kan#78 landed, irrelevant to day but recorded
 v0.8.0-beta.1	ok	current

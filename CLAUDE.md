@@ -209,6 +209,29 @@ thing that checks the test. All of them are from one milestone
   If a rule matters, this is the shape it wants — the `.day/` carve-out has the
   same treatment for the same reason.
 
+## And one about measuring the wrong thing accurately
+
+- **A conformance test must separate "what we depend on" from "what they
+  promised."** day's first kan-compatibility measurement put the floor at kan
+  v0.7.1. It was wrong by a release, and not because the harness was sloppy — it
+  built, ran, and reported honestly. One test carried two assertions: that
+  `kan result <subject> <text>` runs, which day depends on, and that
+  `kan result --subject` *also* runs, which asserts kan#78 was resolved and is a
+  fact about **kan**. day emits only the positional form. So a property of the
+  dependency silently decided a fact about day, and the fact was user-visible:
+  a floor that turns working setups away. **The rule is that a cell measuring
+  "does X work against Y" may only run assertions about X's own requirements** —
+  every other assertion belongs in a test named for what it actually checks.
+  This is `docs/CONVENTIONS.md`'s descriptive-vs-restrictive distinction one
+  level up: the same suite was doing both jobs, and only one of them sets a
+  floor.
+
+  Note what did *not* catch it: the measurement was real, the failure was real,
+  and the diagnosis ("`--subject` is rejected") was correct. What was wrong was
+  the inference from it. Running the thing is necessary and was not sufficient —
+  the check that mattered was reading day's own source to ask whether day emits
+  the form at all, and `src/telos.rs` says in a comment that it does not.
+
 ## Two tools, already written — use them rather than reinventing them
 
 - **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says

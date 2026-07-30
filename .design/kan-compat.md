@@ -144,6 +144,23 @@ a compile failure rather than assuming a non-zero exit means a contract break.
   does not yet consume kan v0.8's trust surface at all. The contract doc would
   have produced a minimum of v0.8, which is wrong by several releases. Only
   running the suite knows.
+- **A conformance cell may only run tests of day's own dependencies.** The first
+  measurement put the floor at v0.7.1 and was wrong, because
+  `conformance_the_documented_kan_result_form_runs` carried two assertions: that
+  the positional `kan result` form runs — which day depends on — and that
+  `result --subject` also runs, which asserts **kan#78 was resolved** and is a
+  property of *kan*. day emits only the positional form, so a kan predating
+  kan#78 serves it fine. One test mixing "what we depend on" with "what they
+  promised" moved a user-visible floor by a release, in the direction that turns
+  working setups away. The assertion is now its own test, named for what it
+  actually checks, and the cell skips it — while normal CI still runs it against
+  the pinned kan, where it does its real job of catching a revocation.
+- **The floor is hard below v0.7.0, and that is worth stating so nobody tries to
+  lower it.** kan v0.6.0 and earlier have no `kan show --json`, and day reads the
+  structured form for everything precisely because it parsed the rendered form
+  once, kan changed it, and day read a full log as empty while reporting success.
+  They also lack `in-tension-with` (kan#60). A fallback to rendered output would
+  not widen support; it would reintroduce the defect day migrated away from.
 - **`is_healthy` is left alone (REQ-7).** Folding the pairing in would change
   the documented meaning of `day doctor`'s exit code, and the usual reason it
   would fire is `Newer`, which is not a fault.

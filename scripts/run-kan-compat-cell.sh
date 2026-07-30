@@ -36,7 +36,15 @@ ln -sf "$(cd "$(dirname "$kan_bin")" && pwd)/$(basename "$kan_bin")" "$shim/kan"
 # supposed to be talking to the real thing.
 unset DAY_KAN_BIN || true
 
-if PATH="$shim:$PATH" cargo test --quiet --test kan_conformance >/tmp/kan-compat.log 2>&1; then
+# `--skip conformance_kan_78`: that test asserts a property of KAN, not a
+# dependency of DAY. day emits `kan result` with its subject positionally and
+# never with `--subject`, so a kan predating kan#78 serves day fine. Measured
+# as one suite it made day's floor wrong by five releases — every kan through
+# v0.7.0 read as `incompatible` when what they lacked was a convenience day
+# does not use. The cell's question is "does day work against this kan", and
+# only tests of day's own dependencies may answer it.
+if PATH="$shim:$PATH" cargo test --quiet --test kan_conformance -- \
+        --skip conformance_kan_78 >/tmp/kan-compat.log 2>&1; then
     echo "ok"
 else
     # Distinguish "day failed to compile" from "the pairing does not work" —
