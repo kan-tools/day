@@ -1,0 +1,169 @@
+name: kan compatibility matrix
+
+# Which released kan versions this day works with (day#94).
+#
+# day and kan are separately released crates with a versioned contract between
+# them, and until this existed nothing recorded which pairings work: `day
+# doctor` said `kan: reachable`, and reachable is not compatible. A user
+# running day against a kan that predates a read day depends on found out by
+# getting a wrong answer.
+#
+# Each cell installs one released kan and runs `tests/kan_conformance.rs`
+# against it. That suite is the only one in the repo that talks to a real kan;
+# every other test stubs it through DAY_KAN_BIN, which validates day against
+# day's own idea of kan's CLI rather than against kan's contract.
+#
+# **This matrix is what sets `src/compat.rs`'s supported range.** The constant
+# is derived from `tests/fixtures/kan-compat.tsv`, not asserted ahead of it —
+# writing the bound first and calling it a requirement would be a claim about
+# kan that day never checked, which is the nominal-requirement failure that
+# blocked `.design/declared-blocks.md`'s first implementation.
+#
+# Relationship to the sibling matrix: `migration-matrix.yml` varies *day* and
+# holds the block shapes fixed; this varies *kan* and holds day fixed. Same
+# caching design, different axis.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  pull_request:
+    # Cheap on a hit, and the range in src/compat.rs is only trustworthy if a
+    # change to day's read surface re-measures it.
+    paths:
+      - "src/kan_client.rs"
+      - "src/compat.rs"
+      - "tests/kan_conformance.rs"
+      - "tests/fixtures/kan-compat.tsv"
+      - ".github/workflows/kan-compat.yml"
+      - "scripts/run-kan-compat-cell.sh"
+  workflow_dispatch:
+
+jobs:
+  # The destination side of every cache key. day's commit is the destination
+  # here; a released kan tag is the immutable reader.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.tags.outputs.json }}
+      surface: ${{ steps.hash.outputs.surface }}
+      rustc: ${{ steps.hash.outputs.rustc }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - id: tags
+        name: Enumerate kan's released tags
+        run: |
+          # Read from kan's repo rather than a hardcoded list, so a kan release
+          # shows up here without anyone remembering to add it.
+          json=$(git ls-remote --tags --refs \
+                   https://github.com/kan-tools/kan 'v*.*.*' \
+                 | sed 's#.*refs/tags/##' \
+                 | sort -V \
+                 | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "json=$json" >> "$GITHUB_OUTPUT"
+          echo "matrix: $json"
+
+      - id: hash
+        name: Hash day's read surface
+        run: |
+          # Only what determines how day talks to kan. Hashing all of src/
+          # would invalidate every cell on an unrelated change, and the cache
+          # is the entire reason this is affordable.
+          surface=$(cat src/kan_client.rs src/compat.rs tests/kan_conformance.rs \
+                    | sha256sum | cut -d' ' -f1)
+          echo "surface=$surface" >> "$GITHUB_OUTPUT"
+          echo "rustc=$(rustc --version | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+  matrix:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kan: ${{ fromJSON(needs.plan.outputs.tags) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Key = (kan tag, day's read surface, toolchain). A released tag is
+      # immutable, so a hit means the answer cannot have changed and running
+      # the cell would be pure waste. Adding a kan release costs one cell;
+      # changing day's read surface costs the column; changing neither costs
+      # nothing.
+      - id: cached
+        uses: actions/cache@v4
+        with:
+          path: kan-compat-outcome.txt
+          key: >-
+            kan-compat-v1-${{ matrix.kan }}-${{ needs.plan.outputs.surface }}-${{
+            needs.plan.outputs.rustc }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.cached.outputs.cache-hit != 'true'
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.cached.outputs.cache-hit != 'true'
+
+      - name: Build this kan
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: |
+          # An old kan tag may not build with a current toolchain. That is a
+          # real outcome rather than a CI failure: a version nobody can build
+          # is a version nobody is running.
+          if cargo install --git https://github.com/kan-tools/kan \
+               --tag "${{ matrix.kan }}" --root /tmp/kan kan 2>/tmp/kan-build.log; then
+            echo built > /tmp/kan-status
+          else
+            echo unbuildable > /tmp/kan-status
+            tail -20 /tmp/kan-build.log || true
+          fi
+
+      - name: Run the conformance suite against it
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: |
+          if [ "$(cat /tmp/kan-status)" = "unbuildable" ]; then
+            echo unbuildable > kan-compat-outcome.txt
+            exit 0
+          fi
+          scripts/run-kan-compat-cell.sh /tmp/kan/bin/kan > kan-compat-outcome.txt
+          cat kan-compat-outcome.txt
+
+      - name: Compare against the committed expectation
+        run: |
+          outcome=$(cat kan-compat-outcome.txt)
+          expected=$(awk -v t="${{ matrix.kan }}" '$1==t {print $2}' \
+                     tests/fixtures/kan-compat.tsv)
+          echo "::notice title=${{ matrix.kan }}::$outcome"
+          if [ -z "$expected" ]; then
+            echo "::error::${{ matrix.kan }} has no committed expectation. Add a row to tests/fixtures/kan-compat.tsv — whether a pairing is supported is a decision, not a default. If this is a new kan release that works, add it and widen NEWEST_MEASURED in src/compat.rs in the same commit."
+            exit 1
+          fi
+          if [ "$outcome" != "$expected" ]; then
+            echo "::error::${{ matrix.kan }}: expected '$expected', got '$outcome'. A pairing changed. If day dropped support deliberately, move OLDEST_SUPPORTED in src/compat.rs and update the table in the same commit — the constant and this table must never disagree."
+            exit 1
+          fi
+
+  # NOTE: the check that keeps src/compat.rs and this table in agreement is
+  # `tests/kan_compat.rs`, NOT a job here. It was a job here first — one that
+  # grepped the constants out of src/compat.rs — and that check would have
+  # passed silently the first time rustfmt reflowed a struct literal onto one
+  # line. A test that reads the constants through the crate cannot drift from
+  # the constants, and it runs on every push rather than only when this
+  # workflow does.
+
+  report:
+    needs: [plan, matrix]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarise
+        run: |
+          {
+            echo "### kan compatibility matrix"
+            echo ""
+            echo "Cells: ${{ needs.matrix.result }}"
+            echo ""
+            echo "Each cell is this day commit running \`tests/kan_conformance.rs\` against one released kan."
+            echo "The supported range \`day doctor\` prints is derived from these results, not asserted ahead of them."
+          } >> "$GITHUB_STEP_SUMMARY"

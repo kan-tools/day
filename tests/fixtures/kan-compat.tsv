@@ -1,0 +1,29 @@
+# Which released kan each day commit works with (day#94).
+#
+# Measured by .github/workflows/kan-compat.yml: one cell per kan tag, running
+# tests/kan_conformance.rs — the only suite in this repo that talks to a real
+# kan rather than a DAY_KAN_BIN stub.
+#
+# src/compat.rs's OLDEST_SUPPORTED and NEWEST_MEASURED are DERIVED from the
+# `ok` rows here, and the `range-matches-measurements` job fails if they drift
+# apart. Do not edit one without the other.
+#
+# Outcomes:
+#   ok            every conformance test passed
+#   incompatible  at least one failed — day's documented invocations do not run
+#   unbuildable   the tag does not build with the current toolchain; says
+#                 nothing about the pairing
+#
+# A tag with no row here fails the build. Whether a pairing is supported is a
+# decision, not a default.
+#
+# tag	outcome	why
+v0.1.1-beta.1	incompatible	predates the read surface day depends on
+v0.2.0-beta.1	incompatible	predates the read surface day depends on
+v0.3.0-beta.1	incompatible	predates the read surface day depends on
+v0.4.0-beta.1	incompatible	predates the read surface day depends on
+v0.5.0-beta.1	incompatible	predates the read surface day depends on
+v0.6.0-beta.1	incompatible	predates the read surface day depends on
+v0.7.0-beta.1	incompatible	`kan result --subject` rejected; positional-only until kan#78
+v0.7.1-beta.1	ok	kan#78 landed: `result --subject` accepted, which is the spelling docs/CONVENTIONS.md documents
+v0.8.0-beta.1	ok	current
