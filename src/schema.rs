@@ -38,6 +38,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Schema {
     /// Headings that must be present and non-empty, in no particular order.
     #[serde(default)]
@@ -64,6 +65,13 @@ pub struct Schema {
     /// design is recorded.
     #[serde(default)]
     pub resolved_section: String,
+}
+
+impl crate::atoms::Versioned for Schema {
+    /// A design-doc schema. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 fn default_requirement_prefix() -> String {

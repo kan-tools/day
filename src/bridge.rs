@@ -45,6 +45,7 @@ pub enum Error {
 
 /// What a telos declares as evidence for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Witnesses {
     /// Artifact types that would evidence this telos. Types, not instances:
     /// many concrete artifacts of a declared type satisfy the telos equally,
@@ -65,6 +66,13 @@ pub struct Witnesses {
     /// byte-identical, so the change is additive rather than versioned.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub scope: std::collections::BTreeMap<String, String>,
+}
+
+impl crate::atoms::Versioned for Witnesses {
+    /// A telos's witness declaration. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = TELOS_FENCE;
 }
 
 impl Witnesses {
@@ -92,6 +100,7 @@ pub enum Node {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Plan {
     /// Target telos slug (without the `telos/` prefix).
     pub telos: String,
@@ -102,6 +111,13 @@ pub struct Plan {
     #[serde(default)]
     pub have: Vec<String>,
     pub plan: Node,
+}
+
+impl crate::atoms::Versioned for Plan {
+    /// A bridge plan. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 impl Plan {

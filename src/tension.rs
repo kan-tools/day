@@ -48,9 +48,17 @@ pub enum Error {
 /// has four — so `tension/foo-bar--baz` is not reliably decomposable. The
 /// slug is a name; this is the data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Tension {
     /// The two telos slugs, sorted. Always two.
     pub between: Vec<String>,
+}
+
+impl crate::atoms::Versioned for Tension {
+    /// A tension declaration. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 impl Tension {

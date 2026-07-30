@@ -47,7 +47,10 @@ pub enum Error {
     Bridge(#[from] bridge::Error),
     #[error(transparent)]
     Tension(#[from] crate::tension::Error),
-    #[error("no telos `{0}` is declared")]
+    // Every variant that concerns one subject **names that subject**, so a
+    // caller which already knows it does not have to guess whether to prefix.
+    // Guessing is what printed `telos/bad: telos/bad: …`.
+    #[error("{}{}: no such telos is declared", atoms::TELOS_PREFIX, .0)]
     NoSuchTelos(String),
     #[error("no atom `{0}` is declared")]
     NoSuchAtom(String),
@@ -105,6 +108,21 @@ impl<'de> Deserialize<'de> for WitnessSchema {
             unsupported,
         })
     }
+}
+
+impl crate::atoms::Versioned for WitnessSchema {
+    /// The witness map. v1 is every block written before versioning existed,
+    /// which an absent `_version` still means.
+    ///
+    /// **No `deny_unknown_fields` here, and that is not an omission.** This
+    /// block is `transparent` over a map from witness type to probe, so every
+    /// key is *data* — an unrecognised key is a witness type day has never
+    /// heard of, which is a project's business and not an error. The strictness
+    /// lives one level down, on the probe each key maps to, and the per-entry
+    /// deserializer above already reports a probe this build cannot read
+    /// without losing the rest of the map.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 impl WitnessSchema {

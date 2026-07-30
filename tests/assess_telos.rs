@@ -410,7 +410,26 @@ fn an_unassessable_telos_does_not_exit_zero() {
         &["assess", "telos", "does-not-exist"],
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("no telos"), "{stdout}");
+    // Pins the property rather than the prose: the error **names the subject it
+    // concerns**, which is what lets a caller that already knows the subject
+    // avoid printing it twice. This used to assert a substring of the wording
+    // and broke when `honest-reads` made every subject-scoped error
+    // self-describing — the behaviour it was protecting is unchanged.
+    assert!(
+        stdout.contains("telos/does-not-exist"),
+        "the error should name the subject it concerns: {stdout}"
+    );
+    assert!(
+        stdout.contains("declared"),
+        "and should say the telos is not declared: {stdout}"
+    );
+    // Named exactly once — a caller that prefixes an already-self-describing
+    // error is what printed `telos/bad: telos/bad: …`.
+    assert_eq!(
+        stdout.matches("telos/does-not-exist").count(),
+        1,
+        "the subject should be named once, not twice: {stdout}"
+    );
     assert_eq!(
         out.status.code(),
         Some(2),

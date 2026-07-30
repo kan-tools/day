@@ -655,8 +655,12 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     // reporting, so the error is printed and the run
                     // continues — but the exit code still says a check did
                     // not run.
+                    // No subject prefix here: every `telos::Error` that concerns
+                    // one subject names it. Prefixing anyway is what produced
+                    // `telos/bad: telos/bad: …` for the one variant that
+                    // already did.
                     Err(e) => {
-                        println!("{}{slug}: {e}", crate::atoms::TELOS_PREFIX);
+                        println!("{e}");
                         unavailable = true;
                     }
                 }

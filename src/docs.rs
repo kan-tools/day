@@ -51,6 +51,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocsSchema {
     /// File holding the version of record.
     pub version_source: String,
@@ -72,6 +73,13 @@ pub struct DocsSchema {
     /// subject it records releases on.
     #[serde(default = "default_release_subject")]
     pub release_subject: String,
+}
+
+impl crate::atoms::Versioned for DocsSchema {
+    /// A docs-consistency schema. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 fn default_release_subject() -> String {
