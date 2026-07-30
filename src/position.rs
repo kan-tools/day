@@ -40,7 +40,7 @@ use std::collections::BTreeMap;
 
 use crate::atoms::Atom;
 use crate::git::{Boundary, Git};
-use crate::probe::{self, Authorization, ClaimLog, Probe, Verdict};
+use crate::probe::{self, Authorization, ClaimLog, Probe, ReadFailure, Verdict};
 
 /// Whether an artifact type is materially present, and how sure day is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,11 +70,37 @@ pub fn resolve(
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
 ) -> Verdict {
+    resolve_collecting(probe, git, log, boundary, None)
+}
+
+/// [`resolve`], with somewhere to put reads that could not happen.
+///
+/// Split rather than adding a parameter to `resolve` because `resolve` is also
+/// called where the caller renders the verdict itself (`status.rs`), and there
+/// the reason is already on screen.
+pub fn resolve_collecting(
+    probe: &Probe,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    boundary: Option<&Boundary>,
+    failures: Option<&mut Vec<ReadFailure>>,
+) -> Verdict {
     match (probe, boundary) {
         // Reported as not-run, never executed, boundary or no boundary. A
         // cycle is a question about *when* evidence appeared; it does not
         // make executing something any more acceptable at session start.
         (Probe::Command(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
+        // No boundary — the cumulative reading. A claim probe is handled here
+        // rather than falling into `evaluate` so it can still report a read it
+        // could not make: `evaluate` has nowhere to put one.
+        //
+        // **This arm is the default one.** No release means no boundary, so
+        // every repo without a `v*` tag takes it — which is every fresh clone,
+        // and was every fixture in this file. Wiring only the `Some(boundary)`
+        // path left the collector dead on exactly the population it was for,
+        // repeating the defect CLAUDE.md records about the position
+        // fingerprint.
+        (Probe::Claim(shape), None) => probe::claims_matching(shape, log, None, failures),
         (_, None) => probe::evaluate(probe, git, log, Authorization::Report),
         (Probe::Path(pathspec), Some(boundary)) => {
             match git.changed_files_matching(&boundary.tag, pathspec) {
@@ -106,7 +132,7 @@ pub fn resolve(
             Err(e) => Verdict::Error(format!("could not list tags: {e}")),
         },
         (Probe::Claim(shape), Some(boundary)) => {
-            probe::claims_matching(shape, log, Some(boundary.at_micros()))
+            probe::claims_matching(shape, log, Some(boundary.at_micros()), failures)
         }
     }
 }
@@ -119,6 +145,7 @@ fn materialized(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
+    failures: Option<&mut Vec<ReadFailure>>,
 ) -> Presence {
     match probes.get(kind) {
         None => Presence::Unknown,
@@ -126,7 +153,7 @@ fn materialized(
         // is unknowable at inference time, which is honest — the alternative
         // is executing it on every session start.
         Some(Probe::Command(_)) => Presence::Unknown,
-        Some(probe) => match resolve(probe, git, log, boundary) {
+        Some(probe) => match resolve_collecting(probe, git, log, boundary, failures) {
             Verdict::Satisfied(_) => Presence::Present,
             Verdict::Unsatisfied(_) => Presence::Absent,
             // NotRun should be unreachable for path/tag/claim, but if it
@@ -224,6 +251,10 @@ pub struct Report {
     /// Off-sequence findings: an atom's outputs are present while an upstream
     /// atom's outputs are not, so a step was skipped.
     pub off_sequence: Vec<String>,
+    /// Reads that could not happen while inferring this position, so a caller
+    /// can say the report is partial instead of presenting it as whole
+    /// (`.design/declared-blocks.md` REQ-4).
+    pub read_failures: Vec<ReadFailure>,
 }
 
 /// Infers position from the atom set and the witness probes, resolving each
@@ -242,10 +273,21 @@ pub fn infer(
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
 ) -> Report {
-    infer_with(
+    // RefCell because `memoized` takes an `Fn`, and each resolution may add to
+    // this. Resolution happens at most once per artifact type, so a failure
+    // cannot be recorded twice for one type.
+    let failures: RefCell<Vec<ReadFailure>> = RefCell::new(Vec::new());
+    let mut report = infer_with(
         atoms,
-        memoized(|kind| materialized(kind, probes, git, log, boundary)),
-    )
+        memoized(|kind| {
+            let mut collected = Vec::new();
+            let presence = materialized(kind, probes, git, log, boundary, Some(&mut collected));
+            failures.borrow_mut().extend(collected);
+            presence
+        }),
+    );
+    report.read_failures = failures.into_inner();
+    report
 }
 
 /// Wraps a resolver so each artifact type is looked up once per inference.
@@ -338,6 +380,7 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
     off_sequence.dedup();
 
     Report {
+        read_failures: Vec::new(),
         standings,
         current,
         off_sequence,
@@ -456,7 +499,8 @@ mod tests {
                     &probes,
                     &git,
                     &ClaimLog::new(&client),
-                    bound
+                    bound,
+                    None
                 ),
                 Presence::Unknown
             );

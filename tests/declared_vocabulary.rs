@@ -29,6 +29,28 @@ fn day(dir: &Path, kan: &Path, args: &[&str]) -> std::process::Output {
 /// A real git repo with three tags in a known order. Real git rather than a
 /// stub, because what is being asserted is which tag day *selects*, and a stub
 /// that returned a fixed answer would assert nothing.
+/// A git repo with a commit and **no tags** — so `cycle_boundary` finds none
+/// and position takes its cumulative reading. This is the DEFAULT mode (no
+/// release means no boundary), and the one a mechanism wired only for the
+/// tagged path silently skips.
+fn init_repo(dir: &Path) {
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@e")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@e")
+            .output()
+            .expect("git");
+    };
+    git(&["init", "-q", "."]);
+    std::fs::write(dir.join("Cargo.toml"), "version = \"1.0.0\"\n").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "one"]);
+}
+
 fn repo_with_tags(dir: &Path, tags: &[&str]) {
     // Dates are set EXPLICITLY and increasing. day selects a boundary with
     // `--sort=-creatordate`, and a lightweight tag's creatordate is its commit's
@@ -583,4 +605,111 @@ fn init_offers_every_declaration_a_project_can_make() {
             && text.contains(&day::cache::DEFAULT_CADENCE.to_string()),
         "`day init` should state what each default is: {text}"
     );
+}
+
+/// `.design/declared-blocks.md` AC-4, for an **instance** rather than a
+/// declaration — the half the adversarial review found unmet.
+///
+/// `claims_matching` refuses to answer a witness from an instance it could not
+/// check, returning `Verdict::Error`. Position inference then reduced that to
+/// `Presence::Unknown`, which is honest about the presence and silent about the
+/// reason: a project whose `research-claim` day cannot read was told only that
+/// its position was unknowable. `telos/honest-reads` is precisely that no report
+/// day makes asserts a completeness it did not verify.
+///
+/// **Run in both boundary modes.** The first fix wired only the
+/// `Some(boundary)` path, so it did nothing on a repo with no `v*` tag — which
+/// is every fresh clone, and was every fixture here. `CLAUDE.md` records that
+/// exact failure for the position fingerprint; this is the same trap one
+/// mechanism over, so the mode is a parameter of the test rather than whatever
+/// the fixture happened to be.
+#[test]
+fn an_instance_day_cannot_check_is_reported_on_both_channels() {
+    let fixture = || {
+        vec![
+            claim(
+                "schema/blocks",
+                "bafybs",
+                "B.\n\n```day-blocks\n{\"research-claim\":{\"required\":[\"medium\"]}}\n```\n",
+            ),
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"station\":{\"claim\":{\"kind\":\"Observation\",\
+                 \"subject\":\"claim/*\",\"block\":\"research-claim\"}}}\n```\n",
+            ),
+            claim(
+                "atom/collect",
+                "bafya",
+                "C.\n\n```day-atom\n{\"in\":[],\"out\":[\"station\"]}\n```\n",
+            ),
+        ]
+    };
+    // The instance this day cannot check.
+    let skewed = claim(
+        "claim/future",
+        "bafyf",
+        "F.\n\n```research-claim\n{\"_version\":2,\"medium\":\"a\"}\n```\n",
+    );
+    // The control: same shape, a version this day reads.
+    let readable = claim(
+        "claim/fine",
+        "bafyok",
+        "F.\n\n```research-claim\n{\"medium\":\"a\"}\n```\n",
+    );
+
+    for tagged in [false, true] {
+        let mode = if tagged {
+            "with a release tag"
+        } else {
+            "no release tag"
+        };
+
+        let run = |extra: StubClaim| -> (String, String) {
+            let dir = tempfile::tempdir().unwrap();
+            if tagged {
+                repo_with_tags(dir.path(), &["v1.0.0"]);
+            } else {
+                init_repo(dir.path());
+            }
+            let mut claims = fixture();
+            claims.push(extra);
+            let kan = write_kan_stub(dir.path(), &claims);
+            let notice = day(dir.path(), &kan, &["hook", "session-notice"]);
+            let start = day(dir.path(), &kan, &["hook", "session-start"]);
+            (
+                String::from_utf8_lossy(&notice.stdout).into_owned(),
+                String::from_utf8_lossy(&start.stdout).into_owned(),
+            )
+        };
+
+        let (notice, start) = run(skewed.clone());
+        assert!(
+            notice.contains("partial"),
+            "{mode}: session-notice should report an unreadable instance: {notice}"
+        );
+        assert!(
+            start.contains("partial") && start.contains("research-claim"),
+            "{mode}: session-start should mark its context partial and name the \
+             block: {start}"
+        );
+        assert!(
+            start.contains("upgrade day"),
+            "{mode}: a version-skewed instance asks the reader to upgrade day, \
+             not to fix the claim: {start}"
+        );
+
+        // Negative control: with a readable instance, both channels are silent.
+        // Without this the assertions above would pass against a warning that
+        // always fires.
+        let (notice, start) = run(readable.clone());
+        assert!(
+            notice.trim().is_empty(),
+            "{mode}: a readable instance should produce no notice: {notice}"
+        );
+        assert!(
+            !start.contains("partial"),
+            "{mode}: a readable instance should not mark the context partial: {start}"
+        );
+    }
 }

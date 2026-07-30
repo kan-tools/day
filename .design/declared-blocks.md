@@ -108,6 +108,21 @@ to assert and this milestone makes true.
       session-notice` reports it and `day hook session-start` marks its context
       partial — the same two channels a built-in reaches. **Negative control:**
       with every declared block valid, both channels are silent. (REQ-4)
+
+      **Two cases, and the review found the second unmet.** An unreadable
+      *declaration* (`schema/blocks` itself) worked. An unreadable *instance* —
+      a claim carrying a `research-claim` from a newer day — reached neither
+      channel: `claims_matching` correctly refused to answer the witness, and
+      position inference then reduced that `Verdict::Error` to
+      `Presence::Unknown`, which is honest about the presence and silent about
+      the reason. day reported a position built on a partial read without saying
+      so, which is what `telos/honest-reads` forbids.
+
+      Both cases are now asserted, and **in both boundary modes**. The first fix
+      wired only the `Some(boundary)` path, so it was inert on any repo with no
+      `v*` tag — every fresh clone, and every fixture in the file. `CLAUDE.md`
+      already records that trap for the position fingerprint; the mode is now a
+      parameter of the test rather than whatever the fixture happened to be.
 - [ ] AC-5: The seven built-in fences are **not** resolvable through the declared
       mechanism, and a project declaring a `schema/blocks` entry named `day-atom`
       is told that name is reserved rather than silently shadowing the built-in.

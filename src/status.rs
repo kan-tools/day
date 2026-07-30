@@ -479,6 +479,8 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                     cadence_unreadable.clone(),
                     cycle_unreadable.clone(),
                 ],
+                // Inference has not run, so it cannot have failed a read.
+                &[],
             ),
         });
     }
@@ -540,6 +542,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 cadence_unreadable.clone(),
                 cycle_unreadable.clone(),
             ],
+            &report.read_failures,
         ),
     })
 }
@@ -561,6 +564,11 @@ fn unreadable_from(
     // read. They lead the list because "day could not read your declaration"
     // outranks anything day found inside the declarations it could.
     declaration_errors: [Option<Unreadable>; 3],
+    // Instances position inference read and could not check
+    // (`.design/declared-blocks.md` REQ-4). Distinct from the declaration
+    // errors above: the project's *declaration* was fine and a *claim carrying
+    // one* is from a newer day.
+    read_failures: &[crate::probe::ReadFailure],
 ) -> Vec<Unreadable> {
     let mut out: Vec<Unreadable> = declaration_errors.into_iter().flatten().collect();
     out.extend(
@@ -584,6 +592,15 @@ fn unreadable_from(
     // situation: the project declared vocabulary and day is only partly able to
     // act on it. Leaving the declarable path unreported while day's own seven
     // are reported would be the inconsistency day#78 was about.
+    // Position inference reduces a verdict to a `Presence`, so an instance it
+    // could not check became `Presence::Unknown` and the reason was dropped on
+    // the floor. day then reported a position built on a partial read without
+    // saying so — which is exactly what `telos/honest-reads` forbids, on the
+    // path a project actually hits at session start.
+    out.extend(read_failures.iter().map(|f| Unreadable {
+        message: f.message.clone(),
+        version_skew: f.version_skew,
+    }));
     for (name, reason) in &blocks.unsupported {
         out.push(Unreadable {
             message: format!("block schema `{name}`: {reason}"),

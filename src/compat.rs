@@ -126,15 +126,6 @@ pub enum Compat {
     Unknown,
 }
 
-impl Compat {
-    /// Whether this verdict warrants saying anything to the user at all.
-    /// [`Compat::Supported`] is silent, which is what keeps the channel worth
-    /// reading.
-    pub fn is_notable(&self) -> bool {
-        !matches!(self, Compat::Supported)
-    }
-}
-
 /// Classifies a kan version against the measured range.
 ///
 /// `None` — kan's version could not be determined — is [`Compat::Unknown`].
@@ -234,14 +225,5 @@ mod tests {
     fn a_prerelease_of_a_supported_version_is_supported() {
         let beta = Version::parse("kan 0.8.0-beta.1").unwrap();
         assert_eq!(classify(Some(&beta)), Compat::Supported);
-    }
-
-    /// Only a mismatch speaks. A supported pairing that emitted a warning would
-    /// train the user to ignore the line.
-    #[test]
-    fn a_supported_pairing_is_not_notable() {
-        assert!(!classify(Some(&NEWEST_MEASURED)).is_notable());
-        assert!(classify(None).is_notable());
-        assert!(classify(Some(&Version::parse("0.1.0").unwrap())).is_notable());
     }
 }

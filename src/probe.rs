@@ -216,6 +216,24 @@ impl ClaimShape {
     }
 }
 
+/// A read that did not happen, surfaced so the report built on it can say it
+/// is partial.
+///
+/// `claims_matching` already refuses to answer a witness from an unchecked
+/// instance — it returns [`Verdict::Error`]. Position inference then maps that
+/// to [`Presence::Unknown`], which is honest about the *presence* and silent
+/// about the *reason*, so a project whose `research-claim` day cannot read was
+/// told only that its position was unknowable. This carries the reason out.
+///
+/// [`Presence::Unknown`]: crate::position::Presence::Unknown
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadFailure {
+    pub message: String,
+    /// True when the *reader* is behind the log. Decides which of two actions,
+    /// for two different people, the human notice asks for.
+    pub version_skew: bool,
+}
+
 /// What reading a declared block on one claim produced.
 ///
 /// Three outcomes, not two, and the split is `v0.7.0-beta.2`'s contract applied
@@ -337,7 +355,7 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
         },
         // Deliberately not gated on `auth`. There is nothing to authorize:
         // this reads the log through kan's read verbs and executes nothing.
-        Probe::Claim(shape) => claims_matching(shape, log, None),
+        Probe::Claim(shape) => claims_matching(shape, log, None, None),
     }
 }
 
@@ -434,7 +452,16 @@ impl<'a> ClaimLog<'a> {
 /// [`ClaimLog`], which runs `kan status` and `kan show` — the same reads
 /// `atoms::load` and `status::last_assessed_atom` already make — and nothing
 /// else.
-pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64>) -> Verdict {
+pub fn claims_matching(
+    shape: &ClaimShape,
+    log: &ClaimLog<'_>,
+    since: Option<i64>,
+    // Collects reads that could not happen. `None` where the caller renders the
+    // `Verdict` itself and so already shows the reason — `day assess telos`
+    // prints ERROR with the message. Position inference passes `Some`, because
+    // it reduces the verdict to a `Presence` and would otherwise drop it.
+    mut failures: Option<&mut Vec<ReadFailure>>,
+) -> Verdict {
     let claims = match log.claims() {
         Ok(claims) => claims,
         Err(e) => return Verdict::Error(e.to_string()),
@@ -495,6 +522,17 @@ pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64
         // stop.
         if let Some(check) = block_check {
             if let BlockOutcome::Unchecked(why) = check(claim) {
+                if let Some(failures) = failures.as_deref_mut() {
+                    // Every `Unchecked` from this path is a version skew: the
+                    // unreadable-*declaration* cases return early above, and
+                    // `extract` reports anything else as `Invalid`. Asserted by
+                    // `an_unchecked_instance_is_always_version_skew` rather
+                    // than left as a comment.
+                    failures.push(ReadFailure {
+                        message: why.clone(),
+                        version_skew: true,
+                    });
+                }
                 unchecked.get_or_insert(why);
             }
         }
