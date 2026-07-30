@@ -328,30 +328,55 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
 
 /// The version gate, then the typed parse.
 ///
-/// **The version is read and then removed before the typed parse**, rather
-/// than being a field on every block type. Three reasons, and the third is
-/// what decides it:
-///
-/// 1. The seven block types need no new field, so nothing day already writes
-///    changes shape and no round-trip becomes non-byte-identical.
-/// 2. `deny_unknown_fields` and `serde(flatten)` do not compose, so a shared
-///    metadata struct was never available anyway.
-/// 3. [`crate::telos::WitnessSchema`] is `transparent` over a map from witness
-///    type to probe. A `_version` *field* there would be read as a witness type
-///    literally named `_version`; stripping it first is the only approach that
-///    works for a block whose body is a map rather than a struct.
+/// The version gate itself lives in [`version_gate`], shared with the
+/// project-declared path so a project's own vocabulary inherits the same
+/// diagnostics rather than growing a parallel set.
 pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
     json: &str,
 ) -> Result<T, BlockError> {
-    let malformed = |source| BlockError::Malformed {
+    let value = version_gate(json, T::FENCE, T::SUPPORTED_VERSION)?;
+    let parsed: T = serde_json::from_value(value).map_err(|source| BlockError::Malformed {
         fence: T::FENCE,
         source,
-    };
+    })?;
+    parsed.validate().map_err(|reason| BlockError::Invalid {
+        fence: T::FENCE,
+        reason,
+    })?;
+    Ok(parsed)
+}
 
+/// Parses a block body, applies the version gate, and hands back the remainder
+/// with [`VERSION_KEY`] removed.
+///
+/// **Shared by the typed path and the project-declared one** (`src/blocks.rs`),
+/// which is what makes a declared block inherit versioning and the
+/// `BlockError` diagnostics rather than growing its own. A project's own
+/// vocabulary gets the same "this day reads v1, this block declares v2 — upgrade
+/// day" message day's built-ins get, because it is literally the same message.
+///
+/// The version is read and then **removed** before anything typed happens. Three
+/// reasons, and the third decides it:
+///
+/// 1. No block type needs a `_version` field, so nothing day already writes
+///    changes shape and no round-trip becomes non-byte-identical.
+/// 2. `deny_unknown_fields` and `serde(flatten)` do not compose, so a shared
+///    metadata struct was never available.
+/// 3. [`crate::telos::WitnessSchema`] and `blocks::BlockSchemas` are both
+///    `transparent` over a map. A `_version` *field* there would be read as a
+///    map entry literally named `_version`; stripping it first is the only
+///    approach that works for a block whose body is a map rather than a struct.
+pub(crate) fn version_gate(
+    json: &str,
+    fence: &'static str,
+    supported: u64,
+) -> Result<serde_json::Value, BlockError> {
+    let malformed = |source| BlockError::Malformed { fence, source };
     let mut value: serde_json::Value = serde_json::from_str(json).map_err(malformed)?;
 
     // A non-object block (a bare array, say) carries no metadata and cannot be
-    // version-gated; hand it to the typed parse, which is what will reject it.
+    // version-gated; hand it on, and let the typed parse or the field check
+    // reject it.
     if let Some(object) = value.as_object_mut() {
         if let Some(declared) = object.remove(VERSION_KEY) {
             let Some(declared) = declared.as_u64() else {
@@ -362,22 +387,16 @@ pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
                     "{VERSION_KEY} must be a positive integer, found `{declared}`"
                 ))));
             };
-            if declared > T::SUPPORTED_VERSION {
+            if declared > supported {
                 return Err(BlockError::TooNew {
-                    fence: T::FENCE,
+                    fence,
                     declared,
-                    supported: T::SUPPORTED_VERSION,
+                    supported,
                 });
             }
         }
     }
-
-    let parsed: T = serde_json::from_value(value).map_err(malformed)?;
-    parsed.validate().map_err(|reason| BlockError::Invalid {
-        fence: T::FENCE,
-        reason,
-    })?;
-    Ok(parsed)
+    Ok(value)
 }
 
 /// [`extract_fenced`] specialized to an atom's `day-atom` interface block.

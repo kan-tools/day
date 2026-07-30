@@ -392,6 +392,29 @@ fn unmet_mark(verdict: &Verdict) -> &'static str {
 /// no command probe.
 pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     let (atoms, findings) = atoms::load(client)?;
+    // Declared block schemas. An ABSENT declaration is the common case and not
+    // an error; a declaration day could not READ is, and the difference is the
+    // whole subject of `v0.7.0-beta.2`.
+    //
+    // This was `.unwrap_or_default()` for about an hour, which turned "day could
+    // not read your block schemas" into "you have none" — the fourth instance of
+    // that pattern in this codebase (day#81 in docs.rs, `render_teloi`, and
+    // `compute` discarding `atoms::load`'s findings were the others), written
+    // *after* CLAUDE.md gained a rule naming it. A rule in prose is not a
+    // constraint.
+    let (blocks, blocks_unreadable) = match crate::blocks::BlockSchemas::load(client) {
+        Ok(blocks) => (blocks, None),
+        Err(e) => (
+            crate::blocks::BlockSchemas::default(),
+            Some(Unreadable {
+                message: format!("block schemas could not be read: {e}"),
+                // A schema day cannot parse at all is the claim's problem unless
+                // it says otherwise; `BlockSchemas::validate` reports a reserved
+                // name this way, and that is the project's to fix.
+                version_skew: false,
+            }),
+        ),
+    };
     // A missing witness schema is not an error here: it means position is
     // uncheckable, which the report says plainly. `assess` needs the schema
     // and errors without it; `status` degrades to "cannot infer".
@@ -412,7 +435,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             off_sequence: Vec::new(),
             transition: None,
             uncheckable: true,
-            unreadable: unreadable_from(&findings, &schema),
+            unreadable: unreadable_from(&findings, &schema, &blocks, blocks_unreadable.clone()),
         });
     }
 
@@ -460,7 +483,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         off_sequence: report.off_sequence,
         transition,
         uncheckable: false,
-        unreadable: unreadable_from(&findings, &schema),
+        unreadable: unreadable_from(&findings, &schema, &blocks, blocks_unreadable.clone()),
     })
 }
 
@@ -473,22 +496,40 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
 /// could not read at all makes the rest of the report partial, and conflating
 /// them would make the "treat this as partial" caveat fire on states that are
 /// fully known.
-fn unreadable_from(findings: &[atoms::Finding], schema: &WitnessSchema) -> Vec<Unreadable> {
-    let mut out: Vec<Unreadable> = findings
-        .iter()
-        // `f.unreadable`, not a substring of `f.message`. This filtered on
-        // `contains("could not be read")` and broke the moment day#20 added a
-        // second unreadable wording: `BlockError::Invalid` renders "is not a
-        // valid …", so a structurally-empty plan node passed the filter and
-        // reached neither hook channel. The typed flag exists precisely so a
-        // caller never decides this by matching prose — a rule this function was
-        // violating two definitions after the flag that states it.
-        .filter(|f| f.unreadable)
-        .map(|f| Unreadable {
-            message: f.message.clone(),
-            version_skew: f.version_skew,
-        })
-        .collect();
+fn unreadable_from(
+    findings: &[atoms::Finding],
+    schema: &WitnessSchema,
+    blocks: &crate::blocks::BlockSchemas,
+    blocks_unreadable: Option<Unreadable>,
+) -> Vec<Unreadable> {
+    let mut out: Vec<Unreadable> = blocks_unreadable.into_iter().collect::<Vec<_>>();
+    out.extend(
+        findings
+            .iter()
+            // `f.unreadable`, not a substring of `f.message`. This filtered on
+            // `contains("could not be read")` and broke the moment day#20 added a
+            // second unreadable wording: `BlockError::Invalid` renders "is not a
+            // valid …", so a structurally-empty plan node passed the filter and
+            // reached neither hook channel. The typed flag exists precisely so a
+            // caller never decides this by matching prose — a rule this function was
+            // violating two definitions after the flag that states it.
+            .filter(|f| f.unreadable)
+            .map(|f| Unreadable {
+                message: f.message.clone(),
+                version_skew: f.version_skew,
+            }),
+    );
+    // A project-declared block schema this build could not read (day#74). Same
+    // treatment as an unreadable witness probe, because it is the same
+    // situation: the project declared vocabulary and day is only partly able to
+    // act on it. Leaving the declarable path unreported while day's own seven
+    // are reported would be the inconsistency day#78 was about.
+    for (name, reason) in &blocks.unsupported {
+        out.push(Unreadable {
+            message: format!("block schema `{name}`: {reason}"),
+            version_skew: true,
+        });
+    }
     for (witness, reason) in &schema.unsupported {
         out.push(Unreadable {
             message: format!("witness `{witness}`: {reason}"),

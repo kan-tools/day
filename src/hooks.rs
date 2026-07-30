@@ -301,11 +301,19 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     // for the expensive computation and has time to. A failed write costs the
     // next prompt a recompute, which is correct-but-slower — never wrong.
     if let Ok(fingerprint) = git.position_fingerprint() {
+        // The declared cadence is resolved HERE, not per prompt. A kan-backed
+        // declaration read on every `UserPromptSubmit` would reintroduce the
+        // 3s-per-turn regression the beta.2 review blocked — a declared value is
+        // only cheap if it is resolved where day already pays for a read.
+        let cadence = crate::blocks::InjectionSchema::load(client)
+            .map(|i| i.cadence)
+            .unwrap_or(crate::cache::DEFAULT_CADENCE);
         let _ = crate::cache::write_standing(
             root,
             &crate::cache::Standing {
                 fingerprint,
                 unreadable: status.unreadable.len(),
+                cadence,
             },
         );
     }
@@ -510,9 +518,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // deleting `.day/` a cost in redundant work rather than a change in answer.
     if let (Some(fp), Some(standing)) = (&fingerprint, &cached) {
         if *fp == standing.fingerprint {
-            if standing.unreadable > 0
-                && crate::cache::cadence_allows(root, crate::cache::DEFAULT_CADENCE)
-            {
+            if standing.unreadable > 0 && crate::cache::cadence_allows(root, standing.cadence) {
                 return format!(
                     "day: {} declaration(s) could not be read at session start, so day's \
                      telos and atom lists are partial — `day doctor` for detail.\n",
@@ -528,12 +534,16 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     let Ok(status) = crate::status::compute(client, &git) else {
         return String::new();
     };
+    let cadence = crate::blocks::InjectionSchema::load(client)
+        .map(|i| i.cadence)
+        .unwrap_or(crate::cache::DEFAULT_CADENCE);
     if let Some(fp) = fingerprint {
         let _ = crate::cache::write_standing(
             root,
             &crate::cache::Standing {
                 fingerprint: fp,
                 unreadable: status.unreadable.len(),
+                cadence,
             },
         );
     }
@@ -548,9 +558,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
 
     // The standing half, still rationed even on a recompute: it is a condition
     // rather than an event, and a git change is not a reason to repeat it.
-    if !status.unreadable.is_empty()
-        && crate::cache::cadence_allows(root, crate::cache::DEFAULT_CADENCE)
-    {
+    if !status.unreadable.is_empty() && crate::cache::cadence_allows(root, cadence) {
         parts.push(format!(
             "day: {} declaration(s) could not be read, so day's telos and atom lists \
              are partial — `day doctor` for detail.",
