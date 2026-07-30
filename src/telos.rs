@@ -47,7 +47,10 @@ pub enum Error {
     Bridge(#[from] bridge::Error),
     #[error(transparent)]
     Tension(#[from] crate::tension::Error),
-    #[error("no telos `{0}` is declared")]
+    // Every variant that concerns one subject **names that subject**, so a
+    // caller which already knows it does not have to guess whether to prefix.
+    // Guessing is what printed `telos/bad: telos/bad: …`.
+    #[error("{}{}: no such telos is declared", atoms::TELOS_PREFIX, .0)]
     NoSuchTelos(String),
     #[error("no atom `{0}` is declared")]
     NoSuchAtom(String),
@@ -105,6 +108,21 @@ impl<'de> Deserialize<'de> for WitnessSchema {
             unsupported,
         })
     }
+}
+
+impl crate::atoms::Versioned for WitnessSchema {
+    /// The witness map. v1 is every block written before versioning existed,
+    /// which an absent `_version` still means.
+    ///
+    /// **No `deny_unknown_fields` here, and that is not an omission.** This
+    /// block is `transparent` over a map from witness type to probe, so every
+    /// key is *data* — an unrecognised key is a witness type day has never
+    /// heard of, which is a project's business and not an error. The strictness
+    /// lives one level down, on the probe each key maps to, and the per-entry
+    /// deserializer above already reports a probe this build cannot read
+    /// without losing the rest of the map.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 impl WitnessSchema {
@@ -190,7 +208,7 @@ impl WitnessSchema {
 
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{WITNESS_SLUG}");
-        newest_fenced::<Self>(client, &subject, FENCE_INFO)?
+        newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, schema)| schema)
             .ok_or_else(|| Error::NotDeclared {
                 starter: Self::starter_command(),
@@ -386,7 +404,7 @@ fn record_tier(
         let Some(bridge_slug) = subject.strip_prefix(bridge::BRIDGE_PREFIX) else {
             continue;
         };
-        let plan = newest_fenced::<bridge::Plan>(client, &subject, bridge::FENCE_INFO)?;
+        let plan = newest_fenced::<bridge::Plan>(client, &subject)?;
         if plan.is_some_and(|(_cid, p)| p.telos == slug) {
             let reachable = bridge::check(client, bridge_slug)
                 .map(|r| r.is_reachable())
@@ -417,7 +435,7 @@ pub fn assess(
         return Err(Error::NoSuchTelos(slug.to_string()));
     }
 
-    let declared = newest_fenced::<Witnesses>(client, &subject, bridge::TELOS_FENCE)?
+    let declared = newest_fenced::<Witnesses>(client, &subject)?
         .map(|(_cid, w)| w)
         .unwrap_or_default();
     let witnesses = declared.witnesses.clone();
@@ -645,7 +663,7 @@ mod tests {
     #[test]
     fn the_starter_round_trips_through_its_own_block() {
         let command = WitnessSchema::starter_command();
-        let parsed: WitnessSchema = atoms::extract_fenced(&command, FENCE_INFO)
+        let parsed: WitnessSchema = atoms::extract_fenced(&command)
             .expect("the starter command should carry a block")
             .expect("it should parse");
         assert_eq!(parsed, WitnessSchema::starter());

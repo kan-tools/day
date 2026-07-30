@@ -98,6 +98,7 @@ pub enum Probe {
 /// arrives later as one more optional field and one more conjunct, without
 /// re-litigating how the existing predicates are expressed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ClaimShape {
     /// A kan claim kind as `kan show --json` renders it — `Observation`,
     /// `Plan`, `Decision`, `Result`, `Subject`, `Relation`. Matched exactly,

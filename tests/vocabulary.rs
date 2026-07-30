@@ -293,10 +293,9 @@ fn ac6_init_records_the_baseline_schema_once_and_reruns_cleanly() {
     assert!(log[0].contains("--subject schema/design-doc"), "{}", log[0]);
 
     // The recorded schema must be what `Schema::load` reads back.
-    let recorded =
-        day::atoms::extract_fenced::<day::schema::Schema>(&log[0], day::schema::FENCE_INFO)
-            .expect("init should record a day-schema block")
-            .expect("the recorded block should parse");
+    let recorded = day::atoms::extract_fenced::<day::schema::Schema>(&log[0])
+        .expect("init should record a day-schema block")
+        .expect("the recorded block should parse");
     assert_eq!(recorded, day::schema::Schema::starter());
 
     // Re-running against a log that already has one records nothing.

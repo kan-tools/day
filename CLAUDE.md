@@ -146,6 +146,61 @@ Two corollaries worth keeping:
   in the same breath. An assessment that pollutes the record it assesses is
   measuring its own footprint.
 
+## Then verify the verifier
+
+Every rule above is about not trusting a test. These are about not trusting the
+thing that checks the test. All of them are from one milestone
+(`v0.7.0-beta.2`), which makes the pattern hard to dismiss as bad luck.
+
+- **A verification tool must distinguish "could not check" from "checked and
+  found nothing."** The mutation harness here reported `SURVIVED` for a mutation
+  that *did not compile* — it grepped for `FAILED`, which a build error never
+  prints — and on an earlier run a timeout left a mutation in the tree, caught
+  only because a separate check noticed a red suite. Both fail toward false
+  confidence. This is the *same rule the milestone was about*, violated in the
+  tooling that verified the milestone: exit-code precedence, could-not-check
+  outranks checked-and-clean, applied to day and not to day's own scripts. A
+  mutation harness needs a per-mutation restore, a distinct compile-error
+  outcome, and an assertion that the file actually changed.
+- **A property claimed in a comment needs a test named after it, and the test
+  must assert the property rather than a proxy.** `user_prompt`'s doc comment,
+  `hooks/hooks.json`, and the design all said it did not recompute; it
+  recomputed on every prompt, 3.03s, for as long as nobody measured. The fix
+  pins it as *zero kan invocations*, not as a duration — a timing assertion
+  measures the machine and flakes; an invocation count measures the design.
+- **Never key a classifier on the absence of a phrase.** The migration cell
+  looked for `composition: ok` to mean "loaded it anyway", so an unrelated
+  finding — a dangling `next` edge in the fixture — suppressed the phrase and
+  filed a reader that silently widened as `errored`. Key on the positive signal:
+  did the thing get rendered.
+- **Generate expectation tables from a measurement run, then review them.** The
+  migration expectations were written from reasoning: eight rows, five wrong. The
+  matrix said so the first time it ran, which is the argument for building it,
+  and also the argument for never hand-writing what it produces.
+- **A generator whose failure mode is "less output" needs an exhaustive
+  expectation.** The block corpus silently omitted three of seven block types,
+  twice — a verb was refused, nothing was appended, and the coverage was quietly
+  smaller with no error. It is now a list of seven fences, not a count.
+
+## Two more, about where a defect hides
+
+- **A mechanism with two modes gets tested in whichever mode this repo is in.**
+  The position fingerprint covered files-changed-since-the-boundary and not the
+  tracked set, so on any repo with no `v*` tag it was a constant and the
+  mid-session hook was inert. day has release tags, so every check passed. The
+  broken path was the *default* one — every fresh clone, i.e. exactly the
+  population `telos/v1.0`'s bar names. Worse, day had already learned this once:
+  `current-cycle-position`'s AC-4 is "no release means no boundary and the
+  cumulative reading." The lesson was recorded for position and not carried to
+  the thing that gates position.
+- **A rule written in one module's doc comment does not propagate to the
+  others.** `src/probe.rs` states plainly that a subject day cannot read is an
+  error and never a silently empty result. Three other modules did exactly that
+  anyway — `docs.rs` (day#81), `hooks.rs`'s `render_teloi`, and
+  `status::compute` discarding `atoms::load`'s findings. Prose in the right place
+  is not a constraint. If a rule matters, it wants a source-scanned test, the way
+  the `.day/` carve-out has one.
+
 ## Working practice
 
 - Design goes through `/design` and lands in `.design/<slug>.md` before

@@ -48,9 +48,17 @@ pub enum Error {
 /// has four — so `tension/foo-bar--baz` is not reliably decomposable. The
 /// slug is a name; this is the data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Tension {
     /// The two telos slugs, sorted. Always two.
     pub between: Vec<String>,
+}
+
+impl crate::atoms::Versioned for Tension {
+    /// A tension declaration. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 impl Tension {
@@ -110,7 +118,7 @@ pub fn all(client: &KanClient) -> Result<Vec<Recorded>, Error> {
         let Some(tension) = claims.iter().rev().find_map(|c| {
             c.text
                 .as_deref()
-                .and_then(|t| atoms::extract_fenced::<Tension>(t, FENCE_INFO))
+                .and_then(atoms::extract_fenced::<Tension>)
                 .and_then(Result::ok)
         }) else {
             continue;
@@ -178,7 +186,7 @@ mod tests {
     fn participants_come_from_the_block_not_from_splitting_the_slug() {
         let tension = Tension::new("no-store-of-its-own", "composable-process");
         let text = tension.to_claim_text("Richer structure pulls toward day-owned state.");
-        let parsed: Tension = atoms::extract_fenced(&text, FENCE_INFO).unwrap().unwrap();
+        let parsed: Tension = atoms::extract_fenced(&text).unwrap().unwrap();
         assert_eq!(parsed, tension);
         assert_eq!(
             parsed.other("no-store-of-its-own"),

@@ -45,6 +45,7 @@ pub enum Error {
 
 /// What a telos declares as evidence for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Witnesses {
     /// Artifact types that would evidence this telos. Types, not instances:
     /// many concrete artifacts of a declared type satisfy the telos equally,
@@ -65,6 +66,13 @@ pub struct Witnesses {
     /// byte-identical, so the change is additive rather than versioned.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub scope: std::collections::BTreeMap<String, String>,
+}
+
+impl crate::atoms::Versioned for Witnesses {
+    /// A telos's witness declaration. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = TELOS_FENCE;
 }
 
 impl Witnesses {
@@ -92,6 +100,7 @@ pub enum Node {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Plan {
     /// Target telos slug (without the `telos/` prefix).
     pub telos: String,
@@ -102,6 +111,51 @@ pub struct Plan {
     #[serde(default)]
     pub have: Vec<String>,
     pub plan: Node,
+}
+
+impl crate::atoms::Versioned for Plan {
+    /// A bridge plan. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
+
+    /// day#20: an empty `seq`, `all`, or `any` node is refused.
+    ///
+    /// The plan *grammar* can never produce one — `collapse` guarantees at least
+    /// one child and `parse` rejects empty input — but a `day-bridge` block is
+    /// JSON in a claim, and hand-written blocks are supported on purpose. So
+    /// `{"any": []}` was reachable, and `walk` handled it by returning the
+    /// incoming set unchanged: an empty alternative contributed nothing and
+    /// reported nothing.
+    ///
+    /// Refused rather than reported as a finding, and the distinction matters.
+    /// A finding says "day read your plan and it looks wrong"; a refusal says
+    /// "this is not a plan." An empty `any` is the second — there is no reading
+    /// of "either of these zero routes suffices" that a reachability check can
+    /// act on, and quietly treating it as a no-op is how `bridge check` could
+    /// report a plan reaches a telos on the strength of a branch that says
+    /// nothing.
+    fn validate(&self) -> Result<(), String> {
+        fn check(node: &Node, path: &str) -> Result<(), String> {
+            let (kind, children) = match node {
+                Node::Atom(_) => return Ok(()),
+                Node::Seq(children) => ("seq", children),
+                Node::All(children) => ("all", children),
+                Node::Any(children) => ("any", children),
+            };
+            if children.is_empty() {
+                return Err(format!(
+                    "`{kind}` at {path} has no children — an empty {kind} node says \
+                     nothing about reachability, so it cannot be part of a plan"
+                ));
+            }
+            for (i, child) in children.iter().enumerate() {
+                check(child, &format!("{path}/{kind}[{i}]"))?;
+            }
+            Ok(())
+        }
+        check(&self.plan, "plan")
+    }
 }
 
 impl Plan {
@@ -263,6 +317,8 @@ fn walk(
             if !missing.is_empty() {
                 findings.push(Finding {
                     atoms: vec![name.clone()],
+                    unreadable: false,
+                    version_skew: false,
                     message: format!(
                         "{}{name} needs [{}] which nothing before it makes available",
                         atoms::ATOM_PREFIX,
@@ -363,7 +419,7 @@ impl Report {
 /// Loads a bridge and its target telos, and checks realizability.
 pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     let subject = format!("{BRIDGE_PREFIX}{slug}");
-    let plan = atoms::newest_fenced::<Plan>(client, &subject, FENCE_INFO)?
+    let plan = atoms::newest_fenced::<Plan>(client, &subject)?
         .map(|(_cid, plan)| plan)
         .ok_or_else(|| Error::NoSuchBridge(slug.to_string()))?;
 
@@ -383,7 +439,7 @@ pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     findings.extend(walk_findings);
 
     let telos_subject = format!("{}{}", atoms::TELOS_PREFIX, plan.telos);
-    let witnesses = atoms::newest_fenced::<Witnesses>(client, &telos_subject, TELOS_FENCE)?
+    let witnesses = atoms::newest_fenced::<Witnesses>(client, &telos_subject)?
         .map(|(_cid, w)| w.witnesses)
         .unwrap_or_default();
 
@@ -478,7 +534,7 @@ mod tests {
             plan: parse("design > build").unwrap(),
         };
         let text = plan.to_claim_text("v1", None);
-        let parsed: Plan = atoms::extract_fenced(&text, FENCE_INFO).unwrap().unwrap();
+        let parsed: Plan = atoms::extract_fenced(&text).unwrap().unwrap();
         assert_eq!(parsed, plan);
     }
 
@@ -550,5 +606,76 @@ mod tests {
         let mut names = referenced(&node);
         names.sort();
         assert_eq!(names, vec!["a", "b", "c", "d"]);
+    }
+}
+
+/// day#20: an empty `seq`/`all`/`any` node is refused at parse, not silently
+/// treated as a no-op.
+#[cfg(test)]
+mod empty_nodes {
+    use super::*;
+    use crate::atoms::{parse_block, BlockError, Versioned};
+
+    fn plan(json: &str) -> Result<Plan, BlockError> {
+        parse_block::<Plan>(json)
+    }
+
+    #[test]
+    fn an_empty_alternative_set_is_refused() {
+        for body in [
+            r#"{"telos":"t","have":[],"plan":{"any":[]}}"#,
+            r#"{"telos":"t","have":[],"plan":{"seq":[]}}"#,
+            r#"{"telos":"t","have":[],"plan":{"all":[]}}"#,
+        ] {
+            let e = plan(body).expect_err(&format!("should be refused: {body}"));
+            assert!(
+                matches!(e, BlockError::Invalid { .. }),
+                "an empty node is invalid, not unreadable or version-skewed: {e:?}"
+            );
+            assert!(
+                !e.is_version_skew(),
+                "an empty node must never tell the reader to upgrade: {e}"
+            );
+        }
+    }
+
+    /// Nested, because the grammar is recursive and a check that only looked at
+    /// the root would pass a plan whose *branch* says nothing.
+    #[test]
+    fn an_empty_node_nested_inside_a_valid_one_is_refused() {
+        let e = plan(r#"{"telos":"t","have":[],"plan":{"seq":[{"atom":"a"},{"any":[]}]}}"#)
+            .expect_err("a nested empty node should be refused");
+        assert!(matches!(e, BlockError::Invalid { .. }), "{e:?}");
+        // The path is named, so a deep plan does not require bisecting by hand.
+        assert!(e.to_string().contains("seq[1]"), "{e}");
+    }
+
+    /// The negative control: every shape the plan grammar can actually produce
+    /// still parses. Without this the assertions above would pass if `validate`
+    /// rejected everything.
+    #[test]
+    fn plans_the_grammar_can_produce_are_unaffected() {
+        for body in [
+            r#"{"telos":"t","have":["intent"],"plan":{"atom":"design"}}"#,
+            r#"{"telos":"t","have":[],"plan":{"seq":[{"atom":"a"},{"atom":"b"}]}}"#,
+            r#"{"telos":"t","have":[],"plan":{"all":[{"atom":"a"},{"atom":"b"}]}}"#,
+            r#"{"telos":"t","have":[],"plan":{"any":[{"atom":"a"},{"seq":[{"atom":"b"},{"atom":"c"}]}]}}"#,
+        ] {
+            assert!(plan(body).is_ok(), "valid plan was refused: {body}");
+        }
+    }
+
+    /// And a plan day itself writes round-trips, so the invariant cannot be
+    /// tightened past what day produces.
+    #[test]
+    fn a_plan_day_writes_passes_its_own_validation() {
+        let node = parse("design > generative-build > (adversarial-review & assess-telos)")
+            .expect("day's own plan syntax should parse");
+        let p = Plan {
+            telos: "t".into(),
+            have: vec!["intent".into()],
+            plan: node,
+        };
+        assert!(p.validate().is_ok(), "{:?}", p.validate());
     }
 }

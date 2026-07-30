@@ -131,7 +131,7 @@ pub enum Command {
     StatusLine,
     /// Entry point harness hooks call; prints advisory context, never blocks
     Hook {
-        /// The harness event: session-start or session-end
+        /// The harness event: session-start, session-notice, user-prompt, or session-end
         event: String,
     },
     /// MCP server over stdio
@@ -655,8 +655,12 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     // reporting, so the error is printed and the run
                     // continues — but the exit code still says a check did
                     // not run.
+                    // No subject prefix here: every `telos::Error` that concerns
+                    // one subject names it. Prefixing anyway is what produced
+                    // `telos/bad: telos/bad: …` for the one variant that
+                    // already did.
                     Err(e) => {
-                        println!("{}{slug}: {e}", crate::atoms::TELOS_PREFIX);
+                        println!("{e}");
                         unavailable = true;
                     }
                 }
@@ -690,10 +694,14 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             let git = crate::git::Git::new(cwd.clone());
             let report = crate::docs::assess(&client, &git, &cwd, since.as_deref())?;
             print!("{}", report.render());
-            Ok(if report.is_clean() {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::from(EXIT_FINDINGS)
+            // Same precedence the telos sweep uses, and for the same reason
+            // (day#81): "could not check" outranks "checked and found
+            // something", because a check that never ran is the weaker
+            // guarantee of the two.
+            Ok(match (report.unchecked(), report.is_clean()) {
+                (true, _) => ExitCode::from(EXIT_UNAVAILABLE),
+                (false, false) => ExitCode::from(EXIT_FINDINGS),
+                (false, true) => ExitCode::SUCCESS,
             })
         }
         Command::Mcp => {

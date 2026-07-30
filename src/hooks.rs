@@ -133,8 +133,26 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
     }
 
     let mut lines = Vec::new();
+    let mut unreadable = Vec::new();
     for subject in teloi {
-        let claims = client.show(subject).unwrap_or_default();
+        // A read that FAILED used to become an empty claim list here, which fell
+        // through to the `(None, None) => continue` arm below — so an unreadable
+        // telos silently vanished from the list *and* from its count, in the one
+        // place day is read by the model. Same defect as day#81, on the surface
+        // where it costs most. The caveat is attached to the item it undermines
+        // rather than put in a footer, because a footer is easy not to connect
+        // to the list above it.
+        let claims = match client.show(subject) {
+            Ok(claims) => claims,
+            Err(e) => {
+                unreadable.push(subject.clone());
+                lines.push(format!(
+                    "- {subject}: ⚠ this day could not read this telos ({e}) — it is \
+                     in play but its declaration and witnesses are unknown here"
+                ));
+                continue;
+            }
+        };
         // Since day#32 a tension's reason lives on `tension/<a>--<b>`, not
         // here, so the newest text claim on a telos is the telos again. The
         // declared title still leads, because a subject's name is an rkey
@@ -165,7 +183,17 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         return "Every recorded telos has been retracted, so none are in play.\n".to_string();
     }
 
+    // The count is over what is *listed*, including the unreadable ones, so it
+    // cannot disagree with the list. A count that silently excluded them is what
+    // made "Teloi in play (1)" true of a project with two.
     let mut out = format!("Teloi in play ({}):\n", lines.len());
+    if !unreadable.is_empty() {
+        out.push_str(&format!(
+            "  ({} of these could not be read by this day, so treat this list as \
+             partial — `day doctor` for detail)\n",
+            unreadable.len()
+        ));
+    }
     for line in lines {
         out.push_str(&line);
         out.push('\n');
@@ -206,12 +234,27 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
 
 fn render_atoms(client: &KanClient) -> String {
     match doctor::run(client) {
-        Ok(report) if report.atoms.is_empty() => String::from(
+        // Empty **and** nothing to report. The guard used to be
+        // `atoms.is_empty()` alone, which matched first and discarded the
+        // findings — so a project whose only atom day could not read was told
+        // "no process atoms are declared yet", which is not a degraded answer
+        // but a false one.
+        Ok(report) if report.atoms.is_empty() && report.findings.is_empty() => String::from(
             "No process atoms are declared yet, so there is no composition to check.\n",
         ),
         Ok(report) => {
             let names: Vec<String> = report.atoms.iter().map(|a| a.subject()).collect();
-            let mut out = format!("Process atoms ({}): {}\n", names.len(), names.join(", "));
+            let mut out = if names.is_empty() {
+                // Declared but unreadable: say that, rather than either of the
+                // two available lies ("none declared" or a count of zero
+                // presented as the whole vocabulary).
+                String::from(
+                    "Process atoms: none could be read by this day, though the log \
+                     declares some — the vocabulary below is not a composition check.\n",
+                )
+            } else {
+                format!("Process atoms ({}): {}\n", names.len(), names.join(", "))
+            };
             if !report.findings.is_empty() {
                 out.push_str(&format!(
                     "\nDrift warnings ({}) — advisory, nothing is blocked:\n",
@@ -253,11 +296,51 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     // status line simply shows nothing until the next session start.
     let _ = crate::cache::write_status_line(root, &status.render_line());
 
-    if status.uncheckable {
-        return String::new();
+    // And what the per-prompt hook needs, so it can re-display without repeating
+    // this read. Recorded here because this is the one place that already pays
+    // for the expensive computation and has time to. A failed write costs the
+    // next prompt a recompute, which is correct-but-slower — never wrong.
+    if let Ok(fingerprint) = git.position_fingerprint() {
+        let _ = crate::cache::write_standing(
+            root,
+            &crate::cache::Standing {
+                fingerprint,
+                unreadable: status.unreadable.len(),
+            },
+        );
     }
 
-    let mut out = String::from("\nProcess position (inferred from artifacts, not tracked):\n");
+    // The caveat comes before the early return, not after it. A schema whose
+    // every probe is a kind this build cannot read makes position `uncheckable`
+    // — and that is exactly the state where staying silent is worst, because
+    // "position could not be inferred" and "this day could not read your witness
+    // schema" call for completely different responses and only the second names
+    // a cause. This is day#60's state, and the human channel reported it while
+    // the model channel did not, which is the asymmetry that mattered least in
+    // theory and most in practice.
+    let mut out = String::new();
+    if !status.unreadable.is_empty() {
+        out.push_str(&format!(
+            "\n⚠ {} declaration(s) could not be read by this day, so the process \
+             context above is partial:\n",
+            status.unreadable.len()
+        ));
+        for item in &status.unreadable {
+            out.push_str(&format!("- {}\n", item.message));
+        }
+    }
+
+    if status.uncheckable {
+        if !out.is_empty() {
+            out.push_str(
+                "Position cannot be inferred at all as a result — treat any statement \
+                 about where the work sits as unknown rather than as \"nothing to do\".\n",
+            );
+        }
+        return out;
+    }
+
+    out.push_str("\nProcess position (inferred from artifacts, not tracked):\n");
     out.push_str(&status.render_line());
     out.push('\n');
     out
@@ -333,13 +416,14 @@ pub fn dispatch(event: &str, client: &KanClient, root: &Path) -> Result<String, 
     match event {
         "session-start" => Ok(session_start(client, root)),
         "session-notice" => Ok(session_notice(client, root)),
+        "user-prompt" => Ok(user_prompt(client, root)),
         "session-end" => Ok(session_end(client)),
         other => Err(UnknownEvent(other.to_string())),
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("unknown hook event `{0}` (known events: session-start, session-notice, session-end)")]
+#[error("unknown hook event `{0}` (known events: session-start, session-notice, user-prompt, session-end)")]
 pub struct UnknownEvent(pub String);
 
 /// The transition/off-sequence notice, as a `systemMessage`-only JSON payload
@@ -373,6 +457,114 @@ pub fn session_notice(client: &KanClient, root: &Path) -> String {
         Some(notice) => serde_json::json!({ "systemMessage": notice }).to_string(),
         None => String::new(),
     }
+}
+
+/// day's **mid-session channel to the model**, on `UserPromptSubmit`.
+///
+/// Designed in v0.6 (`docs/ROADMAP.md`, *Situated injection*), allowlisted in
+/// `tests/plugin.rs`, and never wired until now. The roadmap already answers the
+/// obvious objection: day#30 found that a *general standing rule* injected always
+/// becomes background, and argues that a **specific, state-triggered** notice is
+/// a different thing — that treating them as the same is over-learning from one
+/// failure.
+///
+/// Two triggers, deliberately separate mechanisms:
+///
+/// 1. **A state transition** — an event. Emitted whenever position has moved
+///    past the last recorded assessment, or a step looks skipped.
+/// 2. **A standing condition** — that day's report is *partial* because a
+///    declaration could not be read. Not an event; it stays true until someone
+///    fixes it, so it is re-displayed on a bounded cadence rather than every
+///    turn. This is the one closest to day#30's failure mode, so it carries only
+///    conditions affecting the correctness of what day already said — never
+///    practice advice.
+///
+/// **What this deliberately does not do is recompute the expensive half.** A
+/// `UserPromptSubmit` hook runs on every prompt, and `day status` measures 2.76 s
+/// on day's own log of which 1.99 s is 41 `kan` invocations. So position here is
+/// read from what session-start already computed; the live, git-gated
+/// recomputation waits on day#71's bulk read. Saying "as of session start" is the
+/// honest version of a claim day cannot currently make live.
+///
+/// Emits nothing when there is nothing to say, and cannot fail: every error path
+/// degrades to empty output, because a hook that breaks a prompt would be the
+/// gate `telos/affordance-not-enforcement` forbids.
+pub fn user_prompt(client: &KanClient, root: &Path) -> String {
+    let git = Git::new(root);
+
+    // The cheap gate, and the whole point of this function's shape. The
+    // expensive path costs 3.0s on day's own log; this costs 0.03s. An earlier
+    // version of this hook simply called `status::compute` on every prompt while
+    // its own doc comment, `hooks/hooks.json`, and the design all said it did
+    // not — a 3-second-per-turn regression that three artifacts described as its
+    // opposite, which is the failure this whole milestone exists to stop day
+    // committing.
+    let fingerprint = git.position_fingerprint().ok();
+    let cached = crate::cache::standing(root);
+
+    // Unchanged git state AND a cached reading: nothing a `path`/`tag` probe
+    // sees has moved, so the expensive read cannot have changed the answer.
+    // Re-display the standing condition on the cadence and read nothing.
+    //
+    // A missing cache means *recompute*, never "all clear" — that is what keeps
+    // deleting `.day/` a cost in redundant work rather than a change in answer.
+    if let (Some(fp), Some(standing)) = (&fingerprint, &cached) {
+        if *fp == standing.fingerprint {
+            if standing.unreadable > 0
+                && crate::cache::cadence_allows(root, crate::cache::DEFAULT_CADENCE)
+            {
+                return format!(
+                    "day: {} declaration(s) could not be read at session start, so day's \
+                     telos and atom lists are partial — `day doctor` for detail.\n",
+                    standing.unreadable
+                );
+            }
+            return String::new();
+        }
+    }
+
+    // Git state moved (or there is nothing cached): pay for the real answer
+    // once, and re-cache it so the next prompts are cheap again.
+    let Ok(status) = crate::status::compute(client, &git) else {
+        return String::new();
+    };
+    if let Some(fp) = fingerprint {
+        let _ = crate::cache::write_standing(
+            root,
+            &crate::cache::Standing {
+                fingerprint: fp,
+                unreadable: status.unreadable.len(),
+            },
+        );
+    }
+
+    let mut parts = Vec::new();
+
+    // The event half. Always emitted when true — an event that fired is not
+    // something to ration, and reaching here means the state genuinely moved.
+    if let Some(notice) = status.notice_for_model() {
+        parts.push(notice);
+    }
+
+    // The standing half, still rationed even on a recompute: it is a condition
+    // rather than an event, and a git change is not a reason to repeat it.
+    if !status.unreadable.is_empty()
+        && crate::cache::cadence_allows(root, crate::cache::DEFAULT_CADENCE)
+    {
+        parts.push(format!(
+            "day: {} declaration(s) could not be read, so day's telos and atom lists \
+             are partial — `day doctor` for detail.",
+            status.unreadable.len()
+        ));
+    }
+
+    if parts.is_empty() {
+        return String::new();
+    }
+    // Plain text on stdout: `UserPromptSubmit` adds it to the model's context.
+    // No `hookSpecificOutput`, no decision field — there is deliberately no
+    // shape here that could deny a prompt.
+    format!("{}\n", parts.join("\n"))
 }
 
 /// An end-of-session report, for a human to run by hand.

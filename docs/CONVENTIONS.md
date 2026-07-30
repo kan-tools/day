@@ -511,8 +511,22 @@ So a telos may narrow which instances count, in its own `day-telos` block:
 
 ```bash
 day telos declare v05-shipped "day v0.5 is published." \
-  --witness published-artifact --scope published-artifact=v0.5*
+  --witness published-artifact --scope 'published-artifact=v0.5*'
 ```
+
+**Quote any argument containing a `*`.** This example was unquoted through
+several releases and does not run in zsh — macOS's default shell, and this
+repo's:
+
+```
+zsh:1: no matches found: published-artifact=v0.5*
+```
+
+The shell expands the glob before day sees the argument, and zsh errors on a
+failed match rather than passing it through the way bash does. Found by copying
+this page's own example and having it fail (day#83), which is the same class of
+defect as the `kan result` invocation this page documented for several releases
+without anyone running it.
 
 **A scope narrows; it does not override.** The project map still decides
 which *kind* of probe runs — the scope only replaces its pattern. Two

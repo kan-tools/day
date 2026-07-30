@@ -25,19 +25,112 @@ pub const FENCE_INFO: &str = "day-atom";
 pub enum Error {
     #[error(transparent)]
     Kan(#[from] kan_client::Error),
-    #[error("{subject}: fenced block on claim {cid} is not valid JSON: {source}")]
-    Malformed {
+    #[error("{subject}: {source} (claim {cid})")]
+    Block {
         subject: String,
         cid: String,
         #[source]
+        source: BlockError,
+    },
+}
+
+/// The metadata key naming the reader version a block requires.
+///
+/// Underscore-prefixed to mark it as metadata rather than declared content: a
+/// project's own block could legitimately want a field called `v` or
+/// `version`, and this must never collide with one. Deliberately not
+/// `$`-prefixed, because declared block schemas (day#74) may end up expressed
+/// as JSON Schema, where `$` names are reserved.
+pub const VERSION_KEY: &str = "_version";
+
+/// The version an absent [`VERSION_KEY`] means. Every block written before
+/// versioning existed is a v1 block, so absence has to be the first version
+/// rather than an error.
+pub const IMPLICIT_VERSION: u64 = 1;
+
+/// The block version a type understands, declared **per block type** so a
+/// reader fails only on the block that actually changed rather than on the
+/// whole vocabulary.
+///
+/// This is the honest half of refusing unknown fields. `deny_unknown_fields`
+/// *detects* that a block says more than this day can read; the version is what
+/// lets the message say **why** — "this day reads `day-atom` v1, this block
+/// declares v2, upgrade day" rather than a parse error that reads as the
+/// project's mistake. day#60's lesson was that the v0.6 binary failed loudly
+/// and misdirected the reader; detection without an actionable message repeats
+/// it.
+pub trait Versioned {
+    /// The highest version of this block type this build can read.
+    const SUPPORTED_VERSION: u64;
+    /// The fence info string this block is declared under, for diagnostics.
+    const FENCE: &'static str;
+
+    /// Structural invariants **serde cannot express**, checked immediately after
+    /// the typed parse so a block that is well-typed but meaningless is refused
+    /// in the same place, and with the same diagnostics, as one that will not
+    /// deserialize.
+    ///
+    /// This exists because `deny_unknown_fields` catches a block saying *more*
+    /// than the type allows, and nothing caught a block saying *less than it
+    /// needs to mean anything*. day#20 is the case: `{"any": []}` in a bridge
+    /// plan is valid JSON and a valid `Vec<Node>`, and an empty alternative set
+    /// contributed nothing and reported nothing. A plan grammar day writes can
+    /// never produce one, but a hand-written block can — and hand-written blocks
+    /// are supported deliberately, which makes this a real path rather than a
+    /// hypothetical one.
+    ///
+    /// Default is `Ok`: most blocks have no invariant beyond their types, and a
+    /// trait method nobody implements is cheaper than a second mechanism.
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// Why a fenced block could not be read into its type.
+#[derive(Debug, thiserror::Error)]
+pub enum BlockError {
+    /// The block declares a version newer than this build reads. **Not the
+    /// project's mistake** — the reader is behind, and the message says so.
+    #[error(
+        "`{fence}` block declares {VERSION_KEY} {declared}, but this day reads \
+         up to {supported} — upgrade day to read it"
+    )]
+    TooNew {
+        fence: &'static str,
+        declared: u64,
+        supported: u64,
+    },
+    /// The block is malformed at a version this build does read — invalid
+    /// JSON, or a field the block type does not declare. **This one is the
+    /// claim's problem**, and the message points at the claim.
+    #[error("`{fence}` block could not be read: {source}")]
+    Malformed {
+        fence: &'static str,
+        #[source]
         source: serde_json::Error,
     },
+    /// The block deserialized, but violates an invariant its type cannot
+    /// encode — see [`Versioned::validate`]. Also the claim's problem, not the
+    /// reader's, so it is reported the same way `Malformed` is rather than as
+    /// version skew.
+    #[error("`{fence}` block is not a valid {fence}: {reason}")]
+    Invalid { fence: &'static str, reason: String },
+}
+
+impl BlockError {
+    /// Whether the reader is behind the log, rather than the log being wrong.
+    /// The two need different actions from different people, which is the
+    /// whole reason they are distinct variants.
+    pub fn is_version_skew(&self) -> bool {
+        matches!(self, BlockError::TooNew { .. })
+    }
 }
 
 /// An atom's declared interface. `inputs`/`outputs` are free-form type
 /// names — day checks that they *match*, deliberately not what they mean;
 /// the vocabulary of type names is the project's to choose and evolve.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Interface {
     #[serde(rename = "in", default)]
     pub inputs: Vec<String>,
@@ -56,6 +149,13 @@ pub struct Interface {
     /// existed byte-identical, the same mechanism `Witnesses::scope` uses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub done: Vec<String>,
+}
+
+impl crate::atoms::Versioned for Interface {
+    /// An atom's interface. v1 is every block written before versioning
+    /// existed, which an absent `_version` still means.
+    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +196,22 @@ pub struct Finding {
     /// mismatch rather than just the source.
     pub atoms: Vec<String>,
     pub message: String,
+    /// True when this finding is a declaration day **could not read at all**,
+    /// as opposed to one it read and found wrong.
+    ///
+    /// This is the flag that decides whether the rest of day's report is
+    /// *partial*. A dangling `next` edge is day reporting something it did read;
+    /// an unreadable block means the vocabulary is incomplete and every
+    /// conclusion drawn from it is qualified.
+    pub unreadable: bool,
+    /// True when this finding is a declaration **this build is too old to
+    /// read**, rather than one that is wrong.
+    ///
+    /// Carried as a flag rather than left for a caller to grep out of
+    /// `message`, because the two need different actions from different people
+    /// — upgrade the binary, or fix the claim — and a caller deciding that by
+    /// substring match would break the first time the wording changed.
+    pub version_skew: bool,
 }
 
 /// Reads every `atom/<slug>` subject's live claims and takes the newest
@@ -129,15 +245,28 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
                 cid: claim.cid.clone(),
                 interface,
             }),
+            // The `BlockError` already names the fence and says whether this
+            // day is behind the log or the block is wrong, so this wrapper adds
+            // only the subject and the claim. Restating it here is what made
+            // the message say "not valid interface JSON (not valid day-atom
+            // JSON: …)" — the same thing twice, in two vocabularies.
             Some((claim, Err(e))) => findings.push(Finding {
                 atoms: vec![name.clone()],
-                message: format!(
-                    "{subject}: `{FENCE_INFO}` block is not valid interface JSON ({e}) — claim {}",
-                    claim.cid
-                ),
+                // Every `BlockError` variant means unreadable, including
+                // `Invalid` — a structurally-empty plan node is as unreadable as
+                // a malformed one. Set from the error's type rather than by
+                // matching its wording, which is the bug this replaced: callers
+                // grepped for "could not be read", so `Invalid` ("is not a
+                // valid …") slipped past and day#20's refusal reached no hook
+                // channel at all.
+                unreadable: true,
+                version_skew: e.is_version_skew(),
+                message: format!("{subject}: {e} — claim {}", claim.cid),
             }),
             None => findings.push(Finding {
                 atoms: vec![name.clone()],
+                unreadable: false,
+                version_skew: false,
                 message: format!(
                     "{subject}: no `{FENCE_INFO}` interface block on any live claim, so it can't be composition-checked"
                 ),
@@ -179,44 +308,106 @@ pub fn prose_only(text: &str) -> String {
 ///
 /// Shared by atoms (`day-atom`) and design-doc schemas (`day-schema`): one
 /// embedded-block convention, not two, so a project learns the pattern once.
-pub fn extract_fenced<T: serde::de::DeserializeOwned>(
+pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
     text: &str,
-    fence: &str,
-) -> Option<Result<T, serde_json::Error>> {
-    let open = format!("```{fence}");
+) -> Option<Result<T, BlockError>> {
+    // The fence comes from `T::FENCE`, not from a parameter. It used to be both:
+    // a caller passed a fence string to locate the block, and the diagnostics
+    // reported `T::FENCE` — two sources of truth for one fact, so a mismatch
+    // would find a block by one name and blame another. Every call site passed a
+    // constant equal to the type's own fence, so nothing was broken; removing
+    // the parameter makes that true by construction instead of by nine call
+    // sites continuing to agree. Diagnostics naming the right cause is the whole
+    // point of the error split.
+    let open = format!("```{}", T::FENCE);
     let start = text.find(&open)? + open.len();
     let rest = &text[start..];
     let end = rest.find("```")?;
-    Some(serde_json::from_str(rest[..end].trim()))
+    Some(parse_block::<T>(rest[..end].trim()))
+}
+
+/// The version gate, then the typed parse.
+///
+/// **The version is read and then removed before the typed parse**, rather
+/// than being a field on every block type. Three reasons, and the third is
+/// what decides it:
+///
+/// 1. The seven block types need no new field, so nothing day already writes
+///    changes shape and no round-trip becomes non-byte-identical.
+/// 2. `deny_unknown_fields` and `serde(flatten)` do not compose, so a shared
+///    metadata struct was never available anyway.
+/// 3. [`crate::telos::WitnessSchema`] is `transparent` over a map from witness
+///    type to probe. A `_version` *field* there would be read as a witness type
+///    literally named `_version`; stripping it first is the only approach that
+///    works for a block whose body is a map rather than a struct.
+pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
+    json: &str,
+) -> Result<T, BlockError> {
+    let malformed = |source| BlockError::Malformed {
+        fence: T::FENCE,
+        source,
+    };
+
+    let mut value: serde_json::Value = serde_json::from_str(json).map_err(malformed)?;
+
+    // A non-object block (a bare array, say) carries no metadata and cannot be
+    // version-gated; hand it to the typed parse, which is what will reject it.
+    if let Some(object) = value.as_object_mut() {
+        if let Some(declared) = object.remove(VERSION_KEY) {
+            let Some(declared) = declared.as_u64() else {
+                // A `_version` that is not a number is a malformed block rather
+                // than a version this day cannot read: day cannot tell whether
+                // it is behind, so it must not claim to be.
+                return Err(malformed(serde::de::Error::custom(format!(
+                    "{VERSION_KEY} must be a positive integer, found `{declared}`"
+                ))));
+            };
+            if declared > T::SUPPORTED_VERSION {
+                return Err(BlockError::TooNew {
+                    fence: T::FENCE,
+                    declared,
+                    supported: T::SUPPORTED_VERSION,
+                });
+            }
+        }
+    }
+
+    let parsed: T = serde_json::from_value(value).map_err(malformed)?;
+    parsed.validate().map_err(|reason| BlockError::Invalid {
+        fence: T::FENCE,
+        reason,
+    })?;
+    Ok(parsed)
 }
 
 /// [`extract_fenced`] specialized to an atom's `day-atom` interface block.
-pub fn extract_interface(text: &str) -> Option<Result<Interface, serde_json::Error>> {
-    extract_fenced(text, FENCE_INFO)
+pub fn extract_interface(text: &str) -> Option<Result<Interface, BlockError>> {
+    extract_fenced(text)
 }
 
 /// Reads the newest claim on `subject` carrying a `fence` block, returning
 /// the parsed value with the CID of the claim it came from. The
 /// newest-wins rule every kan-backed vocabulary in day uses.
-pub fn newest_fenced<T: serde::de::DeserializeOwned>(
+pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
     client: &KanClient,
     subject: &str,
-    fence: &str,
 ) -> Result<Option<(String, T)>, Error> {
     let claims = client.show(subject)?;
     for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
-        match extract_fenced::<T>(text, fence) {
+        match extract_fenced::<T>(text) {
             Some(Ok(value)) => return Ok(Some((claim.cid.clone(), value))),
-            // A malformed block on the newest claim is not silently skipped
-            // in favour of an older good one — that would hide the error.
-            Some(Err(e)) => {
-                return Err(Error::Malformed {
+            // An unreadable block on the newest claim is not silently skipped
+            // in favour of an older good one — that would hide the error, and
+            // would silently resolve an *older* declaration as though it were
+            // current, which is worse than failing.
+            Some(Err(source)) => {
+                return Err(Error::Block {
                     subject: subject.to_string(),
                     cid: claim.cid.clone(),
-                    source: e,
+                    source,
                 })
             }
             None => continue,
@@ -250,6 +441,8 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
             if !atoms.iter().any(|a| &a.name == successor) {
                 findings.push(Finding {
                     atoms: vec![atom.name.clone(), successor.clone()],
+                    unreadable: false,
+                    version_skew: false,
                     message: format!(
                         "{} declares next: {successor}, but no {ATOM_PREFIX}{successor} subject exists in the live vocabulary",
                         atom.subject()
@@ -282,6 +475,8 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
             implicated.push(atom.name.clone());
             findings.push(Finding {
                 atoms: implicated,
+                unreadable: false,
+                version_skew: false,
                 message: format!(
                     "{}: interfaces do not compose — needs input(s) [{}] that nothing upstream produces (upstream {} produce [{}])",
                     atom.subject(),
@@ -325,6 +520,235 @@ fn ancestors<'a>(atoms: &'a [Atom], name: &str) -> Vec<&'a Atom> {
 
     found.sort_by(|a, b| a.name.cmp(&b.name));
     found
+}
+
+/// `.design/honest-reads.md` REQ-1 and REQ-2, at the level the contract lives:
+/// one gate, exercised against **every** block type day owns.
+///
+/// These are unit tests rather than seven end-to-end runs on purpose. Each block
+/// type is read by a different verb (`doctor`, `assess telos`, `bridge check`,
+/// `design check`, `assess docs`), so driving all seven through their verbs would
+/// test the verbs, at seven subprocesses per case, while testing the gate once.
+/// The gate is what has to hold for all seven.
+#[cfg(test)]
+mod version_gate {
+    use super::*;
+    use crate::{bridge, docs, schema, telos, tension};
+
+    /// One row per block type day owns. `strict` records whether the body is a
+    /// **struct**, where an unrecognised key is a field the type does not
+    /// declare and must be refused — or a **map**, where every key is data and
+    /// refusing unknown ones would refuse the project's own vocabulary.
+    ///
+    /// Adding a block type to day means adding a row here, which is the point:
+    /// this table is the inventory, and a new block type that is neither strict
+    /// nor deliberately lax cannot be added without someone deciding which.
+    fn parse_all_seven(
+        mutate: impl Fn(&str) -> String,
+    ) -> Vec<(&'static str, bool, Result<(), String>)> {
+        fn attempt<T: serde::de::DeserializeOwned + Versioned>(json: &str) -> Result<(), String> {
+            parse_block::<T>(json)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        }
+        vec![
+            (
+                "day-atom",
+                true,
+                attempt::<Interface>(&mutate(r#"{"in":["a"],"out":["b"]}"#)),
+            ),
+            (
+                "day-telos",
+                true,
+                attempt::<bridge::Witnesses>(&mutate(r#"{"witnesses":["a"]}"#)),
+            ),
+            (
+                "day-bridge",
+                true,
+                attempt::<bridge::Plan>(&mutate(
+                    r#"{"telos":"t","have":["intent"],"plan":{"atom":"design"}}"#,
+                )),
+            ),
+            (
+                // A map from witness type to probe, so any key is a witness
+                // type this project declared. Strictness lives one level down,
+                // on the probe — see the `Versioned` impl for `WitnessSchema`.
+                "day-witness",
+                false,
+                attempt::<telos::WitnessSchema>(&mutate(r#"{"code-change":{"path":"src/*"}}"#)),
+            ),
+            (
+                "day-schema",
+                true,
+                attempt::<schema::Schema>(&mutate(
+                    r#"{"sections":["Summary"],"requirement_prefix":"REQ-","criterion_prefix":"AC-","min_requirements":1,"min_criteria":1,"placeholders":[],"paths_section":"Architecture"}"#,
+                )),
+            ),
+            (
+                "day-docs",
+                true,
+                attempt::<docs::DocsSchema>(&mutate(
+                    r#"{"version_source":"Cargo.toml","version_key":"version"}"#,
+                )),
+            ),
+            (
+                "day-tension",
+                true,
+                attempt::<tension::Tension>(&mutate(r#"{"between":["a","b"]}"#)),
+            ),
+        ]
+    }
+
+    /// AC-1's negative control, and it has to come first: if the untouched
+    /// bodies did not parse, every assertion below would pass for the wrong
+    /// reason.
+    #[test]
+    fn every_block_type_parses_its_own_minimal_body() {
+        for (fence, _, result) in parse_all_seven(str::to_string) {
+            assert!(result.is_ok(), "{fence} rejected a valid body: {result:?}");
+        }
+    }
+
+    /// AC-1: an unrecognised field is **refused**, not dropped, for every
+    /// struct-shaped block.
+    ///
+    /// Before this, all of them parsed and silently discarded the field — which
+    /// for a vocabulary that exists to *constrain* something is a false
+    /// certification rather than lost information.
+    #[test]
+    fn every_struct_shaped_block_refuses_an_unrecognised_field() {
+        let inject = |json: &str| json.replacen('{', r#"{"nonsense_field":1,"#, 1);
+        let rows = parse_all_seven(inject);
+        assert!(
+            rows.iter().filter(|(_, strict, _)| *strict).count() >= 6,
+            "the strict set should not have quietly shrunk"
+        );
+        for (fence, strict, result) in rows {
+            if !strict {
+                continue;
+            }
+            let err = result.expect_err(&format!("{fence} silently dropped an unknown field"));
+            assert!(
+                err.contains("nonsense_field"),
+                "{fence} should name the field it refused: {err}"
+            );
+        }
+    }
+
+    /// The `day-witness` map's contract, which is deliberately *not* the one
+    /// above and would be wrong if it were: an unrecognised key is a witness
+    /// type this project declared, and refusing it would refuse the project's
+    /// own vocabulary. What must not happen is the probe being dropped
+    /// silently — it is set aside and reported, so a reader never mistakes
+    /// "unreadable here" for "no probe declared".
+    #[test]
+    fn an_unreadable_probe_is_set_aside_and_reported_not_dropped() {
+        let schema = parse_block::<telos::WitnessSchema>(
+            r#"{"code-change":{"path":"src/*"},"exotic":{"future-kind":{"x":1}}}"#,
+        )
+        .expect("a witness type day has never heard of is the project's business");
+
+        assert!(schema.probes.contains_key("code-change"));
+        assert!(
+            !schema.probes.contains_key("exotic"),
+            "an unreadable probe must not land in the usable set"
+        );
+        assert!(
+            schema.unsupported.contains_key("exotic"),
+            "and must be reported rather than dropped: {schema:?}"
+        );
+    }
+
+    /// AC-3: an absent `_version` and an explicit `_version: 1` are the same
+    /// block, so nothing written before versioning existed needs touching.
+    #[test]
+    fn an_absent_version_means_the_first_version() {
+        let implicit = parse_block::<Interface>(r#"{"in":["a"],"out":["b"]}"#).unwrap();
+        let explicit =
+            parse_block::<Interface>(r#"{"_version":1,"in":["a"],"out":["b"]}"#).unwrap();
+        assert_eq!(implicit, explicit);
+        assert_eq!(IMPLICIT_VERSION, 1);
+    }
+
+    /// AC-3: `_version` is accepted on every block type, not only the one it
+    /// was implemented against — including `day-witness`, whose body is a *map*
+    /// and where a `_version` field would otherwise read as a witness type
+    /// literally named `_version`.
+    #[test]
+    fn the_version_key_is_stripped_from_every_block_type() {
+        let inject = |json: &str| json.replacen('{', r#"{"_version":1,"#, 1);
+        for (fence, _, result) in parse_all_seven(inject) {
+            assert!(
+                result.is_ok(),
+                "{fence} should accept an explicit v1: {result:?}"
+            );
+        }
+        // The map case specifically: `_version` must not survive as a key.
+        let schema =
+            parse_block::<telos::WitnessSchema>(r#"{"_version":1,"code-change":{"path":"src/*"}}"#)
+                .unwrap();
+        assert!(
+            !schema.probes.contains_key(VERSION_KEY)
+                && !schema.unsupported.contains_key(VERSION_KEY),
+            "the version key leaked into the witness map: {schema:?}"
+        );
+        assert!(schema.probes.contains_key("code-change"));
+    }
+
+    /// AC-4: a block this day is too old to read reports **the reader is
+    /// behind**, distinguishably from a block that is simply wrong. The two
+    /// need different actions from different people, which is why they are
+    /// different variants rather than one message.
+    #[test]
+    fn a_too_new_block_blames_the_reader_and_a_broken_one_blames_the_claim() {
+        let too_new = parse_block::<Interface>(r#"{"_version":2,"in":["a"]}"#).unwrap_err();
+        assert!(too_new.is_version_skew());
+        let rendered = too_new.to_string();
+        assert!(
+            rendered.contains('2'),
+            "names the declared version: {rendered}"
+        );
+        assert!(rendered.contains('1'), "and the supported one: {rendered}");
+        assert!(
+            rendered.contains("upgrade day"),
+            "and says whose problem it is: {rendered}"
+        );
+
+        // Malformed, at a version this day does read.
+        let broken = parse_block::<Interface>(r#"{"in":["a"],}"#).unwrap_err();
+        assert!(!broken.is_version_skew());
+        assert!(
+            !broken.to_string().contains("upgrade day"),
+            "a broken block must not tell the reader to upgrade: {broken}"
+        );
+
+        // An unknown field is the claim's problem too, not version skew — it is
+        // only skew when the block *says* it needs a newer reader. Getting this
+        // backwards would tell every project their day was out of date.
+        let unknown = parse_block::<Interface>(r#"{"in":["a"],"requires":["x"]}"#).unwrap_err();
+        assert!(!unknown.is_version_skew(), "{unknown}");
+    }
+
+    /// A `_version` that is not a number is the claim's problem, not the
+    /// reader's: day cannot tell whether it is behind, so it must not claim to
+    /// be. The tempting alternative — treat anything unparseable as "probably
+    /// newer" — would send every reader to upgrade over a typo.
+    #[test]
+    fn a_non_numeric_version_is_malformed_not_skew() {
+        let e = parse_block::<Interface>(r#"{"_version":"two","in":["a"]}"#).unwrap_err();
+        assert!(!e.is_version_skew(), "{e}");
+        assert!(e.to_string().contains(VERSION_KEY), "{e}");
+    }
+
+    /// Versions are **per block type**, so a `day-atom` this day cannot read
+    /// does not make it unable to read a `day-telos`. One shared version bumped
+    /// for one block would invalidate all seven for an older reader, which is
+    /// the whole-vocabulary blast radius the smallest-unit rule exists to avoid.
+    #[test]
+    fn a_too_new_block_of_one_type_does_not_affect_another() {
+        assert!(parse_block::<Interface>(r#"{"_version":2,"in":["a"]}"#).is_err());
+        assert!(parse_block::<bridge::Witnesses>(r#"{"witnesses":["a"]}"#).is_ok());
+    }
 }
 
 #[cfg(test)]

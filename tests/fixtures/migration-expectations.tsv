@@ -1,0 +1,51 @@
+# What each RELEASED version of day does when handed the block shapes this
+# commit writes. One row per tag; the tag being released is excluded, since a
+# version cannot be a historical reader of its own release.
+#
+# EVERY ROW BELOW WAS MEASURED, not assumed. The first draft of this file said
+# `silently-widened` for all eight, which was wrong for five of them -- and the
+# matrix said so the first time it ran, which is the whole point of having it.
+#
+# These are CHARACTERIZATIONS, not correctness assertions. A released binary
+# cannot be fixed, so the matrix's job is to make the blast radius of a
+# block-shape change visible BEFORE it ships rather than after, which is the
+# thing day#78 needed and did not have.
+#
+# Outcomes:
+#   refused-honestly    said it could not read the block
+#   silently-widened    loaded it as though the unreadable part were absent, and
+#                       certified the result -- day#78's shape
+#   protocol-mismatch   predates day's `kan --json` migration (v0.5.0-beta.1),
+#                       so it parses kan's RENDERED output and a JSON-serving
+#                       stub cannot drive it. A limit of the HARNESS, recorded as
+#                       such -- it says nothing about how that version reads
+#                       blocks. Handed this stub, v0.4.0-beta.1 prints
+#                       "atoms: none declared yet ... composition: ok" at exit 0,
+#                       a clean bill of health over a log it read zero bytes of.
+#   unbuildable         does not build with the current toolchain, so nobody is
+#                       running it
+#   errored             failed some other way
+#
+# The three readable rows all say `silently-widened`. That is not a list of bugs
+# to fix -- it is day#78's residue, quantified: every version that CAN read this
+# log reads a narrowed declaration as a broad one. `v0.7.0-beta.2` is the first
+# version that will read `refused-honestly`, and it appears here as a row the
+# release after it.
+#
+# The protocol boundary also bounds the matrix: five of eight released versions
+# are unreachable by it, so "day's whole release history" is really "everything
+# since v0.5". Worth knowing before treating a green matrix as broad coverage.
+#
+# Changing a block shape and changing a row below belong in the SAME commit. A
+# row that moved on its own is the matrix telling you something you did not
+# intend.
+#
+# tag	expected-outcome
+v0.1.1-beta.1	protocol-mismatch
+v0.1.2-beta.1	protocol-mismatch
+v0.2.0-beta.1	protocol-mismatch
+v0.3.0-beta.1	protocol-mismatch
+v0.4.0-beta.1	protocol-mismatch
+v0.5.0-beta.1	silently-widened
+v0.6.0-beta.1	silently-widened
+v0.7.0-beta.1	silently-widened
