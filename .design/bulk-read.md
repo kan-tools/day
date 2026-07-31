@@ -62,9 +62,25 @@ This adopts it: `ClaimLog` makes one call instead of N+1.
   per-subject failure detection but serving `show()` from the memo — until then
   `show()` was still a real read that could still fail.
 
-  day compares `status --json`'s subject set against the bulk payload's. It
-  costs **no extra invocation**, because day already makes both reads, and it
-  returns empty unless both are in hand so it can never become a third call.
+  day compares `status --json`'s subject set against the bulk payload's, **at
+  the read**, in `KanClient::ensure_log`. Measured: no change to invocation
+  counts (session-start 6, status 2, doctor 4, assess telos 2).
+
+  **The first implementation put this in `status::compute`, and the adversarial
+  review blocked it.** The hook channels were protected; the assess verbs — where
+  day publishes evidentiary verdicts — were not, and `day assess telos` reported
+  `[MISSING]` for evidence carried by a subject it had never received. That is
+  the same shape as the beta.3 BLOCK: a check that exists and is not called from
+  the path that matters. A guarantee that holds only where someone remembered to
+  ask for it is not a guarantee, so it moved to the read, where every consumer
+  inherits it.
+
+  Two refusals, because there are two kinds of reader:
+  - `show(subject)` on an unaccounted subject is an **error naming it** —
+    restoring exactly what reading one subject at a time gave for free, for
+    `docs.rs`, `record.rs` and `practice.rs`, which never touch `ClaimLog`.
+  - a **claim probe** refuses on *any* unaccounted subject, because it scans the
+    whole log and the evidence it seeks may be precisely what was dropped.
 
   It is also *wider* than what it replaces: the per-subject loop could only
   catch a failure kan **reported**, while this also catches one it silently

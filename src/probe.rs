@@ -423,9 +423,25 @@ impl<'a> ClaimLog<'a> {
                 // the read failed would be a false negative dressed as
                 // evidence, and every claim probe in the command is answered
                 // from this.
-                self.client
+                let claims = self
+                    .client
                     .show_all()
-                    .map_err(|e| format!("could not read the log: {e}"))
+                    .map_err(|e| format!("could not read the log: {e}"))?;
+                // A claim probe scans the WHOLE log, so it cannot be answered
+                // from an incomplete one no matter which subject went missing —
+                // the evidence it is looking for may be exactly what was
+                // dropped. `show()` refuses per subject; this refuses for the
+                // scan.
+                let missing = self.client.unaccounted_subjects();
+                if !missing.is_empty() {
+                    return Err(format!(
+                        "kan lists {} subject(s) the bulk read did not return ({}), \
+                         so a probe that scans the whole log cannot be answered from it",
+                        missing.len(),
+                        missing.join(", ")
+                    ));
+                }
+                Ok(claims)
             })
             .as_ref()
             .map(Vec::as_slice)

@@ -44,6 +44,13 @@ pub enum Error {
          reporting an empty log would be worse than saying this."
     )]
     TooOldForBulkRead { oldest: String },
+    #[error(
+        "kan lists `{subject}` but did not return it in the bulk read, so day \
+         cannot tell whether it is unreadable or was dropped.\n\nThis is \
+         reported rather than treated as absent: concluding `{subject}` has \
+         nothing would be an absence day never verified."
+    )]
+    Unaccounted { subject: String },
     #[error("`{bin} {args}` failed ({status}){stderr}")]
     Failed {
         bin: String,
@@ -156,6 +163,9 @@ pub struct KanClient {
     /// Whether reachability has been established. `--help` costs a process like
     /// everything else, and the answer cannot change mid-invocation.
     probed: std::cell::Cell<bool>,
+    /// Subjects kan listed that the bulk read did not return. Computed once,
+    /// at the read, so every consumer of the log inherits it.
+    unaccounted: std::cell::RefCell<Vec<String>>,
 }
 
 impl KanClient {
@@ -167,6 +177,7 @@ impl KanClient {
             log: std::cell::RefCell::new(None),
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
+            unaccounted: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -177,6 +188,7 @@ impl KanClient {
             log: std::cell::RefCell::new(None),
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
+            unaccounted: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -228,6 +240,25 @@ impl KanClient {
             return Ok(());
         }
         let all = self.read_all()?;
+        // Cross-checked HERE, not by one caller. The first version of this was
+        // computed in `status::compute`, so the hook channels were protected
+        // and `assess telos` was not — it reported `[MISSING]` for evidence it
+        // had never received. A guarantee that holds only where someone
+        // remembered to ask for it is the defect this repo keeps finding, so
+        // the check belongs at the read.
+        //
+        // Costs at most one `status --json`, memoized, and that is the price of
+        // the invariant: day went from 167 invocations to 6, and spending one
+        // of them on not lying is the easiest trade in the change.
+        let listed = self.subjects()?;
+        let returned: std::collections::BTreeSet<&str> =
+            all.iter().map(|(s, _)| s.as_str()).collect();
+        let missing: Vec<String> = listed
+            .iter()
+            .filter(|s| !returned.contains(s.as_str()))
+            .cloned()
+            .collect();
+        *self.unaccounted.borrow_mut() = missing;
         *self.log.borrow_mut() = Some(all);
         Ok(())
     }
@@ -237,6 +268,7 @@ impl KanClient {
     fn invalidate(&self) {
         *self.log.borrow_mut() = None;
         *self.subject_memo.borrow_mut() = None;
+        self.unaccounted.borrow_mut().clear();
     }
 
     /// kan's version, via `kan --version`, or `None` when it cannot be
@@ -285,11 +317,24 @@ impl KanClient {
         // A kan predating the flag fails with clap's "unexpected argument",
         // which tells a user nothing about what to do. day knows the floor, so
         // it says it (REQ-2).
-        let out = self.run(&args).map_err(|e| match &e {
-            Error::Failed { stderr, .. } if stderr.contains("--all") => Error::TooOldForBulkRead {
-                oldest: crate::compat::OLDEST_SUPPORTED.to_string(),
-            },
-            _ => e,
+        //
+        // The cause is decided by **asking kan its version**, not by matching
+        // its error prose. The first version keyed on `stderr.contains("--all")`
+        // — a classifier reading another program's wording, which `CLAUDE.md`
+        // warns against, and which would have silently stopped classifying the
+        // day clap rephrased its message. Costs one extra process only on the
+        // failure path, where day is about to abort anyway.
+        let out = self.run(&args).map_err(|e| {
+            let too_old = self.version().is_some_and(|v| {
+                crate::compat::classify(Some(&v)) == crate::compat::Compat::TooOld
+            });
+            if too_old {
+                Error::TooOldForBulkRead {
+                    oldest: crate::compat::OLDEST_SUPPORTED.to_string(),
+                }
+            } else {
+                e
+            }
         })?;
         let envelope: ShowAllEnvelope = parse(&out, &args)?;
         check_shape(envelope.v, &args)?;
@@ -325,18 +370,7 @@ impl KanClient {
     /// made and returns empty unless both are in hand, so it can never turn
     /// into a third call.
     pub fn unaccounted_subjects(&self) -> Vec<String> {
-        let log = self.log.borrow();
-        let listed = self.subject_memo.borrow();
-        let (Some(log), Some(listed)) = (log.as_ref(), listed.as_ref()) else {
-            return Vec::new();
-        };
-        let returned: std::collections::BTreeSet<&str> =
-            log.iter().map(|(s, _)| s.as_str()).collect();
-        listed
-            .iter()
-            .filter(|s| !returned.contains(s.as_str()))
-            .cloned()
-            .collect()
+        self.unaccounted.borrow().clone()
     }
 
     /// This workspace's identity, via `kan identity did`.
@@ -388,6 +422,15 @@ impl KanClient {
     /// them per session start for subjects the bulk read already held.
     pub fn show(&self, subject: &str) -> Result<Vec<Claim>, Error> {
         self.ensure_log()?;
+        // Restores, exactly, what reading one subject at a time gave for free:
+        // a subject day could not obtain is an error naming it, never an empty
+        // result. Without this, `assess docs` reads a dropped subject as
+        // "nobody wrote it down".
+        if self.unaccounted.borrow().iter().any(|s| s == subject) {
+            return Err(Error::Unaccounted {
+                subject: subject.to_string(),
+            });
+        }
         let log = self.log.borrow();
         let all = log.as_ref().expect("ensure_log populated it");
         Ok(all

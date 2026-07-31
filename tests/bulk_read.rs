@@ -200,12 +200,16 @@ fn a_kan_without_the_bulk_read_errors_rather_than_reading_an_empty_log() {
     let (kan, _log) = counting_stub(dir.path(), &claims);
 
     // An old kan: everything works except `show --all`, exactly as kan < 0.9.1
-    // behaves — clap rejects the unknown flag with status 2.
+    // behaves — clap rejects the unknown flag with status 2. It reports its
+    // version, because a real one does and because day now classifies "too old"
+    // by ASKING rather than by matching clap's wording.
     let old = dir.path().join("kan-old.sh");
     std::fs::write(
         &old,
         format!(
-            "#!/bin/sh\nif [ \"$1\" = show ] && [ \"$2\" = --all ]; then\n\
+            "#!/bin/sh\n\
+             if [ \"$1\" = --version ]; then echo 'kan 0.8.0-beta.1'; exit 0; fi\n\
+             if [ \"$1\" = show ] && [ \"$2\" = --all ]; then\n\
              printf 'error: unexpected argument '\\''--all'\\'' found\\n' >&2\n exit 2\nfi\n\
              exec {} \"$@\"\n",
             kan.display()
@@ -318,5 +322,170 @@ fn a_subject_kan_lists_but_does_not_return_is_reported_not_treated_as_absent() {
     assert!(
         !started.contains("did not return it in the bulk read"),
         "a complete bulk read must not report an unaccounted subject: {started}"
+    );
+}
+
+/// The review's F1, which was a BLOCK: `day assess telos` reported
+/// `[MISSING]` for evidence the bulk read had dropped.
+///
+/// The cross-check existed and was wired only into `status::compute`, so the
+/// hook channels were protected and the **assess verbs — where day publishes
+/// evidentiary verdicts — were not**. That is the same shape as the beta.3
+/// BLOCK: a check that exists and is not called from the path that matters.
+///
+/// The fix moved the check to the read rather than adding another call site,
+/// so this asserts the property on the verb that was lying, not on the one that
+/// happened to be fixed.
+#[test]
+fn an_incomplete_log_cannot_answer_a_claim_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let claims = vec![
+        claim(
+            "schema/witness",
+            "bafyw",
+            "W.\n\n```day-witness\n{\"evidence\":{\"claim\":{\"kind\":\"Observation\",\
+             \"subject\":\"proof/*\"}}}\n```\n",
+        ),
+        claim(
+            "telos/t",
+            "bafyt",
+            "T.\n\n```day-telos\n{\"witnesses\":[\"evidence\"]}\n```\n",
+        ),
+        claim("proof/one", "bafyp", "The evidence exists."),
+    ];
+    let (honest, _) = counting_stub(dir.path(), &claims);
+
+    // A kan that lists `proof/one` and omits it from the bulk payload.
+    let dropping = dir.path().join("kan-dropping.sh");
+    std::fs::write(
+        &dropping,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = show ] && [ \"$2\" = --all ]; then\n\
+               {inner} \"$@\" | python3 -c 'import json,sys; d=json.load(sys.stdin); \
+             d[\"subjects\"]=[e for e in d[\"subjects\"] if e[\"subject\"]!=\"proof/one\"]; \
+             print(json.dumps(d))'\n\
+               exit 0\n\
+             fi\n\
+             exec {inner} \"$@\"\n",
+            inner = honest.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&dropping, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = day(dir.path(), &dropping, &["assess", "telos", "t"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !text.contains("[MISSING]"),
+        "day must not report evidence absent when it never received the subject \
+         carrying it: {text}"
+    );
+    assert!(
+        text.contains("[ERROR]") && text.contains("proof/one"),
+        "it must say it could not answer, and name the subject: {text}"
+    );
+
+    // Negative control: the same telos through the honest stub resolves. If
+    // this failed, the assertions above would pass against a probe that can
+    // never answer anything.
+    let out = day(dir.path(), &honest, &["assess", "telos", "t"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("[MATERIAL]"),
+        "a complete log must still resolve the witness: {text}"
+    );
+}
+
+/// The other half of F1: `show()` is used directly by readers that never touch
+/// `ClaimLog` (`docs.rs`, `record.rs`, `practice.rs`). A subject kan listed and
+/// did not return must be an error naming it there too — which is exactly what
+/// reading one subject at a time used to give for free.
+///
+/// **Driven through `assess docs`, whose verdict depends on reading `release`
+/// via `client.show`.** The first version of this test used `session-start` and
+/// was vacuous: it passed on `status.rs` reporting the unaccounted subject
+/// whether or not `show()` refused, so deleting the guard SURVIVED mutation.
+/// This one fails when the guard goes, because the verdict itself changes.
+#[test]
+fn a_direct_show_of_an_unaccounted_subject_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("Cargo.toml"), "version = \"9.9.9\"\n").unwrap();
+    // `assess docs` reads git for the release tag, so it needs a real repo.
+    for args in [
+        vec!["init", "-q", "."],
+        vec!["add", "-A"],
+        vec!["commit", "-q", "-m", "one"],
+        vec!["tag", "v9.9.9"],
+    ] {
+        Command::new("git")
+            .args(&args)
+            .current_dir(dir.path())
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@e")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@e")
+            .output()
+            .expect("git");
+    }
+    let claims = vec![
+        claim(
+            "schema/docs",
+            "bafyds",
+            "D.\n\n```day-docs\n{\"version_source\":\"Cargo.toml\",\
+             \"version_key\":\"version\"}\n```\n",
+        ),
+        claim("release", "bafyr", "v9.9.9 published."),
+    ];
+    let (honest, _) = counting_stub(dir.path(), &claims);
+
+    let dropping = dir.path().join("kan-dropping.sh");
+    std::fs::write(
+        &dropping,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = show ] && [ \"$2\" = --all ]; then\n\
+               {inner} \"$@\" | python3 -c 'import json,sys; d=json.load(sys.stdin); \
+             d[\"subjects\"]=[e for e in d[\"subjects\"] if e[\"subject\"]!=\"release\"]; \
+             print(json.dumps(d))'\n\
+               exit 0\n\
+             fi\n\
+             exec {inner} \"$@\"\n",
+            inner = honest.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&dropping, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = day(dir.path(), &dropping, &["assess", "docs"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !text.contains("nobody wrote down"),
+        "day must not conclude a release was never recorded from a subject it \
+         never received: {text}"
+    );
+    assert!(
+        text.contains("release"),
+        "the unaccounted subject must be named: {text}"
+    );
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "an unverified read must not report success: {text}"
+    );
+
+    // Negative control: through the honest stub the release IS found, so the
+    // assertions above are about the dropped subject and not about the verb.
+    let out = day(dir.path(), &honest, &["assess", "docs"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("v9.9.9"),
+        "a complete log must still assess the release: {text}"
     );
 }

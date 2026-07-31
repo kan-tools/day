@@ -134,6 +134,31 @@ pub struct Status {
     pub unreadable: Vec<Unreadable>,
 }
 
+/// Why day could not read something, and therefore **who has to do what**.
+///
+/// A bool (`version_skew`) held this until a third cause arrived: a subject kan
+/// listed but did not return, which is neither a stale reader nor a bad claim.
+/// It rendered as "the blocks are malformed — the claims need fixing", and
+/// fixing the claim would have done nothing. A two-valued classifier silently
+/// absorbing a third case is how a reader gets pointed the wrong way; an enum
+/// makes the next cause a compile error instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cause {
+    /// This day is behind the log. The reader upgrades day.
+    VersionSkew,
+    /// The claim is malformed. Someone fixes the claim.
+    Malformed,
+    /// kan listed the subject and did not return it. Neither of the above will
+    /// help, and day cannot tell which it is (kan#143).
+    Unaccounted,
+}
+
+impl Cause {
+    fn is_skew(self) -> bool {
+        matches!(self, Cause::VersionSkew)
+    }
+}
+
 /// One declaration this build could not read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unreadable {
@@ -141,7 +166,7 @@ pub struct Unreadable {
     /// Whether the *reader* is behind the log, rather than the log being wrong.
     /// Decides which of two different actions, for two different people, the
     /// human notice asks for.
-    pub version_skew: bool,
+    pub cause: Cause,
 }
 
 impl Status {
@@ -188,9 +213,19 @@ impl Status {
             } else {
                 "declarations"
             };
-            let fix = if self.unreadable.iter().all(|u| u.version_skew) {
+            // Ordered so the honest answer wins: an unaccounted subject is
+            // something NEITHER the reader nor the claim's author can fix, so
+            // it must not be folded into either remedy.
+            let fix = if self
+                .unreadable
+                .iter()
+                .any(|u| u.cause == Cause::Unaccounted)
+            {
+                "kan did not return everything it listed — day cannot tell what is \
+                 in those subjects, so treat this report as incomplete"
+            } else if self.unreadable.iter().all(|u| u.cause.is_skew()) {
                 "this day is older than the log — upgrading day should read them"
-            } else if self.unreadable.iter().any(|u| u.version_skew) {
+            } else if self.unreadable.iter().any(|u| u.cause.is_skew()) {
                 "some need a newer day, others need the claim fixed"
             } else {
                 "the blocks are malformed — the claims need fixing"
@@ -416,7 +451,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             crate::cache::DEFAULT_CADENCE,
             Some(Unreadable {
                 message: format!("injection settings could not be read: {e}"),
-                version_skew: false,
+                cause: Cause::Malformed,
             }),
         ),
     };
@@ -431,7 +466,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             crate::blocks::CycleSchema::default(),
             Some(Unreadable {
                 message: format!("cycle declaration could not be read: {e}"),
-                version_skew: false,
+                cause: Cause::Malformed,
             }),
         ),
     };
@@ -445,7 +480,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 // A schema day cannot parse at all is the claim's problem unless
                 // it says otherwise; `BlockSchemas::validate` reports a reserved
                 // name this way, and that is the project's to fix.
-                version_skew: false,
+                cause: Cause::Malformed,
             }),
         ),
     };
@@ -588,7 +623,11 @@ fn unreadable_from(
             .filter(|f| f.unreadable)
             .map(|f| Unreadable {
                 message: f.message.clone(),
-                version_skew: f.version_skew,
+                cause: if f.version_skew {
+                    Cause::VersionSkew
+                } else {
+                    Cause::Malformed
+                },
             }),
     );
     // A project-declared block schema this build could not read (day#74). Same
@@ -605,9 +644,7 @@ fn unreadable_from(
             "kan lists `{subject}` but did not return it in the bulk read, so \
              anything day concluded about it is unverified"
         ),
-        // Not version skew: this is the log disagreeing with itself, which
-        // upgrading day would not fix.
-        version_skew: false,
+        cause: Cause::Unaccounted,
     }));
     // Position inference reduces a verdict to a `Presence`, so an instance it
     // could not check became `Presence::Unknown` and the reason was dropped on
@@ -616,12 +653,16 @@ fn unreadable_from(
     // path a project actually hits at session start.
     out.extend(read_failures.iter().map(|f| Unreadable {
         message: f.message.clone(),
-        version_skew: f.version_skew,
+        cause: if f.version_skew {
+            Cause::VersionSkew
+        } else {
+            Cause::Malformed
+        },
     }));
     for (name, reason) in &blocks.unsupported {
         out.push(Unreadable {
             message: format!("block schema `{name}`: {reason}"),
-            version_skew: true,
+            cause: Cause::VersionSkew,
         });
     }
     for (witness, reason) in &schema.unsupported {
@@ -630,7 +671,7 @@ fn unreadable_from(
             // An unreadable probe *kind* is the same situation as a too-new
             // block — this build is behind what the project declared — so it
             // asks for the same action.
-            version_skew: true,
+            cause: Cause::VersionSkew,
         });
     }
     out
