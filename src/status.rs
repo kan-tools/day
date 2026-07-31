@@ -111,6 +111,15 @@ pub struct Status {
     /// Off-sequence findings from [`position::infer`]: a downstream output is
     /// present while an upstream one is not, so a step was skipped.
     pub off_sequence: Vec<String>,
+    /// Artifact types that exist but are not written down (day#103): a declared
+    /// `material` witness is satisfied for this cycle and the declared `record`
+    /// witness is not.
+    ///
+    /// Rendered separately from everything else here because it is a distinct
+    /// claim: not "this is next", not "a step was skipped", but "this happened
+    /// and the log does not know". Collapsing it into either of those is the
+    /// defect it exists to fix.
+    pub unrecorded: Vec<String>,
     /// Set when position has moved past the last recorded assessment. `None`
     /// when no atom assessment exists, or when the assessed atom is still
     /// current — absence of a baseline is not a change (REQ-10, AC-10).
@@ -352,6 +361,17 @@ impl Status {
             ));
         }
 
+        if !self.unrecorded.is_empty() {
+            out.push_str("Done but unrecorded:\n");
+            for kind in &self.unrecorded {
+                out.push_str(&format!(
+                    "  ! {kind} exists in this cycle, but its declared record witness \
+                     finds nothing —\n    the work happened and the log does not say so\n"
+                ));
+            }
+            out.push('\n');
+        }
+
         if !self.off_sequence.is_empty() {
             out.push_str("Off-sequence:\n");
             for finding in &self.off_sequence {
@@ -502,6 +522,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         return Ok(Status {
             here: Vec::new(),
             off_sequence: Vec::new(),
+            unrecorded: Vec::new(),
             transition: None,
             uncheckable: true,
             cadence,
@@ -533,7 +554,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // One read of the log, shared by every claim probe below.
     let log = ClaimLog::new(client);
 
-    let report = position::infer(&atoms, &schema.probes, git, &log, boundary.as_ref());
+    let report = position::infer(&atoms, &schema, git, &log, boundary.as_ref());
     let by_name: BTreeMap<&str, &Atom> = atoms.iter().map(|a| (a.name.as_str(), a)).collect();
 
     let here: Vec<Here> = report
@@ -566,6 +587,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     Ok(Status {
         here,
         off_sequence: report.off_sequence,
+        unrecorded: report.unrecorded,
         transition,
         uncheckable: false,
         cadence,
@@ -778,6 +800,7 @@ mod tests {
                 &["review"],
             )],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -798,6 +821,7 @@ mod tests {
         let status = Status {
             here: vec![here("design", vec![], &[]), here("build", vec![], &[])],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -817,6 +841,7 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -833,6 +858,7 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: None,
             uncheckable: true,
             unreadable: Vec::new(),
@@ -851,6 +877,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec!["review produced its output but upstream build did not".into()],
+            unrecorded: vec![],
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -869,6 +896,7 @@ mod tests {
         let status = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: Some(Transition {
                 from: "build".into(),
                 to: vec!["review".into()],
@@ -900,6 +928,7 @@ mod tests {
         let quiet = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -911,6 +940,7 @@ mod tests {
         let loud = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec!["build produced its output but upstream design did not".into()],
+            unrecorded: vec![],
             transition: Some(Transition {
                 from: "build".into(),
                 to: vec!["review".into()],
@@ -938,6 +968,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![c], &[])],
             off_sequence: vec![],
+            unrecorded: vec![],
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),

@@ -74,15 +74,74 @@ pub enum Error {
 /// status line in the session. A newer probe kind now degrades a single
 /// witness to "no probe", which is an honest state day already renders,
 /// rather than taking the project's process surface down with it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WitnessSchema {
+    /// The **material** witness for each type: what would show the artifact
+    /// exists in the world. Every declaration written before the paired form
+    /// lands here unchanged, which is what makes the widening below invisible
+    /// to the eleven call sites that read this map.
     pub probes: BTreeMap<String, Probe>,
+    /// The **record** witness, for types that declare one: what would show the
+    /// artifact was *written down*.
+    ///
+    /// Empty for every single-probe declaration, so a project that never opts
+    /// in is never affected. A type present in both maps can be asked a
+    /// question neither map alone can answer — the thing exists *and* the log
+    /// says so, or it exists and the log does not — which is day#103
+    /// generalised out of the `release` subject it was found on.
+    pub records: BTreeMap<String, Probe>,
     /// Witness types whose declared probe this version could not read, with
     /// the reason. Reported, never silently dropped: a reader must not think
     /// a witness is unprobed when it is merely unreadable *here*.
-    #[serde(skip)]
+    ///
+    /// Not serialized — see the [`Serialize`] impl for why.
     pub unsupported: BTreeMap<String, String>,
+}
+
+/// The paired form: `{"material": {...}, "record": {...}}`.
+///
+/// `deny_unknown_fields` on purpose. A pair is opt-in and both halves are
+/// required, so a typo'd key must be an *unsupported witness* rather than a
+/// silent degradation to material-only — the latter would reintroduce exactly
+/// the blindness the pair exists to remove, and would do it quietly.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PairedWitness {
+    material: Probe,
+    record: Probe,
+}
+
+/// Emits the same shapes [`WitnessSchema`]'s deserializer accepts: a bare probe
+/// for a material-only witness, `{"material": …, "record": …}` for a pair.
+///
+/// Hand-written because this type used to be `#[serde(transparent)]` over
+/// `probes`, and leaving it that way once `records` existed would have printed a
+/// starter that silently dropped every record half — `starter_command()` is what
+/// a project copies into its own `schema/witness` claim, so a lossy render here
+/// would hand people a declaration that quietly does less than the one day
+/// suggested. Round-tripping is asserted rather than assumed.
+///
+/// `unsupported` is deliberately not emitted: it is what *this build* could not
+/// read, not something the project declared, and writing it back would launder a
+/// reader's limitation into the project's record.
+impl Serialize for WitnessSchema {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        let mut map = serializer.serialize_map(Some(self.probes.len()))?;
+        for (witness, material) in &self.probes {
+            match self.records.get(witness) {
+                Some(record) => {
+                    let mut pair = BTreeMap::new();
+                    pair.insert("material", material);
+                    pair.insert("record", record);
+                    map.serialize_entry(witness, &pair)?;
+                }
+                None => map.serialize_entry(witness, material)?,
+            }
+        }
+        map.end()
+    }
 }
 
 impl<'de> Deserialize<'de> for WitnessSchema {
@@ -92,8 +151,36 @@ impl<'de> Deserialize<'de> for WitnessSchema {
         // straight into `Probe` is what made a single unknown kind fatal.
         let raw = BTreeMap::<String, serde_json::Value>::deserialize(deserializer)?;
         let mut probes = BTreeMap::new();
+        let mut records = BTreeMap::new();
         let mut unsupported = BTreeMap::new();
         for (witness, value) in raw {
+            // The discriminator is the *author's evident intent*, not whether
+            // the pair happens to parse: an entry naming either half is a pair,
+            // and then both halves must read or the witness is unsupported.
+            //
+            // Keying on "does it parse as a pair" instead would mean a record
+            // half with a typo fell through to the single-probe branch, failed
+            // there too, and landed in `unsupported` with a message about the
+            // wrong shape — or worse, if only `material` were misspelled,
+            // parsed as a single probe and silently lost the record half. A
+            // witness that quietly stops asking half its question is the
+            // failure mode this whole milestone is about.
+            let declares_pair = value.get("material").is_some() || value.get("record").is_some();
+
+            if declares_pair {
+                match serde_json::from_value::<PairedWitness>(value) {
+                    Ok(pair) => {
+                        probes.insert(witness.clone(), pair.material);
+                        records.insert(witness, pair.record);
+                    }
+                    Err(e) => {
+                        unsupported
+                            .insert(witness, format!("declares a material/record pair but {e}"));
+                    }
+                }
+                continue;
+            }
+
             match serde_json::from_value::<Probe>(value) {
                 Ok(probe) => {
                     probes.insert(witness, probe);
@@ -105,6 +192,7 @@ impl<'de> Deserialize<'de> for WitnessSchema {
         }
         Ok(Self {
             probes,
+            records,
             unsupported,
         })
     }
@@ -177,8 +265,39 @@ impl WitnessSchema {
                 block: None,
             }),
         );
+        // NO PAIRED WITNESS IS SUGGESTED HERE, and the reason is the finding
+        // that writing this milestone produced.
+        //
+        // The obvious starter pair is the one day#103 was about:
+        // `published-artifact`, material `{tag: "v*"}`, record a `release`
+        // claim. It does not work, and it fails *silently*, which is the one
+        // way it must not fail.
+        //
+        // A `tag` probe under a cycle boundary means "created strictly after
+        // the boundary" (`position::resolve_collecting`), and the boundary IS
+        // the newest tag. So in the cycle a release opens, `published-artifact`
+        // is Absent by construction — day's own v0.7.0-beta.1 release claim
+        // records observing exactly this, cutting a tag and watching the
+        // witness go absent. The comparison "material present and record
+        // absent" therefore never fires for the case that motivated it, and a
+        // project adopting the suggestion would get a permanently quiet check
+        // that looks like a clean bill of health.
+        //
+        // What the release case actually needs is *correspondence* — does a
+        // record exist that refers to THIS material instance — which is what
+        // `docs::reconcile_boundary` does with `text.contains(tag)` and what a
+        // `ClaimShape` cannot yet express. That is a real extension and it is
+        // not this milestone's; filed rather than half-built.
+        //
+        // The pair mechanism below is still correct and still shipped: for any
+        // artifact type whose material witness is not boundary-degenerate — a
+        // `path` probe, for instance — "it exists this cycle and the log does
+        // not mention it" is exactly right. It is only the tag/boundary
+        // interaction that defeats it, and day should not suggest the one shape
+        // it cannot answer.
         Self {
             probes,
+            records: BTreeMap::new(),
             unsupported: BTreeMap::new(),
         }
     }
@@ -669,6 +788,105 @@ mod tests {
             .expect("the starter command should carry a block")
             .expect("it should parse");
         assert_eq!(parsed, WitnessSchema::starter());
+    }
+
+    /// REQ-3 — every declaration written before the paired form keeps its exact
+    /// meaning. This is the shape on *this repo's own* `schema/witness` claim.
+    ///
+    /// The assertion is not merely that it parses: it is that `records` stays
+    /// empty, because an empty `records` is what makes the material/record
+    /// comparison a no-op for projects that never opted in. If a single probe
+    /// ever started populating both maps, every such project would begin
+    /// getting done-but-unrecorded findings it never asked for.
+    #[test]
+    fn a_single_probe_declaration_is_material_only_and_gains_no_record() {
+        let json = r#"{
+            "published-artifact": {"tag": "v*"},
+            "design-doc": {"path": ".design/*.md"},
+            "assessment": {"claim": {"kind": "Result", "subject": "atom/*"}}
+        }"#;
+        let schema: WitnessSchema = serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            schema.probes.get("published-artifact"),
+            Some(&Probe::Tag("v*".into()))
+        );
+        assert!(
+            schema.records.is_empty(),
+            "a single-probe declaration must declare no record witness, or every \
+             pre-existing project starts getting findings it did not ask for: {:?}",
+            schema.records
+        );
+        assert!(schema.unsupported.is_empty(), "{:?}", schema.unsupported);
+    }
+
+    /// REQ-2 — the paired form splits into the two maps.
+    #[test]
+    fn a_paired_witness_declares_both_halves() {
+        let json = r#"{
+            "published-artifact": {
+                "material": {"tag": "v*"},
+                "record": {"claim": {"kind": "Result", "subject": "release"}}
+            }
+        }"#;
+        let schema: WitnessSchema = serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            schema.probes.get("published-artifact"),
+            Some(&Probe::Tag("v*".into())),
+            "the material half must land where every existing reader looks"
+        );
+        assert!(
+            matches!(
+                schema.records.get("published-artifact"),
+                Some(Probe::Claim(_))
+            ),
+            "the record half must be kept: {:?}",
+            schema.records
+        );
+        assert!(schema.unsupported.is_empty(), "{:?}", schema.unsupported);
+    }
+
+    /// REQ-3's honest-reads clause, and the reason the parser keys on the
+    /// author's evident intent rather than on whether the pair happens to parse.
+    ///
+    /// Each of these names one half of a pair and gets the other wrong. None may
+    /// quietly become a material-only witness: that would leave the project
+    /// believing it declared a comparison day is not making, which is a silent
+    /// downgrade of exactly the kind `telos/honest-reads` exists to refuse.
+    #[test]
+    fn a_broken_pair_is_unsupported_rather_than_silently_material_only() {
+        for (name, json) in [
+            (
+                "record half misspelled",
+                r#"{"published-artifact": {"material": {"tag": "v*"}, "recrod": {"claim": {"kind": "Result"}}}}"#,
+            ),
+            (
+                "material half misspelled",
+                r#"{"published-artifact": {"materal": {"tag": "v*"}, "record": {"claim": {"kind": "Result"}}}}"#,
+            ),
+            (
+                "record half missing entirely",
+                r#"{"published-artifact": {"material": {"tag": "v*"}}}"#,
+            ),
+            (
+                "record half is not a probe day knows",
+                r#"{"published-artifact": {"material": {"tag": "v*"}, "record": {"telepathy": "x"}}}"#,
+            ),
+        ] {
+            let schema: WitnessSchema = serde_json::from_str(json).unwrap();
+            assert!(
+                schema.unsupported.contains_key("published-artifact"),
+                "{name}: should be reported as unsupported, got probes={:?} records={:?}",
+                schema.probes,
+                schema.records
+            );
+            assert!(
+                !schema.probes.contains_key("published-artifact"),
+                "{name}: must NOT degrade to a material-only witness — the project \
+                 asked for a comparison and would never be told it is not happening"
+            );
+        }
     }
 
     /// The shape a project actually writes: a bare object mapping witness

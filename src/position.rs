@@ -285,6 +285,16 @@ pub struct Report {
     /// can say the report is partial instead of presenting it as whole
     /// (`.design/declared-blocks.md` REQ-4).
     pub read_failures: Vec<ReadFailure>,
+    /// Artifact types that **exist but are not written down**: a declared
+    /// `material` witness is satisfied for this cycle and the declared `record`
+    /// witness is not (day#103).
+    ///
+    /// A separate list rather than a fourth [`Presence`], because it is not a
+    /// statement about whether the work happened — it plainly did — but about
+    /// whether the log knows. Folding it into presence would make an
+    /// unrecorded artifact look absent and put the atom back in `current`,
+    /// which is the collapse this exists to undo.
+    pub unrecorded: Vec<String>,
 }
 
 /// Infers position from the atom set and the witness probes, resolving each
@@ -296,9 +306,15 @@ pub struct Report {
 /// input to three — and a `claim` probe scans the whole log, so resolving per
 /// mention would multiply a session-start read by the size of the vocabulary
 /// for answers that cannot differ within a single inference.
+/// Takes the whole [`WitnessSchema`] rather than just its material probes.
+///
+/// That is REQ-8, and it is deliberate: day#101's recurring defect is a
+/// guarantee wired at a call site, and passing `&schema.probes` would let a
+/// future channel compute a position while silently skipping the record half.
+/// With the declaration itself as the parameter there is no half to pass.
 pub fn infer(
     atoms: &[Atom],
-    probes: &BTreeMap<String, Probe>,
+    schema: &crate::telos::WitnessSchema,
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
@@ -311,11 +327,48 @@ pub fn infer(
         atoms,
         memoized(|kind| {
             let mut collected = Vec::new();
-            let presence = materialized(kind, probes, git, log, boundary, Some(&mut collected));
+            let presence = materialized(
+                kind,
+                &schema.probes,
+                git,
+                log,
+                boundary,
+                Some(&mut collected),
+            );
             failures.borrow_mut().extend(collected);
             presence
         }),
     );
+
+    // The material/record comparison (REQ-2). Only types declaring both halves
+    // can be asked, so a project that declared no pair gets an empty list and
+    // no behaviour change whatsoever.
+    //
+    // Resolved through the same `resolve_collecting` every other probe goes
+    // through, so a record witness is cycle-scoped exactly like a material one:
+    // "was this recorded *in this cycle*", not "was it ever recorded". Without
+    // that, a release claim from six milestones ago would satisfy today's.
+    for (kind, record) in &schema.records {
+        if !schema.probes.contains_key(kind) {
+            continue;
+        }
+        let material = materialized(kind, &schema.probes, git, log, boundary, None);
+        if material != Presence::Present {
+            continue;
+        }
+        let mut collected = Vec::new();
+        let seen = resolve_collecting(record, git, log, boundary, Some(&mut collected));
+        failures.borrow_mut().extend(collected);
+
+        // Only a probe that ran and found nothing counts. An `Error` is a read
+        // that did not happen and is already reported as a read failure;
+        // calling it "unrecorded" would manufacture a finding out of a failure
+        // to look, which is the exact inversion `telos/honest-reads` forbids.
+        if matches!(seen, Verdict::Unsatisfied(_)) {
+            report.unrecorded.push(kind.clone());
+        }
+    }
+
     report.read_failures = failures.into_inner();
     report
 }
@@ -421,6 +474,12 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
 
     Report {
         read_failures: Vec::new(),
+        // Filled by [`infer`], which is the only caller with the schema needed
+        // to answer it. `infer_with` is given a bare presence function and
+        // cannot know what a record witness would be, so an empty list here is
+        // "not asked", not "asked and clean" — and the only path that skips
+        // asking is the test seam.
+        unrecorded: Vec::new(),
         standings,
         current,
         off_sequence,
@@ -633,17 +692,20 @@ mod tests {
             atom("build", &["design-doc"], &["code-change"], &["review"]),
             atom("review", &["code-change"], &["verdict"], &[]),
         ];
-        let probes: BTreeMap<String, Probe> = [(
-            "verdict".to_string(),
-            Probe::Command(format!("touch {}", marker.display())),
-        )]
-        .into_iter()
-        .collect();
+        let schema = crate::telos::WitnessSchema {
+            probes: [(
+                "verdict".to_string(),
+                Probe::Command(format!("touch {}", marker.display())),
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
         let git = Git::with_bin(dir.path(), "definitely-not-a-real-git-binary".to_string());
         let client =
             KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary".to_string());
 
-        let report = infer(&atoms, &probes, &git, &ClaimLog::new(&client), None);
+        let report = infer(&atoms, &schema, &git, &ClaimLog::new(&client), None);
         assert!(
             !marker.exists(),
             "inference executed a command probe — REQ-6 is broken"
