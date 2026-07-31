@@ -98,6 +98,26 @@ struct ShowEnvelope {
     claims: Vec<Claim>,
 }
 
+/// `kan show --all --json` (kan#123, ADR-71).
+///
+/// Each entry is a **full** `ShowJson` — repeated `trust` field and all —
+/// which ADR-71 chose deliberately so day could reuse the parser it already
+/// has for a single subject rather than write a second one. Taking that deal
+/// is the point: [`Claim`] below is unchanged.
+#[derive(Debug, serde::Deserialize)]
+struct ShowAllEnvelope {
+    v: u32,
+    #[serde(default)]
+    subjects: Vec<ShowAllEntry>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ShowAllEntry {
+    subject: String,
+    #[serde(default)]
+    claims: Vec<Claim>,
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct SubjectsEnvelope {
     v: u32,
@@ -180,6 +200,36 @@ impl KanClient {
     /// [`identity`]: Self::identity
     pub fn version(&self) -> Option<crate::compat::Version> {
         crate::compat::Version::parse(self.run(&["--version"]).ok()?.trim())
+    }
+
+    /// Every subject's live claims, from **one** invocation
+    /// (`kan show --all --json`, kan#123 / ADR-71).
+    ///
+    /// This exists because the cost of reading day's log is entirely fixed
+    /// per-process startup — an empty log costs the same as a full one, and
+    /// `kan identity did`, which reads no log at all, costs the same again. So
+    /// no optimisation inside a read helps and only the invocation count does:
+    /// day paid ~48ms × 98 calls at session start to answer questions that one
+    /// call answers.
+    ///
+    /// **Requires kan >= 0.9.1.** An older kan rejects `--all` and this returns
+    /// the error rather than an empty log — a partial read reported as a whole
+    /// one is the failure `src/probe.rs` and `telos/honest-reads` both forbid.
+    /// `src/compat.rs` states the floor and `day doctor` tells the user to
+    /// upgrade.
+    pub fn show_all(&self) -> Result<Vec<(String, Claim)>, Error> {
+        let args = ["show", "--all", "--json"];
+        let out = self.run(&args)?;
+        let envelope: ShowAllEnvelope = parse(&out, &args)?;
+        check_shape(envelope.v, &args)?;
+        Ok(envelope
+            .subjects
+            .into_iter()
+            .flat_map(|entry| {
+                let subject = entry.subject;
+                entry.claims.into_iter().map(move |c| (subject.clone(), c))
+            })
+            .collect())
     }
 
     /// This workspace's identity, via `kan identity did`.

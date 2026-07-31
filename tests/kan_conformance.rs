@@ -382,3 +382,68 @@ fn conformance_kan_78_result_accepts_both_spellings() {
         String::from_utf8_lossy(&both.stderr)
     );
 }
+
+/// day#71 — the bulk read `ClaimLog` now depends on (kan#123 / ADR-71).
+///
+/// **This test is what makes `tests/fixtures/kan-compat.tsv` tell the truth.**
+/// The compat matrix runs this file against every released kan, and until this
+/// existed nothing here touched `--all` — so the table would have kept
+/// reporting v0.8.0 as `ok` while day was in fact broken against it. A table
+/// claiming a pairing works for a kan day cannot use is the false completeness
+/// `telos/honest-reads` forbids, in the artifact built to prevent it.
+///
+/// Asserted through `KanClient::show_all` rather than by shelling out directly,
+/// so what is checked is the call day actually makes.
+#[test]
+fn conformance_bulk_read_is_available_and_agrees_with_per_subject_reads() {
+    let Some(bin) = real_kan() else {
+        eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
+        return;
+    };
+    let dir = scratch_repo();
+    let client = KanClient::with_bin(dir.path(), bin);
+
+    // Two subjects with two claims each, so a bulk read that dropped a claim
+    // or mislabelled a subject cannot pass by coincidence.
+    for (subject, texts) in [
+        ("telos/bulk-a", ["first on a", "second on a"]),
+        ("telos/bulk-b", ["first on b", "second on b"]),
+    ] {
+        for text in texts {
+            client
+                .append(Write::new("observe", subject, text))
+                .expect("append should succeed against a real kan");
+        }
+    }
+
+    let bulk = client
+        .show_all()
+        .expect("kan >= 0.9.0 serves `show --all --json`; day#71 depends on it");
+
+    // AC-2: CID for CID against what the per-subject path returns. A faster
+    // path that returns a different answer is a different answer wearing the
+    // same name, and `ClaimLog` would inherit the difference silently.
+    for subject in ["telos/bulk-a", "telos/bulk-b"] {
+        let mut per_subject: Vec<String> = client
+            .show(subject)
+            .expect("show should succeed")
+            .into_iter()
+            .map(|c| c.cid)
+            .collect();
+        let mut from_bulk: Vec<String> = bulk
+            .iter()
+            .filter(|(s, _)| s == subject)
+            .map(|(_, c)| c.cid.clone())
+            .collect();
+        per_subject.sort();
+        from_bulk.sort();
+        assert_eq!(
+            from_bulk, per_subject,
+            "`show --all` and `show {subject}` must return the same claims"
+        );
+        assert!(
+            !from_bulk.is_empty(),
+            "the fixture should have produced claims on {subject}"
+        );
+    }
+}

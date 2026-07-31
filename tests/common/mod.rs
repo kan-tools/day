@@ -181,6 +181,12 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     // `format!` string would need doubling everywhere, which is exactly the
     // kind of escaping that hides mistakes.
     std::fs::write(data.join("append.py"), STUB_APPEND_PY).unwrap();
+    // `kan show --all --json` (kan#123 / ADR-71), which `ClaimLog` uses since
+    // day#71. Built by globbing the per-subject files at CALL time rather than
+    // being written once here, so a subject created by an append during the
+    // test is visible to the bulk read too — a stub whose bulk read went stale
+    // the moment day wrote anything would test a log that cannot exist.
+    std::fs::write(data.join("show_all.py"), STUB_SHOW_ALL_PY).unwrap();
 
     let script = dir.join("kan-stub.sh");
     std::fs::write(
@@ -198,6 +204,7 @@ case "$1" in
     echo "identity unavailable" >&2; exit 1 ;;
   status) cat "$DATA/status.json"; exit 0 ;;
   show)
+    if [ "$2" = "--all" ]; then python3 "$DATA/show_all.py" "$DATA"; exit 0; fi
     f="$DATA/show-$(printf '%s' "$2" | tr '/' '_').json"
     if [ -f "$f" ]; then cat "$f"; else printf '{{"v":1,"subject":"%s","subjects":[],"claims":[],"inbound":[]}}\n' "$2"; fi
     exit 0 ;;
@@ -343,6 +350,30 @@ pub fn repo_root() -> PathBuf {
 /// Without this the stub is write-only, and anything that writes then reads
 /// back — declaring an atom, then checking the vocabulary composes — cannot
 /// be tested against it.
+/// `kan show --all --json`: every subject's live claims in one envelope.
+///
+/// Each entry is a full `ShowJson`, matching what ADR-71 actually emits —
+/// repeated `trust` field and all — because day parses these with the same
+/// parser it uses for a single subject, and a slimmer stub entry would let day
+/// pass here while failing against the real binary.
+const STUB_SHOW_ALL_PY: &str = r#"
+import json, sys, pathlib
+
+data = pathlib.Path(sys.argv[1])
+entries = []
+for f in sorted(data.glob("show-*.json")):
+    entry = json.loads(f.read_text())
+    entry.setdefault("trust", {"base": "Solo", "authors": []})
+    entry.setdefault("excluded_by_trust", 0)
+    entries.append(entry)
+print(json.dumps({
+    "v": 1,
+    "trust": {"base": "Solo", "authors": []},
+    "excluded_by_trust": 0,
+    "subjects": entries,
+}))
+"#;
+
 const STUB_APPEND_PY: &str = r#"
 import json, os, sys
 

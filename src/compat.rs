@@ -91,8 +91,8 @@ impl fmt::Display for Version {
 /// `tests/fixtures/kan-compat.tsv`.
 pub const OLDEST_SUPPORTED: Version = Version {
     major: 0,
-    minor: 7,
-    patch: 0,
+    minor: 9,
+    patch: 1,
     pre: None,
 };
 
@@ -221,9 +221,22 @@ mod tests {
 
     /// A pre-release of a supported version is supported. Every kan release so
     /// far is a `-beta.N`, so a rule that excluded them would reject all of kan.
+    ///
+    /// Pinned to 0.9.0-beta.1 since day#71: the floor moved to 0.9.0 when
+    /// `ClaimLog` adopted `show --all`. The version here has to be a
+    /// pre-release *of a supported release* or the test asserts the floor
+    /// rather than the pre-release rule it is named for.
     #[test]
     fn a_prerelease_of_a_supported_version_is_supported() {
-        let beta = Version::parse("kan 0.8.0-beta.1").unwrap();
+        let beta = Version::parse("kan 0.9.1-beta.1").unwrap();
         assert_eq!(classify(Some(&beta)), Compat::Supported);
+    }
+
+    /// The floor's other side, so the test above cannot pass by the range being
+    /// wide open.
+    #[test]
+    fn a_kan_below_the_floor_is_too_old() {
+        let below = Version::parse("kan 0.8.0-beta.1").unwrap();
+        assert_eq!(classify(Some(&below)), Compat::TooOld);
     }
 }
