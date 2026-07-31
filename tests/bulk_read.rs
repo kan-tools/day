@@ -239,3 +239,84 @@ fn a_kan_without_the_bulk_read_errors_rather_than_reading_an_empty_log() {
         "the control must not report a version failure: {text}"
     );
 }
+
+/// The capability the whole-log read cost day, recovered — and widened.
+///
+/// Reading one subject at a time, a subject kan could not serve produced an
+/// error naming it. One bulk read cannot: a subject missing from the payload
+/// looks exactly like a subject with nothing in it, and day would report an
+/// absence it never verified. That is the failure `telos/honest-reads` exists
+/// to forbid, and it was introduced not by the bulk read itself but by serving
+/// `show()` from the memo — until then `show()` was still a real per-subject
+/// read that could still fail.
+///
+/// The cross-check is *wider* than what it replaces: the per-subject loop could
+/// only catch a failure kan **reported**, while comparing `status --json`
+/// against the bulk payload also catches one it silently **omitted**.
+#[test]
+fn a_subject_kan_lists_but_does_not_return_is_reported_not_treated_as_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = base_log(1);
+    claims.push(witness_schema(1));
+    claims.push(claim(
+        "telos/vanishing",
+        "bafyvan",
+        "Present in status only.",
+    ));
+    let (inner, _log) = counting_stub(dir.path(), &claims);
+
+    // A kan that lists `telos/vanishing` in `status` but drops it from the
+    // bulk payload — the silent-omission case day could not previously see.
+    let dropping = dir.path().join("kan-dropping.sh");
+    std::fs::write(
+        &dropping,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = show ] && [ \"$2\" = --all ]; then\n\
+               {inner} \"$@\" | python3 -c 'import json,sys; d=json.load(sys.stdin); \
+             d[\"subjects\"]=[e for e in d[\"subjects\"] if e[\"subject\"]!=\"telos/vanishing\"]; \
+             print(json.dumps(d))'\n\
+               exit 0\n\
+             fi\n\
+             exec {inner} \"$@\"\n",
+            inner = inner.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&dropping, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = day(dir.path(), &dropping, &["hook", "session-notice"]);
+    let notice = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        notice.contains("partial"),
+        "a subject kan listed but did not return must mark the report partial: {notice}"
+    );
+
+    let out = day(dir.path(), &dropping, &["hook", "session-start"]);
+    let started = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        started.contains("telos/vanishing"),
+        "the unaccounted subject must be named, or a reader cannot act on it: {started}"
+    );
+    assert!(
+        started.contains("partial"),
+        "and the context must be marked partial: {started}"
+    );
+
+    // Negative control: the same fixture through the honest stub is silent.
+    // Without this, the assertions above would pass against a check that fires
+    // on every run — which is how a warning becomes background noise.
+    let out = day(dir.path(), &inner, &["hook", "session-notice"]);
+    let notice = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        notice.trim().is_empty(),
+        "a complete bulk read must produce no notice: {notice}"
+    );
+    let out = day(dir.path(), &inner, &["hook", "session-start"]);
+    let started = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !started.contains("did not return it in the bulk read"),
+        "a complete bulk read must not report an unaccounted subject: {started}"
+    );
+}

@@ -303,6 +303,42 @@ impl KanClient {
             .collect())
     }
 
+    /// Subjects kan lists but the bulk read did not return.
+    ///
+    /// **This recovers what the whole-log read cost day.** Reading one subject
+    /// at a time, a subject kan could not serve produced an error naming it.
+    /// One bulk read cannot: a subject missing from the payload is
+    /// indistinguishable from a subject that simply has nothing, and day would
+    /// report an absence it never verified — the exact failure
+    /// `telos/honest-reads` forbids.
+    ///
+    /// Cross-checking the two sets closes it, and closes it *wider* than the
+    /// per-subject loop ever did: that could only catch a failure kan
+    /// **reported**, while this also catches one it silently omitted.
+    ///
+    /// A subject can never legitimately be missing. A subject exists by virtue
+    /// of having claims, and retracting the last one appends a `Retraction`,
+    /// which is itself a claim — verified against a real kan, where a subject
+    /// whose only claim was retracted still comes back with one.
+    ///
+    /// **Costs no extra invocation.** It compares two reads day has already
+    /// made and returns empty unless both are in hand, so it can never turn
+    /// into a third call.
+    pub fn unaccounted_subjects(&self) -> Vec<String> {
+        let log = self.log.borrow();
+        let listed = self.subject_memo.borrow();
+        let (Some(log), Some(listed)) = (log.as_ref(), listed.as_ref()) else {
+            return Vec::new();
+        };
+        let returned: std::collections::BTreeSet<&str> =
+            log.iter().map(|(s, _)| s.as_str()).collect();
+        listed
+            .iter()
+            .filter(|s| !returned.contains(s.as_str()))
+            .cloned()
+            .collect()
+    }
+
     /// This workspace's identity, via `kan identity did`.
     ///
     /// `did` is the public identifier and is explicitly safe to share.

@@ -481,6 +481,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 ],
                 // Inference has not run, so it cannot have failed a read.
                 &[],
+                &client.unaccounted_subjects(),
             ),
         });
     }
@@ -543,6 +544,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 cycle_unreadable.clone(),
             ],
             &report.read_failures,
+            &client.unaccounted_subjects(),
         ),
     })
 }
@@ -569,6 +571,8 @@ fn unreadable_from(
     // errors above: the project's *declaration* was fine and a *claim carrying
     // one* is from a newer day.
     read_failures: &[crate::probe::ReadFailure],
+    // Subjects kan listed that the bulk read did not return (day#71).
+    unaccounted: &[String],
 ) -> Vec<Unreadable> {
     let mut out: Vec<Unreadable> = declaration_errors.into_iter().flatten().collect();
     out.extend(
@@ -592,6 +596,19 @@ fn unreadable_from(
     // situation: the project declared vocabulary and day is only partly able to
     // act on it. Leaving the declarable path unreported while day's own seven
     // are reported would be the inconsistency day#78 was about.
+    // A subject kan listed but the bulk read did not return. day cannot tell
+    // whether it was unreadable or dropped, and must not treat it as absent —
+    // one bulk read is day's entire view of the log, so an unaccounted subject
+    // makes every answer built on it partial.
+    out.extend(unaccounted.iter().map(|subject| Unreadable {
+        message: format!(
+            "kan lists `{subject}` but did not return it in the bulk read, so \
+             anything day concluded about it is unverified"
+        ),
+        // Not version skew: this is the log disagreeing with itself, which
+        // upgrading day would not fix.
+        version_skew: false,
+    }));
     // Position inference reduces a verdict to a `Presence`, so an instance it
     // could not check became `Presence::Unknown` and the reason was dropped on
     // the floor. day then reported a position built on a partial read without

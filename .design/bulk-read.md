@@ -56,6 +56,29 @@ This adopts it: `ClaimLog` makes one call instead of N+1.
   it lives for one invocation and dies with it, so `telos/no-store-of-its-own` is
   untouched. Laziness matters more after this change, not less — a command that
   needs no claim probe must still pay nothing.
+- REQ-7: **A subject kan lists but the bulk read does not return is reported,
+  never treated as absent.** This recovers what the whole-log read cost day, and
+  the cost is worth naming precisely: it was not the bulk read that removed
+  per-subject failure detection but serving `show()` from the memo — until then
+  `show()` was still a real read that could still fail.
+
+  day compares `status --json`'s subject set against the bulk payload's. It
+  costs **no extra invocation**, because day already makes both reads, and it
+  returns empty unless both are in hand so it can never become a third call.
+
+  It is also *wider* than what it replaces: the per-subject loop could only
+  catch a failure kan **reported**, while this also catches one it silently
+  **omitted** — a case day never covered.
+
+  A subject can never legitimately be missing: a subject exists by virtue of
+  having claims, and retracting the last one appends a `Retraction`, which is
+  itself a claim. Verified against a real kan, where a subject whose only claim
+  was retracted still comes back carrying one.
+
+  What day still cannot say is *why* — unreadable versus dropped. That needs kan
+  to expose per-subject read errors in the `--all` payload, or to state an
+  all-or-nothing guarantee in ADR-71. Raised as a kan issue rather than guessed
+  at here.
 - REQ-6: The bulk envelope is parsed with the **existing `Claim` parser**. ADR-71
   made each entry a full `ShowJson`, repeated `trust` field and all, specifically
   so day would not write a second parser; taking that deal is the point.
@@ -92,6 +115,12 @@ This adopts it: `ClaimLog` makes one call instead of N+1.
 - [ ] AC-5: `day doctor` against kan 0.8.0 renders `OLDER than this day supports`
       and `Upgrade kan`; `OLDEST_SUPPORTED` and the table agree, enforced by the
       existing `tests/kan_compat.rs`. (REQ-2)
+- [ ] AC-7: With a kan that lists a subject in `status --json` and omits it from
+      `show --all`, both hook channels mark the report partial and **name the
+      subject**. **Negative control:** the same fixture through an honest stub is
+      silent on both channels — a check that fires on every run is how a warning
+      becomes background noise. Invocation counts are unchanged, so the check
+      costs nothing. (REQ-7)
 - [ ] AC-6: The log is read **at most once per invocation**, and not at all when
       nothing asks for a claim. `day init --print` makes zero log reads;
       `day doctor` makes exactly one and **zero** per-subject `show` calls.
