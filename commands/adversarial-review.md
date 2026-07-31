@@ -19,11 +19,11 @@ description: Hostile-by-default post-implementation audit against a named north 
 ## Context
 
 - Repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
-- Branch: !`git branch --show-current 2>/dev/null`
+- Branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached HEAD or not a git repo"`
 - Diff vs. main: !`git diff --stat main...HEAD 2>/dev/null | tail -20 || echo "no main to compare against"`
-- Design docs: !`ls .design/*.md .design/**/*.md 2>/dev/null`
-- Teloi on record: !`command -v kan >/dev/null 2>&1 && kan status 2>/dev/null | grep '^\[Local("telos/' || echo "none"`
-- Orientation files: !`ls CLAUDE.md docs/SPEC.md docs/HANDOFF.md docs/DECISIONS.md 2>/dev/null`
+- Design docs: !`find .design -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
+- Telos subjects on record (INCLUDES RETRACTED — see Step 1): !`command -v kan >/dev/null 2>&1 || echo "kan not on PATH"; kan status 2>/dev/null | grep '^telos/' | cut -d: -f1 | sort -u | grep . || echo "none matched — if this repo HAS teloi, kan's status format has changed and this line is lying; verify with kan status before believing it"`
+- Orientation files: !`find . docs -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
 
 ## Your task
 
@@ -34,6 +34,45 @@ that is the common case, not the exceptional one.
 
 You are not here to be encouraging. You are here to find the gap between what was
 meant and what exists, and to say so plainly.
+
+### Step 0 — Establish that you are that reviewer
+
+Read this before Step 1. If you wrote any of the code under review, **every
+clause of the paragraph above is false about you**: you did write it, you have
+just reported it complete, and you carry the reasoning this review exists to
+audit from the outside.
+
+That is the default case when this command is invoked as a slash command in the
+session that produced the work, so treat it as the expected situation, not an
+edge case.
+
+1. **Where the harness can dispatch a fresh agent, offer to.** Hand it the design
+   doc, the kan subject, and the diff range, and let it report back. In Claude
+   Code that is the Agent tool with a **general-purpose** agent.
+2. **It must be cold, not a fork.** `subagent_type: "fork"` inherits the parent's
+   full conversation, so it arrives already holding the rationalisations this
+   step exists to strip. It would reproduce the problem while appearing to solve
+   it. A context-inheriting reviewer is not an independent one.
+3. **Offer, do not force.** An in-context pass is fast and catches the obvious,
+   and the operator may legitimately want one. Ask; abide by the answer.
+4. **If you proceed in-context — because the operator declined, or because no
+   such capability exists — say so in your output, in the verdict itself**, in
+   roughly this form:
+
+   > **Declared conflict of interest.** The premise of this review is a reviewer
+   > with no stake. I wrote this code. I have compensated by reproducing every
+   > claim against the running binary rather than by reading my own tests, but an
+   > independent reviewer would still be better placed to find what follows.
+
+   A review that is not independent and does not say so is worse than an openly
+   self-audited one, because the verdict reads identically either way.
+
+This is not ceremony. Two of the three defects behind day#101 were found by a
+review of code the same session had written, and both were found by *executing*
+it against hostile input rather than by re-reading it — which is the step an
+author is least likely to take, because they already believe they know what it
+does. When you cannot get independence, buy back what it was protecting: run the
+thing, do not re-read your own summary of it.
 
 ### Arguments
 
@@ -51,8 +90,22 @@ Do not paraphrase from memory and do not invent a north star.
 
 1. If any `telos/*` subjects exist in kan, read them (`kan show telos/<slug>`).
    Those are the north star. Quote them.
+
+   **The Context list above is subjects on record, not teloi in play.** It is a
+   grep over `kan status` and does not filter retracted ones; day's own reader
+   does (`src/hooks.rs:render_teloi`), and the two lists differ in this repo
+   today. A retracted telos quoted as the north star is a review measuring
+   against a target the project abandoned — so confirm each one is live when you
+   `kan show` it, and treat the list as a starting set, not an answer.
 2. If none exist, fall back to this repo's orientation docs (`CLAUDE.md`, an
    authoritative spec, the design doc's own Summary). Quote the specific lines.
+
+   Before you take that branch: **"none" here has two causes** — a project with
+   no teloi, and a grep whose pattern no longer matches kan's output. The second
+   is what happened to this line once already, and it reported `none` in a repo
+   with nine live teloi, silently, for as long as nobody checked. If the fallback
+   text in the Context block says the format may have changed, verify with
+   `kan status` before concluding there is no north star.
 3. State which telos or stated purpose **this particular work** was meant to
    serve. If you cannot find one, that is itself a finding: record it and say
    so — unstated purpose is where drift enters.

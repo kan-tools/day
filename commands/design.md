@@ -19,13 +19,13 @@ description: Interactive, iterative design document authoring grounded in codeba
 
 ## Context
 
-- Current repo root: !`git rev-parse --show-toplevel`
-- Current branch: !`git branch --show-current`
+- Current repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
+- Current branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached HEAD or not a git repo"`
 - kan available: !`command -v kan >/dev/null 2>&1 && echo yes || echo "no (spine not built yet — write plain files, skip kan integration steps)"`
 - kan subjects (if kan exists): !`command -v kan >/dev/null 2>&1 && kan status 2>/dev/null || true`
 - day process state: !`command -v day >/dev/null 2>&1 && day doctor 2>&1 || echo "day not on PATH"`
-- Existing design docs: !`ls .design/*.md 2>/dev/null`
-- Orientation files: !`ls README.md CLAUDE.md docs/SPEC.md docs/HANDOFF.md docs/SETUP-TODO.md 2>/dev/null`
+- Existing design docs: !`find .design -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
+- Orientation files: !`find . docs -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
 
 ## Your task
 

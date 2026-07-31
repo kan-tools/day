@@ -662,3 +662,91 @@ fn ac7_conventions_document_the_declared_block_mechanism() {
         "CONVENTIONS.md should show the claim probe's `block` predicate"
     );
 }
+
+/// day#99 — every `` !`…` `` line in a shipped command's preamble must exit
+/// zero, because the harness treats a non-zero preamble command as a load
+/// failure and aborts the whole skill before the model sees any of it. One
+/// unguarded `ls` of four orientation files (three of which do not exist in
+/// this repo) made `/adversarial-review` unloadable here, and nothing noticed:
+/// `tests/plugin.rs` checked what the command files SAY and never ran what
+/// they DO.
+///
+/// Run in two working directories on purpose. The repo root alone is the
+/// trap CLAUDE.md names — "a mechanism with two modes gets tested in whichever
+/// mode this repo is in" — and for these lines the interesting mode is the one
+/// where nothing exists: no `.design/`, no `docs/`, no git. That is every fresh
+/// clone and every repo day is installed into, which is exactly the population
+/// `telos/v1.0`'s bar names. A guard that only works where the files already
+/// exist is not a guard.
+#[test]
+fn command_preambles_exit_zero_even_where_nothing_exists() {
+    let shell = ["zsh", "bash", "sh"]
+        .into_iter()
+        .find(|s| {
+            std::process::Command::new("command")
+                .args(["-v", s])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+                || std::process::Command::new(s)
+                    .arg("-c")
+                    .arg("exit 0")
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+        })
+        .expect("a POSIX shell must be available to check command preambles");
+
+    let empty = std::env::temp_dir().join(format!("day-preamble-{}", std::process::id()));
+    std::fs::create_dir_all(&empty).expect("temp dir for the nothing-exists case");
+
+    let mut checked = 0usize;
+    for rel in ["commands/design.md", "commands/adversarial-review.md"] {
+        let text = std::fs::read_to_string(repo_root().join(rel)).unwrap();
+
+        for (n, line) in text.lines().enumerate() {
+            let Some(rest) = line.split_once("!`") else {
+                continue;
+            };
+            let Some((cmd, _)) = rest.1.split_once('`') else {
+                panic!("{rel}:{} has an unterminated !` command", n + 1);
+            };
+            checked += 1;
+
+            for (mode, cwd) in [
+                ("repo root", repo_root()),
+                ("nothing exists", empty.clone()),
+            ] {
+                let out = std::process::Command::new(shell)
+                    .arg("-c")
+                    .arg(cmd)
+                    .current_dir(&cwd)
+                    .output()
+                    .unwrap_or_else(|e| panic!("{rel}:{} could not run under {shell}: {e}", n + 1));
+
+                assert!(
+                    out.status.success(),
+                    "{rel}:{} exits {:?} under {shell} in the `{mode}` case, which \
+                     aborts the skill load before the model sees anything.\n  \
+                     command: {cmd}\n  stderr: {}",
+                    n + 1,
+                    out.status.code(),
+                    String::from_utf8_lossy(&out.stderr).trim(),
+                );
+            }
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&empty);
+
+    // A generator whose failure mode is "less output" needs an exhaustive
+    // expectation, not a trusting loop: if the `!` parse silently stopped
+    // matching, every assertion above would pass by checking nothing. This is
+    // the count the two files carry today.
+    assert_eq!(
+        checked, 13,
+        "expected 13 `!` preamble commands across the two command files; found \
+         {checked}. If a line was added or removed, update this number — if it \
+         dropped to zero the parse broke and this test was asserting nothing."
+    );
+}

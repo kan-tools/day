@@ -447,3 +447,89 @@ fn conformance_bulk_read_is_available_and_agrees_with_per_subject_reads() {
         );
     }
 }
+
+/// day#99, found while fixing it: `/adversarial-review`'s Context block greps
+/// `kan status` for telos subjects, and its pattern was `^\[Local("telos/` —
+/// a shape kan's status output no longer has. It matched nothing, the line's
+/// `|| echo "none"` fired, and the command told every reviewer this repo had
+/// **no teloi** while eleven telos subjects sat in the log.
+///
+/// Step 1 of that command calls the teloi "the north star" and falls back to
+/// orientation docs when there are none, so the effect was not cosmetic: every
+/// review run here silently measured against `CLAUDE.md` instead of against the
+/// teloi, and reported nothing unusual because the fallback is a legitimate
+/// branch.
+///
+/// This is day depending on the *format* of kan's output, which no stub can
+/// check — a stub prints whatever day expects. Hence here, with the real binary,
+/// skipping when kan is absent.
+///
+/// Scoped deliberately to day's own requirement, per `CLAUDE.md`: it asserts
+/// that the pattern day ships finds a telos day just wrote. It says nothing
+/// about what kan promises about `status` formatting, which is kan's fact to
+/// state and would belong in a test named for it.
+#[test]
+fn conformance_the_review_commands_telos_pattern_matches_real_kan_status() {
+    let Some(kan) = real_kan() else {
+        eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
+        return;
+    };
+    let repo = scratch_repo();
+
+    let declared = Command::new(kan)
+        .args([
+            "decide",
+            "telos/conformance-probe",
+            "A telos written so the review command's grep has something to find.",
+        ])
+        .current_dir(repo.path())
+        .output()
+        .expect("kan decide should run");
+    assert!(
+        declared.status.success(),
+        "could not write a telos to the scratch log: {}",
+        String::from_utf8_lossy(&declared.stderr)
+    );
+
+    let status = Command::new(kan)
+        .arg("status")
+        .current_dir(repo.path())
+        .output()
+        .expect("kan status should run");
+    assert!(status.status.success(), "kan status failed");
+    let text = String::from_utf8_lossy(&status.stdout);
+
+    // The pattern the shipped command actually uses. Extracted from the file
+    // rather than retyped, so the test cannot pass against a pattern the
+    // command does not ship — the exact gap that let the stale one survive.
+    let cmd = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("commands/adversarial-review.md"),
+    )
+    .expect("the review command must be readable");
+    let line = cmd
+        .lines()
+        .find(|l| l.contains("Telos subjects on record"))
+        .expect("the review command must still carry a telos line in its Context block");
+    assert!(
+        line.contains("grep '^telos/'"),
+        "the telos line no longer greps `^telos/`; if kan's format changed, this \
+         test should have failed on the match below instead — line was: {line}"
+    );
+
+    let matched: Vec<&str> = text.lines().filter(|l| l.starts_with("telos/")).collect();
+    assert!(
+        !matched.is_empty(),
+        "the review command's telos pattern matched NOTHING against real kan \
+         status output, so `/adversarial-review` would report `none` for a repo \
+         that has teloi — which is day#99's second defect recurring.\n\
+         kan status was:\n{text}"
+    );
+    assert!(
+        matched
+            .iter()
+            .any(|l| l.starts_with("telos/conformance-probe")),
+        "the pattern matched {} line(s) but not the telos just written; \
+         matched: {matched:?}",
+        matched.len()
+    );
+}
