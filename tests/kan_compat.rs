@@ -115,27 +115,26 @@ fn every_row_records_a_known_outcome() {
 
 /// The reason the floor is where it is, pinned so it cannot move silently.
 ///
-/// kan v0.6.0 and earlier have **no `kan show --json`** — day reads the
-/// structured form for everything, because it parsed the rendered form once,
-/// kan changed it, and day read a full log as empty while reporting success.
-/// They also lack the `in-tension-with` relation kind (kan#60). Neither is
-/// workaroundable: falling back to rendered output would reintroduce the exact
-/// defect day migrated away from, so this floor is **hard**, not incidental.
+/// Since day#71 the floor is **kan 0.9.1**, where `show --all --json` landed
+/// (kan#123 / ADR-71). `ClaimLog` makes exactly that call, so a kan without it
+/// cannot answer a single claim probe — day does not fall back, deliberately:
+/// a fallback is a two-mode mechanism, and this repo's record says that is
+/// where defects hide (day#91, and twice in `v0.7.0-beta.3` alone).
 ///
-/// It is deliberately *not* kan#78. The first version of this table said it
-/// was, and was wrong by one release, because the conformance suite asserted
-/// kan#78's resolution alongside day's actual dependencies — a property of kan
-/// deciding a fact about day. See `conformance_kan_78_result_accepts_both_spellings`.
+/// The previous floor was 0.7.0, where `show --json` first appeared. That
+/// reason still holds for everything below it; 0.9.0 is simply a higher bar
+/// day now genuinely needs.
 #[test]
-fn the_floor_is_where_show_json_landed() {
+fn the_floor_is_where_the_bulk_read_landed() {
     let ok = measured_ok();
     let oldest = ok.first().unwrap();
     assert_eq!(
         (oldest.major, oldest.minor, oldest.patch),
-        (0, 7, 0),
-        "day's oldest supported kan is expected to be 0.7.0, the first with \
-         `show --json`. If the floor moved, update this test and the `why` \
-         column — the floor is a fact about specific kan changes, not a number."
+        (0, 9, 1),
+        "day's oldest supported kan is expected to be 0.9.1, the first with \
+         `show --all --json`. If the floor moved, update this test and the \
+         `why` column — the floor is a fact about a specific kan change, not a \
+         number."
     );
 }
 
@@ -243,9 +242,9 @@ mod rendered {
     /// a warning that always fires.
     #[test]
     fn a_supported_pairing_prints_no_warning() {
-        let (out, _) = doctor_against("echo 'kan 0.8.0-beta.1'; exit 0");
+        let (out, _) = doctor_against("echo 'kan 0.9.1-beta.1'; exit 0");
         assert!(
-            out.contains("kan: 0.8.0-beta.1 (supported:"),
+            out.contains("kan: 0.9.1-beta.1 (supported:"),
             "a supported pairing should state the range: {out}"
         );
         for alarm in ["OLDER", "newer than", "unknown"] {

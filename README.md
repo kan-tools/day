@@ -106,16 +106,23 @@ day exists to avoid repeating.
 ## Install
 
 ```bash
-cargo install kan --version 0.7.1-beta.1   # the memory layer day reads
-cargo install day --version 0.7.0-beta.2
+cargo install kan --version 0.9.1-beta.1   # the memory layer day reads
+cargo install day --version 0.7.0-beta.3
 ```
 
 **The versions are not decoration.** Everything day has published is a
 pre-release, and cargo will not select one without `--version` — a plain
 `cargo install day` errors. kan does have one stable version, `0.1.0`, so a
-plain `cargo install kan` "succeeds" and hands you a kan six minor versions
+plain `cargo install kan` "succeeds" and hands you a kan many minor versions
 old that day cannot talk to, which is the worse failure because it looks like
 it worked. Tracked as day#50.
+
+**day requires kan >= 0.9.1**, and the requirement is measured rather than
+asserted: `tests/fixtures/kan-compat.tsv` records what every released kan
+actually does against this day, and `day doctor` prints the supported range
+next to the kan you have. Since day#71 every claim probe is answered from a
+single `kan show --all --json`, which landed in kan v0.9.1 — so an older kan
+cannot answer one at all. day says so rather than reading an empty log.
 
 Then, in a repo:
 

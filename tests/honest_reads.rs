@@ -55,15 +55,34 @@ esac
 /// A `kan` stub that **fails** on the named subjects and serves the rest, so a
 /// read error can be told apart from an empty result — the distinction day#81
 /// was about.
+/// A kan whose reads fail.
+///
+/// **Since day#71 the failure is the whole log, not one subject.** day makes a
+/// single `kan show --all --json`, so "this subject is unreadable while the
+/// others are fine" is a kan that can no longer exist, and a stub modelling it
+/// would test a path day does not have. The guards therefore fail the bulk read
+/// as well as the named subjects — which is what a real unreadable log does.
+///
+/// Worth stating plainly, because it is a capability day traded away: day can
+/// no longer distinguish *one* unreadable subject from a readable log that
+/// simply lacks it. If kan's `show --all` ever silently omits a subject it
+/// could not read, day would see an absence rather than an error. That is a
+/// question for kan's contract (does ADR-71 guarantee all-or-nothing?), not
+/// something day can check from its side.
 fn write_failing_kan_stub(dir: &Path, claims: &[StubClaim], fail_on: &[&str]) -> PathBuf {
     let real = write_kan_stub(dir, claims);
     let wrapper = dir.join("kan-failing.sh");
-    let guards: String = fail_on
+    let mut guards: String = fail_on
         .iter()
         .map(|s| {
             format!("  if [ \"$1\" = \"show\" ] && [ \"$2\" = \"{s}\" ]; then echo 'kan: could not decrypt log' >&2; exit 1; fi\n")
         })
         .collect();
+    if !fail_on.is_empty() {
+        guards.push_str(
+            "  if [ \"$1\" = \"show\" ] && [ \"$2\" = \"--all\" ]; then echo 'kan: could not decrypt log' >&2; exit 1; fi\n",
+        );
+    }
     std::fs::write(
         &wrapper,
         format!("#!/bin/sh\n{guards}exec {} \"$@\"\n", real.display()),
@@ -220,16 +239,28 @@ fn ac4_version_skew_and_a_broken_block_read_differently() {
     );
 }
 
-/// AC-9 (day#81): a kan read that **failed** is reported as unchecked, never as
-/// the artifact being absent.
+/// AC-9, restated for the read day actually makes.
 ///
-/// The two states used to be spelled the same way, because a failed
-/// `client.show` was folded into an empty claim list. That made "day could not
-/// read the release subject" indistinguishable from "no release was ever
-/// recorded" — a false negative dressed as evidence, which is precisely what
-/// `src/probe.rs` refuses by name for claim probes.
+/// **The invariant is unchanged: day never reports an absence it did not
+/// verify.** What changed with day#71 is the granularity. day used to read a
+/// subject at a time, so one unreadable subject degraded to `[UNCHECKED]`
+/// inside an otherwise complete report. It now makes a single
+/// `kan show --all --json`, so a read either succeeds for everything or fails
+/// for everything, and the honest response to the latter is to fail loudly
+/// rather than to publish a report built on nothing.
+///
+/// This asserts the property rather than the old shape: on an unreadable log
+/// day must (a) exit 2, because could-not-check outranks
+/// checked-and-found-something, (b) name the cause, and (c) **never** state
+/// that anything was absent. (c) is the one that matters — a false negative
+/// here is exactly the defect the honest-reads milestone exists to prevent.
+///
+/// Per-subject read failure is gone as a *capability*, not just as a test
+/// fixture, and that is a real trade recorded in `write_failing_kan_stub`: if
+/// kan's `show --all` were ever to silently omit a subject it could not read,
+/// day would see an absence rather than an error and could not tell.
 #[test]
-fn ac9_an_unreadable_subject_is_unchecked_not_absent() {
+fn ac9_an_unreadable_log_is_an_error_never_a_false_absence() {
     let docs_schema = claim(
         "schema/docs",
         "bafyds",
@@ -246,37 +277,43 @@ fn ac9_an_unreadable_subject_is_unchecked_not_absent() {
 
     let out = day(dir.path(), &kan, &["assess", "docs"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
     assert!(
-        stdout.contains("[UNCHECKED]") && stdout.contains("release"),
-        "a failed read should report as unchecked, naming the subject: {stdout}"
+        stderr.contains("could not decrypt log") || stderr.contains("show --all"),
+        "the failure must name its cause: {stderr}"
     );
     assert!(
         !stdout.contains("nobody wrote down"),
         "day must not conclude a release was never recorded from a read that \
          never happened: {stdout}"
     );
+    assert!(
+        !stdout.contains("[PASS]") && !stdout.contains("[FAIL]"),
+        "no verdict may be published from a log that could not be read: {stdout}"
+    );
     assert_eq!(
         out.status.code(),
         Some(2),
-        "could-not-check outranks checked-and-found-something: {stdout}"
+        "could-not-check outranks checked-and-found-something: {stdout}{stderr}"
     );
 
     // Negative control: the same run with kan readable and genuinely no release
-    // claim still reports the absent case as absent. Without this, the
-    // assertions above would pass if day reported everything as unchecked.
+    // claim reports the absent case as absent, and exits non-2. Without this the
+    // assertions above would pass if day simply failed at everything.
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("Cargo.toml"), "version = \"9.9.9\"\n").unwrap();
     let kan = write_kan_stub(dir.path(), &[docs_schema]);
     let out = day(dir.path(), &kan, &["assess", "docs"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        !stdout.contains("[UNCHECKED]"),
-        "a readable kan with no release claim is not an unchecked state: {stdout}"
+        !stdout.is_empty(),
+        "a readable kan must still produce a report"
     );
     assert_ne!(
         out.status.code(),
         Some(2),
-        "a check that ran must not exit as one that could not: {stdout}"
+        "a readable log is not an unchecked state: {stdout}"
     );
 }
 
@@ -294,10 +331,20 @@ fn ac6_the_hook_reports_unreadable_declarations_to_the_model() {
     let dir = tempfile::tempdir().unwrap();
     let claims = [
         claim("telos/readable", "bafyok", "A readable telos."),
-        claim("telos/unreadable", "bafybad", "An unreadable telos."),
+        // Unreadable by PARSE — a `day-telos` block from a newer day. Since
+        // day#71 there is no per-subject read failure to model: day makes one
+        // `show --all`, so a subject cannot fail while its neighbours succeed.
+        // The property under test is unchanged — a declaration day could not
+        // read must still reach the model, still be counted, and still mark the
+        // list partial — only the way it becomes unreadable has moved.
+        claim(
+            "telos/unreadable",
+            "bafybad",
+            "An unreadable telos.\n\n```day-telos\n{\"_version\":99}\n```\n",
+        ),
         atom_block("broken", "bafyab", r#"{"in":["a"],"requires":["x"]}"#),
     ];
-    let kan = write_failing_kan_stub(dir.path(), &claims, &["telos/unreadable"]);
+    let kan = write_kan_stub(dir.path(), &claims);
 
     let out = day(dir.path(), &kan, &["hook", "session-start"]);
     let stdout = String::from_utf8_lossy(&out.stdout);

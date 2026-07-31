@@ -23,11 +23,15 @@
 # A tag with no row here fails the build. Whether a pairing is supported is a
 # decision, not a default.
 #
-# The floor is HARD, not incidental: below v0.7.0 there is no `kan show --json`
-# at all, and day reads the structured form for everything because it parsed
-# the rendered form once, kan changed it, and day read a full log as empty
-# while reporting success. Falling back would reintroduce that defect, not
-# widen support.
+# The floor is HARD, not incidental. Since day#71, `ClaimLog` makes exactly one
+# `kan show --all --json` call, so a kan without that flag cannot answer a
+# single claim probe. day does not fall back, deliberately: a fallback is a
+# two-mode mechanism, and this repo's record says that is where defects hide
+# (day#91, and twice in v0.7.0-beta.3 alone).
+#
+# NOTE: `show --all` landed in v0.9.1, NOT v0.9.0 — v0.9.0 has an `--all` flag
+# on `publish`, which is what a substring grep finds and what the measurement
+# correctly refused to believe.
 #
 # tag	outcome	why
 v0.1.1-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
@@ -36,8 +40,8 @@ v0.3.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
 v0.4.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
 v0.5.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind
 v0.6.0-beta.1	incompatible	no `show --json`; no `in-tension-with` relation kind (kan#60)
-v0.7.0-beta.1	ok	`show --json` and kan#60's relation kind both present; lacks kan#78, which day does not use
-v0.7.1-beta.1	ok	kan#78 landed, irrelevant to day but recorded
-v0.8.0-beta.1	ok	`--trust` read surface
-v0.9.0-beta.1	ok	kan#123 / ADR-71: adds `show --all --json`, the bulk read day#71 needs
-v0.9.1-beta.1	ok	current
+v0.7.0-beta.1	incompatible	has `show --json`, lacks `show --all` (day#71 floor)
+v0.7.1-beta.1	incompatible	has `show --json`, lacks `show --all` (day#71 floor)
+v0.8.0-beta.1	incompatible	has `--trust`, lacks `show --all` (day#71 floor)
+v0.9.0-beta.1	incompatible	`--all` here is on `publish`, not `show` — measured, not inferred
+v0.9.1-beta.1	ok	kan#123 / ADR-71: `show --all --json`, the bulk read ClaimLog makes

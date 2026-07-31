@@ -416,24 +416,32 @@ impl<'a> ClaimLog<'a> {
     fn claims(&self) -> Result<&[(String, crate::kan_client::Claim)], &str> {
         self.loaded
             .get_or_init(|| {
-                let subjects = self
+                // ONE invocation (day#71). This was `subjects()` plus a `show`
+                // per subject, which cost ~48ms of fixed process startup 98
+                // times at session start. A read that fails is an error, never
+                // a silently empty log — reporting "no matching claim" because
+                // the read failed would be a false negative dressed as
+                // evidence, and every claim probe in the command is answered
+                // from this.
+                let claims = self
                     .client
-                    .subjects()
-                    .map_err(|e| format!("could not list subjects: {e}"))?;
-                let mut all = Vec::new();
-                for subject in subjects {
-                    // A subject day cannot read is an error, never a
-                    // silently empty result — the failure mode
-                    // `kan_client`'s shape check exists to end. Reporting
-                    // "no matching claim" because a read failed would be a
-                    // false negative dressed as evidence.
-                    let claims = self
-                        .client
-                        .show(&subject)
-                        .map_err(|e| format!("could not read `{subject}`: {e}"))?;
-                    all.extend(claims.into_iter().map(|c| (subject.clone(), c)));
+                    .show_all()
+                    .map_err(|e| format!("could not read the log: {e}"))?;
+                // A claim probe scans the WHOLE log, so it cannot be answered
+                // from an incomplete one no matter which subject went missing —
+                // the evidence it is looking for may be exactly what was
+                // dropped. `show()` refuses per subject; this refuses for the
+                // scan.
+                let missing = self.client.unaccounted_subjects();
+                if !missing.is_empty() {
+                    return Err(format!(
+                        "kan lists {} subject(s) the bulk read did not return ({}), \
+                         so a probe that scans the whole log cannot be answered from it",
+                        missing.len(),
+                        missing.join(", ")
+                    ));
                 }
-                Ok(all)
+                Ok(claims)
             })
             .as_ref()
             .map(Vec::as_slice)
@@ -891,7 +899,7 @@ mod tests {
             let detail = verdict.detail();
             assert!(matches!(verdict, Verdict::Error(_)), "{verdict:?}");
             assert!(
-                detail.contains("could not list subjects"),
+                detail.contains("could not read the log"),
                 "a claim probe must fail as a kan read, not as an execution: {detail}"
             );
             assert!(
