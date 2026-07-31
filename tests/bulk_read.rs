@@ -141,38 +141,46 @@ fn the_log_is_read_once_however_many_claim_probes_are_declared() {
     assert_eq!(seen, vec![1, 1], "the count must not vary with probe count");
 }
 
-/// AC-6. `ClaimLog` is lazy, and must stay lazy: a command that declares no
-/// claim probe pays nothing.
+/// AC-6. The log is read **at most once**, and not at all when nothing asks.
 ///
-/// `day doctor` is the case that matters, because it reads only `atom/*` today.
-/// If it were routed through the bulk read it would go from a handful of calls
-/// to a whole-log read on every invocation — cheap in wall-clock terms now, but
-/// it would make `doctor` depend on the entire log to answer a question about
-/// seven subjects.
+/// The first version of this test asserted `day doctor` never reads the whole
+/// log, on the reasoning that it only needs `atom/*`. That reasoning assumed a
+/// whole-log read costs N calls; it costs one, and `doctor` was spending eight
+/// (`status` + 7 × `show atom/*`) on a question one call answers. Reading
+/// everything made it faster. What is worth protecting is laziness, so that is
+/// what this asserts.
 #[test]
-fn a_command_with_no_claim_probe_never_reads_the_whole_log() {
+fn the_log_is_read_at_most_once_and_only_when_something_asks() {
+    // Nothing asks: `init --print` reports the wiring steps and reads no claims.
     let dir = tempfile::tempdir().unwrap();
-    let mut claims = base_log(1);
-    // A schema whose only probe is a `path` — nothing that touches the log.
-    claims.push(claim(
-        "schema/witness",
-        "bafyw",
-        "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
-    ));
+    let claims = base_log(1);
     let (kan, log) = counting_stub(dir.path(), &claims);
-
-    let out = day(dir.path(), &kan, &["doctor"]);
-    assert!(out.status.success() || !out.stdout.is_empty());
-
-    let all = calls(&log)
-        .iter()
-        .filter(|c| c.starts_with("show --all"))
-        .count();
+    day(dir.path(), &kan, &["init", "--print"]);
     assert_eq!(
-        all,
+        calls(&log).iter().filter(|c| c.starts_with("show")).count(),
         0,
-        "a command with no claim probe must not read the whole log: {:?}",
+        "a command that asks for no claim must not read the log: {:?}",
         calls(&log)
+    );
+
+    // Something asks: `doctor` needs the atom vocabulary. One bulk read, and
+    // crucially ZERO per-subject reads — the seven `show atom/*` calls it used
+    // to make are what this change removes.
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, log) = counting_stub(dir.path(), &base_log(1));
+    day(dir.path(), &kan, &["doctor"]);
+    let c = calls(&log);
+    assert_eq!(
+        c.iter().filter(|x| x.starts_with("show --all")).count(),
+        1,
+        "the log should be read exactly once: {c:?}"
+    );
+    assert_eq!(
+        c.iter()
+            .filter(|x| x.starts_with("show ") && !x.starts_with("show --all"))
+            .count(),
+        0,
+        "no per-subject read should survive: {c:?}"
     );
 }
 
@@ -214,8 +222,9 @@ fn a_kan_without_the_bulk_read_errors_rather_than_reading_an_empty_log() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(
-        text.contains("could not read the log"),
-        "a kan that cannot serve the bulk read must surface as a read failure: {text}"
+        text.contains("requires kan >=") && text.contains("show --all"),
+        "a kan that cannot serve the bulk read must say so and name the version \
+         requirement, not surface clap's `unexpected argument`: {text}"
     );
     assert!(
         !text.contains("[MISSING]"),
@@ -226,7 +235,7 @@ fn a_kan_without_the_bulk_read_errors_rather_than_reading_an_empty_log() {
     let out = day(dir.path(), &kan, &["assess", "telos", "t"]);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
-        !text.contains("could not read the log"),
-        "the control must not report a read failure: {text}"
+        !text.contains("requires kan >="),
+        "the control must not report a version failure: {text}"
     );
 }

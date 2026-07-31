@@ -37,6 +37,13 @@ pub enum Error {
          output, so this is an error instead of a silently empty result."
     )]
     Shape { args: String, detail: String },
+    #[error(
+        "this kan cannot serve `kan show --all --json`, which day reads the log with.\n\n\
+         day requires kan >= {oldest}. Upgrade kan, or point {KAN_BIN_ENV} at a newer one.\n\n\
+         day does not fall back to reading one subject at a time — that path is gone, and \
+         reporting an empty log would be worse than saying this."
+    )]
+    TooOldForBulkRead { oldest: String },
     #[error("`{bin} {args}` failed ({status}){stderr}")]
     Failed {
         bin: String,
@@ -91,13 +98,6 @@ pub struct Claim {
     pub recorded_at: Option<i64>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct ShowEnvelope {
-    v: u32,
-    #[serde(default)]
-    claims: Vec<Claim>,
-}
-
 /// `kan show --all --json` (kan#123, ADR-71).
 ///
 /// Each entry is a **full** `ShowJson` — repeated `trust` field and all —
@@ -133,6 +133,29 @@ struct SubjectEntry {
 pub struct KanClient {
     bin: String,
     cwd: PathBuf,
+    /// The whole log, read once per invocation and served to every `show`.
+    ///
+    /// **Not a store, on the same terms as [`crate::probe::ClaimLog`]:** it
+    /// lives for one invocation and dies with it, so `telos/no-store-of-its-own`
+    /// is untouched. What it removes is the duplication that survived the bulk
+    /// read — eight independent readers each ran their own `subjects()` +
+    /// `show()` loop, so `session-start` read `atom/*` three times over and paid
+    /// 48 process startups beyond the one bulk call it had already made.
+    ///
+    /// `RefCell` rather than `OnceCell` because it must be **invalidated on
+    /// write**: `record.rs` appends and then reads back, and a memo that
+    /// outlived an append would hand a caller the log as it was before its own
+    /// claim. `KanClient` is constructed per MCP call and never shared across
+    /// threads, so interior mutability without a lock is sound.
+    log: std::cell::RefCell<Option<Vec<(String, Claim)>>>,
+    /// `kan status --json`, memoized for the same invocation. Kept as its own
+    /// read rather than derived from `log`: kan lists a subject whether or not
+    /// it has live claims, so deriving the set from claims would silently drop
+    /// any subject that has none.
+    subject_memo: std::cell::RefCell<Option<Vec<String>>>,
+    /// Whether reachability has been established. `--help` costs a process like
+    /// everything else, and the answer cannot change mid-invocation.
+    probed: std::cell::Cell<bool>,
 }
 
 impl KanClient {
@@ -141,6 +164,9 @@ impl KanClient {
         Self {
             bin,
             cwd: cwd.into(),
+            log: std::cell::RefCell::new(None),
+            subject_memo: std::cell::RefCell::new(None),
+            probed: std::cell::Cell::new(false),
         }
     }
 
@@ -148,6 +174,9 @@ impl KanClient {
         Self {
             bin: bin.into(),
             cwd: cwd.into(),
+            log: std::cell::RefCell::new(None),
+            subject_memo: std::cell::RefCell::new(None),
+            probed: std::cell::Cell::new(false),
         }
     }
 
@@ -185,7 +214,29 @@ impl KanClient {
     /// workspace state, so it distinguishes "kan isn't installed" from
     /// "kan is installed but this isn't a kan repo".
     pub fn probe(&self) -> Result<(), Error> {
-        self.run(&["--help"]).map(|_| ())
+        if self.probed.get() {
+            return Ok(());
+        }
+        self.run(&["--help"])?;
+        self.probed.set(true);
+        Ok(())
+    }
+
+    /// Loads the whole log once; every `show` is served from it.
+    fn ensure_log(&self) -> Result<(), Error> {
+        if self.log.borrow().is_some() {
+            return Ok(());
+        }
+        let all = self.read_all()?;
+        *self.log.borrow_mut() = Some(all);
+        Ok(())
+    }
+
+    /// Drops the memo. Called after every write, because a caller that appends
+    /// and then reads must see its own claim.
+    fn invalidate(&self) {
+        *self.log.borrow_mut() = None;
+        *self.subject_memo.borrow_mut() = None;
     }
 
     /// kan's version, via `kan --version`, or `None` when it cannot be
@@ -218,8 +269,28 @@ impl KanClient {
     /// `src/compat.rs` states the floor and `day doctor` tells the user to
     /// upgrade.
     pub fn show_all(&self) -> Result<Vec<(String, Claim)>, Error> {
+        self.ensure_log()?;
+        Ok(self
+            .log
+            .borrow()
+            .as_ref()
+            .expect("ensure_log populated it")
+            .clone())
+    }
+
+    /// The actual `kan show --all --json` process. Everything else is served
+    /// from the memo.
+    fn read_all(&self) -> Result<Vec<(String, Claim)>, Error> {
         let args = ["show", "--all", "--json"];
-        let out = self.run(&args)?;
+        // A kan predating the flag fails with clap's "unexpected argument",
+        // which tells a user nothing about what to do. day knows the floor, so
+        // it says it (REQ-2).
+        let out = self.run(&args).map_err(|e| match &e {
+            Error::Failed { stderr, .. } if stderr.contains("--all") => Error::TooOldForBulkRead {
+                oldest: crate::compat::OLDEST_SUPPORTED.to_string(),
+            },
+            _ => e,
+        })?;
         let envelope: ShowAllEnvelope = parse(&out, &args)?;
         check_shape(envelope.v, &args)?;
         Ok(envelope
@@ -252,7 +323,12 @@ impl KanClient {
 
     /// Every subject in the log, via `kan status --json`.
     pub fn subjects(&self) -> Result<Vec<String>, Error> {
-        self.subject_names(&["status", "--json"])
+        if let Some(memo) = self.subject_memo.borrow().as_ref() {
+            return Ok(memo.clone());
+        }
+        let names = self.subject_names(&["status", "--json"])?;
+        *self.subject_memo.borrow_mut() = Some(names.clone());
+        Ok(names)
     }
 
     /// Subjects that are not yet resolved, via `kan issues --json`.
@@ -268,12 +344,21 @@ impl KanClient {
     }
 
     /// A subject's live claims, via `kan show <subject> --json`.
+    /// One subject's live claims, served from the whole-log read.
+    ///
+    /// This used to be its own `kan show <subject> --json` process. It is not,
+    /// since day#71: a kan read costs fixed process startup, so N targeted reads
+    /// are strictly worse than one bulk read plus a filter, and day made 39 of
+    /// them per session start for subjects the bulk read already held.
     pub fn show(&self, subject: &str) -> Result<Vec<Claim>, Error> {
-        let args = ["show", subject, "--json"];
-        let out = self.run(&args)?;
-        let envelope: ShowEnvelope = parse(&out, &args)?;
-        check_shape(envelope.v, &args)?;
-        Ok(envelope.claims)
+        self.ensure_log()?;
+        let log = self.log.borrow();
+        let all = log.as_ref().expect("ensure_log populated it");
+        Ok(all
+            .iter()
+            .filter(|(s, _)| s == subject)
+            .map(|(_, c)| c.clone())
+            .collect())
     }
 
     /// Appends a narrative claim through kan's own write verb and returns
@@ -299,7 +384,10 @@ impl KanClient {
         if let (Some(title), Some(kind)) = (write.title, write.kind) {
             args.extend_from_slice(&["--title", title, "--kind", kind]);
         }
-        Ok(self.run(&args)?.trim().to_string())
+        let cid = self.run(&args)?.trim().to_string();
+        // A caller that appends and then reads must see its own claim.
+        self.invalidate();
+        Ok(cid)
     }
 
     /// Asserts a domain-semantic edge between two subjects, via
@@ -321,7 +409,10 @@ impl KanClient {
             args.push("--cites");
             args.push(cid);
         }
-        Ok(self.run(&args)?.trim().to_string())
+        let cid = self.run(&args)?.trim().to_string();
+        // A caller that appends and then reads must see its own claim.
+        self.invalidate();
+        Ok(cid)
     }
 }
 
@@ -406,20 +497,33 @@ mod tests {
       "inbound": []
     }"#;
 
+    /// The bulk envelope, wrapping the single-subject shape above — which is
+    /// exactly how ADR-71 defines it, and why day reuses one `Claim` parser.
+    ///
+    /// Retargeted from `ShowEnvelope` when day#71 made `show --all` the only
+    /// read day performs. A test pinning a shape day no longer parses would
+    /// have kept passing while saying nothing.
+    fn bulk(subject_json: &str) -> String {
+        format!(r#"{{"v":1,"subjects":[{subject_json}]}}"#)
+    }
+
     #[test]
     fn claims_come_back_with_the_fields_day_reads() {
-        let envelope: ShowEnvelope = parse(SHOW, &["show"]).expect("should parse");
+        let envelope: ShowAllEnvelope =
+            parse(&bulk(SHOW), &["show", "--all"]).expect("should parse");
         assert_eq!(envelope.v, SHAPE_VERSION);
-        assert_eq!(envelope.claims.len(), 3);
+        let claims = &envelope.subjects[0].claims;
+        assert_eq!(envelope.subjects[0].subject, "telos/a");
+        assert_eq!(claims.len(), 3);
 
-        assert_eq!(envelope.claims[0].text.as_deref(), Some("A telos."));
-        assert_eq!(envelope.claims[0].author.as_deref(), Some("did:key:zabc"));
+        assert_eq!(claims[0].text.as_deref(), Some("A telos."));
+        assert_eq!(claims[0].author.as_deref(), Some("did:key:zabc"));
         // A title rides on the Subject claim, not the narrative one.
-        assert_eq!(envelope.claims[1].title.as_deref(), Some("A"));
+        assert_eq!(claims[1].title.as_deref(), Some("A"));
         // Relations carry no narrative body, which is why a tension's reason
         // needs a subject of its own.
-        assert_eq!(envelope.claims[2].text, None);
-        assert_eq!(envelope.claims[2].kind, "Relation");
+        assert_eq!(claims[2].text, None);
+        assert_eq!(claims[2].kind, "Relation");
     }
 
     /// kan's shape is additive-only, so a field day has never heard of must
@@ -427,11 +531,12 @@ mod tests {
     /// safe rather than brittle.
     #[test]
     fn an_unknown_field_is_ignored_rather_than_fatal() {
-        let json = r#"{"v":1,"claims":[
+        let json = r#"{"v":1,"subjects":[{"subject":"telos/a","claims":[
             {"cid":"bafyreia","kind":"Decision","text":"x","invented_later":{"a":1}}
-        ]}"#;
-        let envelope: ShowEnvelope = parse(json, &["show"]).expect("additive change must parse");
-        assert_eq!(envelope.claims[0].text.as_deref(), Some("x"));
+        ],"invented_later":1}]}"#;
+        let envelope: ShowAllEnvelope =
+            parse(json, &["show", "--all"]).expect("additive change must parse");
+        assert_eq!(envelope.subjects[0].claims[0].text.as_deref(), Some("x"));
     }
 
     /// The failure this whole migration exists to end. day parsed kan's
@@ -440,7 +545,7 @@ mod tests {
     /// an error carrying the command that produced it.
     #[test]
     fn output_day_cannot_read_is_an_error_not_an_empty_result() {
-        let err = parse::<ShowEnvelope>("telos/a (2 live claim(s)):", &["show", "telos/a"])
+        let err = parse::<ShowAllEnvelope>("telos/a (2 live claim(s)):", &["show", "telos/a"])
             .expect_err("rendered output must not parse as a shape");
         let rendered = err.to_string();
         assert!(rendered.contains("show telos/a"), "{rendered}");

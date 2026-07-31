@@ -92,9 +92,20 @@ This adopts it: `ClaimLog` makes one call instead of N+1.
 - [ ] AC-5: `day doctor` against kan 0.8.0 renders `OLDER than this day supports`
       and `Upgrade kan`; `OLDEST_SUPPORTED` and the table agree, enforced by the
       existing `tests/kan_compat.rs`. (REQ-2)
-- [ ] AC-6: A command declaring no claim probe makes **no** `show --all` call at
-      all — laziness preserved. `day doctor` in particular must not regress from
-      its current 10 invocations to a whole-log read. (REQ-5)
+- [ ] AC-6: The log is read **at most once per invocation**, and not at all when
+      nothing asks for a claim. `day init --print` makes zero log reads;
+      `day doctor` makes exactly one and **zero** per-subject `show` calls.
+      (REQ-5)
+
+      **This AC first read "a command declaring no claim probe makes no
+      `show --all` call at all", and `day doctor` was named as the case that
+      must not regress to a whole-log read.** That rationale expired with the
+      same reasoning that killed the "routing the loaders would regress doctor"
+      claim in Architecture: it assumed a whole-log read costs N calls. It costs
+      one. `doctor` previously spent 8 calls (`status` + 7 × `show atom/*`) on a
+      question one bulk call answers, so reading the whole log made it *faster*,
+      not slower. What is worth protecting is laziness — asking for nothing
+      should cost nothing — and that is what this now asserts.
 
 ## Architecture
 
@@ -103,16 +114,35 @@ containing the `subjects()` + N × `show()` loop. It becomes one `show_all()`.
 Everything downstream — `claims_matching`, position inference, the block
 predicate — consumes the same `&[(String, Claim)]` and is untouched.
 
-**What this does *not* fix, deliberately.** Profiling found ~45% of
-`session-start`'s calls are duplicate reads *within* one command: `atom/*` read
-4×, `telos/*` and `tension/*` 2×, `kan status --json` 5×, because eight
-independent read sites each run their own loop instead of sharing `ClaimLog`.
-This change does not route them through it. It does not need to: once the whole
-log costs one call, reading it once and serving everything from memory beats any
-targeted strategy, so the remaining duplication is worth ~7 calls rather than
-~45. Routing the specialised loaders through `ClaimLog` naively would also
-*regress* `day doctor`, which reads only `atom/*` today (10 calls) and would be
-forced into a whole-log read. Separate change, separate design.
+**The duplication is fixed too, and not where this design first said it would
+be.** Profiling found that ~45% of `session-start`'s calls were duplicate reads
+*within* one command — `atom/*` read 4×, `telos/*` and `tension/*` 2×, `kan
+status --json` 5× — because eight independent read sites each ran their own
+`subjects()` + `show()` loop. This document originally deferred that, on the
+reasoning that routing them through `ClaimLog` would regress `day doctor`. Two
+things were wrong with it: the regression argument assumed a whole-log read
+costs N calls (it costs one, so `doctor` got *faster*), and threading `ClaimLog`
+through eight modules was never the cheapest route.
+
+**The memo belongs in `KanClient`, not in `ClaimLog`.** `show()` is served from
+one whole-log read held on the client for the invocation, so every existing
+reader benefits with no call-site change and no signature churn. `ClaimLog`
+keeps its own role — it is the *reading context* for probes, and still holds the
+block schemas — but it is no longer the only thing that reads once.
+
+Two properties make this sound rather than a cache:
+- **It is invalidated on every write.** `record.rs` appends and then reads back;
+  a memo that outlived an append would hand a caller the log as it was before
+  its own claim.
+- **It is per-invocation and in-memory**, on exactly the terms day#71 sets for
+  `ClaimLog`: it lives for one invocation and dies with it, so
+  `telos/no-store-of-its-own` is untouched.
+
+Measured on day's own log, `session-start` 98 → **6** calls, 4.75s → **0.68s**;
+a whole session start (both hooks) 7.70s → **0.80s**, a 10x. The six that remain
+are `--help`, `--version`, `status --json`, `show --all --json`, `issues --json`,
+and `identity did` — one process each, all fixed startup, which kan#123
+established is the only cost there is.
 
 **Also not fixed here:** `hooks.json` registers two commands on `SessionStart`
 and each reads the log in its own process, so a session start pays for two full
@@ -142,7 +172,5 @@ it, and day read a full log as empty while reporting success.
 ## Out of Scope
 
 - **Merging the two `SessionStart` hooks** — orthogonal, and a safety trade.
-- **Routing the specialised loaders through `ClaimLog`** — regresses `doctor`
-  without a subset-aware design.
 - **Filtering the bulk read by kind.** day#71 floats it; the whole log in one
   call is already the win, and a filter is a second contract to agree with kan.
