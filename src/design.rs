@@ -336,6 +336,73 @@ impl Report {
 
 /// Runs every schema rule over a parsed document. `base` is the directory
 /// file-existence checks resolve against (the repo root, normally).
+/// day#41: findings about decisions **already recorded on the subject** that
+/// the document may not cover.
+///
+/// Found during kan's v0.7 release, where it cost two decided requirements: five
+/// items were decided in conversation and recorded as `decide` claims, the
+/// release was re-scoped, a new design doc was written **from the session rather
+/// than from the log**, and two of the five fell through. Nothing rejected them.
+/// One was recovered by accident, hours later, when the defect it fixed caused a
+/// false data-loss alarm.
+///
+/// **Advisory, and deliberately not a matcher.** Matching a decision's prose to
+/// a requirement is inexact, and a check that guessed would either miss the case
+/// it exists for or cry wolf until it was switched off. So: where a decision
+/// carries a resolution id (day#36) the coverage check is *exact*; where it does
+/// not, day lists what is on the record and asks the reader to confirm. The two
+/// issues compose — ids are what make this precise rather than a heuristic.
+pub fn check_against_record(doc: &Document, schema: &Schema, recorded: &[String]) -> Vec<Finding> {
+    if recorded.is_empty() {
+        return Vec::new();
+    }
+
+    let declared: std::collections::BTreeSet<String> = doc
+        .bullets(&schema.resolved_section)
+        .iter()
+        .filter_map(|b| crate::record::resolution_id(b, &schema.resolution_prefix))
+        .collect();
+
+    let mut identified = Vec::new();
+    let mut unidentified = 0usize;
+    for text in recorded {
+        match crate::record::resolution_id(text, &schema.resolution_prefix) {
+            Some(id) => {
+                if !declared.contains(&id) {
+                    identified.push(id);
+                }
+            }
+            None => unidentified += 1,
+        }
+    }
+
+    let mut out = Vec::new();
+    if !identified.is_empty() {
+        out.push(Finding {
+            verdict: Verdict::Warn,
+            message: format!(
+                "{} decision(s) recorded on this subject are not in the document: {}. \
+                 A design written from the session rather than from the log is how \
+                 decided items get dropped",
+                identified.len(),
+                identified.join(", ")
+            ),
+        });
+    }
+    if unidentified > 0 {
+        out.push(Finding {
+            verdict: Verdict::Warn,
+            message: format!(
+                "{unidentified} decision(s) on this subject carry no `{}` id, so day \
+                 cannot tell whether this document covers them — check by hand, or \
+                 give them ids",
+                schema.resolution_prefix
+            ),
+        });
+    }
+    out
+}
+
 pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     let mut findings = Vec::new();
 

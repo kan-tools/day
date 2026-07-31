@@ -12,10 +12,15 @@ use crate::design::{self, Document, Report};
 use crate::kan_client::{KanClient, Write};
 use crate::schema::Schema;
 
-/// The four permitted adversarial-review verdicts. A closed set, checked at
-/// the argument boundary — a verdict outside it is a malformed argument, not
-/// a workflow gate.
-pub const VERDICTS: [&str; 4] = ["APPROVE", "APPROVE-WITH-FOLLOW-UPS", "REDIRECT", "BLOCK"];
+/// day's own four adversarial-review verdicts — the **default** vocabulary, not
+/// the only one (day#77).
+///
+/// A closed set, checked at the argument boundary: a verdict outside it is a
+/// malformed argument, not a workflow gate. What day#77 changes is *which*
+/// closed set, moving it from code to a claim on `schema/verdicts`; the
+/// closedness itself is the property both vocabularies exist to preserve, since
+/// free text is what forces adjudication to be optional.
+pub const DEFAULT_VERDICTS: [&str; 4] = ["APPROVE", "APPROVE-WITH-FOLLOW-UPS", "REDIRECT", "BLOCK"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -31,11 +36,10 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
-    #[error(
-        "verdict must be one of {}, got `{got}`",
-        VERDICTS.join(", ")
-    )]
-    BadVerdict { got: String },
+    #[error("verdict must be one of {permitted}, got `{got}`")]
+    BadVerdict { got: String, permitted: String },
+    #[error(transparent)]
+    Blocks(#[from] crate::blocks::Error),
     #[error("a review verdict must cite the design claim it audits (--cites <cid>)")]
     UncitedVerdict,
     #[error("no atom named `{0}` is declared in this project")]
@@ -62,6 +66,14 @@ pub struct Recorded {
     pub observe: String,
     pub plan: String,
     pub decisions: Vec<String>,
+    /// Resolution ids already on the subject, so a re-record is incremental
+    /// (day#36). Reported rather than silent: "recorded 2, skipped 8" is a
+    /// different fact from "recorded 2".
+    pub skipped: Vec<String>,
+    /// Resolved-question bullets carrying no id. These are recorded every time,
+    /// because nothing identifies them across runs — reported so the duplication
+    /// is a known consequence rather than a surprise.
+    pub unidentified: usize,
     pub report: Report,
 }
 
@@ -72,6 +84,25 @@ impl Recorded {
         out.push_str(&format!("  plan     {}\n", self.plan));
         for cid in &self.decisions {
             out.push_str(&format!("  decide   {cid}\n"));
+        }
+        // day#36: what was NOT recorded, and why, is as much of the answer as
+        // what was. "recorded 2" and "recorded 2, skipped 8 already on the
+        // subject" are different facts, and only the second lets a reader tell
+        // an incremental re-record from a design that resolved two questions.
+        if !self.skipped.is_empty() {
+            out.push_str(&format!(
+                "  skipped  {} already recorded on this subject: {}\n",
+                self.skipped.len(),
+                self.skipped.join(", ")
+            ));
+        }
+        if self.unidentified > 0 {
+            out.push_str(&format!(
+                "  note     {} resolved question(s) carry no id, so re-recording will \
+                 append them again — give them `{}n` ids to make a re-record incremental\n",
+                self.unidentified,
+                crate::schema::Schema::starter().resolution_prefix,
+            ));
         }
         if !self.report.is_clean() {
             out.push_str(
@@ -130,7 +161,34 @@ pub fn design(
 
     let plan_cites = [plan.clone()];
     let mut decisions = Vec::new();
+    let mut skipped = Vec::new();
+    let mut unidentified = 0usize;
+
+    // day#36: re-recording a design must not re-append decisions already on the
+    // subject. `/design` supports iterating, and every iteration that resolves a
+    // question ADDS a bullet — so without this, the second run rewrote every
+    // decide from the first.
+    //
+    // Keyed on a stable id, not on text. Text was the obvious key and breaks the
+    // moment a bullet is reworded, which is precisely what iterating does: a
+    // sharpened wording would record twice, and a rewording that changed the
+    // MEANING would record once and be silently wrong.
+    let already: std::collections::BTreeSet<String> =
+        existing_resolution_ids(client, &subject, schema);
+
     for bullet in doc.bullets(&schema.resolved_section) {
+        match resolution_id(&bullet, &schema.resolution_prefix) {
+            Some(id) if already.contains(&id) => {
+                skipped.push(id);
+                continue;
+            }
+            Some(_) => {}
+            // A bullet with no id cannot be deduplicated, so it is recorded —
+            // the pre-day#36 behaviour, which is right for a document that has
+            // not adopted ids. Counted so the report can say why re-recording
+            // will duplicate it rather than leaving that to be discovered.
+            None => unidentified += 1,
+        }
         decisions.push(client.append(Write::new("decide", &subject, &bullet).cites(&plan_cites))?);
     }
 
@@ -139,12 +197,49 @@ pub fn design(
         observe,
         plan,
         decisions,
+        skipped,
+        unidentified,
         report,
     })
 }
 
-/// Appends an adversarial-review verdict. The verdict must be one of
-/// [`VERDICTS`] and must cite the claim it audits.
+/// The resolution id a bullet declares, e.g. `RQ-1` from `- RQ-1: …`.
+///
+/// Read from the start of the bullet only. A `RQ-2` mentioned mid-sentence is a
+/// reference to another decision, not this bullet's own id — the same anchoring
+/// distinction day#70 drew between `starts_with` and `contains`, for the same
+/// reason.
+pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
+    let rest = bullet.trim_start().strip_prefix(prefix)?;
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    (!digits.is_empty()).then(|| format!("{prefix}{digits}"))
+}
+
+/// Resolution ids already recorded as `decide` claims on a subject.
+///
+/// A read failure yields an empty set, which means "record everything" — the
+/// safe direction: a duplicate decision is noise in an append-only log, while
+/// skipping one that was never recorded loses it. Stated because the opposite
+/// default would be the silent-loss failure this milestone is about.
+fn existing_resolution_ids(
+    client: &KanClient,
+    subject: &str,
+    schema: &crate::schema::Schema,
+) -> std::collections::BTreeSet<String> {
+    let Ok(claims) = client.show(subject) else {
+        return std::collections::BTreeSet::new();
+    };
+    claims
+        .iter()
+        .filter(|c| c.kind == "Decision")
+        .filter_map(|c| c.text.as_deref())
+        .filter_map(|t| resolution_id(t, &schema.resolution_prefix))
+        .collect()
+}
+
+/// Appends an adversarial-review verdict. The verdict must be in the project's
+/// declared vocabulary — [`DEFAULT_VERDICTS`] when none is declared — and must
+/// cite the claim it audits.
 pub fn review(
     client: &KanClient,
     subject: &str,
@@ -152,10 +247,12 @@ pub fn review(
     rationale: &str,
     cites: &[String],
 ) -> Result<String, Error> {
-    let normalized = verdict.trim().to_uppercase().replace(' ', "-");
-    if !VERDICTS.contains(&normalized.as_str()) {
+    let vocabulary = crate::blocks::VerdictVocabulary::load(client)?;
+    let normalized = crate::blocks::normalize(verdict);
+    if !vocabulary.permits(&normalized) {
         return Err(Error::BadVerdict {
             got: verdict.to_string(),
+            permitted: vocabulary.verdicts.join(", "),
         });
     }
     if cites.is_empty() {
@@ -224,4 +321,41 @@ fn producers_of(atoms_list: &[Atom], output: &str) -> Vec<String> {
         .filter(|a| a.interface.outputs.iter().any(|o| o == output))
         .map(|a| a.name.clone())
         .collect()
+}
+
+#[cfg(test)]
+mod resolution_ids {
+    use super::*;
+
+    /// day#36: an id is read from the START of a bullet only.
+    ///
+    /// An `RQ-2` mentioned mid-sentence is a *reference* to another decision,
+    /// not this bullet's own id — the same anchoring distinction day#70 drew
+    /// between `starts_with` and `contains`, and for the same reason: the
+    /// unanchored reading matches things that merely talk about the thing.
+    #[test]
+    fn an_id_is_anchored_at_the_start_of_the_bullet() {
+        assert_eq!(
+            resolution_id("RQ-1: we settled x", "RQ-"),
+            Some("RQ-1".into())
+        );
+        assert_eq!(
+            resolution_id("  RQ-12: padded", "RQ-"),
+            Some("RQ-12".into())
+        );
+
+        // A reference, not an id.
+        assert_eq!(resolution_id("this supersedes RQ-2 entirely", "RQ-"), None);
+        // No id at all — the pre-day#36 shape, which stays valid.
+        assert_eq!(resolution_id("we settled x", "RQ-"), None);
+        // The prefix without digits is not an id.
+        assert_eq!(resolution_id("RQ- something", "RQ-"), None);
+    }
+
+    /// The prefix is the project's, like `requirement_prefix` before it.
+    #[test]
+    fn the_prefix_is_declared_not_assumed() {
+        assert_eq!(resolution_id("D-7: a decision", "D-"), Some("D-7".into()));
+        assert_eq!(resolution_id("RQ-7: a decision", "D-"), None);
+    }
 }

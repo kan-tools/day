@@ -195,11 +195,58 @@ thing that checks the test. All of them are from one milestone
   the thing that gates position.
 - **A rule written in one module's doc comment does not propagate to the
   others.** `src/probe.rs` states plainly that a subject day cannot read is an
-  error and never a silently empty result. Three other modules did exactly that
-  anyway — `docs.rs` (day#81), `hooks.rs`'s `render_teloi`, and
-  `status::compute` discarding `atoms::load`'s findings. Prose in the right place
-  is not a constraint. If a rule matters, it wants a source-scanned test, the way
-  the `.day/` carve-out has one.
+  error and never a silently empty result. It then happened **five times**:
+  `docs.rs` (day#81), `hooks.rs`'s `render_teloi`, `status::compute` discarding
+  `atoms::load`'s findings, `BlockSchemas::load(…).unwrap_or_default()`, and
+  `InjectionSchema::load(…).unwrap_or(DEFAULT_CADENCE)` — the last written *after*
+  this file gained a rule naming it. Prose in the right place is not a
+  constraint.
+
+  **It is now a source scan that fails the build**
+  (`a_failed_kan_read_is_never_swallowed` in `tests/plugin.rs`), with an explicit
+  `kan-read-may-degrade: <why>` escape hatch, because a test with no way out gets
+  deleted the first time it is wrong. Verified by reintroducing all five defects.
+  If a rule matters, this is the shape it wants — the `.day/` carve-out has the
+  same treatment for the same reason.
+
+## And one about measuring the wrong thing accurately
+
+- **A conformance test must separate "what we depend on" from "what they
+  promised."** day's first kan-compatibility measurement put the floor at kan
+  v0.7.1. It was wrong by a release, and not because the harness was sloppy — it
+  built, ran, and reported honestly. One test carried two assertions: that
+  `kan result <subject> <text>` runs, which day depends on, and that
+  `kan result --subject` *also* runs, which asserts kan#78 was resolved and is a
+  fact about **kan**. day emits only the positional form. So a property of the
+  dependency silently decided a fact about day, and the fact was user-visible:
+  a floor that turns working setups away. **The rule is that a cell measuring
+  "does X work against Y" may only run assertions about X's own requirements** —
+  every other assertion belongs in a test named for what it actually checks.
+  This is `docs/CONVENTIONS.md`'s descriptive-vs-restrictive distinction one
+  level up: the same suite was doing both jobs, and only one of them sets a
+  floor.
+
+  Note what did *not* catch it: the measurement was real, the failure was real,
+  and the diagnosis ("`--subject` is rejected") was correct. What was wrong was
+  the inference from it. Running the thing is necessary and was not sufficient —
+  the check that mattered was reading day's own source to ask whether day emits
+  the form at all, and `src/telos.rs` says in a comment that it does not.
+
+## Two tools, already written — use them rather than reinventing them
+
+- **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says
+  nothing about whether a test *asserts* anything, so a claim of coverage wants a
+  mutation. Use this rather than an inline loop: the inline version was
+  reinvented at least three times in one session and had a different defect each
+  time, all failing toward false confidence. It reports **CAUGHT / SURVIVED /
+  DID-NOT-COMPILE / ANCHOR-MISSING** as distinct outcomes — a build error is not
+  a survived mutation, and a stale anchor is not a passing test — and restores the
+  file visibly (`copy`, not `copy2`, then `touch`, because preserving mtime hides
+  the restore from cargo and corrupts the *next* run).
+- **`scripts/capture-block-corpus.sh`** — regenerates the backward-compatibility
+  corpus by building every released tag and driving that tag's own binary. Run it
+  by hand after changing a block shape; `tests/block_corpus.rs` consumes the
+  committed output on every push.
 
 ## Working practice
 

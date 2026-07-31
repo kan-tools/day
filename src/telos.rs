@@ -160,6 +160,7 @@ impl WitnessSchema {
                 contains: None,
                 starts_with: Some("adversarial review of".to_string()),
                 subject: None,
+                block: None,
             }),
         );
         probes.insert(
@@ -173,6 +174,7 @@ impl WitnessSchema {
                 // `verdict` for the mirror reason — a verdict lands on
                 // whatever subject was reviewed.
                 subject: Some(format!("{}*", atoms::ATOM_PREFIX)),
+                block: None,
             }),
         );
         Self {

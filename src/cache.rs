@@ -82,6 +82,15 @@ pub struct Standing {
     pub fingerprint: String,
     /// How many declarations session-start could not read.
     pub unreadable: usize,
+    /// The declared injection cadence, resolved at session start.
+    ///
+    /// **Cached rather than read per prompt, and that is load-bearing.** The
+    /// cadence became declarable in beta.3 (`schema/injection`), and reading a
+    /// kan-backed declaration on every `UserPromptSubmit` would reintroduce
+    /// exactly the 3-second-per-turn regression the beta.2 review blocked. A
+    /// declared value is only cheap if it is resolved where day already pays for
+    /// a read.
+    pub cadence: u32,
 }
 
 /// Records what session-start found. Best-effort, like the status line.
@@ -90,7 +99,10 @@ pub fn write_standing(root: &Path, standing: &Standing) -> io::Result<()> {
     std::fs::create_dir_all(&dir)?;
     std::fs::write(
         standing_path(root),
-        format!("{}\n{}\n", standing.fingerprint, standing.unreadable),
+        format!(
+            "{}\n{}\n{}\n",
+            standing.fingerprint, standing.unreadable, standing.cadence
+        ),
     )
 }
 
@@ -107,9 +119,17 @@ pub fn standing(root: &Path) -> Option<Standing> {
     let mut lines = text.lines();
     let fingerprint = lines.next()?.to_string();
     let unreadable = lines.next()?.trim().parse().ok()?;
+    // An older cache with no cadence line falls back to the default rather than
+    // failing the whole read: losing it costs a repetition, never a fact, which
+    // is the same rule the rest of this file holds.
+    let cadence = lines
+        .next()
+        .and_then(|l| l.trim().parse().ok())
+        .unwrap_or(DEFAULT_CADENCE);
     Some(Standing {
         fingerprint,
         unreadable,
+        cadence,
     })
 }
 

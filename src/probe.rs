@@ -128,6 +128,21 @@ pub struct ClaimShape {
     /// claim-supplied input is a wider surface than that need justifies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
+    /// A **project-declared block type** (day#74) the claim must carry a *valid*
+    /// instance of.
+    ///
+    /// This is the predicate that gives day a reason to read a declared block at
+    /// all, and therefore the one that makes "day validates a declared block
+    /// wherever it reads one" describe something day does. The first
+    /// implementation of day#74 shipped a validator nothing called; adding a
+    /// pass to `doctor` would have satisfied the wording while day still had no
+    /// stake in a `research-claim`.
+    ///
+    /// It is the last conjunct **for cost**: matching it means a substring search
+    /// and a JSON parse per claim, where `kind` and `subject` are comparisons. The
+    /// cheap predicates must filter first and short-circuit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block: Option<String>,
 }
 
 impl ClaimShape {
@@ -140,7 +155,12 @@ impl ClaimShape {
     /// `kan show --json` renders a claim within a subject rather than on one;
     /// [`ClaimLog`] already carries the `(subject, claim)` pair, so scoping
     /// costs no extra read.
-    fn matches(&self, subject: &str, claim: &crate::kan_client::Claim) -> bool {
+    fn matches(
+        &self,
+        subject: &str,
+        claim: &crate::kan_client::Claim,
+        block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome>,
+    ) -> bool {
         if claim.kind != self.kind {
             return false;
         }
@@ -165,6 +185,14 @@ impl ClaimShape {
                 return false;
             }
         }
+        // Deliberately last — see the field's doc comment. `block_check` is
+        // `None` when this shape declares no `block`, so the common case costs
+        // one `Option` test.
+        if let Some(check) = block_check {
+            if !matches!(check(claim), BlockOutcome::Valid) {
+                return false;
+            }
+        }
         true
     }
 
@@ -181,8 +209,48 @@ impl ClaimShape {
         if let Some(scope) = &self.subject {
             described.push_str(&format!(" on `{scope}`"));
         }
+        if let Some(block) = &self.block {
+            described.push_str(&format!(" carrying a valid `{block}` block"));
+        }
         described
     }
+}
+
+/// A read that did not happen, surfaced so the report built on it can say it
+/// is partial.
+///
+/// `claims_matching` already refuses to answer a witness from an unchecked
+/// instance — it returns [`Verdict::Error`]. Position inference then maps that
+/// to [`Presence::Unknown`], which is honest about the *presence* and silent
+/// about the *reason*, so a project whose `research-claim` day cannot read was
+/// told only that its position was unknowable. This carries the reason out.
+///
+/// [`Presence::Unknown`]: crate::position::Presence::Unknown
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadFailure {
+    pub message: String,
+    /// True when the *reader* is behind the log. Decides which of two actions,
+    /// for two different people, the human notice asks for.
+    pub version_skew: bool,
+}
+
+/// What reading a declared block on one claim produced.
+///
+/// Three outcomes, not two, and the split is `v0.7.0-beta.2`'s contract applied
+/// rather than a convenience: an instance day **could not check** must never be
+/// spelled the same way as one it checked and found wanting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockOutcome {
+    /// A valid instance of the declared type.
+    Valid,
+    /// No instance of that type on this claim. A real answer.
+    Absent,
+    /// An instance is present and violates the project's declaration. Also a
+    /// real answer — day looked and found it wrong.
+    Invalid(String),
+    /// day could **not** check: the declaration is unreadable, or the instance
+    /// declares a `_version` this build does not read. Never "absent".
+    Unchecked(String),
 }
 
 /// Glob-lite subject scoping: a trailing `*` makes the rest a prefix,
@@ -287,7 +355,7 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
         },
         // Deliberately not gated on `auth`. There is nothing to authorize:
         // this reads the log through kan's read verbs and executes nothing.
-        Probe::Claim(shape) => claims_matching(shape, log, None),
+        Probe::Claim(shape) => claims_matching(shape, log, None, None),
     }
 }
 
@@ -310,6 +378,14 @@ pub struct ClaimLog<'a> {
     /// on first use; `OnceCell` rather than a `Mutex` because a probe
     /// evaluation is single-threaded.
     loaded: std::cell::OnceCell<Result<Vec<(String, crate::kan_client::Claim)>, String>>,
+    /// The project's declared block schemas, loaded on first use by a `block`
+    /// predicate and never otherwise.
+    ///
+    /// This lives here because [`ClaimLog`] *is* the reading context — it already
+    /// holds the client and already defers its read until something asks. A
+    /// project that declares no block predicate pays nothing, which is why the
+    /// declaration is not simply threaded through `claims_matching`'s signature.
+    schemas: std::cell::OnceCell<Result<crate::blocks::BlockSchemas, String>>,
 }
 
 impl<'a> ClaimLog<'a> {
@@ -317,7 +393,24 @@ impl<'a> ClaimLog<'a> {
         Self {
             client,
             loaded: std::cell::OnceCell::new(),
+            schemas: std::cell::OnceCell::new(),
         }
+    }
+
+    /// The project's declared block schemas, read at most once.
+    ///
+    /// A read failure is an error, never an empty set: "day could not read your
+    /// declarations" and "you declared none" are different, and answering a
+    /// witness from the second when the first is true is the defect this whole
+    /// milestone is about.
+    fn block_schemas(&self) -> Result<&crate::blocks::BlockSchemas, String> {
+        self.schemas
+            .get_or_init(|| {
+                crate::blocks::BlockSchemas::load(self.client)
+                    .map_err(|e| format!("could not read declared block schemas: {e}"))
+            })
+            .as_ref()
+            .map_err(String::clone)
     }
 
     fn claims(&self) -> Result<&[(String, crate::kan_client::Claim)], &str> {
@@ -359,7 +452,16 @@ impl<'a> ClaimLog<'a> {
 /// [`ClaimLog`], which runs `kan status` and `kan show` — the same reads
 /// `atoms::load` and `status::last_assessed_atom` already make — and nothing
 /// else.
-pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64>) -> Verdict {
+pub fn claims_matching(
+    shape: &ClaimShape,
+    log: &ClaimLog<'_>,
+    since: Option<i64>,
+    // Collects reads that could not happen. `None` where the caller renders the
+    // `Verdict` itself and so already shows the reason — `day assess telos`
+    // prints ERROR with the message. Position inference passes `Some`, because
+    // it reduces the verdict to a `Presence` and would otherwise drop it.
+    mut failures: Option<&mut Vec<ReadFailure>>,
+) -> Verdict {
     let claims = match log.claims() {
         Ok(claims) => claims,
         Err(e) => return Verdict::Error(e.to_string()),
@@ -370,10 +472,71 @@ pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64
         None => "",
     };
 
+    // The declared block schemas are resolved ONCE, not per claim, and only when
+    // this shape actually names a block — a project with no `block` predicate
+    // never pays for the read.
+    let declarations = match &shape.block {
+        None => None,
+        Some(name) => match log.block_schemas() {
+            Ok(schemas) => {
+                // A witness naming a type the project never declared is not
+                // "absent" — day cannot check what was not declared, and saying
+                // MISSING would report evidence of absence from an unasked
+                // question.
+                if !schemas.blocks.contains_key(name) {
+                    return Verdict::Error(format!(
+                        "witness names block type `{name}`, which this project has not \
+                         declared on `schema/blocks` — day cannot check it"
+                    ));
+                }
+                Some(schemas)
+            }
+            Err(e) => return Verdict::Error(e.to_string()),
+        },
+    };
+
+    let block_check = shape.block.as_ref().map(|name| {
+        let schemas = declarations.expect("resolved above whenever `block` is set");
+        move |claim: &crate::kan_client::Claim| -> BlockOutcome {
+            let Some(text) = claim.text.as_deref() else {
+                return BlockOutcome::Absent;
+            };
+            match schemas.extract(text, name) {
+                None => BlockOutcome::Absent,
+                Some(Ok(_)) => BlockOutcome::Valid,
+                Some(Err(e)) if e.is_version_skew() => BlockOutcome::Unchecked(e.to_string()),
+                Some(Err(e)) => BlockOutcome::Invalid(e.to_string()),
+            }
+        }
+    });
+    let block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome> =
+        block_check.as_ref().map(|f| f as _);
+
     let mut found = 0usize;
     let mut newest: Option<&str> = None;
+    let mut unchecked: Option<String> = None;
     for (subject, claim) in claims {
-        if !shape.matches(subject, claim) {
+        // An instance day could not check must not read as one that did not
+        // match: it is reported, and the whole verdict becomes Error, because a
+        // witness answered from a partial read is the defect beta.2 exists to
+        // stop.
+        if let Some(check) = block_check {
+            if let BlockOutcome::Unchecked(why) = check(claim) {
+                if let Some(failures) = failures.as_deref_mut() {
+                    // Every `Unchecked` from this path is a version skew: the
+                    // unreadable-*declaration* cases return early above, and
+                    // `extract` reports anything else as `Invalid`. Asserted by
+                    // `an_unchecked_instance_is_always_version_skew` rather
+                    // than left as a comment.
+                    failures.push(ReadFailure {
+                        message: why.clone(),
+                        version_skew: true,
+                    });
+                }
+                unchecked.get_or_insert(why);
+            }
+        }
+        if !shape.matches(subject, claim, block_check) {
             continue;
         }
         if let Some(boundary) = since {
@@ -387,6 +550,14 @@ pub fn claims_matching(shape: &ClaimShape, log: &ClaimLog<'_>, since: Option<i64
         }
         found += 1;
         newest = Some(subject);
+    }
+
+    if let Some(why) = unchecked {
+        return Verdict::Error(format!(
+            "a claim carries a `{}` block this day could not check, so this witness \
+             cannot be answered: {why}",
+            shape.block.as_deref().unwrap_or_default()
+        ));
     }
 
     match found {
@@ -615,6 +786,7 @@ mod tests {
             contains: None,
             starts_with: None,
             subject: None,
+            block: None,
         }
     }
 
@@ -684,6 +856,7 @@ mod tests {
                 kind: "Decision".into(),
                 contains: Some("c".into()),
                 starts_with: Some("s".into()),
+                block: None,
                 subject: Some("x/*".into()),
             })
         );
@@ -739,16 +912,25 @@ mod tests {
         };
         assert!(narrowed.matches(
             "rigor",
-            &claim("Decision", Some("adversarial review of foo: APPROVE — ok"))
+            &claim("Decision", Some("adversarial review of foo: APPROVE — ok")),
+            None
         ));
-        assert!(!narrowed.matches("rigor", &claim("Decision", Some("an unrelated decision"))));
-        assert!(!narrowed.matches("rigor", &claim("Result", Some("adversarial review of foo"))));
+        assert!(!narrowed.matches(
+            "rigor",
+            &claim("Decision", Some("an unrelated decision")),
+            None
+        ));
+        assert!(!narrowed.matches(
+            "rigor",
+            &claim("Result", Some("adversarial review of foo")),
+            None
+        ));
         // A relation carries no text, so it cannot contain a marker.
-        assert!(!narrowed.matches("rigor", &claim("Decision", None)));
+        assert!(!narrowed.matches("rigor", &claim("Decision", None), None));
 
         let bare = shape("Result");
-        assert!(bare.matches("atom/build", &claim("Result", None)));
-        assert!(!bare.matches("atom/build", &claim("Decision", Some("anything"))));
+        assert!(bare.matches("atom/build", &claim("Result", None), None));
+        assert!(!bare.matches("atom/build", &claim("Decision", Some("anything")), None));
     }
 
     /// AC-2: `starts_with` is **anchored** where `contains` is not, and that
@@ -772,9 +954,9 @@ mod tests {
             starts_with: Some(marker.into()),
             ..shape("Decision")
         };
-        assert!(anchored.matches("rigor", &verdict));
+        assert!(anchored.matches("rigor", &verdict, None));
         assert!(
-            !anchored.matches("current-cycle-position", &quoting),
+            !anchored.matches("current-cycle-position", &quoting, None),
             "a claim that merely quotes the marker must not satisfy an anchored probe"
         );
 
@@ -784,11 +966,11 @@ mod tests {
             contains: Some(marker.into()),
             ..shape("Decision")
         };
-        assert!(substring.matches("rigor", &verdict));
-        assert!(substring.matches("current-cycle-position", &quoting));
+        assert!(substring.matches("rigor", &verdict, None));
+        assert!(substring.matches("current-cycle-position", &quoting, None));
 
         // And a claim with no text satisfies neither.
-        assert!(!anchored.matches("rigor", &a_claim("Decision", None)));
+        assert!(!anchored.matches("rigor", &a_claim("Decision", None), None));
     }
 
     /// AC-1: glob-lite subject scoping — a trailing `*` is a prefix, anything
@@ -801,24 +983,24 @@ mod tests {
             ..shape("Result")
         };
         let assessed = a_claim("Result", Some("assessed"));
-        assert!(scoped.matches("atom/build", &assessed));
-        assert!(scoped.matches("atom/generative-build", &assessed));
+        assert!(scoped.matches("atom/build", &assessed, None));
+        assert!(scoped.matches("atom/generative-build", &assessed, None));
         // The two false positives day#70 recorded on day's own log.
-        assert!(!scoped.matches("release", &assessed));
-        assert!(!scoped.matches("spine", &assessed));
+        assert!(!scoped.matches("release", &assessed, None));
+        assert!(!scoped.matches("spine", &assessed, None));
         // A prefix, not a path-segment glob: nested subjects still match.
-        assert!(scoped.matches("atom/a/b", &assessed));
+        assert!(scoped.matches("atom/a/b", &assessed, None));
         // And the prefix must be a prefix, not a substring.
-        assert!(!scoped.matches("my-atom/build", &assessed));
+        assert!(!scoped.matches("my-atom/build", &assessed, None));
 
         // No `*`: an exact subject.
         let exact = ClaimShape {
             subject: Some("release".into()),
             ..shape("Result")
         };
-        assert!(exact.matches("release", &assessed));
-        assert!(!exact.matches("release-notes", &assessed));
-        assert!(!exact.matches("atom/build", &assessed));
+        assert!(exact.matches("release", &assessed, None));
+        assert!(!exact.matches("release-notes", &assessed, None));
+        assert!(!exact.matches("atom/build", &assessed, None));
 
         // Bare `*`: every subject, the same as declaring no scope at all.
         let any = ClaimShape {
@@ -826,7 +1008,7 @@ mod tests {
             ..shape("Result")
         };
         for subject in ["release", "atom/build", ""] {
-            assert!(any.matches(subject, &assessed), "{subject:?}");
+            assert!(any.matches(subject, &assessed, None), "{subject:?}");
         }
 
         // A `*` anywhere but the end is a literal character, not a wildcard —
@@ -835,8 +1017,8 @@ mod tests {
             subject: Some("a*b".into()),
             ..shape("Result")
         };
-        assert!(literal.matches("a*b", &assessed));
-        assert!(!literal.matches("axb", &assessed));
+        assert!(literal.matches("a*b", &assessed, None));
+        assert!(!literal.matches("axb", &assessed, None));
     }
 
     /// AC-3: `matches` is a conjunction — every present predicate must hold,
@@ -852,12 +1034,13 @@ mod tests {
             contains: Some("APPROVE".into()),
             starts_with: Some("adversarial review of".into()),
             subject: Some("atom/*".into()),
+            block: None,
         };
         let matching = a_claim(
             "Decision",
             Some("adversarial review of build: APPROVE — holds"),
         );
-        assert!(all.matches("atom/build", &matching));
+        assert!(all.matches("atom/build", &matching, None));
 
         // Wrong kind.
         assert!(!all.matches(
@@ -865,19 +1048,22 @@ mod tests {
             &a_claim(
                 "Result",
                 Some("adversarial review of build: APPROVE — holds")
-            )
+            ),
+            None
         ));
         // Right kind, right text, wrong subject.
-        assert!(!all.matches("release", &matching));
+        assert!(!all.matches("release", &matching, None));
         // Right everywhere but the substring.
         assert!(!all.matches(
             "atom/build",
-            &a_claim("Decision", Some("adversarial review of build: REVISE — no"))
+            &a_claim("Decision", Some("adversarial review of build: REVISE — no")),
+            None
         ));
         // Right everywhere but the anchor.
         assert!(!all.matches(
             "atom/build",
-            &a_claim("Decision", Some("re: adversarial review of build: APPROVE"))
+            &a_claim("Decision", Some("re: adversarial review of build: APPROVE")),
+            None
         ));
 
         // And omitting a predicate imposes nothing from it: the same claim
@@ -886,7 +1072,7 @@ mod tests {
             subject: None,
             ..all.clone()
         };
-        assert!(unscoped.matches("release", &matching));
+        assert!(unscoped.matches("release", &matching, None));
     }
 
     /// The rendered form names every predicate in force, so a reader of a

@@ -8,7 +8,7 @@ mod common;
 use std::path::Path;
 use std::process::Command;
 
-use common::{appends, atom_claim, claim, schema_claim, write_kan_stub};
+use common::{appends, atom_claim, claim, decision_claim, schema_claim, write_kan_stub};
 
 const DOC: &str = "# Feature: a thing\n\n\
     ## Summary\nIt does the thing.\n\n\
@@ -247,7 +247,7 @@ fn ac7_review_record_rejects_a_bad_verdict_and_an_uncited_one() {
 
 #[test]
 fn ac7_review_record_accepts_each_permitted_verdict() {
-    for verdict in day::record::VERDICTS {
+    for verdict in day::record::DEFAULT_VERDICTS {
         let dir = workspace(DOC);
         let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafyreischema")]);
         let out = day(
@@ -317,4 +317,198 @@ fn ac8_next_names_the_successor_and_what_it_needs() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success());
     assert!(stdout.contains("no successors"), "{stdout}");
+}
+
+/// day#36: re-recording an iterated design must not re-append decisions already
+/// on the subject.
+///
+/// `/design` explicitly supports iterating, and every iteration that resolves a
+/// question adds a bullet — so before this, the second run rewrote every decide
+/// from the first. On `.design/assess-telos.md` that would have been 10 decides,
+/// 8 of them duplicates.
+///
+/// The key is a stable id, not the bullet's text. Text was the obvious choice
+/// and breaks precisely when iterating: a sharpened wording records twice, and a
+/// rewording that changed the *meaning* records once and is silently wrong.
+#[test]
+fn recording_an_iterated_design_is_incremental() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("iterating.md");
+    std::fs::write(
+        &doc,
+        "# Feature: Iterating\n\n## Summary\ns\n\n## Requirements\n\
+         - REQ-1: a.\n- REQ-2: b.\n\n## Acceptance Criteria\n\
+         - [ ] AC-1: REQ-1.\n- [ ] AC-2: REQ-2.\n\n## Architecture\n\
+         In `src/probe.rs`.\n\n## Resolved Questions\n\
+         - RQ-1: the first thing.\n- RQ-2: the second thing.\n",
+    )
+    .unwrap();
+
+    let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafysc")]);
+
+    let first = day(
+        dir.path(),
+        &kan,
+        &["design", "record", doc.to_str().unwrap()],
+    );
+    let first = String::from_utf8_lossy(&first.stdout);
+    assert_eq!(
+        first.matches("decide").count(),
+        2,
+        "the first record should append both decisions: {first}"
+    );
+
+    let second = day(
+        dir.path(),
+        &kan,
+        &["design", "record", doc.to_str().unwrap()],
+    );
+    let second = String::from_utf8_lossy(&second.stdout);
+    assert_eq!(
+        second.matches("decide").count(),
+        0,
+        "the second record must append nothing — both ids are already on the \
+         subject: {second}"
+    );
+    assert!(
+        second.contains("RQ-1") && second.contains("RQ-2"),
+        "and must say WHICH were skipped, since 'recorded 0' and 'recorded 0, \
+         skipped 2' are different facts: {second}"
+    );
+}
+
+/// The negative control, and the backward-compatibility half: a document with no
+/// ids behaves exactly as it did before day#36 — every bullet recorded, every
+/// time — and day says so rather than leaving the duplication to be discovered.
+#[test]
+fn a_document_without_ids_still_records_every_time_and_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("unidentified.md");
+    std::fs::write(
+        &doc,
+        "# Feature: No ids\n\n## Summary\ns\n\n## Requirements\n\
+         - REQ-1: a.\n- REQ-2: b.\n\n## Acceptance Criteria\n\
+         - [ ] AC-1: REQ-1.\n- [ ] AC-2: REQ-2.\n\n## Architecture\n\
+         In `src/probe.rs`.\n\n## Resolved Questions\n\
+         - the first thing.\n- the second thing.\n",
+    )
+    .unwrap();
+
+    let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafysc")]);
+
+    for pass in 1..=2 {
+        let out = day(
+            dir.path(),
+            &kan,
+            &["design", "record", doc.to_str().unwrap()],
+        );
+        let out = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            out.matches("decide").count(),
+            2,
+            "pass {pass}: an un-idded document keeps its pre-day#36 behaviour: {out}"
+        );
+        assert!(
+            out.contains("carry no id"),
+            "pass {pass}: and day must say the duplication is coming: {out}"
+        );
+    }
+}
+
+/// day#41: a decision recorded on the subject that the document does not carry
+/// is reported.
+///
+/// The scenario is kan's v0.7 release, where it cost two decided requirements:
+/// five items were decided and recorded as `decide` claims, the release was
+/// re-scoped, a new design doc was written **from the session rather than from
+/// the log**, and two fell through. Nothing rejected them — one was recovered
+/// hours later by accident.
+///
+/// Exact rather than heuristic, because day#36's ids make it so. Matching prose
+/// to a requirement would either miss the case this exists for or cry wolf until
+/// it was switched off.
+#[test]
+fn a_decision_on_the_record_that_the_document_dropped_is_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    std::fs::write(dir.path().join("src/probe.rs"), "// fixture\n").unwrap();
+    let doc = dir.path().join("rescoped.md");
+
+    // The document carries RQ-1 only. RQ-2 was decided and is on the record.
+    std::fs::write(
+        &doc,
+        "# Feature: Rescoped\n\n## Summary\ns\n\n## Requirements\n\
+         - REQ-1: a.\n- REQ-2: b.\n\n## Acceptance Criteria\n\
+         - [ ] AC-1: REQ-1.\n- [ ] AC-2: REQ-2.\n\n## Architecture\n\
+         In `src/probe.rs`.\n\n## Resolved Questions\n- RQ-1: kept.\n",
+    )
+    .unwrap();
+
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            schema_claim("design-doc", "bafysc"),
+            decision_claim("rescoped", "bafyd1", "RQ-1: kept.", 10),
+            decision_claim("rescoped", "bafyd2", "RQ-2: dropped in the re-scope.", 20),
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &["design", "check", doc.to_str().unwrap()],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("RQ-2"),
+        "the dropped decision should be named: {stdout}"
+    );
+    assert!(
+        !stdout.contains("RQ-1,") && !stdout.contains(": RQ-1"),
+        "and the one the document DOES carry must not be reported — a check that \
+         lists everything is a check nobody reads: {stdout}"
+    );
+}
+
+/// The negative control: a document covering every recorded decision reports
+/// none of them. Without this, the test above would pass if day reported every
+/// decision unconditionally.
+#[test]
+fn a_document_covering_the_record_reports_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    // The Architecture section references this, and day validates that a design
+    // is grounded in real code. Created so this test fails on day#41's behaviour
+    // rather than on an unrelated path check.
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    std::fs::write(dir.path().join("src/probe.rs"), "// fixture\n").unwrap();
+    let doc = dir.path().join("complete.md");
+    std::fs::write(
+        &doc,
+        "# Feature: Complete\n\n## Summary\ns\n\n## Requirements\n\
+         - REQ-1: a.\n- REQ-2: b.\n\n## Acceptance Criteria\n\
+         - [ ] AC-1: REQ-1.\n- [ ] AC-2: REQ-2.\n\n## Architecture\n\
+         In `src/probe.rs`.\n\n## Resolved Questions\n- RQ-1: kept.\n- RQ-2: also kept.\n",
+    )
+    .unwrap();
+
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            schema_claim("design-doc", "bafysc"),
+            decision_claim("complete", "bafyd1", "RQ-1: kept.", 10),
+            decision_claim("complete", "bafyd2", "RQ-2: also kept.", 20),
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &["design", "check", doc.to_str().unwrap()],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("not in the document"),
+        "every recorded decision is covered, so nothing should be reported: {stdout}"
+    );
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
 }

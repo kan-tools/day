@@ -131,7 +131,20 @@ impl Git {
 
     /// The most recent `v*` tag by creation date, if any.
     pub fn latest_version_tag(&self) -> Result<Option<String>, Error> {
-        Ok(self.tags_matching("v*")?.into_iter().next())
+        self.latest_tag_matching(crate::blocks::DEFAULT_BOUNDARY_TAGS)
+    }
+
+    /// The newest tag matching `pattern`.
+    ///
+    /// Takes the pattern for the same reason [`Self::cycle_boundary_matching`]
+    /// does: `assess docs` reconciles the tag against the recorded release, and
+    /// day#76 asks that BOTH it and position resolve "since" against the
+    /// project's declared cycle. Half of day#76 would be worse than none — a
+    /// project whose cycles are passes would get pass-relative position and
+    /// release-relative docs reconciliation, disagreeing with each other with no
+    /// indication why.
+    pub fn latest_tag_matching(&self, pattern: &str) -> Result<Option<String>, Error> {
+        Ok(self.tags_matching(pattern)?.into_iter().next())
     }
 
     /// The current **cycle boundary**: the last release, as a tag and the
@@ -142,8 +155,19 @@ impl Git {
     /// behaviour. Treating an unbounded repo as "everything is the current
     /// cycle" would make a fresh clone report every atom as current.
     pub fn cycle_boundary(&self) -> Result<Option<Boundary>, Error> {
+        self.cycle_boundary_matching(crate::blocks::DEFAULT_BOUNDARY_TAGS)
+    }
+
+    /// The newest tag matching `pattern`, which is what ends a cycle.
+    ///
+    /// The pattern is a parameter because a cycle is not always a release
+    /// (day#76): a research program's is a pass, a paper's a freeze. day#60's
+    /// insight — that "does an artifact of this type exist" is always-yes on a
+    /// repo with history and needs bounding — is process-generic; only the
+    /// binding to `v*` was software-specific.
+    pub fn cycle_boundary_matching(&self, pattern: &str) -> Result<Option<Boundary>, Error> {
         Ok(self
-            .tags_with_dates("v*")?
+            .tags_with_dates(pattern)?
             .into_iter()
             .next()
             .map(|(tag, at_unix)| Boundary { tag, at_unix }))

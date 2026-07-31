@@ -271,10 +271,11 @@ fn check_versions(
 fn reconcile_boundary(
     client: &KanClient,
     git: &Git,
+    cycle_tags: &str,
     subject: &str,
     findings: &mut Vec<Finding>,
 ) -> Result<Option<String>, Error> {
-    let tag = git.latest_version_tag()?;
+    let tag = git.latest_tag_matching(cycle_tags)?;
 
     // day#81: this used to be `client.show(subject).unwrap_or_default()`, which
     // turned "day could not read the release subject" into "no release has been
@@ -324,7 +325,8 @@ fn reconcile_boundary(
         (None, Some(_)) => findings.push(Finding {
             level: Level::Warn,
             message: format!(
-                "a `{subject}` claim exists but no v* tag does — a release nobody cut"
+                "a `{subject}` claim exists but no `{cycle_tags}` tag does — a boundary \
+                 nobody cut"
             ),
         }),
         (None, None) => {}
@@ -416,9 +418,32 @@ pub fn assess(
 
     // An explicit --since names the boundary outright, so there is nothing
     // to reconcile.
+    // The project's declared cycle (day#76), so `assess docs` reconciles against
+    // the same boundary position does. An unreadable declaration falls back to
+    // release semantics and is reported, rather than silently disagreeing with
+    // position about what "since" means.
+    let cycle = match crate::blocks::CycleSchema::load(client) {
+        Ok(c) => c,
+        Err(e) => {
+            findings.push(Finding {
+                level: Level::Unchecked,
+                message: format!(
+                    "cycle declaration could not be read, so this reconciled against \
+                     release semantics: {e}"
+                ),
+            });
+            crate::blocks::CycleSchema::default()
+        }
+    };
     let boundary = match since {
         Some(reference) => Some(reference.to_string()),
-        None => reconcile_boundary(client, git, &schema.release_subject, &mut findings)?,
+        None => reconcile_boundary(
+            client,
+            git,
+            &cycle.tags,
+            &schema.release_subject,
+            &mut findings,
+        )?,
     };
 
     let mut prompts = Vec::new();

@@ -488,3 +488,177 @@ fn ac10_conventions_document_the_practice_subject_and_replace_token() {
         "CONVENTIONS should state that projected practice is locally signed"
     );
 }
+
+/// **A kan read that failed must never be spelled the same way as a kan read
+/// that found nothing.**
+///
+/// This is a source scan rather than prose because prose did not work. The rule
+/// is stated plainly in `src/probe.rs` — *"a subject day cannot read is an
+/// error, never a silently empty result"* — and `CLAUDE.md` now states it too,
+/// and the defect still recurred **five times in five places**:
+///
+/// - `docs.rs`, folding a failed `show` into "no release recorded" (day#81)
+/// - `hooks.rs`'s `render_teloi`, where an unreadable telos vanished from the
+///   model's context *and* from its count
+/// - `status::compute`, discarding `atoms::load`'s findings so position was
+///   computed over a vocabulary day knew was incomplete
+/// - `status::compute` again, `BlockSchemas::load(...).unwrap_or_default()`
+/// - `hooks.rs`, `InjectionSchema::load(...).unwrap_or(DEFAULT_CADENCE)` — the
+///   fifth, written *after* the rule was added to `CLAUDE.md`
+///
+/// A rule a human has to remember is not a constraint. This one fails the build.
+///
+/// **The escape hatch is deliberate and requires a reason.** A test with no way
+/// out gets deleted the first time it is wrong; one that demands an explicit
+/// marker makes the exception visible in review instead.
+#[test]
+fn a_failed_kan_read_is_never_swallowed() {
+    const MARKER: &str = "kan-read-may-degrade:";
+    let reads = [
+        "client.show(",
+        "client.subjects(",
+        "client.issues(",
+        "::load(client)",
+    ];
+    let swallows = [
+        ".unwrap_or_default(",
+        ".unwrap_or(",
+        ".unwrap_or_else(",
+        ".ok(",
+    ];
+
+    let mut offenders = Vec::new();
+    let mut stack = vec![repo_root().join("src")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            // Comments are stripped first. Without that, a comment *describing*
+            // a past instance — as `docs.rs` has, recording what day#81 was —
+            // reads as a live one, and a scan that cries wolf about its own
+            // documentation gets switched off.
+            let text: String = std::fs::read_to_string(&path)
+                .unwrap()
+                .lines()
+                .map(|l| match l.find("//") {
+                    Some(i) => l[..i].to_string(),
+                    None => l.to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            for read in reads {
+                let mut from = 0;
+                while let Some(at) = text[from..].find(read) {
+                    let start = from + at + read.len();
+                    from = start;
+                    // The expression ends at the next `;` or `?`.
+                    let tail = &text[start..text.len().min(start + 240)];
+                    let end = tail
+                        .find(';')
+                        .into_iter()
+                        .chain(tail.find('?'))
+                        .min()
+                        .unwrap_or(tail.len());
+                    let expr = &tail[..end];
+                    if swallows.iter().any(|s| expr.contains(s)) {
+                        let line = text[..start].matches('\n').count() + 1;
+                        offenders.push(format!("{}:{line}", path.display()));
+                    }
+                }
+            }
+        }
+    }
+
+    // The marker opts a file out, and has to say why.
+    let allowed: Vec<String> = offenders
+        .iter()
+        .filter(|o| {
+            let file = o.split(':').next().unwrap_or_default();
+            std::fs::read_to_string(file)
+                .map(|t| t.contains(MARKER))
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+
+    let unexplained: Vec<&String> = offenders.iter().filter(|o| !allowed.contains(o)).collect();
+    assert!(
+        unexplained.is_empty(),
+        "a kan read's failure is swallowed at {unexplained:?}.\n\n\
+         \"day could not read this\" and \"there is nothing here\" must not be \
+         spelled the same way — that has been five separate defects. Either \
+         propagate the error and report it (see `status::unreadable_from`), or \
+         mark the site `{MARKER} <why this one is genuinely different>`."
+    );
+}
+
+/// `.design/declared-blocks.md` AC-7. A mechanism a project is meant to *use*
+/// is documented or it does not exist, and the reserved-fence list is exactly
+/// the kind of rule someone hits at the worst moment.
+///
+/// Reads the constants rather than restating the strings, for the reason
+/// [`ac9_conventions_document_the_prefixes_the_code_actually_reads`] does: a
+/// doc check that hardcodes what it checks can pass while the code moves.
+#[test]
+fn ac7_conventions_document_the_declared_block_mechanism() {
+    let text = std::fs::read_to_string(repo_root().join("docs/CONVENTIONS.md"))
+        .expect("docs/CONVENTIONS.md should exist");
+
+    for token in [
+        day::blocks::FENCE_INFO,
+        day::blocks::INJECTION_FENCE,
+        day::blocks::CYCLE_FENCE,
+        day::blocks::VERDICTS_FENCE,
+    ] {
+        assert!(
+            text.contains(token),
+            "docs/CONVENTIONS.md should document {token:?}"
+        );
+    }
+
+    // Every reserved fence must appear, or a project learns the list by
+    // being refused.
+    for fence in day::blocks::RESERVED_FENCES {
+        assert!(
+            text.contains(*fence),
+            "docs/CONVENTIONS.md should name {fence:?} as reserved"
+        );
+    }
+
+    // The field-spec vocabulary a project actually writes.
+    for token in ["required", "optional", "schema/blocks"] {
+        assert!(
+            text.contains(token),
+            "docs/CONVENTIONS.md should document the field spec's {token:?}"
+        );
+    }
+
+    // REQ-7's second half, and the part a summary would drop: *why* day's own
+    // blocks are not declared this way. Asserted on the reasoning rather than
+    // a heading, because the heading is not the content.
+    assert!(
+        text.contains("Why day's own blocks are not declared this way"),
+        "CONVENTIONS.md should answer why the built-ins are struct-defined"
+    );
+    assert!(
+        text.contains("no compiler between them"),
+        "the reason is that a declaration beside a struct has no compiler \
+         between them — CONVENTIONS.md should say so, since that is the whole \
+         argument"
+    );
+
+    // The `block` predicate is the read path that makes declared blocks
+    // matter; documenting the declaration without it would describe a
+    // vocabulary nothing consults.
+    assert!(
+        text.contains("\"block\": \"research-claim\""),
+        "CONVENTIONS.md should show the claim probe's `block` predicate"
+    );
+}

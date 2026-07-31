@@ -12,9 +12,11 @@
 //! See `docs/TELOS.md` for the model this implements.
 
 pub mod atoms;
+pub mod blocks;
 pub mod bridge;
 pub mod cache;
 pub mod cli;
+pub mod compat;
 pub mod design;
 pub mod docs;
 pub mod doctor;

@@ -4,6 +4,15 @@ on:
   push:
   pull_request:
 
+env:
+  # The kan the hermetic suite runs against. Pinned rather than tracking
+  # kan's default branch: CI must fail because *day* changed, and an unpinned
+  # dependency turns an unrelated kan commit into a red build here.
+  #
+  # `.github/workflows/kan-compat.yml` is what covers the *other* versions —
+  # this pin is the one pairing every push checks.
+  KAN_TAG: v0.9.1-beta.1
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,6 +22,38 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+
+      # Without this, `tests/kan_conformance.rs` SKIPS — it resolves `kan`
+      # through PATH and skips when absent, per CLAUDE.md's rule that no test
+      # may require a real kan install. That rule is right, and its
+      # consequence was that day's only check against kan's *actual* contract
+      # never ran in CI at all. Every other test stubs kan through
+      # DAY_KAN_BIN, which validates day against day's own idea of kan's CLI —
+      # the blind spot that shipped a documented `kan result` invocation that
+      # does not run, through several releases (day#27, kan#78).
+      #
+      # kan is not published to crates.io, so this installs from the tag.
+      - name: Cache the kan binary
+        id: kan-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/kan
+          key: kan-${{ env.KAN_TAG }}-${{ runner.os }}
+
+      - name: Install kan
+        if: steps.kan-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install --git https://github.com/kan-tools/kan \
+            --tag "${KAN_TAG}" kan
+
+      - name: Confirm the conformance suite can actually see kan
+        run: |
+          # A silent skip is the failure mode this whole block exists to end,
+          # so assert kan is present rather than trusting the install step's
+          # exit code.
+          kan --version
+          test -x "$(command -v kan)"
+
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings

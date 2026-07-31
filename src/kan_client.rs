@@ -168,6 +168,20 @@ impl KanClient {
         self.run(&["--help"]).map(|_| ())
     }
 
+    /// kan's version, via `kan --version`, or `None` when it cannot be
+    /// determined.
+    ///
+    /// Returns `None` rather than an error for the same reason [`identity`]
+    /// does: a caller deciding whether to warn needs a value it can branch on,
+    /// and "I could not tell" must read as *unknown*, never as *incompatible*.
+    /// A day that treats an unparseable version string as a mismatch is a day
+    /// that cries wolf against every kan whose output format shifts.
+    ///
+    /// [`identity`]: Self::identity
+    pub fn version(&self) -> Option<crate::compat::Version> {
+        crate::compat::Version::parse(self.run(&["--version"]).ok()?.trim())
+    }
+
     /// This workspace's identity, via `kan identity did`.
     ///
     /// `did` is the public identifier and is explicitly safe to share.

@@ -118,6 +118,12 @@ pub struct Status {
     /// True when no witness probes are declared, so position cannot be
     /// inferred at all — reported plainly rather than as "no current atom".
     pub uncheckable: bool,
+    /// The declared injection cadence (`schema/injection`), resolved here
+    /// because this is where day already reads declarations and already reports
+    /// the ones it could not read. Resolving it in the hook instead meant an
+    /// unreadable declaration silently became the default — the same defect as
+    /// day#81, on a value nobody would have noticed was wrong.
+    pub cadence: u32,
     /// Declarations this build could not read, so every field above is
     /// **partial** and a reader must be told rather than left to assume.
     ///
@@ -392,6 +398,57 @@ fn unmet_mark(verdict: &Verdict) -> &'static str {
 /// no command probe.
 pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     let (atoms, findings) = atoms::load(client)?;
+    // Declared block schemas. An ABSENT declaration is the common case and not
+    // an error; a declaration day could not READ is, and the difference is the
+    // whole subject of `v0.7.0-beta.2`.
+    //
+    // This was `.unwrap_or_default()` for about an hour, which turned "day could
+    // not read your block schemas" into "you have none" — the fourth instance of
+    // that pattern in this codebase (day#81 in docs.rs, `render_teloi`, and
+    // `compute` discarding `atoms::load`'s findings were the others), written
+    // *after* CLAUDE.md gained a rule naming it. A rule in prose is not a
+    // constraint.
+    // The declared cadence, resolved with the other declarations. An ABSENT
+    // declaration is day's default; one that could not be READ is reported.
+    let (cadence, cadence_unreadable) = match crate::blocks::InjectionSchema::load(client) {
+        Ok(i) => (i.cadence, None),
+        Err(e) => (
+            crate::cache::DEFAULT_CADENCE,
+            Some(Unreadable {
+                message: format!("injection settings could not be read: {e}"),
+                version_skew: false,
+            }),
+        ),
+    };
+
+    // What ends a cycle is declared (day#76); absent, it is a release. An
+    // unreadable declaration is reported rather than silently falling back —
+    // silently reverting to release semantics on a repo whose cycles are passes
+    // would report position confidently and wrongly.
+    let (cycle, cycle_unreadable) = match crate::blocks::CycleSchema::load(client) {
+        Ok(c) => (c, None),
+        Err(e) => (
+            crate::blocks::CycleSchema::default(),
+            Some(Unreadable {
+                message: format!("cycle declaration could not be read: {e}"),
+                version_skew: false,
+            }),
+        ),
+    };
+
+    let (blocks, blocks_unreadable) = match crate::blocks::BlockSchemas::load(client) {
+        Ok(blocks) => (blocks, None),
+        Err(e) => (
+            crate::blocks::BlockSchemas::default(),
+            Some(Unreadable {
+                message: format!("block schemas could not be read: {e}"),
+                // A schema day cannot parse at all is the claim's problem unless
+                // it says otherwise; `BlockSchemas::validate` reports a reserved
+                // name this way, and that is the project's to fix.
+                version_skew: false,
+            }),
+        ),
+    };
     // A missing witness schema is not an error here: it means position is
     // uncheckable, which the report says plainly. `assess` needs the schema
     // and errors without it; `status` degrades to "cannot infer".
@@ -412,7 +469,19 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             off_sequence: Vec::new(),
             transition: None,
             uncheckable: true,
-            unreadable: unreadable_from(&findings, &schema),
+            cadence,
+            unreadable: unreadable_from(
+                &findings,
+                &schema,
+                &blocks,
+                [
+                    blocks_unreadable.clone(),
+                    cadence_unreadable.clone(),
+                    cycle_unreadable.clone(),
+                ],
+                // Inference has not run, so it cannot have failed a read.
+                &[],
+            ),
         });
     }
 
@@ -420,7 +489,10 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // fails leaves it `None`, which is the same state a repo with no release
     // is in — position falls back to its cumulative reading rather than
     // failing, because "where am I" degrading is better than not answering.
-    let boundary = git.cycle_boundary().unwrap_or(None);
+    // A git read that fails leaves it `None`, which is the same state a repo
+    // with no boundary is in — position falls back to its cumulative reading
+    // rather than failing.
+    let boundary = git.cycle_boundary_matching(&cycle.tags).unwrap_or(None);
 
     // One read of the log, shared by every claim probe below.
     let log = ClaimLog::new(client);
@@ -460,7 +532,18 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         off_sequence: report.off_sequence,
         transition,
         uncheckable: false,
-        unreadable: unreadable_from(&findings, &schema),
+        cadence,
+        unreadable: unreadable_from(
+            &findings,
+            &schema,
+            &blocks,
+            [
+                blocks_unreadable.clone(),
+                cadence_unreadable.clone(),
+                cycle_unreadable.clone(),
+            ],
+            &report.read_failures,
+        ),
     })
 }
 
@@ -473,22 +556,57 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
 /// could not read at all makes the rest of the report partial, and conflating
 /// them would make the "treat this as partial" caveat fire on states that are
 /// fully known.
-fn unreadable_from(findings: &[atoms::Finding], schema: &WitnessSchema) -> Vec<Unreadable> {
-    let mut out: Vec<Unreadable> = findings
-        .iter()
-        // `f.unreadable`, not a substring of `f.message`. This filtered on
-        // `contains("could not be read")` and broke the moment day#20 added a
-        // second unreadable wording: `BlockError::Invalid` renders "is not a
-        // valid …", so a structurally-empty plan node passed the filter and
-        // reached neither hook channel. The typed flag exists precisely so a
-        // caller never decides this by matching prose — a rule this function was
-        // violating two definitions after the flag that states it.
-        .filter(|f| f.unreadable)
-        .map(|f| Unreadable {
-            message: f.message.clone(),
-            version_skew: f.version_skew,
-        })
-        .collect();
+fn unreadable_from(
+    findings: &[atoms::Finding],
+    schema: &WitnessSchema,
+    blocks: &crate::blocks::BlockSchemas,
+    // Failures to READ a declaration, as opposed to findings within one that was
+    // read. They lead the list because "day could not read your declaration"
+    // outranks anything day found inside the declarations it could.
+    declaration_errors: [Option<Unreadable>; 3],
+    // Instances position inference read and could not check
+    // (`.design/declared-blocks.md` REQ-4). Distinct from the declaration
+    // errors above: the project's *declaration* was fine and a *claim carrying
+    // one* is from a newer day.
+    read_failures: &[crate::probe::ReadFailure],
+) -> Vec<Unreadable> {
+    let mut out: Vec<Unreadable> = declaration_errors.into_iter().flatten().collect();
+    out.extend(
+        findings
+            .iter()
+            // `f.unreadable`, not a substring of `f.message`. This filtered on
+            // `contains("could not be read")` and broke the moment day#20 added a
+            // second unreadable wording: `BlockError::Invalid` renders "is not a
+            // valid …", so a structurally-empty plan node passed the filter and
+            // reached neither hook channel. The typed flag exists precisely so a
+            // caller never decides this by matching prose — a rule this function was
+            // violating two definitions after the flag that states it.
+            .filter(|f| f.unreadable)
+            .map(|f| Unreadable {
+                message: f.message.clone(),
+                version_skew: f.version_skew,
+            }),
+    );
+    // A project-declared block schema this build could not read (day#74). Same
+    // treatment as an unreadable witness probe, because it is the same
+    // situation: the project declared vocabulary and day is only partly able to
+    // act on it. Leaving the declarable path unreported while day's own seven
+    // are reported would be the inconsistency day#78 was about.
+    // Position inference reduces a verdict to a `Presence`, so an instance it
+    // could not check became `Presence::Unknown` and the reason was dropped on
+    // the floor. day then reported a position built on a partial read without
+    // saying so — which is exactly what `telos/honest-reads` forbids, on the
+    // path a project actually hits at session start.
+    out.extend(read_failures.iter().map(|f| Unreadable {
+        message: f.message.clone(),
+        version_skew: f.version_skew,
+    }));
+    for (name, reason) in &blocks.unsupported {
+        out.push(Unreadable {
+            message: format!("block schema `{name}`: {reason}"),
+            version_skew: true,
+        });
+    }
     for (witness, reason) in &schema.unsupported {
         out.push(Unreadable {
             message: format!("witness `{witness}`: {reason}"),
@@ -605,6 +723,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(long.contains("Current atom: build"), "{long}");
@@ -624,6 +743,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(long.contains("2 atoms are consistent"), "{long}");
@@ -642,6 +762,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert!(status
             .render_long()
@@ -657,6 +778,7 @@ mod tests {
             transition: None,
             uncheckable: true,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert!(status
             .render_long()
@@ -674,6 +796,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert!(status.render_long().contains("Off-sequence:"));
         let line = status.render_line();
@@ -694,6 +817,7 @@ mod tests {
             }),
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(
@@ -721,6 +845,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         assert_eq!(quiet.notice(), None);
 
@@ -734,6 +859,7 @@ mod tests {
             }),
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let notice = loud.notice().expect("there is something to mark");
         assert!(notice.contains("`build`"), "{notice}");
@@ -757,6 +883,7 @@ mod tests {
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
         };
         let long = status.render_long();
         assert!(long.contains("[not run] passing-tests"), "{long}");

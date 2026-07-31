@@ -494,7 +494,35 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         Command::Design(DesignAction::Check { path, schema }) => {
             let schema = crate::schema::Schema::load(&client, &schema)?;
             let doc = crate::record::read_document(&path)?;
-            let report = crate::design::check(&doc, &schema, &cwd);
+            let mut report = crate::design::check(&doc, &schema, &cwd);
+
+            // day#41: validate against the decisions already on the subject, not
+            // only against the document's own structure. The subject is the
+            // document's filename stem, the same inference `design record` uses.
+            //
+            // A read failure is reported, not swallowed: "day could not check
+            // the record" and "the record holds nothing" are different, which is
+            // the rule `a_failed_kan_read_is_never_swallowed` now enforces.
+            let subject = crate::record::slug_for(&path);
+            match client.show(&subject) {
+                Ok(claims) => {
+                    let recorded: Vec<String> = claims
+                        .iter()
+                        .filter(|c| c.kind == "Decision")
+                        .filter_map(|c| c.text.clone())
+                        .collect();
+                    report.findings.extend(crate::design::check_against_record(
+                        &doc, &schema, &recorded,
+                    ));
+                }
+                Err(e) => report.findings.push(crate::design::Finding {
+                    verdict: crate::design::Verdict::Warn,
+                    message: format!(
+                        "could not read `{subject}`, so decisions already recorded there \
+                         were not checked against this document: {e}"
+                    ),
+                }),
+            }
             print!("{}", report.render());
             Ok(if report.is_clean() {
                 ExitCode::SUCCESS
@@ -777,6 +805,44 @@ pub fn init_instructions() -> String {
     out.push_str(&format!(
         "     {{\"statusLine\": {{\"type\": \"command\", \"command\": \"{exe} status-line\"}}}}\n\n"
     ));
+    // day#77 ask #2, answered as *offer* rather than *record*. The four
+    // declarations below all have working defaults, so recording them at init
+    // would impose four choices on a project that has not made them — and one
+    // of them (`schema/blocks`) has no sensible default at all: its starter
+    // carries the research loop's `research-claim`, which is an example of the
+    // shape, not a vocabulary any other project wants. What was actually
+    // missing is that a project had no way to learn these exist; the starters
+    // were written and nothing printed them.
+    out.push_str("Optional declarations. Each has a working default, so a project that\n");
+    out.push_str("declares none of them is fully configured — these exist for when the\n");
+    out.push_str("default is wrong (docs/CONVENTIONS.md):\n\n");
+    out.push_str(&format!(
+        "  schema/{}     invent a fenced block type of your own\n\
+         {}\n\n",
+        crate::blocks::BLOCKS_SLUG,
+        crate::blocks::BlockSchemas::starter_command()
+    ));
+    out.push_str(&format!(
+        "  schema/{}   which review verdicts this project accepts\n\
+         {}\n\n",
+        crate::blocks::VERDICTS_SLUG,
+        crate::blocks::VerdictVocabulary::starter_command()
+    ));
+    out.push_str(&format!(
+        "  schema/{}      which tags bound a cycle (default: {})\n\
+         {}\n\n",
+        crate::blocks::CYCLE_SLUG,
+        crate::blocks::DEFAULT_BOUNDARY_TAGS,
+        crate::blocks::CycleSchema::starter_command()
+    ));
+    out.push_str(&format!(
+        "  schema/{}  how often a standing condition is re-shown (default: every {})\n\
+         {}\n\n",
+        crate::blocks::INJECTION_SLUG,
+        crate::cache::DEFAULT_CADENCE,
+        crate::blocks::InjectionSchema::starter_command()
+    ));
+
     out.push_str("day stores nothing of its own: teloi, atoms, and assessments all live in\n");
     out.push_str("kan as claims (docs/CONVENTIONS.md). The only file day writes is a\n");
     out.push_str("gitignored, disposable render cache under .day/ (display only). Nothing\n");
