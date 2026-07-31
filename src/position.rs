@@ -36,7 +36,7 @@
 //! [`probe::evaluate`], which has no boundary to pass.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::atoms::Atom;
 use crate::git::{Boundary, Git};
@@ -221,6 +221,13 @@ pub struct Standing {
     pub inputs_unknown: Vec<String>,
     /// This atom's own outputs, as a three-way presence.
     pub outputs: Outputs,
+    /// The artifact types this atom declares it produces, by name.
+    ///
+    /// Carried because [`Outputs`] collapses them to a presence verdict, and
+    /// day#98 needs the names: whether an inputless atom is a true source or a
+    /// *convergent root* depends on whether anything downstream consumes what
+    /// it makes, which the verdict cannot answer.
+    pub outputs_declared: Vec<String>,
 }
 
 impl Standing {
@@ -236,10 +243,33 @@ impl Standing {
 
     /// Source atoms have no declared inputs; their inputs come from outside
     /// the vocabulary and are not evidence of position.
-    fn is_source(&self) -> bool {
+    ///
+    /// **A convergent root is not a source** (day#98). An atom can declare no
+    /// inputs and still be gated *on*: if something downstream lists what it
+    /// produces as an input, then the absence of its outputs is precisely what
+    /// blocks that downstream work, and is exactly what a reader needs named.
+    /// Excluding those made day structurally blind to them — on the vocabulary
+    /// that found this, the two inputless atoms were the build-out's first and
+    /// last, so day could not name A1 while A1 was the work and could not name
+    /// A4 once A4 was.
+    ///
+    /// `consumed` is every artifact type any atom declares as an input. A true
+    /// source — one whose outputs nobody consumes — is still excluded, which
+    /// preserves what this rule was protecting: naming an atom nothing gates
+    /// would be noise.
+    ///
+    /// This was met once before and routed around locally rather than fixed:
+    /// `tests/declared_vocabulary.rs` records hitting it while building a
+    /// fixture and changed the fixture. Encountered, not generalised, which is
+    /// why it survived to a real vocabulary.
+    fn is_source(&self, consumed: &BTreeSet<&str>) -> bool {
         self.inputs_present.is_empty()
             && self.inputs_missing.is_empty()
             && self.inputs_unknown.is_empty()
+            && !self
+                .outputs_declared
+                .iter()
+                .any(|out| consumed.contains(out.as_str()))
     }
 }
 
@@ -334,13 +364,23 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
                 inputs_missing,
                 inputs_unknown,
                 outputs,
+                outputs_declared: atom.interface.outputs.clone(),
             }
         })
         .collect();
 
+    // day#98: every artifact type some atom declares as an input. An inputless
+    // atom producing one of these is a convergent root, not a source — see
+    // [`Standing::is_source`]. Computed from the atom set already in hand: no
+    // probe, no read, no declaration.
+    let consumed: BTreeSet<&str> = atoms
+        .iter()
+        .flat_map(|a| a.interface.inputs.iter().map(String::as_str))
+        .collect();
+
     let current: Vec<String> = standings
         .iter()
-        .filter(|s| !s.is_source() && s.is_current())
+        .filter(|s| !s.is_source(&consumed) && s.is_current())
         .map(|s| s.atom.clone())
         .collect();
 
@@ -437,6 +477,80 @@ mod tests {
             ]),
         );
         assert_eq!(report.current, vec!["build"], "{:?}", report.standings);
+    }
+
+    /// day#98, AC-1 — a convergent root is a candidate; a true source is not.
+    ///
+    /// This cannot be asserted against day's own vocabulary: all seven of its
+    /// atoms declare inputs, so neither branch is reachable here. That is the
+    /// point of the issue — the defect was invisible in this repo and bit a
+    /// vocabulary with twelve bespoke atoms, where the two inputless ones were
+    /// the build-out's first and its last.
+    ///
+    /// Both branches in one test on purpose. Asserting only that the root is
+    /// named would be satisfied by deleting the `is_source` filter outright,
+    /// which would reintroduce the noise the filter exists to prevent.
+    #[test]
+    fn a_convergent_root_is_current_but_a_true_source_is_not() {
+        let atoms = [
+            // No inputs, and `schema` is consumed downstream -> convergent root.
+            atom("declare", &[], &["schema"], &["store"]),
+            atom("store", &["schema"], &["store-impl"], &[]),
+            // No inputs, and nothing declares `scratch` as an input -> a true
+            // source, which stays excluded.
+            atom("doodle", &[], &["scratch"], &[]),
+        ];
+
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("schema", Presence::Absent),
+                ("store-impl", Presence::Absent),
+                ("scratch", Presence::Absent),
+            ]),
+        );
+
+        assert!(
+            report.current.contains(&"declare".to_string()),
+            "an inputless atom whose output something consumes gates that work, \
+             so it must be nameable as current: {:?}",
+            report.current
+        );
+        assert!(
+            !report.current.contains(&"doodle".to_string()),
+            "an inputless atom nothing consumes is a true source and stays \
+             excluded, or the filter's purpose is lost: {:?}",
+            report.current
+        );
+    }
+
+    /// The discriminator is *consumption*, not merely having outputs. A
+    /// convergent root whose output is already present is finished, not
+    /// current — so the day#98 fix must not make inputless atoms permanently
+    /// current, which is the obvious wrong way to satisfy the test above.
+    #[test]
+    fn a_convergent_root_whose_output_exists_is_not_current() {
+        let atoms = [
+            atom("declare", &[], &["schema"], &["store"]),
+            atom("store", &["schema"], &["store-impl"], &[]),
+        ];
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("schema", Presence::Present),
+                ("store-impl", Presence::Absent),
+            ]),
+        );
+        assert!(
+            !report.current.contains(&"declare".to_string()),
+            "its output exists, so it is done: {:?}",
+            report.current
+        );
+        assert!(
+            report.current.contains(&"store".to_string()),
+            "and the work it gates is now current: {:?}",
+            report.current
+        );
     }
 
     #[test]

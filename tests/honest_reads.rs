@@ -690,6 +690,62 @@ fn user_prompt_does_not_read_kan_when_git_has_not_moved() {
     );
 }
 
+/// day#97, AC-4 — the recompute path re-renders the line it just recomputed.
+///
+/// `user_prompt` paid for `status::compute`, cached the *standing*, and left
+/// `.day/statusline` holding whatever session-start wrote. So the bar showed
+/// session-start state for an entire session — observed four hours and three
+/// atoms behind, with `day status` and the line disagreeing, on a repo that had
+/// advanced through three atoms, three assessments and four commits.
+///
+/// Asserted with a sentinel rather than by comparing two real renders. Whether
+/// the position *changes* depends on the fixture's probes; what day#97 is about
+/// is that this path never writes the line **at all**, and a sentinel proves
+/// that directly. A test that compared two renders could pass while the line
+/// was never rewritten, simply because the position happened to be identical —
+/// which is the "assert the wrong side of the finding" failure CLAUDE.md
+/// records.
+#[test]
+fn user_prompt_rerenders_the_status_line_when_it_recomputes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, _counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    // A line from an earlier session, and no cached standing — so the hook must
+    // take the recompute path, exactly as it does when git has moved.
+    std::fs::create_dir_all(dir.path().join(".day")).unwrap();
+    let stale = "day · STALE-SENTINEL-from-session-start";
+    std::fs::write(dir.path().join(".day/statusline"), stale).unwrap();
+
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+
+    let line = std::fs::read_to_string(dir.path().join(".day/statusline"))
+        .expect(".day/statusline should still exist after the hook runs");
+    assert!(
+        !line.contains("STALE-SENTINEL"),
+        "user-prompt recomputed the position and left the status line holding the \
+         previous session's render — this is day#97: the bar shows session-start \
+         state all session while `day status` disagrees. line was: {line:?}"
+    );
+    assert!(
+        line.starts_with("day"),
+        "the re-rendered line should be a real status line, not empty or garbage: {line:?}"
+    );
+}
+
 /// REQ-7's boundary, applied to the fingerprint: **a missing cache means
 /// recompute, never all-clear.**
 ///

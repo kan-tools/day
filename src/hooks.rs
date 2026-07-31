@@ -533,6 +533,23 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
         return String::new();
     };
     let cadence = status.cadence;
+
+    // day#97: re-render the line from the reading just paid for.
+    //
+    // This path recomputed the position and cached the *standing* while leaving
+    // `statusline` holding whatever session-start wrote, so the bar showed
+    // session-start state for the whole session — observed four hours and three
+    // atoms behind on a repo that had advanced through three atoms, three
+    // assessments and four commits. `day status` and the line disagreed, and the
+    // line is the surface a human actually watches.
+    //
+    // It costs nothing extra. `status` is already computed here, `render_line`
+    // is pure, and reaching this point means the fingerprint moved — so the
+    // write happens exactly when the answer can have changed and never on the
+    // cheap path above. Zero additional kan invocations, which is the property
+    // REQ-4 pins, rather than a duration, which would measure the machine.
+    let _ = crate::cache::write_status_line(root, &status.render_line());
+
     if let Some(fp) = fingerprint {
         let _ = crate::cache::write_standing(
             root,
