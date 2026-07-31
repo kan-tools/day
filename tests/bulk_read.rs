@@ -489,3 +489,70 @@ fn a_direct_show_of_an_unaccounted_subject_is_an_error() {
         "a complete log must still assess the release: {text}"
     );
 }
+
+/// The cross-check must fire only on evidence that went **missing**, never on
+/// evidence that **arrived**.
+///
+/// kan's log is shared: another agent may append while day is reading. If day
+/// took the subject list *after* the bulk read, a subject created in between
+/// would look listed-but-not-returned, and day would call a healthy kan
+/// incomplete and refuse to answer. Taken first, that subject shows up as a
+/// surplus in the bulk read, which is harmless.
+///
+/// Deterministic rather than timing-based: the stub reveals the extra subject
+/// in `status` **only once `show --all` has been called**, which is exactly the
+/// interleaving the wrong order produces. With the reads in the right order the
+/// list is taken before that ever happens.
+#[test]
+fn a_subject_that_arrives_mid_read_is_not_mistaken_for_a_missing_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let claims = vec![
+        claim(
+            "schema/witness",
+            "bafyw",
+            "W.\n\n```day-witness\n{\"evidence\":{\"claim\":{\"kind\":\"Observation\",\
+             \"subject\":\"proof/*\"}}}\n```\n",
+        ),
+        claim(
+            "telos/t",
+            "bafyt",
+            "T.\n\n```day-telos\n{\"witnesses\":[\"evidence\"]}\n```\n",
+        ),
+        claim("proof/one", "bafyp", "The evidence exists."),
+    ];
+    let (honest, _) = counting_stub(dir.path(), &claims);
+
+    let racing = dir.path().join("kan-racing.sh");
+    let marker = dir.path().join("all-was-read");
+    std::fs::write(
+        &racing,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = show ] && [ \"$2\" = --all ]; then touch {marker}; fi\n\
+             if [ \"$1\" = status ] && [ -f {marker} ]; then\n\
+               {inner} \"$@\" | python3 -c 'import json,sys; d=json.load(sys.stdin); \
+             d[\"subjects\"].append({{\"subject\":\"telos/appeared\",\"subjects\":[\"telos/appeared\"],\
+             \"state\":\"Unclassified\"}}); print(json.dumps(d))'\n\
+               exit 0\n\
+             fi\n\
+             exec {inner} \"$@\"\n",
+            marker = marker.display(),
+            inner = honest.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&racing, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = day(dir.path(), &racing, &["assess", "telos", "t"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("[MATERIAL]"),
+        "a subject that appeared mid-read must not make day refuse a witness it \
+         can answer: {text}"
+    );
+    assert!(
+        !text.contains("telos/appeared"),
+        "and it must not be reported as unaccounted for: {text}"
+    );
+}

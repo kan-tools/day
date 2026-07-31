@@ -239,7 +239,6 @@ impl KanClient {
         if self.log.borrow().is_some() {
             return Ok(());
         }
-        let all = self.read_all()?;
         // Cross-checked HERE, not by one caller. The first version of this was
         // computed in `status::compute`, so the hook channels were protected
         // and `assess telos` was not — it reported `[MISSING]` for evidence it
@@ -250,7 +249,17 @@ impl KanClient {
         // Costs at most one `status --json`, memoized, and that is the price of
         // the invariant: day went from 167 invocations to 6, and spending one
         // of them on not lying is the easiest trade in the change.
+        //
+        // **ORDER IS LOAD-BEARING: the subject list is taken FIRST.** kan's log
+        // is shared, and another agent may append while day is reading. Taking
+        // the list *after* the bulk read would show a subject created in
+        // between as listed-but-not-returned — day would call a healthy kan
+        // incomplete and refuse to answer. Taken first, that subject appears in
+        // the bulk read and not in the list, which is a surplus and harmless:
+        // day simply holds a claim it did not expect. The check must only ever
+        // fire on evidence that went MISSING, never on evidence that arrived.
         let listed = self.subjects()?;
+        let all = self.read_all()?;
         let returned: std::collections::BTreeSet<&str> =
             all.iter().map(|(s, _)| s.as_str()).collect();
         let missing: Vec<String> = listed
