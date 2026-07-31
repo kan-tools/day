@@ -232,6 +232,38 @@ thing that checks the test. All of them are from one milestone
   the check that mattered was reading day's own source to ask whether day emits
   the form at all, and `src/telos.rs` says in a comment that it does not.
 
+## The one that keeps coming back: a guarantee wired at a call site
+
+Three milestones, three instances, each caught by `/adversarial-review` and none
+by the build. Filed as **day#101**; repeated here because this is where a future
+session will look.
+
+- `BlockSchemas::extract` validated a declared block and **nothing called it**.
+- `unaccounted_subjects()` detected a dropped subject and was wired into
+  `status::compute` — so the hook channels were protected and `assess telos`,
+  where day publishes *evidentiary verdicts*, reported `[MISSING]` for evidence
+  day had never received.
+- The fix for that was right about **where** and wrong about **when**: it took
+  the subject list *after* the bulk read, so a concurrent append by another
+  agent looked like a missing subject.
+
+**The rule: a guarantee about reads belongs in `KanClient`, never in a caller.**
+Not "call the check from more places" — make it impossible to read without it.
+Both times the real fix was to push the guarantee down to the mechanism, and
+both times a check added at a call site looked complete because the author's
+test drove the call site they were thinking about.
+
+Two corollaries with teeth:
+- **`pub` suppresses dead-code detection.** `BlockSchemas::extract` and
+  `Compat::is_notable` were both `pub`, both called only by their own tests, and
+  clippy was silent for both. A `pub fn` whose only callers are `#[cfg(test)]`
+  is either dead or a requirement about to go nominal.
+- **A test written to close a finding can assert the wrong side of it.** The
+  first test for the `show()` guard drove `session-start`, which reports the
+  same string from a *different* mechanism — so deleting the guard **SURVIVED**
+  mutation. If a test covers a finding, mutate the exact line the finding was
+  about, not the feature around it.
+
 ## Two tools, already written — use them rather than reinventing them
 
 - **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says

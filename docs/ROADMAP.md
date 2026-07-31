@@ -9,16 +9,26 @@ it always said something else.
 
 ## Where we are
 
-**v0.1.x — the reader.** day folds and reports; it does not write. Teloi and
-process atoms are hand-typed kan claims, atom interfaces are fenced JSON blocks
-written by hand. Four verbs (`init`, `doctor`, `hook`, `mcp`), two commands
-(`/design`, `/adversarial-review`), one hook (session-start), and the v0
-conventions in `CONVENTIONS.md`.
+**Shipped: `v0.8.0-beta.1`.** day declares, reads, assesses and records. Eleven
+verbs, two commands (`/design`, `/adversarial-review`), three hooks, a status
+line, and three substrates (kan; git read-only; project-declared commands). The
+v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
+(`beta.3`); `v0.8.0-beta.1` is the bulk read (day#71).
 
-Both real bugs found so far came from using day on day, not from testing it.
-That is the strongest signal available about how to sequence what follows:
-**prefer the version that gets day used daily over the version that adds the
-most model.**
+**The version number and the milestone name below have come apart, and this is
+the honest record of it.** "v0.8 — transportable" in the table further down is a
+*milestone*: vocabulary packs, day#73. The **release** `v0.8.0-beta.1` is not
+that milestone. It took the 0.8.0 number because day#71 raised day's minimum kan
+to 0.9.1 — a breaking requirement change that `0.7.0-beta.4` would have
+understated — and semver answers to what breaks, not to what a roadmap section
+is called. Packs remain unbuilt and will ship under whatever number is current
+when they do. Recorded rather than reconciled by renaming, because renaming
+would lose the reason.
+
+Every defect found in day so far came from using day on day, not from testing
+it. That is still the strongest signal available about how to sequence what
+follows: **prefer the version that gets day used daily over the version that
+adds the most model.**
 
 ## v0.2 — Declaring *(complete)*
 
@@ -578,12 +588,21 @@ is worth stating once. Every durable thing day does is driven by
 **project-declared vocabulary read back from kan claims**. That read path needs
 four properties, and they can only be built in this order:
 
-| | property | milestone |
-| --- | --- | --- |
-| 1 | **honest** — what it cannot account for is reported, never dropped | `beta.2` |
-| 2 | **complete** — everything a project may differ on is declarable | `beta.3` |
-| 3 | **transportable** — a vocabulary can be handed to another repo | v0.8 |
-| 4 | **frame-relative** — the same vocabulary read under several frames | v0.7.0 |
+| | property | milestone | status |
+| --- | --- | --- | --- |
+| 1 | **honest** — what it cannot account for is reported, never dropped | `beta.2` | **shipped** |
+| 2 | **complete** — everything a project may differ on is declarable | `beta.3` | **shipped** |
+| 3 | **transportable** — a vocabulary can be handed to another repo | packs (day#73) | not started |
+| 4 | **frame-relative** — the same vocabulary read under several frames | Frames | blocked on kan |
+
+Property 1 has been tested twice more since it shipped, and both times by
+something other than a test. `v0.7.0-beta.3`'s review found an unreadable
+*instance* reaching neither hook channel; day#71's review found `assess telos`
+reporting `[MISSING]` for evidence day had never received. Honest reads is not
+a milestone that closes — it is the property every subsequent read has to keep,
+and the two mechanisms that keep it are the source scans and
+`/adversarial-review`. day#101 is about that second one being the only thing
+catching a specific recurring shape.
 
 Honest strictly precedes complete: every surface made declarable before the
 degradation contract exists inherits the silent-dropping bug, which is day#78
