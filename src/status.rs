@@ -281,13 +281,34 @@ impl Status {
                 "day: a step may have been skipped — {first}. Advisory; nothing is blocked."
             ));
         }
-        // day#103. This reaches the MODEL, not only `day status`, because the
-        // record is easiest to repair in the session that broke it — an hour
-        // later the boundary check is archaeology, and two releases went
-        // unrecorded precisely because nobody was told at the time.
+        (!parts.is_empty()).then(|| parts.join("\n"))
+    }
+
+    /// The **standing** half of what the model should hear: things that are
+    /// true until somebody records something, as opposed to events.
+    ///
+    /// Separate from [`Self::notice_for_model`] because the two are rationed
+    /// differently, and `hooks.rs` is where that distinction lives. A transition
+    /// is an event and fires once; "this exists and the log does not mention it"
+    /// stays true for as long as nobody acts, so repeating it every prompt is
+    /// day#30's failure — an always-present rule becomes background, and then
+    /// the real one is invisible too.
+    ///
+    /// day#103 wanted this on the model channel at all, and that part is right:
+    /// the record is cheapest to repair in the session that broke it, and an
+    /// hour later the boundary check is archaeology. Rationed, not silent.
+    pub fn standing_notice(&self) -> Option<String> {
+        let mut parts = Vec::new();
         if let Some(finding) = &self.unrecorded_boundary {
             parts.push(format!(
                 "day: {finding}. Recording it is an append, not a correction. \
+                 Advisory; nothing is blocked."
+            ));
+        }
+        for kind in &self.unrecorded {
+            parts.push(format!(
+                "day: `{kind}` exists in this cycle, but its declared record witness \
+                 finds nothing — the work happened and the log does not say so. \
                  Advisory; nothing is blocked."
             ));
         }
@@ -378,14 +399,13 @@ impl Status {
             ));
         }
 
-        if let Some(finding) = &self.unrecorded_boundary {
+        // One section, whichever findings fired. Two blocks each printing the
+        // same header rendered it twice when both were live (F8).
+        if self.unrecorded_boundary.is_some() || !self.unrecorded.is_empty() {
             out.push_str("Done but unrecorded:\n");
-            out.push_str(&format!("  ! {finding}\n"));
-            out.push('\n');
-        }
-
-        if !self.unrecorded.is_empty() {
-            out.push_str("Done but unrecorded:\n");
+            if let Some(finding) = &self.unrecorded_boundary {
+                out.push_str(&format!("  ! {finding}\n"));
+            }
             for kind in &self.unrecorded {
                 out.push_str(&format!(
                     "  ! {kind} exists in this cycle, but its declared record witness \
@@ -451,6 +471,23 @@ impl Status {
         // Off-sequence is a warning, and worth its own line even in the terse
         // form — a skipped step is exactly what a person scanning a status bar
         // should catch.
+        // F2: the done-but-unrecorded findings reach the bar. It is persistent,
+        // it already carries `day ! ` findings, and a STANDING condition — one
+        // that stays true until someone records something — is exactly what a
+        // persistent surface is for. The model channel rations these instead
+        // (see `notice_for_model`), because repeating a standing condition every
+        // prompt is day#30's failure.
+        if let Some(finding) = &self.unrecorded_boundary {
+            lines.push(format!("day ! {finding}"));
+        }
+        if let Some(kind) = self.unrecorded.first() {
+            let more = match self.unrecorded.len() {
+                1 => String::new(),
+                n => format!(" (+{} more)", n - 1),
+            };
+            lines.push(format!("day ! {kind} exists but is not recorded{more}"));
+        }
+
         if let Some(first) = self.off_sequence.first() {
             lines.push(format!("day ! {first}"));
         }
@@ -923,6 +960,54 @@ mod tests {
 
     /// Off-sequence is a warning and gets its own line even in the terse form:
     /// a skipped step is exactly what a status-bar glance should catch.
+    /// F2 — the done-but-unrecorded findings reach the model, not only
+    /// `day status`.
+    ///
+    /// The review mutated the boundary line out of the model channel and it
+    /// **SURVIVED**: the guarantee was computed at the mechanism and then
+    /// dropped at three separate call sites, and the AC-8 scan could not see it
+    /// because it asserts `status::compute` *calls* the check, not that the
+    /// answer is delivered. day#101 one layer out.
+    #[test]
+    fn the_unrecorded_findings_reach_the_model_channel() {
+        let mut status = Status {
+            here: vec![here("build", vec![], &[])],
+            off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: Some("v1.0.0 is tagged but no `release` claim records it".into()),
+            transition: None,
+            uncheckable: false,
+            unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
+        };
+
+        let notice = status
+            .standing_notice()
+            .expect("a boundary finding must reach the model channel");
+        assert!(
+            notice.contains("v1.0.0"),
+            "the notice must name the tag, or it cannot be acted on: {notice}"
+        );
+
+        // The generalised finding too, not only the release special case.
+        status.unrecorded_boundary = None;
+        status.unrecorded = vec!["code-change".into()];
+        let notice = status
+            .standing_notice()
+            .expect("a paired-witness finding must reach the model channel too");
+        assert!(
+            notice.contains("code-change"),
+            "the notice must name the artifact type: {notice}"
+        );
+
+        // And stays quiet when there is nothing to say.
+        status.unrecorded = vec![];
+        assert!(
+            status.standing_notice().is_none(),
+            "a healthy repo must produce no standing notice at all"
+        );
+    }
+
     #[test]
     fn off_sequence_surfaces_in_both_forms() {
         let status = Status {

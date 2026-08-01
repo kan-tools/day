@@ -75,9 +75,27 @@ until the verb was run for an unrelated reason.
 - REQ-4: `UserPromptSubmit` **re-renders the status line** when it recomputes the
   position. Today it recomputes and writes the standing, and the line keeps
   serving the session-start render. The fix must not reintroduce the 3.03s
-  regression `v0.7.0-beta.2`'s review blocked: re-render is gated on the same
-  0.03s git fingerprint that already gates recomputation, and costs zero
-  additional kan invocations.
+  regression `v0.7.0-beta.2`'s review blocked.
+
+  **AMENDED DURING THE BUILD (day#111), and the amendment is the interesting
+  part.** This originally read "gated on the same 0.03s git fingerprint … and
+  costs zero additional kan invocations". That gate is *wrong*, not merely
+  cheap: `Git::position_fingerprint` reads no kan, but position also depends on
+  `claim` probes, so recording a claim moved the position and left the
+  fingerprint byte-identical. The bar was stale for a whole session whenever
+  work was recorded rather than edited — the dominant workflow in this repo.
+
+  So the gate now hashes the kan log too, and the quiet path costs **two** kan
+  invocations, not zero. Measured: 0.03s → 0.16s, against the 1.40s recompute it
+  avoids and the 3.03s regression that was blocked. `kan status` was measured and
+  rejected as a cheaper signal — it does not change when a claim is appended to
+  an existing subject, which is exactly the case that matters. Raised with kan as
+  kan#151; if a cheap log-generation signal lands, this returns to roughly its
+  original cost.
+
+  Recorded here rather than left to drift, per `docs/ROADMAP.md`'s rule: revise
+  by editing and recording the change, never by pretending it always said
+  something else.
 
 - REQ-5: Each of the three is covered by a test **in the mode where it fails**,
   not the mode this repo is in. day#98 cannot be tested against day's own
@@ -129,9 +147,11 @@ until the verb was run for an unrelated reason.
 
 - [ ] AC-4: (REQ-4) After a fingerprint-moving change, `day hook user-prompt` leaves
   `.day/statusline` holding the recomputed position, not the session-start one.
-  Asserted as **content changed**, and separately as **zero kan invocations** when
-  the fingerprint has not moved — an invocation count measures the design where a
-  duration measures the machine.
+  Asserted as **content changed**, and separately as a **bounded, constant kan
+  invocation count** on a quiet prompt — an invocation count measures the design
+  where a duration measures the machine. Amended from "zero" with REQ-4: reading
+  the log is the only way to know the log moved, so the honest property is that
+  the cost does not scale and never reaches the full inference.
 
 - [ ] AC-5: (REQ-5, REQ-6) Each of AC-1, AC-2 and AC-4 is shown to fail when its
   defect is reintroduced, recorded in the milestone's claims with the mutation

@@ -718,6 +718,100 @@ fn user_prompt_costs_a_bounded_fingerprint_read_and_never_recomputes() {
     );
 }
 
+/// day#111's actual property, which the invocation-count test does not check.
+///
+/// The review mutated `claim.cid.hash(&mut hasher)` away and it **SURVIVED**:
+/// without the CID the fingerprint is a function of the subject SET, which is
+/// precisely the `kan status` failure mode day#111 was filed to avoid — an
+/// append to an existing subject changes nothing — and 332 tests stayed green.
+///
+/// The old assertion was `kan_calls > after_cold`: it measured that a read
+/// HAPPENED, not that the answer CHANGES. That is the proxy CLAUDE.md warns
+/// about, quoted in the commit that introduced it and then committed anyway.
+///
+/// Hermetic on purpose. Two stubs differing by exactly one claim on an
+/// **existing** subject — no new subject, no state change — which is the case a
+/// subject-set fingerprint cannot see.
+#[test]
+fn the_log_fingerprint_changes_when_a_claim_is_appended_to_an_existing_subject() {
+    let witness = |cid: &str| {
+        claim(
+            "schema/witness",
+            cid,
+            "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+        )
+    };
+
+    let before = tempfile::tempdir().unwrap();
+    let kan_before = write_kan_stub(before.path(), &[witness("bafyw")]);
+
+    // Same subject set, same subject, one additional claim.
+    let after = tempfile::tempdir().unwrap();
+    let kan_after = write_kan_stub(
+        after.path(),
+        &[
+            witness("bafyw"),
+            claim(
+                "schema/witness",
+                "bafyw2",
+                "A later note on the same subject.",
+            ),
+        ],
+    );
+
+    let fp = |dir: &Path, kan: &Path| -> String {
+        let out = day(dir, kan, &["hook", "user-prompt"]);
+        assert!(out.status.success(), "hook should exit zero");
+        std::fs::read_to_string(dir.join(".day/standing"))
+            .expect(".day/standing should exist after the hook")
+            .lines()
+            .next()
+            .expect("standing should carry a fingerprint line")
+            .to_string()
+    };
+
+    let a = fp(before.path(), &kan_before);
+    let b = fp(after.path(), &kan_after);
+
+    assert!(
+        !a.is_empty() && !b.is_empty(),
+        "both fingerprints must be non-empty or this assertion is vacuous: {a:?} / {b:?}"
+    );
+    assert_ne!(
+        a, b,
+        "appending a claim to an EXISTING subject did not move the fingerprint, so \
+         day cannot see a position change caused by recording a claim — day#111, \
+         and the exact reason `kan status` was rejected as the cheap signal"
+    );
+
+    // And the narrow case the CID hash is the ONLY thing protecting: same
+    // subjects, same claim COUNT, different claims. Retract one and record
+    // another between two prompts and the count is unchanged.
+    //
+    // Worth stating why this half exists. The review mutated `claim.cid.hash`
+    // away and reported the fingerprint becomes "a function of the subject
+    // set"; it does not — `claims.len()` is hashed too, so every ordinary
+    // append still moves it and the assertion above passes without the CID.
+    // The mutation SURVIVED against the first version of this test for exactly
+    // that reason. This is the case that distinguishes them, and without it the
+    // CID hash is unasserted.
+    let swapped = tempfile::tempdir().unwrap();
+    let kan_swapped = write_kan_stub(
+        swapped.path(),
+        &[
+            witness("bafyw"),
+            claim("schema/witness", "bafyw3", "A different later note."),
+        ],
+    );
+    let c = fp(swapped.path(), &kan_swapped);
+    assert_ne!(
+        b, c,
+        "two logs with the same subjects and the same claim count but different \
+         claims produced the same fingerprint — only the CID hash separates these, \
+         and without it a retract-plus-record between prompts is invisible"
+    );
+}
+
 /// day#97, AC-4 — the recompute path re-renders the line it just recomputed.
 ///
 /// `user_prompt` paid for `status::compute`, cached the *standing*, and left

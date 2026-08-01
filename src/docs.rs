@@ -265,6 +265,33 @@ fn check_versions(
     }
 }
 
+/// Does any live claim on `subject` name `tag`?
+///
+/// **Any**, not the newest. Taking only the newest claim carrying text meant
+/// that recording a release correctly and then appending an ordinary note to
+/// the same subject flipped it back to "not recorded" — reproduced during the
+/// review of the position-honesty milestone. It is the same degenerate fold as
+/// the telos-rendering defect: "newest text wins" works only while exactly one
+/// kind of claim ever lands on a subject, and nothing enforces that.
+///
+/// Scanning every live claim also spans this repo's own mixed history — v0.3
+/// and v0.4 were recorded with `kan observe`, v0.5 onward with `kan result` —
+/// without day having to assume which verb a project uses.
+///
+/// The cost is a claim that merely *mentions* the tag in passing satisfying it.
+/// That is a rarer failure than the one it removes, and day#107 is where
+/// correspondence gets expressed properly rather than by substring.
+///
+/// Shared with [`reconcile_boundary`] on purpose: two surfaces answering the
+/// same question from two implementations is how they come to disagree, which
+/// is F5's other half.
+fn any_claim_names(claims: &[crate::kan_client::Claim], tag: &str) -> bool {
+    claims
+        .iter()
+        .filter_map(|c| c.text.as_deref())
+        .any(|text| text.contains(tag))
+}
+
 /// day#103 — is the tag that closed the last cycle actually written down?
 ///
 /// The same question [`reconcile_boundary`] asks, extracted so it can be asked
@@ -319,24 +346,27 @@ pub fn unrecorded_boundary(client: &KanClient, git: &Git) -> Result<Option<Strin
     };
 
     let claims = client.show(&schema.release_subject)?;
-    let recorded = claims.iter().rev().find_map(|c| c.text.clone());
 
-    Ok(match recorded {
-        // Correspondence, not mere existence: a `release` claim for the PREVIOUS
-        // tag would satisfy "a claim exists" while the current one went
-        // unrecorded, which is exactly what happened across v0.7.0-beta.3 and
-        // v0.8.0-beta.1. day#107 is about generalising this test.
-        Some(text) if text.contains(tag.as_str()) => None,
-        Some(_) => Some(format!(
-            "{tag} is tagged, but the newest `{}` claim does not mention it — one \
-             of the two records is behind",
+    // Correspondence, not mere existence: a `release` claim for the PREVIOUS tag
+    // would satisfy "a claim exists" while the current one went unrecorded,
+    // which is exactly what happened across v0.7.0-beta.3 and v0.8.0-beta.1.
+    if any_claim_names(&claims, &tag) {
+        return Ok(None);
+    }
+
+    let has_any_text = claims.iter().any(|c| c.text.is_some());
+    Ok(Some(if has_any_text {
+        format!(
+            "{tag} is tagged, but no `{}` claim mentions it — one of the two \
+             records is behind",
             schema.release_subject
-        )),
-        None => Some(format!(
+        )
+    } else {
+        format!(
             "{tag} is tagged but no `{}` claim records it — a release nobody wrote down",
             schema.release_subject
-        )),
-    })
+        )
+    }))
 }
 
 /// Reconciles the two records of "when was the last release": the `release`
@@ -361,7 +391,10 @@ fn reconcile_boundary(
     // is falling through to the (Some(tag), None) arm below and announcing a
     // release nobody wrote down, on the strength of a read that never happened.
     let recorded = match client.show(subject) {
-        Ok(claims) => claims.iter().rev().find_map(|c| c.text.clone()),
+        // F5: every live claim, not the newest carrying text — see
+        // `any_claim_names`. Shared with `unrecorded_boundary` so `day status`
+        // and `day assess docs` cannot answer the same question differently.
+        Ok(claims) => Some(claims),
         Err(e) => {
             findings.push(Finding {
                 level: Level::Unchecked,
@@ -374,9 +407,15 @@ fn reconcile_boundary(
         }
     };
 
+    // A subject whose claims carry no text is "nothing recorded", not "recorded
+    // as nothing" — normalised here so each arm below means exactly what it says
+    // and the match stays exhaustive.
+    let recorded = recorded
+        .filter(|claims: &Vec<crate::kan_client::Claim>| claims.iter().any(|c| c.text.is_some()));
+
     match (&tag, &recorded) {
-        (Some(tag), Some(text)) => {
-            if text.contains(tag.as_str()) {
+        (Some(tag), Some(claims)) => {
+            if any_claim_names(claims, tag) {
                 findings.push(Finding {
                     level: Level::Pass,
                     message: format!("release {tag} is both tagged and recorded"),
@@ -385,8 +424,8 @@ fn reconcile_boundary(
                 findings.push(Finding {
                     level: Level::Warn,
                     message: format!(
-                        "latest tag is {tag}, but the newest `{subject}` claim does not \
-                         mention it — one of the two records may be behind"
+                        "latest tag is {tag}, but no `{subject}` claim mentions it — one \
+                         of the two records may be behind"
                     ),
                 });
             }

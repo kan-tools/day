@@ -40,7 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::atoms::Atom;
 use crate::git::{Boundary, Git};
-use crate::probe::{self, Authorization, ClaimLog, Probe, ReadFailure, Verdict};
+use crate::probe::{self, Authorization, ClaimLog, Failures, Probe, ReadFailure, Verdict};
 
 /// Whether an artifact type is materially present, and how sure day is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,7 +70,9 @@ pub fn resolve(
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
 ) -> Verdict {
-    resolve_collecting(probe, git, log, boundary, None)
+    // The caller renders this verdict itself — see the doc comment above and
+    // `Failures::AlreadyReported`. This is the one site where that is true.
+    resolve_collecting(probe, git, log, boundary, Failures::AlreadyReported)
 }
 
 /// [`resolve`], with somewhere to put reads that could not happen.
@@ -83,7 +85,7 @@ pub fn resolve_collecting(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
-    failures: Option<&mut Vec<ReadFailure>>,
+    failures: Failures<'_>,
 ) -> Verdict {
     match (probe, boundary) {
         // Reported as not-run, never executed, boundary or no boundary. A
@@ -145,7 +147,7 @@ fn materialized(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
-    failures: Option<&mut Vec<ReadFailure>>,
+    failures: Failures<'_>,
 ) -> Presence {
     match probes.get(kind) {
         None => Presence::Unknown,
@@ -323,22 +325,30 @@ pub fn infer(
     // this. Resolution happens at most once per artifact type, so a failure
     // cannot be recorded twice for one type.
     let failures: RefCell<Vec<ReadFailure>> = RefCell::new(Vec::new());
-    let mut report = infer_with(
-        atoms,
-        memoized(|kind| {
-            let mut collected = Vec::new();
-            let presence = materialized(
-                kind,
-                &schema.probes,
-                git,
-                log,
-                boundary,
-                Some(&mut collected),
-            );
-            failures.borrow_mut().extend(collected);
-            presence
-        }),
-    );
+
+    // Hoisted rather than passed inline, so the record comparison below can ask
+    // the SAME memoized resolver instead of reading the material half a second
+    // time (F1). The old shape called `materialized` again directly, which had
+    // two defects at once: it passed no failure collector, so a read it could
+    // not make was silently dropped; and it bypassed the memo, so collecting
+    // properly would have reported the same failure twice for any type an atom
+    // also names. One resolution per type, one collection, both fixed by
+    // structure rather than by remembering the right argument.
+    let resolve_presence = memoized(|kind| {
+        let mut collected = Vec::new();
+        let presence = materialized(
+            kind,
+            &schema.probes,
+            git,
+            log,
+            boundary,
+            Failures::Collect(&mut collected),
+        );
+        failures.borrow_mut().extend(collected);
+        presence
+    });
+
+    let mut report = infer_with(atoms, &resolve_presence);
 
     // The material/record comparison (REQ-2). Only types declaring both halves
     // can be asked, so a project that declared no pair gets an empty list and
@@ -352,12 +362,19 @@ pub fn infer(
         if !schema.probes.contains_key(kind) {
             continue;
         }
-        let material = materialized(kind, &schema.probes, git, log, boundary, None);
-        if material != Presence::Present {
+        // Memoized: free if an atom already named this type, and collected
+        // exactly once either way.
+        if resolve_presence(kind) != Presence::Present {
             continue;
         }
         let mut collected = Vec::new();
-        let seen = resolve_collecting(record, git, log, boundary, Some(&mut collected));
+        let seen = resolve_collecting(
+            record,
+            git,
+            log,
+            boundary,
+            Failures::Collect(&mut collected),
+        );
         failures.borrow_mut().extend(collected);
 
         // Only a probe that ran and found nothing counts. An `Error` is a read
@@ -369,6 +386,10 @@ pub fn infer(
         }
     }
 
+    // The resolver borrows `failures`, so it has to go before the cell can be
+    // consumed. Explicit rather than relying on scope order, since the drop is
+    // load-bearing for the line below it.
+    drop(resolve_presence);
     report.read_failures = failures.into_inner();
     report
 }
@@ -673,7 +694,10 @@ mod tests {
                     &git,
                     &ClaimLog::new(&client),
                     bound,
-                    None
+                    // The assertion is about Presence, and the test renders
+                    // nothing — no failure can arise from a command probe,
+                    // which is never run here.
+                    Failures::AlreadyReported
                 ),
                 Presence::Unknown
             );

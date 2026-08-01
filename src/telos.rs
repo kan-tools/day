@@ -790,6 +790,66 @@ mod tests {
         assert_eq!(parsed, WitnessSchema::starter());
     }
 
+    /// The paired arm of the hand-written `Serialize`, which the starter no
+    /// longer exercises.
+    ///
+    /// `starter()` used to suggest a paired `published-artifact`, so
+    /// `the_starter_round_trips_through_its_own_block` covered this. Removing
+    /// that suggestion (day#107 — the pair cannot answer for a boundary-degenerate
+    /// tag witness) left the arm unreachable in production AND untested, while
+    /// its doc comment still claimed "round-tripping is asserted rather than
+    /// assumed". A comment claiming a property needs a test named after it.
+    ///
+    /// Kept rather than deleted because the arm goes live the moment a project
+    /// declares a pair or day#107 lets the starter suggest one again — and a
+    /// missing arm would silently flatten every record half on output, which is
+    /// the exact failure the hand-written impl exists to prevent.
+    #[test]
+    fn a_paired_witness_round_trips_through_serialize() {
+        let mut probes = BTreeMap::new();
+        probes.insert("published-artifact".to_string(), Probe::Tag("v*".into()));
+        probes.insert("design-doc".to_string(), Probe::Path(".design/*.md".into()));
+
+        let mut records = BTreeMap::new();
+        records.insert(
+            "published-artifact".to_string(),
+            Probe::Claim(ClaimShape {
+                kind: "Result".to_string(),
+                contains: None,
+                starts_with: None,
+                subject: Some("release".to_string()),
+                block: None,
+            }),
+        );
+
+        let schema = WitnessSchema {
+            probes,
+            records,
+            unsupported: BTreeMap::new(),
+        };
+
+        let json = serde_json::to_string(&schema).expect("a schema should serialize");
+        assert!(
+            json.contains("\"material\"") && json.contains("\"record\""),
+            "a paired witness must serialize in the paired form, not flattened to \
+             its material half: {json}"
+        );
+
+        let back: WitnessSchema = serde_json::from_str(&json).expect("and parse back");
+        assert_eq!(back.probes, schema.probes);
+        assert_eq!(
+            back.records, schema.records,
+            "the record half must survive the round trip — losing it here is the \
+             silent flattening this impl was hand-written to prevent"
+        );
+
+        // The unpaired entry must NOT gain a wrapper on the way out.
+        assert!(
+            json.contains("\"design-doc\":{\"path\""),
+            "a material-only witness must still serialize as a bare probe: {json}"
+        );
+    }
+
     /// REQ-3 — every declaration written before the paired form keeps its exact
     /// meaning. This is the shape on *this repo's own* `schema/witness` claim.
     ///

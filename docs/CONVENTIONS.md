@@ -403,6 +403,43 @@ carrying a fenced `day-witness` block: a map from witness type to **probe**.
 | `claim` | a live claim exists satisfying **every** declared predicate | kan | always |
 | `command` | the command exits zero | — | only with `--run` |
 
+### A witness may declare two halves: material and record
+
+A witness type may map to a **pair** instead of a single probe — what shows the
+artifact exists in the world, and what shows the log knows about it:
+
+```day-witness
+{
+  "code-change": {
+    "material": {"path": "src/*.rs"},
+    "record":   {"claim": {"kind": "Result", "subject": "atom/*"}}
+  }
+}
+```
+
+Material present with record absent is **done but unrecorded**: the work
+happened and nothing wrote it down. day reports that as its own finding,
+distinct from "this atom is next" and from "this atom is finished" — collapsing
+those is what let two consecutive releases ship with no `release` claim.
+
+Both forms are valid and the single-probe form is unchanged: a bare probe is a
+**material** witness with no record half, produces no such finding, and every
+`day-witness` block written before this existed keeps its exact meaning. The
+pair is opt-in.
+
+An entry naming `material` or `record` is read as a pair, and then **both**
+halves must parse or the whole witness is reported unsupported. A misspelled
+half is never quietly demoted to a material-only witness — that would leave a
+project believing it declared a comparison day is not making.
+
+**Not every witness can usefully be paired.** A `tag` material probe is resolved
+against the cycle boundary, and the boundary *is* the newest tag, so
+`published-artifact` is absent by construction in the cycle a release opens and
+the comparison can never fire. day therefore suggests no pair in its starter
+schema. Pair a witness whose material half is a `path` or `claim` probe; for the
+release case, `day assess docs` and `day status` reconcile the tag against the
+`release` subject directly (day#107 is about expressing that as a pair too).
+
 `path` uses `git ls-files`, so an untracked build output or a stray local
 file cannot witness a telos — being committed is the stronger claim, and it
 costs no new dependency.

@@ -234,6 +234,48 @@ pub struct ReadFailure {
     pub version_skew: bool,
 }
 
+/// Where a read failure goes — and, when it goes nowhere, why that is allowed.
+///
+/// This replaced `Option<&mut Vec<ReadFailure>>`, and the reason is day#101's
+/// rule rather than taste. A bare `None` costs nothing to write and says
+/// nothing, so choosing it looked like choosing no argument at all — and
+/// `position.rs` shipped one, five lines above a site that passed `Some`, in
+/// the same loop. The reason a read could not be made was constructed, and
+/// dropped.
+///
+/// Naming the second variant does not prevent that. It makes committing it
+/// require asserting something: at the site that had the defect,
+/// `AlreadyReported` is visibly false, because nothing there reports anything.
+/// A `None` was invisible; a false claim is not.
+#[derive(Debug)]
+pub enum Failures<'a> {
+    /// Collect into this, for a caller that will report them.
+    Collect(&'a mut Vec<ReadFailure>),
+    /// The caller renders this verdict itself, so the reason is already on
+    /// screen and collecting it again would double-report.
+    ///
+    /// The **only** valid reason to discard one. If you cannot say this
+    /// truthfully about the call site, it wants [`Self::Collect`].
+    AlreadyReported,
+}
+
+impl Failures<'_> {
+    /// Record a failure, or deliberately drop it per the variant.
+    pub fn record(&mut self, failure: ReadFailure) {
+        if let Self::Collect(sink) = self {
+            sink.push(failure);
+        }
+    }
+
+    /// A shorter-lived borrow, for forwarding into a nested call.
+    pub fn reborrow(&mut self) -> Failures<'_> {
+        match self {
+            Self::Collect(sink) => Failures::Collect(sink),
+            Self::AlreadyReported => Failures::AlreadyReported,
+        }
+    }
+}
+
 /// What reading a declared block on one claim produced.
 ///
 /// Three outcomes, not two, and the split is `v0.7.0-beta.2`'s contract applied
@@ -355,7 +397,7 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
         },
         // Deliberately not gated on `auth`. There is nothing to authorize:
         // this reads the log through kan's read verbs and executes nothing.
-        Probe::Claim(shape) => claims_matching(shape, log, None, None),
+        Probe::Claim(shape) => claims_matching(shape, log, None, Failures::AlreadyReported),
     }
 }
 
@@ -468,7 +510,7 @@ pub fn claims_matching(
     // `Verdict` itself and so already shows the reason — `day assess telos`
     // prints ERROR with the message. Position inference passes `Some`, because
     // it reduces the verdict to a `Presence` and would otherwise drop it.
-    mut failures: Option<&mut Vec<ReadFailure>>,
+    mut failures: Failures<'_>,
 ) -> Verdict {
     let claims = match log.claims() {
         Ok(claims) => claims,
@@ -530,17 +572,15 @@ pub fn claims_matching(
         // stop.
         if let Some(check) = block_check {
             if let BlockOutcome::Unchecked(why) = check(claim) {
-                if let Some(failures) = failures.as_deref_mut() {
-                    // Every `Unchecked` from this path is a version skew: the
-                    // unreadable-*declaration* cases return early above, and
-                    // `extract` reports anything else as `Invalid`. Asserted by
-                    // `an_unchecked_instance_is_always_version_skew` rather
-                    // than left as a comment.
-                    failures.push(ReadFailure {
-                        message: why.clone(),
-                        version_skew: true,
-                    });
-                }
+                // Every `Unchecked` from this path is a version skew: the
+                // unreadable-*declaration* cases return early above, and
+                // `extract` reports anything else as `Invalid`. Asserted by
+                // `an_unchecked_instance_is_always_version_skew` rather than
+                // left as a comment.
+                failures.record(ReadFailure {
+                    message: why.clone(),
+                    version_skew: true,
+                });
                 unchecked.get_or_insert(why);
             }
         }

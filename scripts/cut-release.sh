@@ -44,6 +44,9 @@ esac
 
 command -v kan >/dev/null 2>&1 || die "kan is not on PATH; the release claim cannot be recorded"
 command -v day >/dev/null 2>&1 || die "day is not on PATH; run 'cargo install --path .' first"
+# Guarded like the others. Without this, a missing jq exits under `set -e` with
+# no message at all, mid-script, after the checks above have passed.
+command -v jq  >/dev/null 2>&1 || die "jq is not on PATH; it is needed to read the Cargo.toml version"
 
 # --- 1. the tree is what it says it is -------------------------------------
 
@@ -51,6 +54,14 @@ command -v day >/dev/null 2>&1 || die "day is not on PATH; run 'cargo install --
 
 branch="$(git branch --show-current 2>/dev/null || true)"
 [ "$branch" = "main" ] || die "releases are cut from main; you are on '${branch:-a detached HEAD}'"
+
+# A stale local main is still `main`. Compare against the remote rather than
+# trusting the branch name — tagging a commit the remote does not have produces
+# a release nobody can check out. Read-only: `ls-remote` fetches nothing.
+remote_main="$(git ls-remote origin refs/heads/main 2>/dev/null | cut -f1)"
+if [ -n "$remote_main" ] && [ "$remote_main" != "$(git rev-parse HEAD)" ]; then
+  die "local main is not the same commit as origin/main ($remote_main); pull or push first"
+fi
 
 # An `if` rather than `... | grep -q . && die`. That form is safe under `set -e`
 # (the left side of an AND-OR list is exempt from errexit) but only obviously so
@@ -88,7 +99,11 @@ day assess docs || die "'day assess docs' failed; fix the docs before releasing"
 # silent until somebody happened to look.
 
 printf 'Recording the release claim for %s.\n' "$tag"
-printf 'What shipped, verified against the artifact (empty line to finish):\n' >&2
+# `cat` reads to EOF, so the prompt must say EOF and not "empty line" — the
+# first version said the latter, and a blank line does not terminate it. Stating
+# the key sequence because "EOF" is not what a person types.
+printf 'What shipped, verified against the artifact.\n' >&2
+printf 'Finish with Ctrl-D on a blank line:\n' >&2
 
 notes="$(cat)"
 [ -n "$notes" ] || die "a release claim with no text is not a record; aborting"

@@ -161,8 +161,10 @@ fn shape_of(value: &serde_json::Value) -> &'static str {
 /// The block types a project declared, by name.
 ///
 /// `transparent` over the map for the same reason [`crate::telos::WitnessSchema`]
-/// is: every key is *data* — a block type this project invented — so refusing
-/// unknown keys would refuse the project's own vocabulary. The strictness lives
+/// treats its map as data: every key is a block type this project invented, so
+/// refusing unknown keys would refuse the project's own vocabulary. (That type
+/// no longer *derives* transparent — it hand-writes `Serialize` so a paired
+/// witness round-trips — but the reasoning about its keys is unchanged.) The strictness lives
 /// one level down, on [`FieldSpec`], which does refuse a field it does not
 /// declare.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]

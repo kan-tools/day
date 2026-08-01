@@ -153,23 +153,63 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
                 continue;
             }
         };
-        // Since day#32 a tension's reason lives on `tension/<a>--<b>`, not
-        // here, so the newest text claim on a telos is the telos again. The
-        // declared title still leads, because a subject's name is an rkey
-        // and this is what it is called.
+        // A SUBJECT IS A CLAIM LOG, AND ITS CURRENT STATE IS A FOLD OVER IT BY
+        // ROLE — not "whatever text arrived last".
+        //
+        // This used to take the newest claim carrying text, justified by: since
+        // day#32 a tension's reason lives on `tension/<a>--<b>`, so the newest
+        // text on a telos is the telos again. That held only while exactly one
+        // KIND of claim ever landed here, and nothing enforces that. Recording
+        // an assessment with `kan result telos/<slug>` — which `day assess
+        // telos` itself instructs — made the assessment render AS the telos, on
+        // the one surface the model reads every session. Two of day's own
+        // surfaces in contradiction: one told you to write a claim the other
+        // could not read.
+        //
+        // Each kind now has a role, so a kind nobody anticipated has NO role
+        // rather than accidentally becoming the statement:
+        //   Decision   -> the statement (newest live one wins; `kan decide` is
+        //                 what `day telos declare` emits)
+        //   Subject    -> the title
+        //   Result     -> an assessment; surfaced as a suffix, never as the text
+        //   other      -> context, not the statement
         let title = claims.iter().rev().find_map(|c| c.title.clone());
-        let latest = claims
+        // Prefer the declaration; fall back to any claim that is not an
+        // assessment. Filtering strictly to `Decision` was too strict: `kan
+        // decide` is the documented way to declare a telos and what `day telos
+        // declare` emits, but a hand-written one may be an `Observation`, and
+        // rendering nothing for it would trade this defect for a worse one.
+        // What must never happen is a `Result` becoming the statement, which is
+        // the whole of F12.
+        let prose = |c: &crate::kan_client::Claim| {
+            c.text
+                .as_deref()
+                .map(atoms::prose_only)
+                .filter(|s| !s.is_empty())
+        };
+        let statement = claims
             .iter()
             .rev()
-            .find_map(|c| c.text.as_deref().map(atoms::prose_only))
-            .filter(|s| !s.is_empty());
+            .filter(|c| c.kind == "Decision")
+            .find_map(prose)
+            .or_else(|| {
+                claims
+                    .iter()
+                    .rev()
+                    .filter(|c| c.kind != "Result")
+                    .find_map(prose)
+            });
+        // An assessment enriches the line instead of replacing it — which is
+        // what recording one was supposed to do.
+        let assessed = claims.iter().any(|c| c.kind == "Result");
+        let suffix = if assessed { "  [assessed]" } else { "" };
 
-        match (title, latest) {
+        match (title, statement) {
             (Some(title), Some(text)) => {
-                lines.push(format!("- {subject}: {title} — {}", excerpt(&text)))
+                lines.push(format!("- {subject}: {title} — {}{suffix}", excerpt(&text)))
             }
-            (Some(title), None) => lines.push(format!("- {subject}: {title}")),
-            (None, Some(text)) => lines.push(format!("- {subject}: {}", excerpt(&text))),
+            (Some(title), None) => lines.push(format!("- {subject}: {title}{suffix}")),
+            (None, Some(text)) => lines.push(format!("- {subject}: {}{suffix}", excerpt(&text))),
             // Nothing left to say about it. kan never destroys a subject, so
             // a fully-retracted telos still exists and still appears in
             // `status` — but a telos whose every claim has been retracted is
@@ -285,6 +325,27 @@ fn render_atoms(client: &KanClient) -> String {
 /// Infallible like the rest of the hook: a failed computation degrades to
 /// nothing rather than derailing the session, and a failed cache write leaves
 /// the status line showing its documented empty state.
+/// The fingerprint both cache writers use, in one place so they cannot drift.
+///
+/// F4: session-start wrote `git.position_fingerprint()` while user-prompt
+/// compared `{git}:{log}`, so the two never matched and the first prompt of
+/// every session paid for a recompute whose answer it already had. Two writers
+/// of one value in different formats is the same shape as a guarantee wired at
+/// a call site — the fix is one function, not two matching edits.
+///
+/// `None` when git cannot be read. An unreadable kan log deliberately yields an
+/// *unmatchable* value rather than a matching one, so the next prompt recomputes
+/// and reports the failure instead of going quiet — treating a log day could not
+/// read as "nothing moved" would be the carve-out abuse and an honest-reads
+/// violation at once.
+fn position_cache_fingerprint(git: &Git, client: &KanClient) -> Option<String> {
+    let git_fp = git.position_fingerprint().ok()?;
+    Some(match client.log_fingerprint() {
+        Ok(log_fp) => format!("{git_fp}:{log_fp}"),
+        Err(_) => format!("{git_fp}:unreadable"),
+    })
+}
+
 fn render_position(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
     let status = match crate::status::compute(client, &git) {
@@ -300,7 +361,7 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     // this read. Recorded here because this is the one place that already pays
     // for the expensive computation and has time to. A failed write costs the
     // next prompt a recompute, which is correct-but-slower — never wrong.
-    if let Ok(fingerprint) = git.position_fingerprint() {
+    if let Some(fingerprint) = position_cache_fingerprint(&git, client) {
         // The cadence comes off `status`, which resolved it with the other
         // declarations and reported it if unreadable. Loading it here instead
         // meant an unreadable `schema/injection` silently became the default —
@@ -312,6 +373,7 @@ fn render_position(client: &KanClient, root: &Path) -> String {
                 fingerprint,
                 unreadable: status.unreadable.len(),
                 cadence,
+                standing_notice: status.standing_notice(),
             },
         );
     }
@@ -520,18 +582,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // ~1.4s recompute this gate exists to avoid) and **none** on a turn that
     // goes on to recompute, because `ClaimLog` memoizes the bulk read and the
     // two share it.
-    let fingerprint =
-        git.position_fingerprint()
-            .ok()
-            .map(|git_fp| match client.log_fingerprint() {
-                Ok(log_fp) => format!("{git_fp}:{log_fp}"),
-                // A log day could not read is not a log that has not changed.
-                // Making the fingerprint unmatchable forces the recompute path,
-                // which reports the failure — the alternative is treating an
-                // unreadable log as "nothing moved" and going quiet, which is the
-                // carve-out abuse and the honest-reads violation in one.
-                Err(_) => format!("{git_fp}:unreadable"),
-            });
+    let fingerprint = position_cache_fingerprint(&git, client);
     let cached = crate::cache::standing(root);
 
     // Unchanged git state AND a cached reading: nothing a `path`/`tag` probe
@@ -542,12 +593,27 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // deleting `.day/` a cost in redundant work rather than a change in answer.
     if let (Some(fp), Some(standing)) = (&fingerprint, &cached) {
         if *fp == standing.fingerprint {
-            if standing.unreadable > 0 && crate::cache::cadence_allows(root, standing.cadence) {
-                return format!(
-                    "day: {} declaration(s) could not be read at session start, so day's \
-                     telos and atom lists are partial — `day doctor` for detail.\n",
-                    standing.unreadable
-                );
+            // Both standing conditions re-display on the cadence, from the
+            // cache, without recomputing. The done-but-unrecorded findings were
+            // missing here, and unifying the fingerprint writers (F4) turned
+            // that from latent into live: the first prompt began hitting the
+            // cache, so the model stopped being told about an unrecorded
+            // release entirely.
+            if crate::cache::cadence_allows(root, standing.cadence) {
+                let mut parts = Vec::new();
+                if let Some(notice) = &standing.standing_notice {
+                    parts.push(notice.clone());
+                }
+                if standing.unreadable > 0 {
+                    parts.push(format!(
+                        "day: {} declaration(s) could not be read at session start, so \
+                         day's telos and atom lists are partial — `day doctor` for detail.",
+                        standing.unreadable
+                    ));
+                }
+                if !parts.is_empty() {
+                    return format!("{}\n", parts.join("\n"));
+                }
             }
             return String::new();
         }
@@ -583,6 +649,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
                 fingerprint: fp,
                 unreadable: status.unreadable.len(),
                 cadence,
+                standing_notice: status.standing_notice(),
             },
         );
     }
@@ -593,6 +660,16 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // something to ration, and reaching here means the state genuinely moved.
     if let Some(notice) = status.notice_for_model() {
         parts.push(notice);
+    }
+
+    // The done-but-unrecorded findings, rationed on the same cadence and for the
+    // same reason: they stay true until somebody records something, so emitting
+    // them every prompt would make them background noise (day#30) — and then the
+    // one that matters reads like the ones that did not.
+    if let Some(standing) = status.standing_notice() {
+        if crate::cache::cadence_allows(root, cadence) {
+            parts.push(standing);
+        }
     }
 
     // The standing half, still rationed even on a recompute: it is a condition
