@@ -310,21 +310,6 @@ fn render_atoms(client: &KanClient) -> String {
     }
 }
 
-/// Runs position inference, writes the status-line cache, and returns a short
-/// block naming where the work sits for the model.
-///
-/// Two things happen here that matter beyond the returned text:
-/// - **The cache is written.** The status line reads it and never shells out,
-///   which is the whole latency story ([`crate::cache`]).
-/// - **Inference actually runs.** `AC-5` asserts it executes no command probe
-///   on session start; that assertion is only real coverage because this call
-///   exists — [`crate::status::compute`] uses `Authorization::Report`, so the
-///   guarantee holds by construction rather than by the hook happening not to
-///   ask.
-///
-/// Infallible like the rest of the hook: a failed computation degrades to
-/// nothing rather than derailing the session, and a failed cache write leaves
-/// the status line showing its documented empty state.
 /// The fingerprint both cache writers use, in one place so they cannot drift.
 ///
 /// F4: session-start wrote `git.position_fingerprint()` while user-prompt
@@ -346,6 +331,21 @@ fn position_cache_fingerprint(git: &Git, client: &KanClient) -> Option<String> {
     })
 }
 
+/// Runs position inference, writes the status-line cache, and returns a short
+/// block naming where the work sits for the model.
+///
+/// Two things happen here that matter beyond the returned text:
+/// - **The cache is written.** The status line reads it and never shells out,
+///   which is the whole latency story ([`crate::cache`]).
+/// - **Inference actually runs.** `AC-5` asserts it executes no command probe
+///   on session start; that assertion is only real coverage because this call
+///   exists — [`crate::status::compute`] uses `Authorization::Report`, so the
+///   guarantee holds by construction rather than by the hook happening not to
+///   ask.
+///
+/// Infallible like the rest of the hook: a failed computation degrades to
+/// nothing rather than derailing the session, and a failed cache write leaves
+/// the status line showing its documented empty state.
 fn render_position(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
     let status = match crate::status::compute(client, &git) {
@@ -662,24 +662,35 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
         parts.push(notice);
     }
 
-    // The done-but-unrecorded findings, rationed on the same cadence and for the
-    // same reason: they stay true until somebody records something, so emitting
-    // them every prompt would make them background noise (day#30) — and then the
-    // one that matters reads like the ones that did not.
-    if let Some(standing) = status.standing_notice() {
-        if crate::cache::cadence_allows(root, cadence) {
+    // THE CADENCE IS CONSULTED EXACTLY ONCE PER PROMPT, and every standing
+    // condition shares that one decision.
+    //
+    // `cadence_allows` ADVANCES A COUNTER on each call, so consulting it per
+    // condition does not ration them independently — it makes them compete. Two
+    // calls advanced the counter by two per prompt, and whichever ran last
+    // always landed on the threshold and reset it, so the other could never
+    // reach it. The done-but-unrecorded notice reached the model *zero* times in
+    // 22 prompts on any repo that also had an unreadable declaration — which is
+    // the degraded repo, exactly where both notices matter most.
+    //
+    // Verified in the one-condition case at the time, which is the two-mode trap
+    // `CLAUDE.md` names: the mode this repo happened to be in worked, and the
+    // other one was dead.
+    let repeat_standing = crate::cache::cadence_allows(root, cadence);
+
+    // Both are conditions rather than events: true until somebody acts, so a git
+    // change is not a reason to repeat them.
+    if repeat_standing {
+        if let Some(standing) = status.standing_notice() {
             parts.push(standing);
         }
-    }
-
-    // The standing half, still rationed even on a recompute: it is a condition
-    // rather than an event, and a git change is not a reason to repeat it.
-    if !status.unreadable.is_empty() && crate::cache::cadence_allows(root, cadence) {
-        parts.push(format!(
-            "day: {} declaration(s) could not be read, so day's telos and atom lists \
-             are partial — `day doctor` for detail.",
-            status.unreadable.len()
-        ));
+        if !status.unreadable.is_empty() {
+            parts.push(format!(
+                "day: {} declaration(s) could not be read, so day's telos and atom lists \
+                 are partial — `day doctor` for detail.",
+                status.unreadable.len()
+            ));
+        }
     }
 
     if parts.is_empty() {

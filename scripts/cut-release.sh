@@ -58,9 +58,30 @@ branch="$(git branch --show-current 2>/dev/null || true)"
 # A stale local main is still `main`. Compare against the remote rather than
 # trusting the branch name — tagging a commit the remote does not have produces
 # a release nobody can check out. Read-only: `ls-remote` fetches nothing.
-remote_main="$(git ls-remote origin refs/heads/main 2>/dev/null | cut -f1)"
-if [ -n "$remote_main" ] && [ "$remote_main" != "$(git rev-parse HEAD)" ]; then
-  die "local main is not the same commit as origin/main ($remote_main); pull or push first"
+#
+# THE FIRST VERSION OF THIS COULD NOT FAIL. It was
+#   remote_main="$(git ls-remote origin ... 2>/dev/null | cut -f1)"
+# and a pipeline's status is its LAST command's, so a failed `ls-remote`
+# (offline, auth, no origin) left the variable empty, the `-n` test skipped the
+# check, and the script proceeded. Could-not-check reported as
+# checked-and-clean, in a release gate, in the commit that cites that rule.
+#
+# The three cases are now distinguished, because they want different answers:
+# no `origin` at all is a legitimate skip and says so; a reachable origin is
+# compared; an origin that cannot be reached REFUSES, because at that point the
+# script does not know whether the tag would be based on a stale commit.
+if git remote get-url origin >/dev/null 2>&1; then
+  if remote_main="$(git ls-remote origin refs/heads/main 2>&1)"; then
+    remote_main="$(printf '%s' "$remote_main" | cut -f1)"
+    if [ -n "$remote_main" ] && [ "$remote_main" != "$(git rev-parse HEAD)" ]; then
+      die "local main is not origin/main ($remote_main); pull or push first"
+    fi
+  else
+    die "could not reach origin to compare main ($remote_main); \
+re-run when the remote is reachable, or verify by hand that HEAD is pushed"
+  fi
+else
+  printf 'note: no `origin` remote configured; skipping the origin/main check.\n' >&2
 fi
 
 # An `if` rather than `... | grep -q . && die`. That form is safe under `set -e`

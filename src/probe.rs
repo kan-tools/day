@@ -267,13 +267,12 @@ impl Failures<'_> {
         }
     }
 
-    /// A shorter-lived borrow, for forwarding into a nested call.
-    pub fn reborrow(&mut self) -> Failures<'_> {
-        match self {
-            Self::Collect(sink) => Failures::Collect(sink),
-            Self::AlreadyReported => Failures::AlreadyReported,
-        }
-    }
+    // NOTE: there was a `reborrow` here, written on the assumption that
+    // forwarding into a nested call would need it. Nothing ever called it —
+    // `pub` suppressed dead-code detection, so clippy stayed silent, which is
+    // the corollary CLAUDE.md records twice. Removed rather than kept "in case":
+    // an uncalled `pub fn` is either dead or a requirement about to go nominal,
+    // and this one was dead. Add it back when a call site exists.
 }
 
 /// What reading a declared block on one claim produced.

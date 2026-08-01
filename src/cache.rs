@@ -166,6 +166,13 @@ pub fn standing(root: &Path) -> Option<Standing> {
 /// Whether enough prompts have passed to re-display a standing condition, and
 /// records this prompt either way.
 ///
+/// **CONSULT THIS ONCE PER PROMPT, AND SHARE THE ANSWER.** It advances a
+/// counter on every call, so calling it per condition does not ration each
+/// condition — it makes them compete, and whichever calls last lands on the
+/// threshold and resets it. `user_prompt` did that with two conditions and one
+/// of them reached the model zero times in 22 prompts. The unit is a prompt,
+/// not a condition, which is what the name and the doc below mean by "prompts".
+///
 /// **This is the one place the carve-out is extended, and the boundary it keeps
 /// is a stated test: delete `.day/` and day's answer must not change — only
 /// *when* it next repeats itself.** The counter is not consulted to decide

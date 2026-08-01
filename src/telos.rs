@@ -561,14 +561,32 @@ pub fn assess(
         .unwrap_or_default();
     let witnesses = declared.witnesses.clone();
 
-    // The newest narrative claim is the closest thing to "what this telos
-    // currently says". It is not always the declaration — see day#32 — so it
-    // is shown as context rather than labelled as the statement.
+    // The same fold `hooks::render_teloi` uses, and for the same reason.
+    //
+    // This read "the newest narrative claim" and it produced the defect on the
+    // verb that CAUSES it: `assess telos` prints `kan result telos/<slug>` as
+    // the way to record an assessment, and the next run rendered that
+    // assessment in the telos-statement slot. The reader and the writer were
+    // the same command, disagreeing with itself.
+    //
+    // Fixing `render_teloi` alone fixed the surface where it was observed and
+    // left the one that instructs the write. Prefer the declaration; fall back
+    // to any claim that is not an assessment; never let a `Result` stand in for
+    // the statement.
+    let prose =
+        |c: &crate::kan_client::Claim| c.text.as_deref().map(prose_only).filter(|s| !s.is_empty());
     let statement = claims
         .iter()
         .rev()
-        .find_map(|c| c.text.as_deref().map(prose_only))
-        .filter(|s| !s.is_empty());
+        .filter(|c| c.kind == "Decision")
+        .find_map(prose)
+        .or_else(|| {
+            claims
+                .iter()
+                .rev()
+                .filter(|c| c.kind != "Result")
+                .find_map(prose)
+        });
 
     // Loaded only when there is something to check, so a telos with no
     // witnesses reports that rather than a missing-schema error it cannot

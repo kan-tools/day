@@ -14,6 +14,10 @@
 
 mod common;
 
+/// Mirrors `cache::DEFAULT_CADENCE`; a local constant so this test file does
+/// not depend on the crate's internals for a loop bound.
+const DEFAULT_CADENCE_PROMPTS: usize = 10;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -715,6 +719,185 @@ fn user_prompt_costs_a_bounded_fingerprint_read_and_never_recomputes() {
         kan_calls(&counter) > after_cold,
         "the fingerprint must actually read the log, or it cannot see a claim \
          that moved the position — which is day#111"
+    );
+}
+
+/// F2's DELIVERY, not its computation.
+///
+/// The previous round added the finding to four places and asserted none of
+/// them: all four survived deletion against a green 335-test suite. The test
+/// that was supposed to cover it drove `Status::standing_notice()` — the pure
+/// function, which is the mechanism again, not the delivery. day#101's pattern
+/// reproduced inside the commit whose message describes day#101's pattern.
+///
+/// This drives the shipped binary and asserts the finding arrives on each
+/// surface that is supposed to carry it:
+///   1. `.day/statusline`   — the persistent human surface
+///   2. `.day/standing`     — so the cheap path can re-display without recomputing
+///   3. `hook user-prompt`  — the model channel, on the firing prompt
+#[test]
+fn an_unrecorded_release_reaches_the_line_the_cache_and_the_model() {
+    let dir = tempfile::tempdir().unwrap();
+    // A tag exists (the git stub reports v9.9.9) and no claim names it.
+    let (kan, _counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"published-artifact\":{\"tag\":\"v*\"}}\n```\n",
+            ),
+            claim(
+                "schema/docs",
+                "bafyd",
+                "D.\n\n```day-docs\n{\"version_source\":\"Cargo.toml\",\"version_files\":[],\
+                 \"doc_files\":[],\"release_subject\":\"release\"}\n```\n",
+            ),
+        ],
+    );
+
+    day(dir.path(), &kan, &["hook", "session-start"]);
+
+    // 1 — the status line.
+    let line = std::fs::read_to_string(dir.path().join(".day/statusline"))
+        .expect(".day/statusline should exist after session-start");
+    assert!(
+        line.contains("v9.9.9"),
+        "the unrecorded release must reach the status line, the one persistent \
+         human-visible surface: {line:?}"
+    );
+
+    // 2 — the cache, so the cheap path can re-display it without recomputing.
+    // Without this the fingerprint fix silently starved the model channel.
+    let standing = std::fs::read_to_string(dir.path().join(".day/standing"))
+        .expect(".day/standing should exist after session-start");
+    assert!(
+        standing.contains("v9.9.9"),
+        "the rendered notice must be cached, or the cheap path has nothing to \
+         re-display and the model is told only on a recompute: {standing:?}"
+    );
+
+    // 3 — the model channel. Rationed, so drive it to the firing prompt; the
+    // point is that it arrives at all, which is what four survived mutations
+    // said it might not.
+    let mut fired = None;
+    for i in 1..=(DEFAULT_CADENCE_PROMPTS + 2) {
+        let out = day(dir.path(), &kan, &["hook", "user-prompt"]);
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        if text.contains("v9.9.9") {
+            fired = Some(i);
+            break;
+        }
+    }
+    assert!(
+        fired.is_some(),
+        "the unrecorded release never reached the model channel in {} prompts — \
+         rationed must not mean silent",
+        DEFAULT_CADENCE_PROMPTS + 2
+    );
+
+    // And again on the RECOMPUTE path specifically. The loop above is served by
+    // the cheap path after its first prompt, so it cannot tell whether the
+    // recompute path delivers the notice at all — deleting that push survived
+    // this test until this half existed. Dropping `.day/standing` each
+    // iteration forces a recompute every time; `.day/cadence` is a separate
+    // file and keeps counting.
+    let mut fired_on_recompute = None;
+    for i in 1..=(DEFAULT_CADENCE_PROMPTS + 2) {
+        let _ = std::fs::remove_file(dir.path().join(".day/standing"));
+        let out = day(dir.path(), &kan, &["hook", "user-prompt"]);
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        if text.contains("v9.9.9") {
+            fired_on_recompute = Some(i);
+            break;
+        }
+    }
+    assert!(
+        fired_on_recompute.is_some(),
+        "the unrecorded release never reached the model channel on the RECOMPUTE \
+         path in {} prompts — the path that pays for the answer must also deliver it",
+        DEFAULT_CADENCE_PROMPTS + 2
+    );
+}
+
+/// The cadence rations PROMPTS, not conditions — asserted as a counter that
+/// advances by exactly one per prompt.
+///
+/// `cache::cadence_allows` advances a counter on every call, and `user_prompt`
+/// consulted it once per standing condition. With two conditions live the
+/// counter moved by two per prompt and whichever gate ran last always landed on
+/// the threshold and reset it, so the other **never fired**: the
+/// done-but-unrecorded notice reached the model zero times in 22 prompts on any
+/// repo that also had an unreadable declaration.
+///
+/// The end-to-end check that missed it ran with ONE condition live, where a
+/// single gate works perfectly. That is `CLAUDE.md`'s two-mode trap, and the
+/// broken mode was the degraded repo — precisely where both notices matter.
+///
+/// This asserts the invariant rather than the symptom: one prompt, one tick. A
+/// test that counted firings would pass again the moment a third condition was
+/// added and started competing with the other two.
+#[test]
+fn the_cadence_counter_advances_once_per_prompt_not_once_per_condition() {
+    let dir = tempfile::tempdir().unwrap();
+    // A witness schema day can read, plus an atom block it CANNOT — so the
+    // unreadable-declaration condition is live alongside anything else.
+    let (kan, _counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":99,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    let tick = || -> u32 {
+        std::fs::read_to_string(dir.path().join(".day/cadence"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0)
+    };
+
+    // BOTH prompts must take the RECOMPUTE path, which is where the gates were
+    // duplicated — the cheap path always had one. Dropping `.day/standing`
+    // between them forces it; `.day/cadence` is a separate file and survives,
+    // which is what makes the two ticks comparable.
+    //
+    // The first version of this test did not do that: its second prompt hit the
+    // cache, saw one gate, and measured an advance of one no matter how many
+    // gates the recompute path had. It passed against the very defect it names.
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let after_first = tick();
+
+    std::fs::remove_file(dir.path().join(".day/standing")).expect("standing should exist");
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let after_second = tick();
+
+    // Either the counter advanced by one, or it wrapped to zero because this
+    // prompt fired — both are one tick. What must not happen is a jump of two.
+    // Vacuity guard. If the gate never ran, both reads are zero and every
+    // assertion below passes while measuring nothing — which is how the first
+    // two versions of this test "passed" against the defect they name.
+    assert!(
+        after_first > 0 || after_second > 0,
+        "the cadence gate never ran in this fixture, so this test asserts nothing \
+         (counter stayed at {after_first}/{after_second})"
+    );
+
+    let advanced = after_second.wrapping_sub(after_first);
+    assert!(
+        advanced <= 1,
+        "the cadence counter moved by {advanced} across one prompt ({after_first} -> \
+         {after_second}), so a standing condition is being charged per condition \
+         rather than per prompt — with two conditions live, one of them can never \
+         reach the threshold"
     );
 }
 

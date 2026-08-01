@@ -70,8 +70,18 @@ pub fn resolve(
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
 ) -> Verdict {
-    // The caller renders this verdict itself — see the doc comment above and
-    // `Failures::AlreadyReported`. This is the one site where that is true.
+    // The caller renders this verdict itself — see `Failures::AlreadyReported`.
+    //
+    // True of `day status`'s long form, which prints each criterion's verdict
+    // WITH its detail. Not true of `render_line`, which reduces the same
+    // verdicts to `met/total` and drops the reason — and `render_line` is both
+    // the status bar and what session-start puts in the model's context. So the
+    // reason reaches one of two consumers.
+    //
+    // Left as-is because it is pre-existing (the bare `None` had exactly this
+    // reach) and widening it here would change what the bar reports, which is a
+    // separate decision. Recorded rather than papered over: the variant's name
+    // makes the claim checkable, and this is where it is only partly true.
     resolve_collecting(probe, git, log, boundary, Failures::AlreadyReported)
 }
 
