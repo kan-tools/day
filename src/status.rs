@@ -120,6 +120,13 @@ pub struct Status {
     /// and the log does not know". Collapsing it into either of those is the
     /// defect it exists to fix.
     pub unrecorded: Vec<String>,
+    /// day#103 — the cycle-closing tag exists and the log does not record it.
+    ///
+    /// Computed here rather than only in `day assess docs`, so every channel
+    /// that reports a position inherits it. Two consecutive releases shipped
+    /// unrecorded because the only detector was a manual verb downstream of the
+    /// step that was skipped.
+    pub unrecorded_boundary: Option<String>,
     /// Set when position has moved past the last recorded assessment. `None`
     /// when no atom assessment exists, or when the assessed atom is still
     /// current — absence of a baseline is not a change (REQ-10, AC-10).
@@ -274,6 +281,16 @@ impl Status {
                 "day: a step may have been skipped — {first}. Advisory; nothing is blocked."
             ));
         }
+        // day#103. This reaches the MODEL, not only `day status`, because the
+        // record is easiest to repair in the session that broke it — an hour
+        // later the boundary check is archaeology, and two releases went
+        // unrecorded precisely because nobody was told at the time.
+        if let Some(finding) = &self.unrecorded_boundary {
+            parts.push(format!(
+                "day: {finding}. Recording it is an append, not a correction. \
+                 Advisory; nothing is blocked."
+            ));
+        }
         (!parts.is_empty()).then(|| parts.join("\n"))
     }
 
@@ -359,6 +376,12 @@ impl Status {
                     t.to.join(", ")
                 }
             ));
+        }
+
+        if let Some(finding) = &self.unrecorded_boundary {
+            out.push_str("Done but unrecorded:\n");
+            out.push_str(&format!("  ! {finding}\n"));
+            out.push('\n');
         }
 
         if !self.unrecorded.is_empty() {
@@ -491,6 +514,26 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         ),
     };
 
+    // day#103 — the boundary check, asked HERE rather than only in `assess
+    // docs`. `status::compute` is the one place position is computed for every
+    // channel, so wiring it here means the hooks, the status line and the long
+    // form all inherit it and no channel can be added later that omits it. That
+    // is day#101's rule: a guarantee belongs at the mechanism, not at a caller.
+    //
+    // An error is reported as unreadable, never dropped. A log day could not
+    // read is not a boundary that is fine.
+    let (unrecorded_boundary, boundary_unreadable) =
+        match crate::docs::unrecorded_boundary(client, git) {
+            Ok(finding) => (finding, None),
+            Err(e) => (
+                None,
+                Some(Unreadable {
+                    message: format!("the release boundary could not be reconciled: {e}"),
+                    cause: Cause::Malformed,
+                }),
+            ),
+        };
+
     let (blocks, blocks_unreadable) = match crate::blocks::BlockSchemas::load(client) {
         Ok(blocks) => (blocks, None),
         Err(e) => (
@@ -523,6 +566,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             here: Vec::new(),
             off_sequence: Vec::new(),
             unrecorded: Vec::new(),
+            unrecorded_boundary: unrecorded_boundary.clone(),
             transition: None,
             uncheckable: true,
             cadence,
@@ -534,6 +578,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                     blocks_unreadable.clone(),
                     cadence_unreadable.clone(),
                     cycle_unreadable.clone(),
+                    boundary_unreadable.clone(),
                 ],
                 // Inference has not run, so it cannot have failed a read.
                 &[],
@@ -588,6 +633,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         here,
         off_sequence: report.off_sequence,
         unrecorded: report.unrecorded,
+        unrecorded_boundary,
         transition,
         uncheckable: false,
         cadence,
@@ -599,6 +645,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 blocks_unreadable.clone(),
                 cadence_unreadable.clone(),
                 cycle_unreadable.clone(),
+                boundary_unreadable.clone(),
             ],
             &report.read_failures,
             &client.unaccounted_subjects(),
@@ -622,7 +669,7 @@ fn unreadable_from(
     // Failures to READ a declaration, as opposed to findings within one that was
     // read. They lead the list because "day could not read your declaration"
     // outranks anything day found inside the declarations it could.
-    declaration_errors: [Option<Unreadable>; 3],
+    declaration_errors: [Option<Unreadable>; 4],
     // Instances position inference read and could not check
     // (`.design/declared-blocks.md` REQ-4). Distinct from the declaration
     // errors above: the project's *declaration* was fine and a *claim carrying
@@ -801,6 +848,7 @@ mod tests {
             )],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -822,6 +870,7 @@ mod tests {
             here: vec![here("design", vec![], &[]), here("build", vec![], &[])],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -842,6 +891,7 @@ mod tests {
             here: vec![],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -859,6 +909,7 @@ mod tests {
             here: vec![],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: true,
             unreadable: Vec::new(),
@@ -878,6 +929,7 @@ mod tests {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec!["review produced its output but upstream build did not".into()],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -897,6 +949,7 @@ mod tests {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: Some(Transition {
                 from: "build".into(),
                 to: vec!["review".into()],
@@ -929,6 +982,7 @@ mod tests {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -941,6 +995,7 @@ mod tests {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec!["build produced its output but upstream design did not".into()],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: Some(Transition {
                 from: "build".into(),
                 to: vec!["review".into()],
@@ -969,6 +1024,7 @@ mod tests {
             here: vec![here("build", vec![c], &[])],
             off_sequence: vec![],
             unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),

@@ -33,6 +33,8 @@ pub enum Error {
     Kan(#[from] crate::kan_client::Error),
     #[error(transparent)]
     Git(#[from] crate::git::Error),
+    #[error(transparent)]
+    Blocks(#[from] crate::blocks::Error),
     #[error("could not read {path}: {source}")]
     Read {
         path: String,
@@ -261,6 +263,80 @@ fn check_versions(
             }),
         }
     }
+}
+
+/// day#103 — is the tag that closed the last cycle actually written down?
+///
+/// The same question [`reconcile_boundary`] asks, extracted so it can be asked
+/// from **where position is computed** rather than only from `day assess docs`.
+///
+/// That reachability is the entire point of the issue. The detector of a skipped
+/// `release` atom used to sit downstream of the release atom, in a manual verb —
+/// so skipping the atom skipped the alarm, and the record looked complete from
+/// the inside for two consecutive releases until the verb was run for an
+/// unrelated reason. A check that only runs when you remember to run it is not a
+/// check on the thing you forget.
+///
+/// Returns the finding, or `None` when tag and record agree. Errors are
+/// **returned, never swallowed**: a log day could not read is not a boundary
+/// that is fine, and reporting it as fine is the failure `telos/honest-reads`
+/// names.
+///
+/// Deliberately narrower than `reconcile_boundary`, which also reports the
+/// reverse case (a claim with no tag — "a boundary nobody cut"). That one is an
+/// assessment-time observation about the record; this is the one a session needs
+/// to see, because it is the one that means work just happened and was lost.
+pub fn unrecorded_boundary(client: &KanClient, git: &Git) -> Result<Option<String>, Error> {
+    let schema = match DocsSchema::load(client) {
+        Ok(schema) => schema,
+        // A project that has NOT DECLARED a docs schema has not told day where
+        // releases are recorded, so there is no correspondence to check and no
+        // finding to make. That is absence, not failure, and the two must not
+        // collapse: reporting "day could not read your declaration" for a
+        // project that simply has none is the same error in the opposite
+        // direction from the one this function exists to fix.
+        //
+        // Every other error still propagates — a declaration that exists and
+        // could not be read is exactly what must never be silently skipped.
+        Err(Error::NotDeclared { .. }) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    // Propagated, not defaulted. The cycle declaration is what says which tags
+    // close a cycle (day#76); if day cannot read it, it does not know what to
+    // look for, and defaulting to `v*` on a project whose cycles are passes
+    // would produce a confident finding about the wrong tag. `status::compute`
+    // surfaces the error as unreadable, which is the honest outcome — an
+    // absent declaration is still the default, because `load` reports that as
+    // its own case rather than as a failure.
+    let cycle = crate::blocks::CycleSchema::load(client)?;
+
+    let Some(tag) = git.latest_tag_matching(&cycle.tags)? else {
+        // No boundary tag at all is not a finding. A repo that has never
+        // released has nothing to have failed to record — and this is the
+        // default state of every fresh clone, which CLAUDE.md names as the mode
+        // a two-mode mechanism gets tested in least.
+        return Ok(None);
+    };
+
+    let claims = client.show(&schema.release_subject)?;
+    let recorded = claims.iter().rev().find_map(|c| c.text.clone());
+
+    Ok(match recorded {
+        // Correspondence, not mere existence: a `release` claim for the PREVIOUS
+        // tag would satisfy "a claim exists" while the current one went
+        // unrecorded, which is exactly what happened across v0.7.0-beta.3 and
+        // v0.8.0-beta.1. day#107 is about generalising this test.
+        Some(text) if text.contains(tag.as_str()) => None,
+        Some(_) => Some(format!(
+            "{tag} is tagged, but the newest `{}` claim does not mention it — one \
+             of the two records is behind",
+            schema.release_subject
+        )),
+        None => Some(format!(
+            "{tag} is tagged but no `{}` claim records it — a release nobody wrote down",
+            schema.release_subject
+        )),
+    })
 }
 
 /// Reconciles the two records of "when was the last release": the `release`
