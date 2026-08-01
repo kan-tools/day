@@ -750,3 +750,59 @@ fn command_preambles_exit_zero_even_where_nothing_exists() {
          dropped to zero the parse broke and this test was asserting nothing."
     );
 }
+
+/// `.design/position-honesty.md` AC-8 — the boundary check is wired at the
+/// **mechanism**, not at a caller.
+///
+/// This is day#101's rule as a scan. Three milestones produced three instances
+/// of the same defect: a check that existed, was correct, and was called from
+/// one of the paths that needed it. Each time the author's test drove the call
+/// site they were thinking about, so each time it looked complete.
+///
+/// day#103 is the instance this guards. The boundary reconciliation existed and
+/// was reachable only from `day assess docs` — a manual verb *downstream of the
+/// step it detects* — so skipping the step skipped the alarm, and two
+/// consecutive releases went unrecorded until the verb was run for an unrelated
+/// reason. `status::compute` is the one place position is computed for every
+/// channel, so a check there is inherited by the hooks, the status line and the
+/// long form alike. Nothing but a scan would notice it being unwired.
+///
+/// **Scoped to what a scan can actually catch.** An earlier version of this test
+/// also asserted that `position::infer` takes the whole `WitnessSchema` rather
+/// than just its probes — the property that stops a channel computing a position
+/// with the record witness silently skipped. That assertion is decoration: the
+/// parameter type is compile-enforced, so no mutation can break the property
+/// without breaking the build, and mutating it SURVIVED for exactly that reason.
+/// Asserting it here would let this test claim credit the compiler earns, which
+/// is the "test asserts a proxy" failure `CLAUDE.md` records. The invariant is
+/// real and is held by `infer`'s signature; it does not need a scan, and saying
+/// so is more useful than a green assertion that cannot fail.
+///
+/// Carries the same escape hatch as `a_failed_kan_read_is_never_swallowed`, for
+/// the same reason: a test with no way out gets deleted the first time it is
+/// wrong, and then the rule goes with it.
+#[test]
+fn the_boundary_check_is_wired_where_every_channel_reads() {
+    const MARKER: &str = "position-guarantee-may-degrade:";
+
+    let status = std::fs::read_to_string(repo_root().join("src/status.rs"))
+        .expect("src/status.rs should be readable");
+
+    // Comments stripped first: this repo deliberately keeps comments describing
+    // past defects, and a scan that cries wolf about its own documentation gets
+    // switched off.
+    let live: String = status
+        .lines()
+        .map(|l| l.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        live.contains("unrecorded_boundary(client, git)") || live.contains(MARKER),
+        "`status::compute` must ask `docs::unrecorded_boundary`. day#103 is that \
+         this check existed and was reachable only from `day assess docs` — a verb \
+         downstream of the release step, so skipping the step skipped the alarm \
+         and two consecutive releases went unrecorded. If it moved somewhere that \
+         still reaches every channel, mark it `{MARKER} <why>`."
+    );
+}
