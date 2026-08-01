@@ -319,6 +319,36 @@ impl KanClient {
             .clone())
     }
 
+    /// A hash of the whole log, for answering "has anything been recorded since
+    /// last time?" without recomputing a position (day#111).
+    ///
+    /// Served from the same memo as every other read, so on a turn that goes on
+    /// to recompute, this costs **no extra kan invocation** — the fingerprint
+    /// read and the compute share one. It is only a real read on turns where
+    /// nothing changed, which is the case that has to stay cheap.
+    ///
+    /// Hashes the `(subject, cid)` pairs rather than the claim bodies: a CID is
+    /// content-addressed, so it moves if and only if something was appended or
+    /// retracted, and skipping the text keeps this proportional to the number of
+    /// claims instead of the size of the log.
+    ///
+    /// **Not** built on `kan status`. That output does not change when a claim
+    /// is appended to an existing subject whose state is unchanged — measured —
+    /// so a fingerprint over it would miss exactly the appends that move a
+    /// position: an observation, a result, a verdict on a subject already open.
+    pub fn log_fingerprint(&self) -> Result<String, Error> {
+        use std::hash::{Hash, Hasher};
+
+        let claims = self.show_all()?;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        claims.len().hash(&mut hasher);
+        for (subject, claim) in &claims {
+            subject.hash(&mut hasher);
+            claim.cid.hash(&mut hasher);
+        }
+        Ok(format!("{:x}", hasher.finish()))
+    }
+
     /// The actual `kan show --all --json` process. Everything else is served
     /// from the memo.
     fn read_all(&self) -> Result<Vec<(String, Claim)>, Error> {

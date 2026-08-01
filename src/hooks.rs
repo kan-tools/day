@@ -505,7 +505,33 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // not — a 3-second-per-turn regression that three artifacts described as its
     // opposite, which is the failure this whole milestone exists to stop day
     // committing.
-    let fingerprint = git.position_fingerprint().ok();
+    // day#111: git AND kan, because position depends on both.
+    //
+    // The git half alone was the whole gate, and `Git::position_fingerprint`
+    // reads no kan — so recording a claim moved the position and left the
+    // fingerprint byte-identical, this function took its early return, and the
+    // status line kept serving the previous render. On this repo that is the
+    // dominant workflow: a session that records a design pass, a verdict and an
+    // assessment changes position repeatedly while touching no tracked file.
+    // The bar was reliable; it updated on exactly one of the two ways position
+    // moves.
+    //
+    // Costs one kan invocation on a quiet turn (0.06s measured, against the
+    // ~1.4s recompute this gate exists to avoid) and **none** on a turn that
+    // goes on to recompute, because `ClaimLog` memoizes the bulk read and the
+    // two share it.
+    let fingerprint =
+        git.position_fingerprint()
+            .ok()
+            .map(|git_fp| match client.log_fingerprint() {
+                Ok(log_fp) => format!("{git_fp}:{log_fp}"),
+                // A log day could not read is not a log that has not changed.
+                // Making the fingerprint unmatchable forces the recompute path,
+                // which reports the failure — the alternative is treating an
+                // unreadable log as "nothing moved" and going quiet, which is the
+                // carve-out abuse and the honest-reads violation in one.
+                Err(_) => format!("{git_fp}:unreadable"),
+            });
     let cached = crate::cache::standing(root);
 
     // Unchanged git state AND a cached reading: nothing a `path`/`tag` probe

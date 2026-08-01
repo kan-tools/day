@@ -650,7 +650,7 @@ fn kan_calls(counter: &Path) -> usize {
 /// would measure the machine and flake in CI; "this path reads the log zero
 /// times" is the actual property, and it cannot pass by accident.
 #[test]
-fn user_prompt_does_not_read_kan_when_git_has_not_moved() {
+fn user_prompt_costs_a_bounded_fingerprint_read_and_never_recomputes() {
     let dir = tempfile::tempdir().unwrap();
     let (kan, counter) = write_counting_kan_stub(
         dir.path(),
@@ -678,15 +678,43 @@ fn user_prompt_does_not_read_kan_when_git_has_not_moved() {
         "a cold cache must mean recompute, never all-clear"
     );
 
-    // Subsequent prompts, git unchanged: zero further reads.
-    for _ in 0..5 {
+    // Subsequent prompts, nothing changed: a small CONSTANT cost per prompt,
+    // and no recompute.
+    //
+    // This assertion used to be zero, and day#111 is why it is not. The gate was
+    // a git-only fingerprint, so a position that moved because a CLAIM was
+    // recorded — the dominant workflow in this repo — left it byte-identical and
+    // the status line served a stale render for the whole session. Reading the
+    // log is the only way to know the log moved; `kan status` does not change on
+    // an append to an existing subject, measured, so there is no cheaper honest
+    // signal.
+    //
+    // What the original test was protecting is intact, and it was never really
+    // "zero" — it was "this path does not do the expensive thing every turn."
+    // Measured on day's own log: quiet path 0.16s, the recompute it avoids
+    // 1.40s, the regression the v0.7.0-beta.2 review blocked 3.03s. Still an
+    // invocation count rather than a duration, for the reason that milestone
+    // gave: a count measures the design, a duration measures the machine.
+    //
+    // The bound is what matters. It must not scale with prompts beyond the
+    // fixed per-prompt fingerprint read, and it must not reach the full
+    // inference — which is what the per-prompt delta pins.
+    let before_loop = kan_calls(&counter);
+    let prompts = 5;
+    for _ in 0..prompts {
         day(dir.path(), &kan, &["hook", "user-prompt"]);
     }
-    assert_eq!(
-        kan_calls(&counter),
-        after_cold,
-        "user-prompt read kan again despite an unchanged git fingerprint — this is \
-         the 3s-per-turn regression the review blocked, back again"
+    let per_prompt = (kan_calls(&counter) - before_loop) / prompts;
+    assert!(
+        per_prompt <= 2,
+        "a quiet prompt should cost only the fingerprint read (the subject list \
+         plus one bulk read), not a recompute — {per_prompt} kan invocations per \
+         prompt means the gate stopped gating"
+    );
+    assert!(
+        kan_calls(&counter) > after_cold,
+        "the fingerprint must actually read the log, or it cannot see a claim \
+         that moved the position — which is day#111"
     );
 }
 
