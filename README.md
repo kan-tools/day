@@ -107,7 +107,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.9.1-beta.1   # the memory layer day reads
-cargo install day --version 0.8.0-beta.1
+cargo install day --version 0.9.0-beta.1
 ```
 
 **The versions are not decoration.** Everything day has published is a
