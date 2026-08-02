@@ -68,10 +68,23 @@ for entry in blocks:
         "inbound": [],
     }
     (data / ("show-%s.json" % subject.replace("/", "_"))).write_text(json.dumps(doc))
-    subjects.append(subject)
+    subjects.append((subject, doc["claims"]))
 (data / "status.json").write_text(json.dumps({
     "v": 1,
-    "subjects": [{"subject": s, "subjects": [s], "state": "Unclassified"} for s in subjects],
+    "subjects": [{"subject": s, "subjects": [s], "state": "Unclassified"}
+                 for s, _ in subjects],
+}))
+# `show --all --json`, which day requires from v0.8.0-beta.1 (day#71, kan ADR-71).
+#
+# Without this the stub answered `--all` with its not-found fallback — an EMPTY
+# subject list — while `status` still listed every subject. Every version from
+# v0.8 on correctly refuses that as unaccounted subjects, so the cell measured
+# `errored` and the matrix was DEAD for the whole current major line. Not a fact
+# about how those versions read blocks; a limit of the harness, which this file
+# says in as many words must never be filed as an outcome.
+(data / "show-all.json").write_text(json.dumps({
+    "v": 1,
+    "subjects": [{"subject": s, "claims": c} for s, c in subjects],
 }))
 PY
 
@@ -84,6 +97,9 @@ case "$1" in
   status) cat "$D/status.json"; exit 0 ;;
   issues) cat "$D/status.json"; exit 0 ;;
   show)
+    # `show --all` is a different question from `show <subject>`, and keying on
+    # $2 alone turned it into a lookup for a subject literally named `--all`.
+    if [ "$2" = "--all" ]; then cat "$D/show-all.json"; exit 0; fi
     f="$D/show-$(printf '%s' "$2" | tr '/' '_').json"
     if [ -f "$f" ]; then cat "$f"
     else printf '{"v":1,"subject":"%s","subjects":[],"claims":[],"inbound":[]}\n' "$2"; fi

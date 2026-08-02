@@ -36,6 +36,20 @@
 # are unreachable by it, so "day's whole release history" is really "everything
 # since v0.5". Worth knowing before treating a green matrix as broad coverage.
 #
+# A SECOND boundary opened at v0.8.0-beta.1 and closed again. That release made
+# `kan show --all --json` mandatory (day#71), and the stub keyed `show` on its
+# second argument, so `--all` became a lookup for a subject of that name and
+# returned an EMPTY list while `status` still listed every subject. Every version
+# from v0.8 on correctly refuses that as unaccounted subjects, so the cell
+# measured `errored` and the matrix was dead for the entire current major line —
+# silently, and it would have grown by one row per release.
+#
+# `errored` was therefore NOT recorded, because this file and the cell script both
+# say a limit of the harness must never be filed as a fact about a released
+# version. The stub now serves `--all`, and v0.8.0-beta.1 measures
+# `refused-honestly` — the same as the two releases before it, which is what it
+# should have read all along.
+#
 # Changing a block shape and changing a row below belong in the SAME commit. A
 # row that moved on its own is the matrix telling you something you did not
 # intend.
@@ -51,3 +65,4 @@ v0.6.0-beta.1	silently-widened
 v0.7.0-beta.1	silently-widened
 v0.7.0-beta.2	refused-honestly
 v0.7.0-beta.3	refused-honestly
+v0.8.0-beta.1	refused-honestly
