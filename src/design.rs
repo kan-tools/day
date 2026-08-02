@@ -262,6 +262,16 @@ pub enum Verdict {
     Pass,
     Warn,
     Fail,
+    /// A check that could not be run, as distinct from one that ran and found
+    /// nothing. `docs::Level` has carried this distinction since day#81; this
+    /// enum did not, so `design check`'s only way to describe an unanswerable
+    /// question was to answer it. day#105 is what that cost: coverage reported
+    /// `[PASS]` for a document with no acceptance criteria to cover anything.
+    ///
+    /// Deliberately **not** a failure. `is_clean` stays false only for `Fail`,
+    /// because an unrunnable check is not a defect in the document — it is a
+    /// gap in what was asserted about it, and saying so is the whole point.
+    Unchecked,
 }
 
 impl Verdict {
@@ -270,6 +280,7 @@ impl Verdict {
             Self::Pass => "PASS",
             Self::Warn => "WARN",
             Self::Fail => "FAIL",
+            Self::Unchecked => "UNCHECKED",
         }
     }
 }
@@ -326,8 +337,19 @@ impl Report {
             .iter()
             .filter(|f| f.verdict == Verdict::Warn)
             .count();
+        // The unchecked count belongs here rather than only in the rendered
+        // output: this string is what the *claim* carries, and a summary that
+        // reports "0 failed" while silently omitting that a check could not run
+        // is the same overstatement day#105 was about, one level up. A record
+        // that says how much was verified must also say how much was not.
+        let unchecked = self
+            .findings
+            .iter()
+            .filter(|f| f.verdict == Verdict::Unchecked)
+            .count();
         format!(
-            "validation: {} check(s), {failed} failed, {warned} warning(s), {} open question(s)",
+            "validation: {} check(s), {failed} failed, {warned} warning(s), \
+             {unchecked} unchecked, {} open question(s)",
             self.findings.len(),
             self.open_questions,
         )
@@ -457,7 +479,31 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
 
     // Coverage: every declared requirement must be referenced somewhere in
     // the acceptance-criteria section.
-    if !requirements.is_empty() {
+    //
+    // day#105: this used to run on `!requirements.is_empty()` alone, and
+    // computes coverage from *mentions* of requirement ids inside the criteria
+    // section — never from whether a criterion was declared. A document with
+    // six requirements and no parseable criteria therefore got
+    // "every requirement is referenced by an acceptance criterion" in the same
+    // run that failed the criteria count at zero: two findings about one
+    // absence, disagreeing.
+    //
+    // With no criteria the question is not satisfied, it is unanswerable, so it
+    // reports unchecked. This is `CLAUDE.md`'s rule for verification tooling —
+    // could-not-check outranks checked-and-clean — and it is day#55's other
+    // half: that fix stopped a malformed id from vanishing out of the *count*
+    // and left it vanishing out of *coverage*, which is what the comment above
+    // the malformed-id loop already says it was supposed to prevent.
+    if !requirements.is_empty() && criteria.is_empty() {
+        findings.push(Finding {
+            verdict: Verdict::Unchecked,
+            message: format!(
+                "requirement coverage not checked: {} requirement(s) declared and no \
+                 acceptance criteria, so there is nothing to cover them",
+                requirements.len()
+            ),
+        });
+    } else if !requirements.is_empty() {
         let ac_section = schema
             .sections
             .iter()
@@ -660,6 +706,98 @@ mod tests {
         assert!(
             doc.section("architecture").is_some(),
             "lookup is case-insensitive"
+        );
+    }
+
+    /// day#105 — the pair, not either line alone.
+    ///
+    /// `design check` computes coverage from *mentions* of requirement ids
+    /// inside the acceptance-criteria section, never from whether a criterion
+    /// was declared. A document whose criteria are written in a form the strict
+    /// parser rejects therefore declared zero criteria and still passed
+    /// coverage, because the rejected lines left their `REQ-n` references
+    /// behind in the section text.
+    ///
+    /// The assertion is deliberately on **both** findings at once. The criteria
+    /// count was already correct — it failed at zero, which is how this was
+    /// noticed — so a test checking only the count would have passed before the
+    /// fix and proves nothing. What was wrong was the two findings coexisting:
+    /// one saying there are no criteria, one saying every requirement has one.
+    #[test]
+    fn coverage_is_unchecked_rather_than_passed_when_no_criteria_are_declared() {
+        // Criteria in the `- AC-1 (REQ-1): …` form: a real shape a person
+        // writes, rejected by the strict `AC-<n>:` parser, and not flagged by
+        // `malformed_ids` either — a space after the digits is treated as a
+        // loose mention by design, which is correct on its own and is exactly
+        // what let this through.
+        let doc = "# Feature: thing\n\n## Summary\nIt does a thing.\nMore summary.\n\n\
+             ## Requirements\n- REQ-1: first\n- REQ-2: second\n\n\
+             ## Acceptance Criteria\n- AC-1 (REQ-1): checks first\n- AC-2 (REQ-2): checks second\n\n\
+             ## Architecture\nTouches `src/design.rs`.\n";
+
+        let report = check(&Document::parse(doc), &schema(), Path::new("x.md"));
+
+        // Precondition: this document really does declare no criteria. If the
+        // parser ever starts accepting this form the test is measuring nothing,
+        // so assert the premise rather than assuming it.
+        assert_eq!(
+            Document::parse(doc).declared_ids("AC-").len(),
+            0,
+            "premise broken: the fixture is supposed to declare zero parseable criteria"
+        );
+
+        let coverage: Vec<&Finding> = report
+            .findings
+            .iter()
+            .filter(|f| f.message.contains("coverage") || f.message.contains("referenced by"))
+            .collect();
+
+        assert!(
+            !coverage.iter().any(|f| f.verdict == Verdict::Pass),
+            "coverage must not PASS when nothing was declared to provide it; findings were: {:?}",
+            coverage
+                .iter()
+                .map(|f| (f.verdict, &f.message))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            coverage.iter().any(|f| f.verdict == Verdict::Unchecked),
+            "coverage should report UNCHECKED, so the gap is visible rather than absent; \
+             findings were: {:?}",
+            coverage
+                .iter()
+                .map(|f| (f.verdict, &f.message))
+                .collect::<Vec<_>>()
+        );
+
+        // And the summary that lands in the claim must carry it, or the record
+        // says the document was validated more thoroughly than it was.
+        assert!(
+            report.summary().contains("1 unchecked"),
+            "summary should count the unchecked finding: {}",
+            report.summary()
+        );
+    }
+
+    /// The other side of the same rule: with criteria actually declared, the
+    /// coverage check still runs and still passes. Without this, the fix could
+    /// be "never report coverage at all" and the test above would be satisfied.
+    #[test]
+    fn coverage_still_passes_when_criteria_are_declared() {
+        let report = check(&Document::parse(DOC), &schema(), Path::new("x.md"));
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.verdict == Verdict::Pass && f.message.contains("referenced by")),
+            "a document with real criteria should still get the coverage PASS"
+        );
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.verdict == Verdict::Unchecked),
+            "nothing should be unchecked in a well-formed document"
         );
     }
 

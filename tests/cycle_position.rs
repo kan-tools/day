@@ -187,6 +187,117 @@ fn ac1_a_path_witness_is_present_only_when_it_changed_this_cycle() {
     );
 }
 
+/// `.design/position-honesty.md` AC-2 — a paired witness reports three states,
+/// and they are three different reports.
+///
+/// A type may declare a `material` witness (what exists in the world) and a
+/// `record` witness (what the log says). Their disagreement is the finding:
+/// **material present, record absent = done but unrecorded**, which is neither
+/// "this atom is next" nor "this atom is finished". day#103 is the case where
+/// collapsing those cost two consecutive unrecorded releases.
+///
+/// All three states asserted in one test, because any two of them can be
+/// satisfied by a wrong implementation. Reporting the finding whenever the
+/// record is absent would fire on work that has not started; reporting it
+/// whenever material is present would fire on work that was properly recorded.
+/// Only the conjunction is the property.
+///
+/// Uses a `path` material witness deliberately. A `tag` witness is
+/// boundary-degenerate — under a cycle boundary it means "created strictly
+/// after the boundary", and the boundary IS the newest tag — so the pair can
+/// never fire for one, which is day#107 and why `WitnessSchema::starter()`
+/// suggests no pair.
+#[test]
+fn ac2_a_paired_witness_separates_unstarted_unrecorded_and_recorded() {
+    let probes = r#"{
+        "design-doc": {"path": ".design/*.md"},
+        "code-change": {
+            "material": {"path": "src/*.rs"},
+            "record": {"claim": {"kind": "Result", "subject": "atom/*"}}
+        }
+    }"#;
+
+    let build_atom = |dir: &Path, claims: &[StubClaim]| {
+        let mut all = vec![
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &[],
+                &[],
+            ),
+            witness_schema("bafyreiw", probes),
+        ];
+        all.extend_from_slice(claims);
+        write_kan_stub(dir, &all)
+    };
+
+    // (1) NOT STARTED — no source changed this cycle, nothing recorded. The
+    // pair must stay silent: an absent artifact is not an unrecorded one.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = build_atom(dir.path(), &[]);
+    let git = write_git_stub(
+        dir.path(),
+        &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+        &[".design/x.md", "src/lib.rs"],
+        &[".design/x.md"],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        !stdout.contains("Done but unrecorded"),
+        "work that has not started is not work that went unrecorded: {stdout}"
+    );
+
+    // (2) DONE BUT UNRECORDED — source changed this cycle, no assessment in
+    // the log. This is the state day#103 was about.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = build_atom(dir.path(), &[]);
+    let git = write_git_stub(
+        dir.path(),
+        &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+        &[".design/x.md", "src/lib.rs"],
+        &[".design/x.md", "src/lib.rs"],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        stdout.contains("Done but unrecorded"),
+        "the artifact exists this cycle and the log does not mention it — that is \
+         the finding this pair exists to make: {stdout}"
+    );
+    assert!(
+        stdout.contains("code-change"),
+        "the finding must name the artifact type, or a reader cannot act on it: {stdout}"
+    );
+
+    // (3) RECORDED — same world, plus an assessment recorded this cycle. The
+    // finding must go away, or it is not a check but a permanent complaint.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = build_atom(
+        dir.path(),
+        &[result_claim(
+            "atom/build",
+            "bafyres",
+            "assessed",
+            AFTER_BOUNDARY_US,
+        )],
+    );
+    let git = write_git_stub(
+        dir.path(),
+        &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+        &[".design/x.md", "src/lib.rs"],
+        &[".design/x.md", "src/lib.rs"],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        !stdout.contains("Done but unrecorded"),
+        "the log records it, so there is nothing to report: {stdout}"
+    );
+}
+
 /// AC-2: a `claim` probe reports present when a matching claim exists and
 /// absent when none does, and a text marker narrows which claims count.
 ///

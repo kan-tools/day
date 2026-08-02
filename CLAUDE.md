@@ -289,6 +289,18 @@ Two corollaries with teeth:
 - One PR per milestone: branch off `main`, commit, push, `gh pr create`,
   wait for CI, then `gh pr merge --merge --delete-branch` (regular merge, so
   the milestone's internal commits stay visible).
+- **Cut releases with `scripts/cut-release.sh <tag>`, never by hand.** It
+  verifies, records the `release` claim, and *then* tags — one step, in that
+  order. Two consecutive releases shipped with no claim because recording was a
+  separate step beside the tag, and a separate step is one that gets dropped
+  when the cadence compresses. Recording *before* tagging also inverts the
+  failure mode: a claim with no tag is loud (`assess docs` reports "a boundary
+  nobody cut") where a tag with no claim was silent until somebody looked.
+
+  This is not enforceable in CI and the script says why at length: `.kan/` is
+  gitignored and this repo publishes no `.claims/`, so a workflow cannot see the
+  log. A CI step asserting the claim exists would be green forever for the wrong
+  reason — better no gate than a gate that cannot fail.
 - Record durable findings and decisions into kan as you go, citing the claims
   they build on. `--cites` takes **CIDs of prior claims, never file paths** —
   capture the CID a write verb prints and chain it.

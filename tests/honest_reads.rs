@@ -14,6 +14,10 @@
 
 mod common;
 
+/// Mirrors `cache::DEFAULT_CADENCE`; a local constant so this test file does
+/// not depend on the crate's internals for a loop bound.
+const DEFAULT_CADENCE_PROMPTS: usize = 10;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -650,7 +654,7 @@ fn kan_calls(counter: &Path) -> usize {
 /// would measure the machine and flake in CI; "this path reads the log zero
 /// times" is the actual property, and it cannot pass by accident.
 #[test]
-fn user_prompt_does_not_read_kan_when_git_has_not_moved() {
+fn user_prompt_costs_a_bounded_fingerprint_read_and_never_recomputes() {
     let dir = tempfile::tempdir().unwrap();
     let (kan, counter) = write_counting_kan_stub(
         dir.path(),
@@ -678,15 +682,407 @@ fn user_prompt_does_not_read_kan_when_git_has_not_moved() {
         "a cold cache must mean recompute, never all-clear"
     );
 
-    // Subsequent prompts, git unchanged: zero further reads.
-    for _ in 0..5 {
+    // Subsequent prompts, nothing changed: a small CONSTANT cost per prompt,
+    // and no recompute.
+    //
+    // This assertion used to be zero, and day#111 is why it is not. The gate was
+    // a git-only fingerprint, so a position that moved because a CLAIM was
+    // recorded — the dominant workflow in this repo — left it byte-identical and
+    // the status line served a stale render for the whole session. Reading the
+    // log is the only way to know the log moved; `kan status` does not change on
+    // an append to an existing subject, measured, so there is no cheaper honest
+    // signal.
+    //
+    // What the original test was protecting is intact, and it was never really
+    // "zero" — it was "this path does not do the expensive thing every turn."
+    // Measured on day's own log: quiet path 0.16s, the recompute it avoids
+    // 1.40s, the regression the v0.7.0-beta.2 review blocked 3.03s. Still an
+    // invocation count rather than a duration, for the reason that milestone
+    // gave: a count measures the design, a duration measures the machine.
+    //
+    // The bound is what matters. It must not scale with prompts beyond the
+    // fixed per-prompt fingerprint read, and it must not reach the full
+    // inference — which is what the per-prompt delta pins.
+    let before_loop = kan_calls(&counter);
+    let prompts = 5;
+    for _ in 0..prompts {
         day(dir.path(), &kan, &["hook", "user-prompt"]);
     }
-    assert_eq!(
-        kan_calls(&counter),
-        after_cold,
-        "user-prompt read kan again despite an unchanged git fingerprint — this is \
-         the 3s-per-turn regression the review blocked, back again"
+    let per_prompt = (kan_calls(&counter) - before_loop) / prompts;
+    assert!(
+        per_prompt <= 2,
+        "a quiet prompt should cost only the fingerprint read (the subject list \
+         plus one bulk read), not a recompute — {per_prompt} kan invocations per \
+         prompt means the gate stopped gating"
+    );
+    assert!(
+        kan_calls(&counter) > after_cold,
+        "the fingerprint must actually read the log, or it cannot see a claim \
+         that moved the position — which is day#111"
+    );
+}
+
+/// F2's DELIVERY, not its computation.
+///
+/// The previous round added the finding to four places and asserted none of
+/// them: all four survived deletion against a green 335-test suite. The test
+/// that was supposed to cover it drove `Status::standing_notice()` — the pure
+/// function, which is the mechanism again, not the delivery. day#101's pattern
+/// reproduced inside the commit whose message describes day#101's pattern.
+///
+/// This drives the shipped binary and asserts the finding arrives on each
+/// surface that is supposed to carry it:
+///   1. `.day/statusline`   — the persistent human surface
+///   2. `.day/standing`     — so the cheap path can re-display without recomputing
+///   3. `hook user-prompt`  — the model channel, on the firing prompt
+#[test]
+fn an_unrecorded_release_reaches_the_line_the_cache_and_the_model() {
+    let dir = tempfile::tempdir().unwrap();
+    // A tag exists (the git stub reports v9.9.9) and no claim names it.
+    let (kan, _counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"published-artifact\":{\"tag\":\"v*\"}}\n```\n",
+            ),
+            claim(
+                "schema/docs",
+                "bafyd",
+                "D.\n\n```day-docs\n{\"version_source\":\"Cargo.toml\",\"version_files\":[],\
+                 \"doc_files\":[],\"release_subject\":\"release\"}\n```\n",
+            ),
+        ],
+    );
+
+    day(dir.path(), &kan, &["hook", "session-start"]);
+
+    // 1 — the status line.
+    let line = std::fs::read_to_string(dir.path().join(".day/statusline"))
+        .expect(".day/statusline should exist after session-start");
+    assert!(
+        line.contains("v9.9.9"),
+        "the unrecorded release must reach the status line, the one persistent \
+         human-visible surface: {line:?}"
+    );
+
+    // 2 — the cache, so the cheap path can re-display it without recomputing.
+    // Without this the fingerprint fix silently starved the model channel.
+    let standing = std::fs::read_to_string(dir.path().join(".day/standing"))
+        .expect(".day/standing should exist after session-start");
+    assert!(
+        standing.contains("v9.9.9"),
+        "the rendered notice must be cached, or the cheap path has nothing to \
+         re-display and the model is told only on a recompute: {standing:?}"
+    );
+
+    // 3 — the model channel. Rationed, so drive it to the firing prompt; the
+    // point is that it arrives at all, which is what four survived mutations
+    // said it might not.
+    let mut fired = None;
+    for i in 1..=(DEFAULT_CADENCE_PROMPTS + 2) {
+        let out = day(dir.path(), &kan, &["hook", "user-prompt"]);
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        if text.contains("v9.9.9") {
+            fired = Some(i);
+            break;
+        }
+    }
+    assert!(
+        fired.is_some(),
+        "the unrecorded release never reached the model channel in {} prompts — \
+         rationed must not mean silent",
+        DEFAULT_CADENCE_PROMPTS + 2
+    );
+
+    // And again on the RECOMPUTE path specifically. The loop above is served by
+    // the cheap path after its first prompt, so it cannot tell whether the
+    // recompute path delivers the notice at all — deleting that push survived
+    // this test until this half existed. Dropping `.day/standing` each
+    // iteration forces a recompute every time; `.day/cadence` is a separate
+    // file and keeps counting.
+    let mut fired_on_recompute = None;
+    for i in 1..=(DEFAULT_CADENCE_PROMPTS + 2) {
+        let _ = std::fs::remove_file(dir.path().join(".day/standing"));
+        let out = day(dir.path(), &kan, &["hook", "user-prompt"]);
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        if text.contains("v9.9.9") {
+            fired_on_recompute = Some(i);
+            break;
+        }
+    }
+    assert!(
+        fired_on_recompute.is_some(),
+        "the unrecorded release never reached the model channel on the RECOMPUTE \
+         path in {} prompts — the path that pays for the answer must also deliver it",
+        DEFAULT_CADENCE_PROMPTS + 2
+    );
+}
+
+/// The cadence rations PROMPTS, not conditions — asserted as a counter that
+/// advances by exactly one per prompt.
+///
+/// `cache::cadence_allows` advances a counter on every call, and `user_prompt`
+/// consulted it once per standing condition. With two conditions live the
+/// counter moved by two per prompt and whichever gate ran last always landed on
+/// the threshold and reset it, so the other **never fired**: the
+/// done-but-unrecorded notice reached the model zero times in 22 prompts on any
+/// repo that also had an unreadable declaration.
+///
+/// The end-to-end check that missed it ran with ONE condition live, where a
+/// single gate works perfectly. That is `CLAUDE.md`'s two-mode trap, and the
+/// broken mode was the degraded repo — precisely where both notices matter.
+///
+/// This asserts the invariant rather than the symptom: one prompt, one tick. A
+/// test that counted firings would pass again the moment a third condition was
+/// added and started competing with the other two.
+#[test]
+fn the_cadence_counter_advances_once_per_prompt_not_once_per_condition() {
+    let dir = tempfile::tempdir().unwrap();
+    // TWO standing conditions must be genuinely live, and the first version of
+    // this test had only one.
+    //
+    // It declared `{"code":{"path":"src/*"}}` — a material-only witness, so
+    // `unrecorded` was empty — and no `schema/docs`, so `unrecorded_boundary`
+    // was None. `standing_notice()` returned None, one condition was live, and
+    // under the defective code the first gate SHORT-CIRCUITS and consults the
+    // cadence exactly once. The test passed with the defect fully present:
+    // reverting the fix left 337/337 green.
+    //
+    // That is the two-mode trap for the third time in this milestone, and the
+    // third time in the mode the commit message said was already working.
+    //
+    // So: a PAIRED witness whose material half is a `path` probe (a `tag`
+    // material probe is boundary-degenerate and can never fire — see
+    // docs/CONVENTIONS.md), which makes `unrecorded` non-empty; plus an atom
+    // block this build cannot read, which makes `unreadable` non-empty.
+    let (kan, _counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"published-artifact\":{\"tag\":\"v*\"}}\n```\n",
+            ),
+            // Makes the boundary condition live: the git stub reports a `v9.9.9`
+            // tag and no claim names it, so `unrecorded_boundary` is Some.
+            claim(
+                "schema/docs",
+                "bafyd",
+                "D.\n\n```day-docs\n{\"version_source\":\"Cargo.toml\",\"version_files\":[],\
+                 \"doc_files\":[],\"release_subject\":\"release\"}\n```\n",
+            ),
+            // And an atom block this build cannot read, so `unreadable` is
+            // non-empty. Two live standing conditions, which is the whole point.
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":99,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    let tick = || -> u32 {
+        std::fs::read_to_string(dir.path().join(".day/cadence"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0)
+    };
+
+    // BOTH prompts must take the RECOMPUTE path, which is where the gates were
+    // duplicated — the cheap path always had one. Dropping `.day/standing`
+    // between them forces it; `.day/cadence` is a separate file and survives,
+    // which is what makes the two ticks comparable.
+    //
+    // The first version of this test did not do that: its second prompt hit the
+    // cache, saw one gate, and measured an advance of one no matter how many
+    // gates the recompute path had. It passed against the very defect it names.
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let after_first = tick();
+
+    std::fs::remove_file(dir.path().join(".day/standing")).expect("standing should exist");
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+    let after_second = tick();
+
+    // Either the counter advanced by one, or it wrapped to zero because this
+    // prompt fired — both are one tick. What must not happen is a jump of two.
+    // PREMISE GUARD, and the previous one was the wrong guard. It checked that
+    // the gate RAN, which is true with one condition live — so it supplied
+    // assurance for exactly the mode that could not detect the defect. What
+    // matters is that TWO conditions are live, because that is what makes two
+    // consultations observable.
+    let status = String::from_utf8_lossy(&day(dir.path(), &kan, &["status"]).stdout).to_string();
+    assert!(
+        status.contains("Done but unrecorded"),
+        "premise broken: the paired-witness condition is not live, so a second \
+         gate consultation cannot be observed and this test asserts nothing.\n{status}"
+    );
+    assert!(
+        after_first > 0 || after_second > 0,
+        "the cadence gate never ran (counter {after_first}/{after_second})"
+    );
+
+    // Saturating, not wrapping. `wrapping_sub` turns a fire-and-reset
+    // (n -> 0) into u32::MAX, which fails the assertion for the wrong reason —
+    // unreachable at cadence 10, live the moment a fixture declares a small one.
+    let advanced = after_second.saturating_sub(after_first);
+    assert!(
+        advanced <= 1,
+        "the cadence counter moved by {advanced} across one prompt ({after_first} -> \
+         {after_second}), so a standing condition is being charged per condition \
+         rather than per prompt — with two conditions live, one of them can never \
+         reach the threshold"
+    );
+}
+
+/// day#111's actual property, which the invocation-count test does not check.
+///
+/// The review mutated `claim.cid.hash(&mut hasher)` away and it **SURVIVED**:
+/// without the CID the fingerprint is a function of the subject SET, which is
+/// precisely the `kan status` failure mode day#111 was filed to avoid — an
+/// append to an existing subject changes nothing — and 332 tests stayed green.
+///
+/// The old assertion was `kan_calls > after_cold`: it measured that a read
+/// HAPPENED, not that the answer CHANGES. That is the proxy CLAUDE.md warns
+/// about, quoted in the commit that introduced it and then committed anyway.
+///
+/// Hermetic on purpose. Two stubs differing by exactly one claim on an
+/// **existing** subject — no new subject, no state change — which is the case a
+/// subject-set fingerprint cannot see.
+#[test]
+fn the_log_fingerprint_changes_when_a_claim_is_appended_to_an_existing_subject() {
+    let witness = |cid: &str| {
+        claim(
+            "schema/witness",
+            cid,
+            "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+        )
+    };
+
+    let before = tempfile::tempdir().unwrap();
+    let kan_before = write_kan_stub(before.path(), &[witness("bafyw")]);
+
+    // Same subject set, same subject, one additional claim.
+    let after = tempfile::tempdir().unwrap();
+    let kan_after = write_kan_stub(
+        after.path(),
+        &[
+            witness("bafyw"),
+            claim(
+                "schema/witness",
+                "bafyw2",
+                "A later note on the same subject.",
+            ),
+        ],
+    );
+
+    let fp = |dir: &Path, kan: &Path| -> String {
+        let out = day(dir, kan, &["hook", "user-prompt"]);
+        assert!(out.status.success(), "hook should exit zero");
+        std::fs::read_to_string(dir.join(".day/standing"))
+            .expect(".day/standing should exist after the hook")
+            .lines()
+            .next()
+            .expect("standing should carry a fingerprint line")
+            .to_string()
+    };
+
+    let a = fp(before.path(), &kan_before);
+    let b = fp(after.path(), &kan_after);
+
+    assert!(
+        !a.is_empty() && !b.is_empty(),
+        "both fingerprints must be non-empty or this assertion is vacuous: {a:?} / {b:?}"
+    );
+    assert_ne!(
+        a, b,
+        "appending a claim to an EXISTING subject did not move the fingerprint, so \
+         day cannot see a position change caused by recording a claim — day#111, \
+         and the exact reason `kan status` was rejected as the cheap signal"
+    );
+
+    // And the narrow case the CID hash is the ONLY thing protecting: same
+    // subjects, same claim COUNT, different claims. Retract one and record
+    // another between two prompts and the count is unchanged.
+    //
+    // Worth stating why this half exists. The review mutated `claim.cid.hash`
+    // away and reported the fingerprint becomes "a function of the subject
+    // set"; it does not — `claims.len()` is hashed too, so every ordinary
+    // append still moves it and the assertion above passes without the CID.
+    // The mutation SURVIVED against the first version of this test for exactly
+    // that reason. This is the case that distinguishes them, and without it the
+    // CID hash is unasserted.
+    let swapped = tempfile::tempdir().unwrap();
+    let kan_swapped = write_kan_stub(
+        swapped.path(),
+        &[
+            witness("bafyw"),
+            claim("schema/witness", "bafyw3", "A different later note."),
+        ],
+    );
+    let c = fp(swapped.path(), &kan_swapped);
+    assert_ne!(
+        b, c,
+        "two logs with the same subjects and the same claim count but different \
+         claims produced the same fingerprint — only the CID hash separates these, \
+         and without it a retract-plus-record between prompts is invisible"
+    );
+}
+
+/// day#97, AC-4 — the recompute path re-renders the line it just recomputed.
+///
+/// `user_prompt` paid for `status::compute`, cached the *standing*, and left
+/// `.day/statusline` holding whatever session-start wrote. So the bar showed
+/// session-start state for an entire session — observed four hours and three
+/// atoms behind, with `day status` and the line disagreeing, on a repo that had
+/// advanced through three atoms, three assessments and four commits.
+///
+/// Asserted with a sentinel rather than by comparing two real renders. Whether
+/// the position *changes* depends on the fixture's probes; what day#97 is about
+/// is that this path never writes the line **at all**, and a sentinel proves
+/// that directly. A test that compared two renders could pass while the line
+/// was never rewritten, simply because the position happened to be identical —
+/// which is the "assert the wrong side of the finding" failure CLAUDE.md
+/// records.
+#[test]
+fn user_prompt_rerenders_the_status_line_when_it_recomputes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, _counter) = write_counting_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyw",
+                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+            ),
+            atom_block(
+                "future",
+                "bafyf",
+                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
+            ),
+        ],
+    );
+
+    // A line from an earlier session, and no cached standing — so the hook must
+    // take the recompute path, exactly as it does when git has moved.
+    std::fs::create_dir_all(dir.path().join(".day")).unwrap();
+    let stale = "day · STALE-SENTINEL-from-session-start";
+    std::fs::write(dir.path().join(".day/statusline"), stale).unwrap();
+
+    day(dir.path(), &kan, &["hook", "user-prompt"]);
+
+    let line = std::fs::read_to_string(dir.path().join(".day/statusline"))
+        .expect(".day/statusline should still exist after the hook runs");
+    assert!(
+        !line.contains("STALE-SENTINEL"),
+        "user-prompt recomputed the position and left the status line holding the \
+         previous session's render — this is day#97: the bar shows session-start \
+         state all session while `day status` disagrees. line was: {line:?}"
+    );
+    assert!(
+        line.starts_with("day"),
+        "the re-rendered line should be a real status line, not empty or garbage: {line:?}"
     );
 }
 

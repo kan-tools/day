@@ -153,23 +153,47 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
                 continue;
             }
         };
-        // Since day#32 a tension's reason lives on `tension/<a>--<b>`, not
-        // here, so the newest text claim on a telos is the telos again. The
-        // declared title still leads, because a subject's name is an rkey
-        // and this is what it is called.
+        // A SUBJECT IS A CLAIM LOG, AND ITS CURRENT STATE IS A FOLD OVER IT BY
+        // ROLE — not "whatever text arrived last".
+        //
+        // This used to take the newest claim carrying text, justified by: since
+        // day#32 a tension's reason lives on `tension/<a>--<b>`, so the newest
+        // text on a telos is the telos again. That held only while exactly one
+        // KIND of claim ever landed here, and nothing enforces that. Recording
+        // an assessment with `kan result telos/<slug>` — which `day assess
+        // telos` itself instructs — made the assessment render AS the telos, on
+        // the one surface the model reads every session. Two of day's own
+        // surfaces in contradiction: one told you to write a claim the other
+        // could not read.
+        //
+        // Each kind now has a role, so a kind nobody anticipated has NO role
+        // rather than accidentally becoming the statement:
+        //   Decision   -> the statement (newest live one wins; `kan decide` is
+        //                 what `day telos declare` emits)
+        //   Subject    -> the title
+        //   Result     -> an assessment; surfaced as a suffix, never as the text
+        //   other      -> context, not the statement
         let title = claims.iter().rev().find_map(|c| c.title.clone());
-        let latest = claims
-            .iter()
-            .rev()
-            .find_map(|c| c.text.as_deref().map(atoms::prose_only))
-            .filter(|s| !s.is_empty());
+        // Prefer the declaration; fall back to any claim that is not an
+        // assessment. Filtering strictly to `Decision` was too strict: `kan
+        // decide` is the documented way to declare a telos and what `day telos
+        // declare` emits, but a hand-written one may be an `Observation`, and
+        // rendering nothing for it would trade this defect for a worse one.
+        // What must never happen is a `Result` becoming the statement, which is
+        // the whole of F12.
+        let statement = atoms::statement_from(&claims);
 
-        match (title, latest) {
+        // An assessment enriches the line instead of replacing it — which is
+        // what recording one was supposed to do.
+        let assessed = claims.iter().any(|c| c.kind == "Result");
+        let suffix = if assessed { "  [assessed]" } else { "" };
+
+        match (title, statement) {
             (Some(title), Some(text)) => {
-                lines.push(format!("- {subject}: {title} — {}", excerpt(&text)))
+                lines.push(format!("- {subject}: {title} — {}{suffix}", excerpt(&text)))
             }
-            (Some(title), None) => lines.push(format!("- {subject}: {title}")),
-            (None, Some(text)) => lines.push(format!("- {subject}: {}", excerpt(&text))),
+            (Some(title), None) => lines.push(format!("- {subject}: {title}{suffix}")),
+            (None, Some(text)) => lines.push(format!("- {subject}: {}{suffix}", excerpt(&text))),
             // Nothing left to say about it. kan never destroys a subject, so
             // a fully-retracted telos still exists and still appears in
             // `status` — but a telos whose every claim has been retracted is
@@ -270,6 +294,27 @@ fn render_atoms(client: &KanClient) -> String {
     }
 }
 
+/// The fingerprint both cache writers use, in one place so they cannot drift.
+///
+/// F4: session-start wrote `git.position_fingerprint()` while user-prompt
+/// compared `{git}:{log}`, so the two never matched and the first prompt of
+/// every session paid for a recompute whose answer it already had. Two writers
+/// of one value in different formats is the same shape as a guarantee wired at
+/// a call site — the fix is one function, not two matching edits.
+///
+/// `None` when git cannot be read. An unreadable kan log deliberately yields an
+/// *unmatchable* value rather than a matching one, so the next prompt recomputes
+/// and reports the failure instead of going quiet — treating a log day could not
+/// read as "nothing moved" would be the carve-out abuse and an honest-reads
+/// violation at once.
+fn position_cache_fingerprint(git: &Git, client: &KanClient) -> Option<String> {
+    let git_fp = git.position_fingerprint().ok()?;
+    Some(match client.log_fingerprint() {
+        Ok(log_fp) => format!("{git_fp}:{log_fp}"),
+        Err(_) => format!("{git_fp}:unreadable"),
+    })
+}
+
 /// Runs position inference, writes the status-line cache, and returns a short
 /// block naming where the work sits for the model.
 ///
@@ -300,7 +345,7 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     // this read. Recorded here because this is the one place that already pays
     // for the expensive computation and has time to. A failed write costs the
     // next prompt a recompute, which is correct-but-slower — never wrong.
-    if let Ok(fingerprint) = git.position_fingerprint() {
+    if let Some(fingerprint) = position_cache_fingerprint(&git, client) {
         // The cadence comes off `status`, which resolved it with the other
         // declarations and reported it if unreadable. Loading it here instead
         // meant an unreadable `schema/injection` silently became the default —
@@ -312,6 +357,7 @@ fn render_position(client: &KanClient, root: &Path) -> String {
                 fingerprint,
                 unreadable: status.unreadable.len(),
                 cadence,
+                standing_notice: status.standing_notice(),
             },
         );
     }
@@ -505,7 +551,22 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // not — a 3-second-per-turn regression that three artifacts described as its
     // opposite, which is the failure this whole milestone exists to stop day
     // committing.
-    let fingerprint = git.position_fingerprint().ok();
+    // day#111: git AND kan, because position depends on both.
+    //
+    // The git half alone was the whole gate, and `Git::position_fingerprint`
+    // reads no kan — so recording a claim moved the position and left the
+    // fingerprint byte-identical, this function took its early return, and the
+    // status line kept serving the previous render. On this repo that is the
+    // dominant workflow: a session that records a design pass, a verdict and an
+    // assessment changes position repeatedly while touching no tracked file.
+    // The bar was reliable; it updated on exactly one of the two ways position
+    // moves.
+    //
+    // Costs one kan invocation on a quiet turn (0.06s measured, against the
+    // ~1.4s recompute this gate exists to avoid) and **none** on a turn that
+    // goes on to recompute, because `ClaimLog` memoizes the bulk read and the
+    // two share it.
+    let fingerprint = position_cache_fingerprint(&git, client);
     let cached = crate::cache::standing(root);
 
     // Unchanged git state AND a cached reading: nothing a `path`/`tag` probe
@@ -516,12 +577,27 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // deleting `.day/` a cost in redundant work rather than a change in answer.
     if let (Some(fp), Some(standing)) = (&fingerprint, &cached) {
         if *fp == standing.fingerprint {
-            if standing.unreadable > 0 && crate::cache::cadence_allows(root, standing.cadence) {
-                return format!(
-                    "day: {} declaration(s) could not be read at session start, so day's \
-                     telos and atom lists are partial — `day doctor` for detail.\n",
-                    standing.unreadable
-                );
+            // Both standing conditions re-display on the cadence, from the
+            // cache, without recomputing. The done-but-unrecorded findings were
+            // missing here, and unifying the fingerprint writers (F4) turned
+            // that from latent into live: the first prompt began hitting the
+            // cache, so the model stopped being told about an unrecorded
+            // release entirely.
+            if crate::cache::cadence_allows(root, standing.cadence) {
+                let mut parts = Vec::new();
+                if let Some(notice) = &standing.standing_notice {
+                    parts.push(notice.clone());
+                }
+                if standing.unreadable > 0 {
+                    parts.push(format!(
+                        "day: {} declaration(s) could not be read at session start, so \
+                         day's telos and atom lists are partial — `day doctor` for detail.",
+                        standing.unreadable
+                    ));
+                }
+                if !parts.is_empty() {
+                    return format!("{}\n", parts.join("\n"));
+                }
             }
             return String::new();
         }
@@ -533,6 +609,23 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
         return String::new();
     };
     let cadence = status.cadence;
+
+    // day#97: re-render the line from the reading just paid for.
+    //
+    // This path recomputed the position and cached the *standing* while leaving
+    // `statusline` holding whatever session-start wrote, so the bar showed
+    // session-start state for the whole session — observed four hours and three
+    // atoms behind on a repo that had advanced through three atoms, three
+    // assessments and four commits. `day status` and the line disagreed, and the
+    // line is the surface a human actually watches.
+    //
+    // It costs nothing extra. `status` is already computed here, `render_line`
+    // is pure, and reaching this point means the fingerprint moved — so the
+    // write happens exactly when the answer can have changed and never on the
+    // cheap path above. Zero additional kan invocations, which is the property
+    // REQ-4 pins, rather than a duration, which would measure the machine.
+    let _ = crate::cache::write_status_line(root, &status.render_line());
+
     if let Some(fp) = fingerprint {
         let _ = crate::cache::write_standing(
             root,
@@ -540,6 +633,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
                 fingerprint: fp,
                 unreadable: status.unreadable.len(),
                 cadence,
+                standing_notice: status.standing_notice(),
             },
         );
     }
@@ -552,14 +646,35 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
         parts.push(notice);
     }
 
-    // The standing half, still rationed even on a recompute: it is a condition
-    // rather than an event, and a git change is not a reason to repeat it.
-    if !status.unreadable.is_empty() && crate::cache::cadence_allows(root, cadence) {
-        parts.push(format!(
-            "day: {} declaration(s) could not be read, so day's telos and atom lists \
-             are partial — `day doctor` for detail.",
-            status.unreadable.len()
-        ));
+    // THE CADENCE IS CONSULTED EXACTLY ONCE PER PROMPT, and every standing
+    // condition shares that one decision.
+    //
+    // `cadence_allows` ADVANCES A COUNTER on each call, so consulting it per
+    // condition does not ration them independently — it makes them compete. Two
+    // calls advanced the counter by two per prompt, and whichever ran last
+    // always landed on the threshold and reset it, so the other could never
+    // reach it. The done-but-unrecorded notice reached the model *zero* times in
+    // 22 prompts on any repo that also had an unreadable declaration — which is
+    // the degraded repo, exactly where both notices matter most.
+    //
+    // Verified in the one-condition case at the time, which is the two-mode trap
+    // `CLAUDE.md` names: the mode this repo happened to be in worked, and the
+    // other one was dead.
+    let repeat_standing = crate::cache::cadence_allows(root, cadence);
+
+    // Both are conditions rather than events: true until somebody acts, so a git
+    // change is not a reason to repeat them.
+    if repeat_standing {
+        if let Some(standing) = status.standing_notice() {
+            parts.push(standing);
+        }
+        if !status.unreadable.is_empty() {
+            parts.push(format!(
+                "day: {} declaration(s) could not be read, so day's telos and atom lists \
+                 are partial — `day doctor` for detail.",
+                status.unreadable.len()
+            ));
+        }
     }
 
     if parts.is_empty() {

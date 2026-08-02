@@ -91,6 +91,19 @@ pub struct Standing {
     /// declared value is only cheap if it is resolved where day already pays for
     /// a read.
     pub cadence: u32,
+    /// The done-but-unrecorded findings, as already-rendered text.
+    ///
+    /// Cached for the same reason `unreadable` is: the cheap path must be able
+    /// to RE-DISPLAY a standing condition without recomputing it. Without this,
+    /// unifying the two fingerprint writers (F4) made the first prompt hit the
+    /// cache and the model was never told about an unrecorded release at all —
+    /// two defects that had been propping each other up.
+    ///
+    /// Still display-only, still derived, still regenerates: it is the rendered
+    /// sentence, not a fact day consults to decide anything. Losing it costs a
+    /// repetition, never an answer — the same boundary the rest of this file
+    /// keeps. Stored last so an older cache without the line still parses.
+    pub standing_notice: Option<String>,
 }
 
 /// Records what session-start found. Best-effort, like the status line.
@@ -99,9 +112,19 @@ pub fn write_standing(root: &Path, standing: &Standing) -> io::Result<()> {
     std::fs::create_dir_all(&dir)?;
     std::fs::write(
         standing_path(root),
+        // Newlines are the record separator, so the notice is stored with them
+        // escaped and restored on read. A multi-line notice would otherwise be
+        // indistinguishable from extra fields.
         format!(
-            "{}\n{}\n{}\n",
-            standing.fingerprint, standing.unreadable, standing.cadence
+            "{}\n{}\n{}\n{}\n",
+            standing.fingerprint,
+            standing.unreadable,
+            standing.cadence,
+            standing
+                .standing_notice
+                .as_deref()
+                .unwrap_or("")
+                .replace('\n', "\\n")
         ),
     )
 }
@@ -126,15 +149,29 @@ pub fn standing(root: &Path) -> Option<Standing> {
         .next()
         .and_then(|l| l.trim().parse().ok())
         .unwrap_or(DEFAULT_CADENCE);
+    // Absent on a cache written before this field existed, which is a
+    // repetition lost and never a wrong answer.
+    let standing_notice = lines
+        .next()
+        .map(|l| l.replace("\\n", "\n"))
+        .filter(|l| !l.is_empty());
     Some(Standing {
         fingerprint,
         unreadable,
         cadence,
+        standing_notice,
     })
 }
 
 /// Whether enough prompts have passed to re-display a standing condition, and
 /// records this prompt either way.
+///
+/// **CONSULT THIS ONCE PER PROMPT, AND SHARE THE ANSWER.** It advances a
+/// counter on every call, so calling it per condition does not ration each
+/// condition — it makes them compete, and whichever calls last lands on the
+/// threshold and resets it. `user_prompt` did that with two conditions and one
+/// of them reached the model zero times in 22 prompts. The unit is a prompt,
+/// not a condition, which is what the name and the doc below mean by "prompts".
 ///
 /// **This is the one place the carve-out is extended, and the boundary it keeps
 /// is a stated test: delete `.day/` and day's answer must not change — only

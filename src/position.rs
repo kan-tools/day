@@ -36,11 +36,11 @@
 //! [`probe::evaluate`], which has no boundary to pass.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::atoms::Atom;
 use crate::git::{Boundary, Git};
-use crate::probe::{self, Authorization, ClaimLog, Probe, ReadFailure, Verdict};
+use crate::probe::{self, Authorization, ClaimLog, Failures, Probe, ReadFailure, Verdict};
 
 /// Whether an artifact type is materially present, and how sure day is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,7 +70,19 @@ pub fn resolve(
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
 ) -> Verdict {
-    resolve_collecting(probe, git, log, boundary, None)
+    // The caller renders this verdict itself — see `Failures::AlreadyReported`.
+    //
+    // True of `day status`'s long form, which prints each criterion's verdict
+    // WITH its detail. Not true of `render_line`, which reduces the same
+    // verdicts to `met/total` and drops the reason — and `render_line` is both
+    // the status bar and what session-start puts in the model's context. So the
+    // reason reaches one of two consumers.
+    //
+    // Left as-is because it is pre-existing (the bare `None` had exactly this
+    // reach) and widening it here would change what the bar reports, which is a
+    // separate decision. Recorded rather than papered over: the variant's name
+    // makes the claim checkable, and this is where it is only partly true.
+    resolve_collecting(probe, git, log, boundary, Failures::AlreadyReported)
 }
 
 /// [`resolve`], with somewhere to put reads that could not happen.
@@ -83,7 +95,7 @@ pub fn resolve_collecting(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
-    failures: Option<&mut Vec<ReadFailure>>,
+    failures: Failures<'_>,
 ) -> Verdict {
     match (probe, boundary) {
         // Reported as not-run, never executed, boundary or no boundary. A
@@ -145,7 +157,7 @@ fn materialized(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
-    failures: Option<&mut Vec<ReadFailure>>,
+    failures: Failures<'_>,
 ) -> Presence {
     match probes.get(kind) {
         None => Presence::Unknown,
@@ -221,6 +233,13 @@ pub struct Standing {
     pub inputs_unknown: Vec<String>,
     /// This atom's own outputs, as a three-way presence.
     pub outputs: Outputs,
+    /// The artifact types this atom declares it produces, by name.
+    ///
+    /// Carried because [`Outputs`] collapses them to a presence verdict, and
+    /// day#98 needs the names: whether an inputless atom is a true source or a
+    /// *convergent root* depends on whether anything downstream consumes what
+    /// it makes, which the verdict cannot answer.
+    pub outputs_declared: Vec<String>,
 }
 
 impl Standing {
@@ -236,10 +255,33 @@ impl Standing {
 
     /// Source atoms have no declared inputs; their inputs come from outside
     /// the vocabulary and are not evidence of position.
-    fn is_source(&self) -> bool {
+    ///
+    /// **A convergent root is not a source** (day#98). An atom can declare no
+    /// inputs and still be gated *on*: if something downstream lists what it
+    /// produces as an input, then the absence of its outputs is precisely what
+    /// blocks that downstream work, and is exactly what a reader needs named.
+    /// Excluding those made day structurally blind to them — on the vocabulary
+    /// that found this, the two inputless atoms were the build-out's first and
+    /// last, so day could not name A1 while A1 was the work and could not name
+    /// A4 once A4 was.
+    ///
+    /// `consumed` is every artifact type any atom declares as an input. A true
+    /// source — one whose outputs nobody consumes — is still excluded, which
+    /// preserves what this rule was protecting: naming an atom nothing gates
+    /// would be noise.
+    ///
+    /// This was met once before and routed around locally rather than fixed:
+    /// `tests/declared_vocabulary.rs` records hitting it while building a
+    /// fixture and changed the fixture. Encountered, not generalised, which is
+    /// why it survived to a real vocabulary.
+    fn is_source(&self, consumed: &BTreeSet<&str>) -> bool {
         self.inputs_present.is_empty()
             && self.inputs_missing.is_empty()
             && self.inputs_unknown.is_empty()
+            && !self
+                .outputs_declared
+                .iter()
+                .any(|out| consumed.contains(out.as_str()))
     }
 }
 
@@ -255,6 +297,16 @@ pub struct Report {
     /// can say the report is partial instead of presenting it as whole
     /// (`.design/declared-blocks.md` REQ-4).
     pub read_failures: Vec<ReadFailure>,
+    /// Artifact types that **exist but are not written down**: a declared
+    /// `material` witness is satisfied for this cycle and the declared `record`
+    /// witness is not (day#103).
+    ///
+    /// A separate list rather than a fourth [`Presence`], because it is not a
+    /// statement about whether the work happened — it plainly did — but about
+    /// whether the log knows. Folding it into presence would make an
+    /// unrecorded artifact look absent and put the atom back in `current`,
+    /// which is the collapse this exists to undo.
+    pub unrecorded: Vec<String>,
 }
 
 /// Infers position from the atom set and the witness probes, resolving each
@@ -266,9 +318,15 @@ pub struct Report {
 /// input to three — and a `claim` probe scans the whole log, so resolving per
 /// mention would multiply a session-start read by the size of the vocabulary
 /// for answers that cannot differ within a single inference.
+/// Takes the whole [`WitnessSchema`] rather than just its material probes.
+///
+/// That is REQ-8, and it is deliberate: day#101's recurring defect is a
+/// guarantee wired at a call site, and passing `&schema.probes` would let a
+/// future channel compute a position while silently skipping the record half.
+/// With the declaration itself as the parameter there is no half to pass.
 pub fn infer(
     atoms: &[Atom],
-    probes: &BTreeMap<String, Probe>,
+    schema: &crate::telos::WitnessSchema,
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
@@ -277,15 +335,71 @@ pub fn infer(
     // this. Resolution happens at most once per artifact type, so a failure
     // cannot be recorded twice for one type.
     let failures: RefCell<Vec<ReadFailure>> = RefCell::new(Vec::new());
-    let mut report = infer_with(
-        atoms,
-        memoized(|kind| {
-            let mut collected = Vec::new();
-            let presence = materialized(kind, probes, git, log, boundary, Some(&mut collected));
-            failures.borrow_mut().extend(collected);
-            presence
-        }),
-    );
+
+    // Hoisted rather than passed inline, so the record comparison below can ask
+    // the SAME memoized resolver instead of reading the material half a second
+    // time (F1). The old shape called `materialized` again directly, which had
+    // two defects at once: it passed no failure collector, so a read it could
+    // not make was silently dropped; and it bypassed the memo, so collecting
+    // properly would have reported the same failure twice for any type an atom
+    // also names. One resolution per type, one collection, both fixed by
+    // structure rather than by remembering the right argument.
+    let resolve_presence = memoized(|kind| {
+        let mut collected = Vec::new();
+        let presence = materialized(
+            kind,
+            &schema.probes,
+            git,
+            log,
+            boundary,
+            Failures::Collect(&mut collected),
+        );
+        failures.borrow_mut().extend(collected);
+        presence
+    });
+
+    let mut report = infer_with(atoms, &resolve_presence);
+
+    // The material/record comparison (REQ-2). Only types declaring both halves
+    // can be asked, so a project that declared no pair gets an empty list and
+    // no behaviour change whatsoever.
+    //
+    // Resolved through the same `resolve_collecting` every other probe goes
+    // through, so a record witness is cycle-scoped exactly like a material one:
+    // "was this recorded *in this cycle*", not "was it ever recorded". Without
+    // that, a release claim from six milestones ago would satisfy today's.
+    for (kind, record) in &schema.records {
+        if !schema.probes.contains_key(kind) {
+            continue;
+        }
+        // Memoized: free if an atom already named this type, and collected
+        // exactly once either way.
+        if resolve_presence(kind) != Presence::Present {
+            continue;
+        }
+        let mut collected = Vec::new();
+        let seen = resolve_collecting(
+            record,
+            git,
+            log,
+            boundary,
+            Failures::Collect(&mut collected),
+        );
+        failures.borrow_mut().extend(collected);
+
+        // Only a probe that ran and found nothing counts. An `Error` is a read
+        // that did not happen and is already reported as a read failure;
+        // calling it "unrecorded" would manufacture a finding out of a failure
+        // to look, which is the exact inversion `telos/honest-reads` forbids.
+        if matches!(seen, Verdict::Unsatisfied(_)) {
+            report.unrecorded.push(kind.clone());
+        }
+    }
+
+    // The resolver borrows `failures`, so it has to go before the cell can be
+    // consumed. Explicit rather than relying on scope order, since the drop is
+    // load-bearing for the line below it.
+    drop(resolve_presence);
     report.read_failures = failures.into_inner();
     report
 }
@@ -334,13 +448,23 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
                 inputs_missing,
                 inputs_unknown,
                 outputs,
+                outputs_declared: atom.interface.outputs.clone(),
             }
         })
         .collect();
 
+    // day#98: every artifact type some atom declares as an input. An inputless
+    // atom producing one of these is a convergent root, not a source — see
+    // [`Standing::is_source`]. Computed from the atom set already in hand: no
+    // probe, no read, no declaration.
+    let consumed: BTreeSet<&str> = atoms
+        .iter()
+        .flat_map(|a| a.interface.inputs.iter().map(String::as_str))
+        .collect();
+
     let current: Vec<String> = standings
         .iter()
-        .filter(|s| !s.is_source() && s.is_current())
+        .filter(|s| !s.is_source(&consumed) && s.is_current())
         .map(|s| s.atom.clone())
         .collect();
 
@@ -381,6 +505,12 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
 
     Report {
         read_failures: Vec::new(),
+        // Filled by [`infer`], which is the only caller with the schema needed
+        // to answer it. `infer_with` is given a bare presence function and
+        // cannot know what a record witness would be, so an empty list here is
+        // "not asked", not "asked and clean" — and the only path that skips
+        // asking is the test seam.
+        unrecorded: Vec::new(),
         standings,
         current,
         off_sequence,
@@ -437,6 +567,80 @@ mod tests {
             ]),
         );
         assert_eq!(report.current, vec!["build"], "{:?}", report.standings);
+    }
+
+    /// day#98, AC-1 — a convergent root is a candidate; a true source is not.
+    ///
+    /// This cannot be asserted against day's own vocabulary: all seven of its
+    /// atoms declare inputs, so neither branch is reachable here. That is the
+    /// point of the issue — the defect was invisible in this repo and bit a
+    /// vocabulary with twelve bespoke atoms, where the two inputless ones were
+    /// the build-out's first and its last.
+    ///
+    /// Both branches in one test on purpose. Asserting only that the root is
+    /// named would be satisfied by deleting the `is_source` filter outright,
+    /// which would reintroduce the noise the filter exists to prevent.
+    #[test]
+    fn a_convergent_root_is_current_but_a_true_source_is_not() {
+        let atoms = [
+            // No inputs, and `schema` is consumed downstream -> convergent root.
+            atom("declare", &[], &["schema"], &["store"]),
+            atom("store", &["schema"], &["store-impl"], &[]),
+            // No inputs, and nothing declares `scratch` as an input -> a true
+            // source, which stays excluded.
+            atom("doodle", &[], &["scratch"], &[]),
+        ];
+
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("schema", Presence::Absent),
+                ("store-impl", Presence::Absent),
+                ("scratch", Presence::Absent),
+            ]),
+        );
+
+        assert!(
+            report.current.contains(&"declare".to_string()),
+            "an inputless atom whose output something consumes gates that work, \
+             so it must be nameable as current: {:?}",
+            report.current
+        );
+        assert!(
+            !report.current.contains(&"doodle".to_string()),
+            "an inputless atom nothing consumes is a true source and stays \
+             excluded, or the filter's purpose is lost: {:?}",
+            report.current
+        );
+    }
+
+    /// The discriminator is *consumption*, not merely having outputs. A
+    /// convergent root whose output is already present is finished, not
+    /// current — so the day#98 fix must not make inputless atoms permanently
+    /// current, which is the obvious wrong way to satisfy the test above.
+    #[test]
+    fn a_convergent_root_whose_output_exists_is_not_current() {
+        let atoms = [
+            atom("declare", &[], &["schema"], &["store"]),
+            atom("store", &["schema"], &["store-impl"], &[]),
+        ];
+        let report = infer_with(
+            &atoms,
+            presences(&[
+                ("schema", Presence::Present),
+                ("store-impl", Presence::Absent),
+            ]),
+        );
+        assert!(
+            !report.current.contains(&"declare".to_string()),
+            "its output exists, so it is done: {:?}",
+            report.current
+        );
+        assert!(
+            report.current.contains(&"store".to_string()),
+            "and the work it gates is now current: {:?}",
+            report.current
+        );
     }
 
     #[test]
@@ -500,7 +704,10 @@ mod tests {
                     &git,
                     &ClaimLog::new(&client),
                     bound,
-                    None
+                    // The assertion is about Presence, and the test renders
+                    // nothing — no failure can arise from a command probe,
+                    // which is never run here.
+                    Failures::AlreadyReported
                 ),
                 Presence::Unknown
             );
@@ -519,17 +726,20 @@ mod tests {
             atom("build", &["design-doc"], &["code-change"], &["review"]),
             atom("review", &["code-change"], &["verdict"], &[]),
         ];
-        let probes: BTreeMap<String, Probe> = [(
-            "verdict".to_string(),
-            Probe::Command(format!("touch {}", marker.display())),
-        )]
-        .into_iter()
-        .collect();
+        let schema = crate::telos::WitnessSchema {
+            probes: [(
+                "verdict".to_string(),
+                Probe::Command(format!("touch {}", marker.display())),
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
         let git = Git::with_bin(dir.path(), "definitely-not-a-real-git-binary".to_string());
         let client =
             KanClient::with_bin(dir.path(), "definitely-not-a-real-kan-binary".to_string());
 
-        let report = infer(&atoms, &probes, &git, &ClaimLog::new(&client), None);
+        let report = infer(&atoms, &schema, &git, &ClaimLog::new(&client), None);
         assert!(
             !marker.exists(),
             "inference executed a command probe — REQ-6 is broken"

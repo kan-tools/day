@@ -33,6 +33,8 @@ pub enum Error {
     Kan(#[from] crate::kan_client::Error),
     #[error(transparent)]
     Git(#[from] crate::git::Error),
+    #[error(transparent)]
+    Blocks(#[from] crate::blocks::Error),
     #[error("could not read {path}: {source}")]
     Read {
         path: String,
@@ -263,6 +265,110 @@ fn check_versions(
     }
 }
 
+/// Does any live claim on `subject` name `tag`?
+///
+/// **Any**, not the newest. Taking only the newest claim carrying text meant
+/// that recording a release correctly and then appending an ordinary note to
+/// the same subject flipped it back to "not recorded" — reproduced during the
+/// review of the position-honesty milestone. It is the same degenerate fold as
+/// the telos-rendering defect: "newest text wins" works only while exactly one
+/// kind of claim ever lands on a subject, and nothing enforces that.
+///
+/// Scanning every live claim also spans this repo's own mixed history — v0.3
+/// and v0.4 were recorded with `kan observe`, v0.5 onward with `kan result` —
+/// without day having to assume which verb a project uses.
+///
+/// The cost is a claim that merely *mentions* the tag in passing satisfying it.
+/// That is a rarer failure than the one it removes, and day#107 is where
+/// correspondence gets expressed properly rather than by substring.
+///
+/// Shared with [`reconcile_boundary`] on purpose: two surfaces answering the
+/// same question from two implementations is how they come to disagree, which
+/// is F5's other half.
+fn any_claim_names(claims: &[crate::kan_client::Claim], tag: &str) -> bool {
+    claims
+        .iter()
+        .filter_map(|c| c.text.as_deref())
+        .any(|text| text.contains(tag))
+}
+
+/// day#103 — is the tag that closed the last cycle actually written down?
+///
+/// The same question [`reconcile_boundary`] asks, extracted so it can be asked
+/// from **where position is computed** rather than only from `day assess docs`.
+///
+/// That reachability is the entire point of the issue. The detector of a skipped
+/// `release` atom used to sit downstream of the release atom, in a manual verb —
+/// so skipping the atom skipped the alarm, and the record looked complete from
+/// the inside for two consecutive releases until the verb was run for an
+/// unrelated reason. A check that only runs when you remember to run it is not a
+/// check on the thing you forget.
+///
+/// Returns the finding, or `None` when tag and record agree. Errors are
+/// **returned, never swallowed**: a log day could not read is not a boundary
+/// that is fine, and reporting it as fine is the failure `telos/honest-reads`
+/// names.
+///
+/// Deliberately narrower than `reconcile_boundary`, which also reports the
+/// reverse case (a claim with no tag — "a boundary nobody cut"). That one is an
+/// assessment-time observation about the record; this is the one a session needs
+/// to see, because it is the one that means work just happened and was lost.
+pub fn unrecorded_boundary(client: &KanClient, git: &Git) -> Result<Option<String>, Error> {
+    let schema = match DocsSchema::load(client) {
+        Ok(schema) => schema,
+        // A project that has NOT DECLARED a docs schema has not told day where
+        // releases are recorded, so there is no correspondence to check and no
+        // finding to make. That is absence, not failure, and the two must not
+        // collapse: reporting "day could not read your declaration" for a
+        // project that simply has none is the same error in the opposite
+        // direction from the one this function exists to fix.
+        //
+        // Every other error still propagates — a declaration that exists and
+        // could not be read is exactly what must never be silently skipped.
+        Err(Error::NotDeclared { .. }) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    // Propagated, not defaulted. The cycle declaration is what says which tags
+    // close a cycle (day#76); if day cannot read it, it does not know what to
+    // look for, and defaulting to `v*` on a project whose cycles are passes
+    // would produce a confident finding about the wrong tag. `status::compute`
+    // surfaces the error as unreadable, which is the honest outcome — an
+    // absent declaration is still the default, because `load` reports that as
+    // its own case rather than as a failure.
+    let cycle = crate::blocks::CycleSchema::load(client)?;
+
+    let Some(tag) = git.latest_tag_matching(&cycle.tags)? else {
+        // No boundary tag at all is not a finding. A repo that has never
+        // released has nothing to have failed to record — and this is the
+        // default state of every fresh clone, which CLAUDE.md names as the mode
+        // a two-mode mechanism gets tested in least.
+        return Ok(None);
+    };
+
+    let claims = client.show(&schema.release_subject)?;
+
+    // Correspondence, not mere existence: a `release` claim for the PREVIOUS tag
+    // would satisfy "a claim exists" while the current one went unrecorded,
+    // which is exactly what happened across v0.7.0-beta.3 and v0.8.0-beta.1.
+    if any_claim_names(&claims, &tag) {
+        return Ok(None);
+    }
+
+    let has_any_text = claims.iter().any(|c| c.text.is_some());
+    Ok(Some(if has_any_text {
+        format!(
+            "{tag} is tagged, but no `{}` claim mentions it — one of the two \
+             records is behind",
+            schema.release_subject
+        )
+    } else {
+        format!(
+            "{tag} is tagged but no `{}` claim records it — a release nobody wrote down",
+            schema.release_subject
+        )
+    }))
+}
+
 /// Reconciles the two records of "when was the last release": the `release`
 /// subject in kan, and the newest `v*` tag in git. Disagreement is a
 /// finding, not something to resolve by picking a winner — a release tagged
@@ -285,7 +391,10 @@ fn reconcile_boundary(
     // is falling through to the (Some(tag), None) arm below and announcing a
     // release nobody wrote down, on the strength of a read that never happened.
     let recorded = match client.show(subject) {
-        Ok(claims) => claims.iter().rev().find_map(|c| c.text.clone()),
+        // F5: every live claim, not the newest carrying text — see
+        // `any_claim_names`. Shared with `unrecorded_boundary` so `day status`
+        // and `day assess docs` cannot answer the same question differently.
+        Ok(claims) => Some(claims),
         Err(e) => {
             findings.push(Finding {
                 level: Level::Unchecked,
@@ -298,9 +407,15 @@ fn reconcile_boundary(
         }
     };
 
+    // A subject whose claims carry no text is "nothing recorded", not "recorded
+    // as nothing" — normalised here so each arm below means exactly what it says
+    // and the match stays exhaustive.
+    let recorded = recorded
+        .filter(|claims: &Vec<crate::kan_client::Claim>| claims.iter().any(|c| c.text.is_some()));
+
     match (&tag, &recorded) {
-        (Some(tag), Some(text)) => {
-            if text.contains(tag.as_str()) {
+        (Some(tag), Some(claims)) => {
+            if any_claim_names(claims, tag) {
                 findings.push(Finding {
                     level: Level::Pass,
                     message: format!("release {tag} is both tagged and recorded"),
@@ -309,8 +424,8 @@ fn reconcile_boundary(
                 findings.push(Finding {
                     level: Level::Warn,
                     message: format!(
-                        "latest tag is {tag}, but the newest `{subject}` claim does not \
-                         mention it — one of the two records may be behind"
+                        "latest tag is {tag}, but no `{subject}` claim mentions it — one \
+                         of the two records may be behind"
                     ),
                 });
             }

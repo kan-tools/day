@@ -111,6 +111,22 @@ pub struct Status {
     /// Off-sequence findings from [`position::infer`]: a downstream output is
     /// present while an upstream one is not, so a step was skipped.
     pub off_sequence: Vec<String>,
+    /// Artifact types that exist but are not written down (day#103): a declared
+    /// `material` witness is satisfied for this cycle and the declared `record`
+    /// witness is not.
+    ///
+    /// Rendered separately from everything else here because it is a distinct
+    /// claim: not "this is next", not "a step was skipped", but "this happened
+    /// and the log does not know". Collapsing it into either of those is the
+    /// defect it exists to fix.
+    pub unrecorded: Vec<String>,
+    /// day#103 — the cycle-closing tag exists and the log does not record it.
+    ///
+    /// Computed here rather than only in `day assess docs`, so every channel
+    /// that reports a position inherits it. Two consecutive releases shipped
+    /// unrecorded because the only detector was a manual verb downstream of the
+    /// step that was skipped.
+    pub unrecorded_boundary: Option<String>,
     /// Set when position has moved past the last recorded assessment. `None`
     /// when no atom assessment exists, or when the assessed atom is still
     /// current — absence of a baseline is not a change (REQ-10, AC-10).
@@ -268,6 +284,37 @@ impl Status {
         (!parts.is_empty()).then(|| parts.join("\n"))
     }
 
+    /// The **standing** half of what the model should hear: things that are
+    /// true until somebody records something, as opposed to events.
+    ///
+    /// Separate from [`Self::notice_for_model`] because the two are rationed
+    /// differently, and `hooks.rs` is where that distinction lives. A transition
+    /// is an event and fires once; "this exists and the log does not mention it"
+    /// stays true for as long as nobody acts, so repeating it every prompt is
+    /// day#30's failure — an always-present rule becomes background, and then
+    /// the real one is invisible too.
+    ///
+    /// day#103 wanted this on the model channel at all, and that part is right:
+    /// the record is cheapest to repair in the session that broke it, and an
+    /// hour later the boundary check is archaeology. Rationed, not silent.
+    pub fn standing_notice(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if let Some(finding) = &self.unrecorded_boundary {
+            parts.push(format!(
+                "day: {finding}. Recording it is an append, not a correction. \
+                 Advisory; nothing is blocked."
+            ));
+        }
+        for kind in &self.unrecorded {
+            parts.push(format!(
+                "day: `{kind}` exists in this cycle, but its declared record witness \
+                 finds nothing — the work happened and the log does not say so. \
+                 Advisory; nothing is blocked."
+            ));
+        }
+        (!parts.is_empty()).then(|| parts.join("\n"))
+    }
+
     /// `day status`: the full human report — current atom(s), satisfied and
     /// unknown inputs, met and unmet `done` criteria, what follows, and any
     /// off-sequence finding.
@@ -352,6 +399,22 @@ impl Status {
             ));
         }
 
+        // One section, whichever findings fired. Two blocks each printing the
+        // same header rendered it twice when both were live (F8).
+        if self.unrecorded_boundary.is_some() || !self.unrecorded.is_empty() {
+            out.push_str("Done but unrecorded:\n");
+            if let Some(finding) = &self.unrecorded_boundary {
+                out.push_str(&format!("  ! {finding}\n"));
+            }
+            for kind in &self.unrecorded {
+                out.push_str(&format!(
+                    "  ! {kind} exists in this cycle, but its declared record witness \
+                     finds nothing —\n    the work happened and the log does not say so\n"
+                ));
+            }
+            out.push('\n');
+        }
+
         if !self.off_sequence.is_empty() {
             out.push_str("Off-sequence:\n");
             for finding in &self.off_sequence {
@@ -408,6 +471,23 @@ impl Status {
         // Off-sequence is a warning, and worth its own line even in the terse
         // form — a skipped step is exactly what a person scanning a status bar
         // should catch.
+        // F2: the done-but-unrecorded findings reach the bar. It is persistent,
+        // it already carries `day ! ` findings, and a STANDING condition — one
+        // that stays true until someone records something — is exactly what a
+        // persistent surface is for. The model channel rations these instead
+        // (see `notice_for_model`), because repeating a standing condition every
+        // prompt is day#30's failure.
+        if let Some(finding) = &self.unrecorded_boundary {
+            lines.push(format!("day ! {finding}"));
+        }
+        if let Some(kind) = self.unrecorded.first() {
+            let more = match self.unrecorded.len() {
+                1 => String::new(),
+                n => format!(" (+{} more)", n - 1),
+            };
+            lines.push(format!("day ! {kind} exists but is not recorded{more}"));
+        }
+
         if let Some(first) = self.off_sequence.first() {
             lines.push(format!("day ! {first}"));
         }
@@ -471,6 +551,26 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         ),
     };
 
+    // day#103 — the boundary check, asked HERE rather than only in `assess
+    // docs`. `status::compute` is the one place position is computed for every
+    // channel, so wiring it here means the hooks, the status line and the long
+    // form all inherit it and no channel can be added later that omits it. That
+    // is day#101's rule: a guarantee belongs at the mechanism, not at a caller.
+    //
+    // An error is reported as unreadable, never dropped. A log day could not
+    // read is not a boundary that is fine.
+    let (unrecorded_boundary, boundary_unreadable) =
+        match crate::docs::unrecorded_boundary(client, git) {
+            Ok(finding) => (finding, None),
+            Err(e) => (
+                None,
+                Some(Unreadable {
+                    message: format!("the release boundary could not be reconciled: {e}"),
+                    cause: Cause::Malformed,
+                }),
+            ),
+        };
+
     let (blocks, blocks_unreadable) = match crate::blocks::BlockSchemas::load(client) {
         Ok(blocks) => (blocks, None),
         Err(e) => (
@@ -502,6 +602,8 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         return Ok(Status {
             here: Vec::new(),
             off_sequence: Vec::new(),
+            unrecorded: Vec::new(),
+            unrecorded_boundary: unrecorded_boundary.clone(),
             transition: None,
             uncheckable: true,
             cadence,
@@ -513,6 +615,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                     blocks_unreadable.clone(),
                     cadence_unreadable.clone(),
                     cycle_unreadable.clone(),
+                    boundary_unreadable.clone(),
                 ],
                 // Inference has not run, so it cannot have failed a read.
                 &[],
@@ -533,7 +636,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // One read of the log, shared by every claim probe below.
     let log = ClaimLog::new(client);
 
-    let report = position::infer(&atoms, &schema.probes, git, &log, boundary.as_ref());
+    let report = position::infer(&atoms, &schema, git, &log, boundary.as_ref());
     let by_name: BTreeMap<&str, &Atom> = atoms.iter().map(|a| (a.name.as_str(), a)).collect();
 
     let here: Vec<Here> = report
@@ -566,6 +669,8 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     Ok(Status {
         here,
         off_sequence: report.off_sequence,
+        unrecorded: report.unrecorded,
+        unrecorded_boundary,
         transition,
         uncheckable: false,
         cadence,
@@ -577,6 +682,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 blocks_unreadable.clone(),
                 cadence_unreadable.clone(),
                 cycle_unreadable.clone(),
+                boundary_unreadable.clone(),
             ],
             &report.read_failures,
             &client.unaccounted_subjects(),
@@ -600,7 +706,7 @@ fn unreadable_from(
     // Failures to READ a declaration, as opposed to findings within one that was
     // read. They lead the list because "day could not read your declaration"
     // outranks anything day found inside the declarations it could.
-    declaration_errors: [Option<Unreadable>; 3],
+    declaration_errors: [Option<Unreadable>; 4],
     // Instances position inference read and could not check
     // (`.design/declared-blocks.md` REQ-4). Distinct from the declaration
     // errors above: the project's *declaration* was fine and a *claim carrying
@@ -778,6 +884,8 @@ mod tests {
                 &["review"],
             )],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -798,6 +906,8 @@ mod tests {
         let status = Status {
             here: vec![here("design", vec![], &[]), here("build", vec![], &[])],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -817,6 +927,8 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -833,6 +945,8 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: true,
             unreadable: Vec::new(),
@@ -846,11 +960,99 @@ mod tests {
 
     /// Off-sequence is a warning and gets its own line even in the terse form:
     /// a skipped step is exactly what a status-bar glance should catch.
+    /// F2 — the done-but-unrecorded findings reach the model, not only
+    /// `day status`.
+    ///
+    /// The review mutated the boundary line out of the model channel and it
+    /// **SURVIVED**: the guarantee was computed at the mechanism and then
+    /// dropped at three separate call sites, and the AC-8 scan could not see it
+    /// because it asserts `status::compute` *calls* the check, not that the
+    /// answer is delivered. day#101 one layer out.
+    #[test]
+    fn the_unrecorded_findings_reach_the_model_channel() {
+        let mut status = Status {
+            here: vec![here("build", vec![], &[])],
+            off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: Some("v1.0.0 is tagged but no `release` claim records it".into()),
+            transition: None,
+            uncheckable: false,
+            unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
+        };
+
+        let notice = status
+            .standing_notice()
+            .expect("a boundary finding must reach the model channel");
+        assert!(
+            notice.contains("v1.0.0"),
+            "the notice must name the tag, or it cannot be acted on: {notice}"
+        );
+
+        // The generalised finding too, not only the release special case.
+        status.unrecorded_boundary = None;
+        status.unrecorded = vec!["code-change".into()];
+        let notice = status
+            .standing_notice()
+            .expect("a paired-witness finding must reach the model channel too");
+        assert!(
+            notice.contains("code-change"),
+            "the notice must name the artifact type: {notice}"
+        );
+
+        // And stays quiet when there is nothing to say.
+        status.unrecorded = vec![];
+        assert!(
+            status.standing_notice().is_none(),
+            "a healthy repo must produce no standing notice at all"
+        );
+    }
+
+    /// F5 — the GENERAL finding reaches the status line, not only the release
+    /// special case it was meant to generalise.
+    ///
+    /// The end-to-end test declared a single `tag` witness plus a `schema/docs`,
+    /// so all four of its passing mutations ran through
+    /// `docs::unrecorded_boundary` — the pre-existing release path. Deleting the
+    /// `unrecorded` (paired-witness) half of `render_line` SURVIVED: the test
+    /// named for the generalisation exercised only the instance.
+    ///
+    /// A unit test rather than another end-to-end one, because reaching this
+    /// through the hooks needs a git stub reporting a changed file, and the
+    /// property here is about rendering, not about probes.
+    #[test]
+    fn the_paired_witness_finding_reaches_the_status_line() {
+        let status = Status {
+            here: vec![here("build", vec![], &[])],
+            off_sequence: vec![],
+            unrecorded: vec!["code-change".into(), "design-doc".into()],
+            unrecorded_boundary: None,
+            transition: None,
+            uncheckable: false,
+            unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
+        };
+
+        let line = status.render_line();
+        assert!(
+            line.contains("code-change"),
+            "the paired-witness finding must reach the bar, not only `day status` \
+             — the release case is the instance, this is the rule: {line}"
+        );
+        assert!(
+            line.contains("+1 more"),
+            "with several types unrecorded the line must say so rather than \
+             silently naming one: {line}"
+        );
+    }
+
     #[test]
     fn off_sequence_surfaces_in_both_forms() {
         let status = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec!["review produced its output but upstream build did not".into()],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -869,6 +1071,8 @@ mod tests {
         let status = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: Some(Transition {
                 from: "build".into(),
                 to: vec!["review".into()],
@@ -900,6 +1104,8 @@ mod tests {
         let quiet = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
@@ -911,6 +1117,8 @@ mod tests {
         let loud = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec!["build produced its output but upstream design did not".into()],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: Some(Transition {
                 from: "build".into(),
                 to: vec!["review".into()],
@@ -938,6 +1146,8 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![c], &[])],
             off_sequence: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
             transition: None,
             uncheckable: false,
             unreadable: Vec::new(),
