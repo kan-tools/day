@@ -840,16 +840,41 @@ fn an_unrecorded_release_reaches_the_line_the_cache_and_the_model() {
 #[test]
 fn the_cadence_counter_advances_once_per_prompt_not_once_per_condition() {
     let dir = tempfile::tempdir().unwrap();
-    // A witness schema day can read, plus an atom block it CANNOT — so the
-    // unreadable-declaration condition is live alongside anything else.
+    // TWO standing conditions must be genuinely live, and the first version of
+    // this test had only one.
+    //
+    // It declared `{"code":{"path":"src/*"}}` — a material-only witness, so
+    // `unrecorded` was empty — and no `schema/docs`, so `unrecorded_boundary`
+    // was None. `standing_notice()` returned None, one condition was live, and
+    // under the defective code the first gate SHORT-CIRCUITS and consults the
+    // cadence exactly once. The test passed with the defect fully present:
+    // reverting the fix left 337/337 green.
+    //
+    // That is the two-mode trap for the third time in this milestone, and the
+    // third time in the mode the commit message said was already working.
+    //
+    // So: a PAIRED witness whose material half is a `path` probe (a `tag`
+    // material probe is boundary-degenerate and can never fire — see
+    // docs/CONVENTIONS.md), which makes `unrecorded` non-empty; plus an atom
+    // block this build cannot read, which makes `unreadable` non-empty.
     let (kan, _counter) = write_counting_kan_stub(
         dir.path(),
         &[
             claim(
                 "schema/witness",
                 "bafyw",
-                "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
+                "W.\n\n```day-witness\n{\"published-artifact\":{\"tag\":\"v*\"}}\n```\n",
             ),
+            // Makes the boundary condition live: the git stub reports a `v9.9.9`
+            // tag and no claim names it, so `unrecorded_boundary` is Some.
+            claim(
+                "schema/docs",
+                "bafyd",
+                "D.\n\n```day-docs\n{\"version_source\":\"Cargo.toml\",\"version_files\":[],\
+                 \"doc_files\":[],\"release_subject\":\"release\"}\n```\n",
+            ),
+            // And an atom block this build cannot read, so `unreadable` is
+            // non-empty. Two live standing conditions, which is the whole point.
             atom_block(
                 "future",
                 "bafyf",
@@ -882,16 +907,26 @@ fn the_cadence_counter_advances_once_per_prompt_not_once_per_condition() {
 
     // Either the counter advanced by one, or it wrapped to zero because this
     // prompt fired — both are one tick. What must not happen is a jump of two.
-    // Vacuity guard. If the gate never ran, both reads are zero and every
-    // assertion below passes while measuring nothing — which is how the first
-    // two versions of this test "passed" against the defect they name.
+    // PREMISE GUARD, and the previous one was the wrong guard. It checked that
+    // the gate RAN, which is true with one condition live — so it supplied
+    // assurance for exactly the mode that could not detect the defect. What
+    // matters is that TWO conditions are live, because that is what makes two
+    // consultations observable.
+    let status = String::from_utf8_lossy(&day(dir.path(), &kan, &["status"]).stdout).to_string();
+    assert!(
+        status.contains("Done but unrecorded"),
+        "premise broken: the paired-witness condition is not live, so a second \
+         gate consultation cannot be observed and this test asserts nothing.\n{status}"
+    );
     assert!(
         after_first > 0 || after_second > 0,
-        "the cadence gate never ran in this fixture, so this test asserts nothing \
-         (counter stayed at {after_first}/{after_second})"
+        "the cadence gate never ran (counter {after_first}/{after_second})"
     );
 
-    let advanced = after_second.wrapping_sub(after_first);
+    // Saturating, not wrapping. `wrapping_sub` turns a fire-and-reset
+    // (n -> 0) into u32::MAX, which fails the assertion for the wrong reason —
+    // unreachable at cadence 10, live the moment a fixture declares a small one.
+    let advanced = after_second.saturating_sub(after_first);
     assert!(
         advanced <= 1,
         "the cadence counter moved by {advanced} across one prompt ({after_first} -> \

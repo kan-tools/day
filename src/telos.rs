@@ -573,21 +573,7 @@ pub fn assess(
     // left the one that instructs the write. Prefer the declaration; fall back
     // to any claim that is not an assessment; never let a `Result` stand in for
     // the statement.
-    let prose =
-        |c: &crate::kan_client::Claim| c.text.as_deref().map(prose_only).filter(|s| !s.is_empty());
-    let statement = claims
-        .iter()
-        .rev()
-        .filter(|c| c.kind == "Decision")
-        .find_map(prose)
-        .or_else(|| {
-            claims
-                .iter()
-                .rev()
-                .filter(|c| c.kind != "Result")
-                .find_map(prose)
-        });
-
+    let statement = atoms::statement_from(&claims);
     // Loaded only when there is something to check, so a telos with no
     // witnesses reports that rather than a missing-schema error it cannot
     // act on.

@@ -181,24 +181,8 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         // rendering nothing for it would trade this defect for a worse one.
         // What must never happen is a `Result` becoming the statement, which is
         // the whole of F12.
-        let prose = |c: &crate::kan_client::Claim| {
-            c.text
-                .as_deref()
-                .map(atoms::prose_only)
-                .filter(|s| !s.is_empty())
-        };
-        let statement = claims
-            .iter()
-            .rev()
-            .filter(|c| c.kind == "Decision")
-            .find_map(prose)
-            .or_else(|| {
-                claims
-                    .iter()
-                    .rev()
-                    .filter(|c| c.kind != "Result")
-                    .find_map(prose)
-            });
+        let statement = atoms::statement_from(&claims);
+
         // An assessment enriches the line instead of replacing it — which is
         // what recording one was supposed to do.
         let assessed = claims.iter().any(|c| c.kind == "Result");

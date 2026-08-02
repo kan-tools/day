@@ -70,14 +70,33 @@ branch="$(git branch --show-current 2>/dev/null || true)"
 # no `origin` at all is a legitimate skip and says so; a reachable origin is
 # compared; an origin that cannot be reached REFUSES, because at that point the
 # script does not know whether the tag would be based on a stale commit.
+# FOUR cases, and each of the previous two versions got a different one wrong.
+# Round 1 used `2>/dev/null | cut`, so a pipeline's status is `cut`'s and the
+# check COULD NOT FAIL. Round 2 used `2>&1`, which folded stderr INTO the value
+# being compared — an ordinary first-connect SSH warning ("Permanently added
+# 'github.com' …") became part of the sha and the script refused a correct
+# release. Could-not-fail replaced by cannot-succeed.
+#
+# stdout and stderr are therefore captured SEPARATELY, via a temp file for
+# stderr, so the compared value is only ever the sha.
 if git remote get-url origin >/dev/null 2>&1; then
-  if remote_main="$(git ls-remote origin refs/heads/main 2>&1)"; then
-    remote_main="$(printf '%s' "$remote_main" | cut -f1)"
-    if [ -n "$remote_main" ] && [ "$remote_main" != "$(git rev-parse HEAD)" ]; then
+  ls_remote_err="$(mktemp)"
+  if remote_out="$(git ls-remote origin refs/heads/main 2>"$ls_remote_err")"; then
+    remote_main="$(printf '%s' "$remote_out" | cut -f1)"
+    rm -f "$ls_remote_err"
+    if [ -z "$remote_main" ]; then
+      # Reachable, but the branch is not there. Not a skip: the script cannot
+      # confirm HEAD is pushed, and silently proceeding is the could-not-check
+      # -reported-as-clean shape this block exists to remove.
+      die "origin is reachable but has no refs/heads/main; verify by hand that this commit is pushed"
+    fi
+    if [ "$remote_main" != "$(git rev-parse HEAD)" ]; then
       die "local main is not origin/main ($remote_main); pull or push first"
     fi
   else
-    die "could not reach origin to compare main ($remote_main); \
+    err="$(cat "$ls_remote_err" 2>/dev/null)"
+    rm -f "$ls_remote_err"
+    die "could not reach origin to compare main: ${err:-no detail}
 re-run when the remote is reachable, or verify by hand that HEAD is pushed"
   fi
 else
@@ -92,7 +111,15 @@ if git tag --list "$tag" | grep -q .; then
   die "tag $tag already exists locally"
 fi
 
-cargo_version="$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')"
+# Same pipeline-status class as above: a failed `cargo metadata` would leave
+# this empty and the script would die naming the wrong cause ("tag does not
+# match version ''") instead of the real one.
+if ! cargo_meta="$(cargo metadata --no-deps --format-version=1)"; then
+  die "could not read cargo metadata; fix the manifest before releasing"
+fi
+cargo_version="$(printf '%s' "$cargo_meta" | jq -r '.packages[0].version')"
+[ -n "$cargo_version" ] && [ "$cargo_version" != "null" ] \
+  || die "could not read a version out of cargo metadata"
 [ "${tag#v}" = "$cargo_version" ] \
   || die "tag $tag does not match Cargo.toml version $cargo_version — bump one of them"
 

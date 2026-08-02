@@ -1008,6 +1008,44 @@ mod tests {
         );
     }
 
+    /// F5 — the GENERAL finding reaches the status line, not only the release
+    /// special case it was meant to generalise.
+    ///
+    /// The end-to-end test declared a single `tag` witness plus a `schema/docs`,
+    /// so all four of its passing mutations ran through
+    /// `docs::unrecorded_boundary` — the pre-existing release path. Deleting the
+    /// `unrecorded` (paired-witness) half of `render_line` SURVIVED: the test
+    /// named for the generalisation exercised only the instance.
+    ///
+    /// A unit test rather than another end-to-end one, because reaching this
+    /// through the hooks needs a git stub reporting a changed file, and the
+    /// property here is about rendering, not about probes.
+    #[test]
+    fn the_paired_witness_finding_reaches_the_status_line() {
+        let status = Status {
+            here: vec![here("build", vec![], &[])],
+            off_sequence: vec![],
+            unrecorded: vec!["code-change".into(), "design-doc".into()],
+            unrecorded_boundary: None,
+            transition: None,
+            uncheckable: false,
+            unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
+        };
+
+        let line = status.render_line();
+        assert!(
+            line.contains("code-change"),
+            "the paired-witness finding must reach the bar, not only `day status` \
+             — the release case is the instance, this is the rule: {line}"
+        );
+        assert!(
+            line.contains("+1 more"),
+            "with several types unrecorded the line must say so rather than \
+             silently naming one: {line}"
+        );
+    }
+
     #[test]
     fn off_sequence_surfaces_in_both_forms() {
         let status = Status {

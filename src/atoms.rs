@@ -290,6 +290,50 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
 /// A claim's prose with fenced blocks removed.
 ///
 /// Both uses found by dogfooding: rendering a telos statement printed the
+/// The statement a vocabulary subject currently makes, folded from its claims
+/// **by role** rather than by recency.
+///
+/// ONE function, called from both surfaces that need it. `render_teloi` and
+/// `assess telos` each had their own copy of this logic — the second written
+/// while fixing the first — which is precisely the defect that produced the
+/// shared `any_claim_names` helper one commit earlier: two surfaces answering
+/// one question from two implementations drift, and nothing notices. It also
+/// means there is exactly one line to mutate to prove the rule is asserted.
+///
+/// The rule: prefer the declaration (`Decision`, which is what `kan decide` and
+/// `day telos declare` write), fall back to any claim that is **not** an
+/// assessment, and never let a `Result` stand in for the statement.
+///
+/// The fallback is load-bearing, not laxity. Filtering strictly to `Decision`
+/// is correct in principle and renders nothing for a hand-written telos
+/// recorded with `kan observe` — a fold that returns "no statement" for a
+/// subject that plainly has one is a worse defect than the one being fixed.
+///
+/// Why a `Result` must never win: `day assess telos` prints
+/// `kan result telos/<slug> "…"` as the way to record an assessment, so the
+/// verb that reads this instructs the write that used to break it. The reader
+/// and the writer were the same command, disagreeing with itself.
+pub fn statement_from(claims: &[kan_client::Claim]) -> Option<String> {
+    let prose = |c: &kan_client::Claim| {
+        c.text
+            .as_deref()
+            .map(prose_only)
+            .filter(|s: &String| !s.is_empty())
+    };
+    claims
+        .iter()
+        .rev()
+        .filter(|c| c.kind == "Decision")
+        .find_map(prose)
+        .or_else(|| {
+            claims
+                .iter()
+                .rev()
+                .filter(|c| c.kind != "Result")
+                .find_map(prose)
+        })
+}
+
 /// whole `day-telos` block back at the reader, and — worse — the witness
 /// scan matched every witness type against the block that *declares* it, so
 /// every telos reported its own declaration as a prose assertion that the
@@ -785,6 +829,68 @@ mod version_gate {
 
 #[cfg(test)]
 mod tests {
+
+    /// The fold, asserted on the case that produced it.
+    ///
+    /// Both surfaces shipped this logic with NO test — twice. Round 1 added the
+    /// `render_teloi` fold untested; round 2 added the `assess telos` fold
+    /// untested, inside the commit whose stated theme was "four delivery sites
+    /// were unasserted". Reverting either to "newest text wins" SURVIVED.
+    ///
+    /// One shared function means one line to mutate, which is most of why it
+    /// was extracted.
+    #[test]
+    fn a_result_never_stands_in_for_a_telos_statement() {
+        let decl = kan_client::Claim {
+            cid: "bafy1".into(),
+            kind: "Decision".into(),
+            text: Some("The telos itself.".into()),
+            title: None,
+            author: None,
+            recorded_at: Some(1),
+        };
+        // Newer than the declaration, and what `day assess telos` instructs you
+        // to write — the exact claim that used to hijack the statement slot.
+        let assessment = kan_client::Claim {
+            cid: "bafy2".into(),
+            kind: "Result".into(),
+            text: Some("ASSESSMENT OF telos/x: material evidence ...".into()),
+            title: None,
+            author: None,
+            recorded_at: Some(2),
+        };
+
+        let folded = statement_from(&[decl.clone(), assessment.clone()])
+            .expect("a declared telos must yield a statement");
+        assert_eq!(
+            folded, "The telos itself.",
+            "a newer Result must not become the statement — that is the defect \
+             `day assess telos` inflicts on itself by instructing `kan result \
+             telos/<slug>`"
+        );
+
+        // The fallback: a telos recorded with `kan observe` still renders,
+        // because a fold returning nothing for a subject that plainly has a
+        // statement is worse than the defect being fixed.
+        let observed = kan_client::Claim {
+            kind: "Observation".into(),
+            text: Some("A hand-written telos.".into()),
+            ..decl.clone()
+        };
+        assert_eq!(
+            statement_from(&[observed, assessment.clone()]).as_deref(),
+            Some("A hand-written telos."),
+            "an Observation-declared telos must still render"
+        );
+
+        // And a subject carrying only assessments has no statement to give.
+        assert_eq!(
+            statement_from(&[assessment]),
+            None,
+            "nothing but Results means no statement, not the newest Result"
+        );
+    }
+
     use super::*;
 
     fn atom(name: &str, inputs: &[&str], outputs: &[&str], next: &[&str]) -> Atom {
