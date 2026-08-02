@@ -9,11 +9,13 @@ it always said something else.
 
 ## Where we are
 
-**Shipped: `v0.8.0-beta.1`.** day declares, reads, assesses and records. Eleven
+**Shipped: `v0.9.0-beta.1`.** day declares, reads, assesses and records. Eleven
 verbs, two commands (`/design`, `/adversarial-review`), three hooks, a status
 line, and three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
-(`beta.3`); `v0.8.0-beta.1` is the bulk read (day#71).
+(`beta.3`); `v0.8.0-beta.1` is the bulk read (day#71); `v0.9.0-beta.1` is
+position reports that can represent their own failure (day#98/#97/#103/#105/#111)
+plus the material/record witness pair.
 
 **The version number and the milestone name below have come apart, and this is
 the honest record of it.** "v0.8 — transportable" in the table further down is a
@@ -29,6 +31,53 @@ Every defect found in day so far came from using day on day, not from testing
 it. That is still the strongest signal available about how to sequence what
 follows: **prefer the version that gets day used daily over the version that
 adds the most model.**
+
+### The next three, and why in that order
+
+Tracked as GitHub milestones; the issue numbers are the contract, this is the
+reasoning.
+
+**v0.10 — the graph tells the truth.** day#113 splits `next` into forward edges
+and `revisits`, so `next` alone is a **guaranteed DAG**. That is worth more than
+the bug it fixes: reachability, topological ordering and partial-order reporting
+go from unavailable to trivial, and today's constant false "a step was skipped"
+warning disappears because "upstream" stops being undefined in a cycle. With it:
+day#115 (fold rules — a subject's state is an aggregation over its claims, not
+whatever text arrived last), day#112, day#108, day#95.
+
+First because it is the only one of the three a person feels daily. The false
+warning is on the board every session, and a warning present in the normal state
+teaches you to ignore the channel — which `src/compat.rs` already names as how a
+warning gets ignored.
+
+**v0.11 — verification that can fail.** day#101 (a guarantee wired at a call
+site) and day#116 (a guarantee asserted by a test that cannot observe it) are one
+defect from two sides; day#114 and day#118 are the tooling that would catch
+either. The deliverable is a **revert harness** — apply the inverse of a named
+change, assert named tests fail, restore, assert they pass — plus the rule that a
+commit closing a finding demonstrates it.
+
+**Build the harness before writing the rule into `CLAUDE.md`.** A rule that costs
+something on every fix commit with no tooling behind it is ceremony, and ceremony
+is what people route around — crosslink's blocking hooks are that failure wearing
+a different hat. If the harness makes the demonstration nearly free, the rule
+describes what already happens; if it does not, the rule should not ship. The
+milestone is held to its own rule, which is the only honest way to find out.
+
+Scope is every harness in `scripts/` and `.github/workflows/`, not just
+`mutate.py`: in the single session that produced this section, four separate
+measurement tools asserted more than they verified, and none of it was in day's
+shipped behaviour.
+
+**v0.12 — transportable.** Vocabulary packs (day#73), with day#109, day#86,
+day#50, day#107. This is the milestone the table below still calls "v0.8", and it
+has now been deferred twice for the same stated reason: a pack transports a
+vocabulary, and transporting one whose reporting is known-wrong exports the
+defect to exactly the population `telos/v1.0`'s bar names. v0.10 and v0.11 are
+what make it safe to ship.
+
+Bracketed, not scheduled: day#38, day#75, day#82, day#84, day#85, day#88,
+day#93, day#106.
 
 ## v0.2 — Declaring *(complete)*
 
