@@ -146,9 +146,34 @@ pub struct Interface {
     pub inputs: Vec<String>,
     #[serde(rename = "out", default)]
     pub outputs: Vec<String>,
-    /// Atoms this one declares it composes into, by slug.
+    /// Atoms this one declares it composes into, by slug. **Forward only**:
+    /// the relation is "what follows this", never "what this can send you back
+    /// to". See [`revisits`](Self::revisits) for the other one, and
+    /// [`Forward`] for the acyclic view every ordering is read through.
+    ///
+    /// Read this field raw only to render the declaration as written. Anything
+    /// that treats it as an *order* goes through [`Forward`], which is enforced
+    /// by a source scan in `tests/plugin.rs` — see [`Forward`] for why.
     #[serde(default)]
     pub next: Vec<String>,
+    /// Atoms a negative outcome here sends you **back** to, by slug. The
+    /// feedback half of what `next` used to carry alone: an adversarial review
+    /// blocking sends you back to the build, and that is a real relation with
+    /// its own uses ("what work can this atom invalidate?") rather than a
+    /// dumping ground for edges that break the DAG.
+    ///
+    /// May be cyclic; is never an ordering, never contributes to input
+    /// coverage, and is never walked by anything that wants a partial order.
+    /// That is the whole point of it being a separate field (day#113): with
+    /// feedback out of `next`, `next` alone is a guaranteed DAG, and
+    /// reachability, topological ordering and partial-order reporting go from
+    /// unavailable to trivial.
+    ///
+    /// Additive, the same mechanism `done` uses: `skip_serializing_if` keeps
+    /// every block written before this existed byte-identical. A block that
+    /// *does* use it declares `_version: 2` — see [`Interface::to_claim_text`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revisits: Vec<String>,
     /// Witness types that would evidence this atom is **done**, resolved
     /// through the same `schema/witness` probes teloi use. `in`/`out`/`next`
     /// say what an atom consumes, produces, and leads to; this says how you
@@ -161,11 +186,46 @@ pub struct Interface {
     pub done: Vec<String>,
 }
 
+/// The `day-atom` version that introduced [`Interface::revisits`], and the
+/// version a block declares **only when it uses that field**.
+///
+/// Conditional on purpose. [`VERSION_KEY`] is documented as the reader version
+/// a block *requires*, and a block with no `revisits` requires nothing this
+/// day's predecessors could not already read — so stamping every block a new
+/// day writes would turn a compatible vocabulary into an incompatible one for
+/// no reason.
+pub const INTERFACE_VERSION_REVISITS: u64 = 2;
+
 impl crate::atoms::Versioned for Interface {
     /// An atom's interface. v1 is every block written before versioning
-    /// existed, which an absent `_version` still means.
-    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    /// existed, which an absent `_version` still means; v2 added `revisits`.
+    const SUPPORTED_VERSION: u64 = INTERFACE_VERSION_REVISITS;
     const FENCE: &'static str = FENCE_INFO;
+
+    /// One slug cannot be both a successor and a revisit. Decidable from a
+    /// single block, which is why it lives here rather than in [`check`] — the
+    /// *return* rule (a revisit's target must reach this atom through `next`)
+    /// needs the whole atom set and belongs there instead.
+    ///
+    /// No block written before `revisits` existed can trip this, so it refuses
+    /// nothing that upgrading a project would newly break — the reason a
+    /// `next` cycle is a finding and this is a refusal.
+    fn validate(&self) -> Result<(), String> {
+        let both: Vec<&str> = self
+            .next
+            .iter()
+            .filter(|n| self.revisits.iter().any(|r| r == *n))
+            .map(String::as_str)
+            .collect();
+        if both.is_empty() {
+            return Ok(());
+        }
+        Err(format!(
+            "[{}] appear in both `next` and `revisits` — an edge is either what follows \
+             this atom or what it sends you back to, and declaring both says neither",
+            both.join(", ")
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -189,12 +249,51 @@ impl Interface {
     /// [`extract_interface`] reads back. Write and read share the
     /// `Interface` type and this one function, so a hand-written block and a
     /// day-written block cannot mean different things.
+    ///
+    /// Stamps [`VERSION_KEY`] **only when the block uses a field an older day
+    /// could not read** — today, only `revisits`. An older day handed a
+    /// stamped block reports [`BlockError::TooNew`] ("upgrade day to read
+    /// it"), which is true and actionable; handed an unstamped one it reports
+    /// [`BlockError::Malformed`], which would blame the claim for the reader
+    /// being behind. See [`INTERFACE_VERSION_REVISITS`] for why this is not
+    /// stamped unconditionally.
     pub fn to_claim_text(&self, slug: &str, note: Option<&str>) -> String {
-        let json = serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string());
+        let json = self.to_block_json();
         let note = note
             .map(|n| format!("{n}\n\n"))
             .unwrap_or_else(|| format!("The {slug} atom.\n\n"));
         format!("{note}```{FENCE_INFO}\n{json}\n```\n")
+    }
+
+    /// The block body alone, version-stamped per [`to_claim_text`]'s rule.
+    ///
+    /// Split out so the stamping rule has one home and can be asserted
+    /// directly, rather than only through the claim text that wraps it.
+    ///
+    /// [`to_claim_text`]: Self::to_claim_text
+    pub fn to_block_json(&self) -> String {
+        let body = serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string());
+        if self.revisits.is_empty() {
+            return body;
+        }
+        // Spliced onto the serialized struct rather than rebuilt through a
+        // `serde_json::Value`. serde_json's `Map` is a `BTreeMap` unless
+        // `preserve_order` is on, so a round-trip through `Value` would
+        // re-sort every key and change the bytes of blocks that are supposed
+        // to be untouched by this feature. Splicing keeps every other byte
+        // exactly as the unstamped path produced it, which is what makes
+        // "the stamp is the only difference" an assertable property rather
+        // than a hope.
+        //
+        // `in`/`out`/`next` are never skipped, so a serialized interface is
+        // always a non-empty object; the `else` is unreachable in practice and
+        // returns the unstamped body rather than inventing a shape.
+        match body.strip_prefix('{') {
+            Some(rest) if rest != "}" => {
+                format!("{{\"{VERSION_KEY}\":{INTERFACE_VERSION_REVISITS},{rest}")
+            }
+            _ => body,
+        }
     }
 }
 
@@ -222,6 +321,237 @@ pub struct Finding {
     /// — upgrade the binary, or fix the claim — and a caller deciding that by
     /// substring match would break the first time the wording changed.
     pub version_skew: bool,
+    /// True when day **could not perform this check**, as opposed to performing
+    /// it and finding a fault. Excluded from [`crate::doctor::Report::is_healthy`],
+    /// and therefore from the exit code.
+    ///
+    /// The distinction against `unreadable`, which *does* fail: an unreadable
+    /// block is not legal at any version, whereas a cycle in `next` is a
+    /// perfectly legal declaration in a vocabulary written before `revisits`
+    /// existed (day#113). Failing on one would break every such project on
+    /// upgrade, before its author had touched anything — and day is advisory,
+    /// so an existing project gets told, not broken.
+    ///
+    /// Never a way to be quiet: an unchecked finding is still a finding, still
+    /// rendered, and still says which check could not run. Could-not-check
+    /// outranks checked-and-clean; it does not outrank being reported.
+    pub unchecked: bool,
+}
+
+impl Finding {
+    /// A fault: day ran the check and the vocabulary is wrong.
+    fn fault(atoms: Vec<String>, message: String) -> Self {
+        Finding {
+            atoms,
+            message,
+            unreadable: false,
+            version_skew: false,
+            unchecked: false,
+        }
+    }
+
+    /// A check day could not run. See [`Finding::unchecked`].
+    fn unchecked(atoms: Vec<String>, message: String) -> Self {
+        Finding {
+            unchecked: true,
+            ..Finding::fault(atoms, message)
+        }
+    }
+}
+
+/// One cycle in the declared `next` relation, and the edges [`Forward`] had to
+/// drop because of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cycle {
+    /// Every atom on the cycle, sorted, so the same cycle renders identically
+    /// however it was discovered.
+    pub atoms: Vec<String>,
+    /// The `(from, to)` edges excluded from the ordering, sorted.
+    pub dropped: Vec<(String, String)>,
+}
+
+impl Cycle {
+    pub fn message(&self) -> String {
+        format!(
+            "{} are in a cycle through `next` ({}), so day cannot order them — `next` is \
+             forward-only, and the edge that sends you back belongs in `revisits`",
+            self.atoms
+                .iter()
+                .map(|a| format!("{ATOM_PREFIX}{a}"))
+                .collect::<Vec<_>>()
+                .join(" and "),
+            self.dropped
+                .iter()
+                .map(|(from, to)| format!("{from} -> {to}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+/// The forward relation over `next`, **guaranteed acyclic**, together with the
+/// cycles that had to be dropped to guarantee it.
+///
+/// This type is the day#113 deliverable. `next` used to carry both sequence
+/// ("review follows build") and feedback ("a review sends you back to fix"),
+/// which made every consumer that read it as an ordering wrong on any
+/// vocabulary with a feedback edge — including day's own. Feedback now lives in
+/// [`Interface::revisits`], so a *migrated* vocabulary has nothing to drop and
+/// this view is simply the declaration. For one that has not migrated, the
+/// cyclic edges are excluded and **reported**, never silently skipped.
+///
+/// The guarantee is structural, not documentary: [`cycles`](Self::cycles) sits
+/// on the same value as [`successors`](Self::successors), so a caller cannot
+/// obtain the ordering without also holding what could not be ordered. That is
+/// the shape day#101 keeps asking for — push the guarantee into the mechanism
+/// rather than wiring a check at a call site — and the same one
+/// [`crate::position::infer`] uses in taking a whole `WitnessSchema` rather
+/// than the half a caller happened to want.
+///
+/// It is backed by a source scan. `tests/plugin.rs` fails the build if
+/// `interface.next` is read outside this module without an adjacent
+/// `dag-not-required: <why>` comment, because CLAUDE.md records five separate
+/// occasions on which a rule stated in one module's doc comment did not reach
+/// the others. Rendering the declaration as written is a legitimate raw read;
+/// treating it as an order is not.
+#[derive(Debug, Clone)]
+pub struct Forward<'a> {
+    successors: std::collections::BTreeMap<&'a str, Vec<&'a str>>,
+    cycles: Vec<Cycle>,
+}
+
+impl<'a> Forward<'a> {
+    /// Drops every edge that participates in a cycle, and records the cycles.
+    ///
+    /// An edge `u -> v` is cyclic iff `v` reaches `u` through declared `next`
+    /// edges, which covers a self-loop (`u -> u`) with no special case. Cycles
+    /// are the non-trivial strongly connected components, computed as the
+    /// mutual-reachability partition rather than by Tarjan: a vocabulary is
+    /// single digits of atoms, and `docs/CONVENTIONS.md` asks the composition
+    /// check to be boring and obviously right rather than asymptotically
+    /// clever.
+    ///
+    /// An edge naming an atom that does not exist is **kept**. It is not part
+    /// of any cycle, and dropping it here would take the dangling-edge finding
+    /// in [`check`] with it — the check would go quiet on exactly the
+    /// declaration it exists to report.
+    pub fn build(atoms: &'a [Atom]) -> Self {
+        let declared: std::collections::BTreeMap<&str, &[String]> = atoms
+            .iter()
+            // dag-not-required: this is the one place the raw declaration is
+            // read *in order to* build the acyclic view from it.
+            .map(|a| (a.name.as_str(), a.interface.next.as_slice()))
+            .collect();
+
+        let reaches = |from: &str, to: &str| -> bool {
+            let mut frontier: Vec<&str> = declared
+                .get(from)
+                .map(|next| next.iter().map(String::as_str).collect())
+                .unwrap_or_default();
+            let mut seen: std::collections::BTreeSet<&str> = frontier.iter().copied().collect();
+            while let Some(current) = frontier.pop() {
+                if current == to {
+                    return true;
+                }
+                for successor in declared.get(current).copied().unwrap_or(&[]) {
+                    if seen.insert(successor.as_str()) {
+                        frontier.push(successor.as_str());
+                    }
+                }
+            }
+            false
+        };
+
+        let mut successors: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
+        let mut dropped: Vec<(&str, &str)> = Vec::new();
+        for atom in atoms {
+            let mut kept = Vec::new();
+            for successor in declared.get(atom.name.as_str()).copied().unwrap_or(&[]) {
+                if reaches(successor, &atom.name) {
+                    dropped.push((atom.name.as_str(), successor.as_str()));
+                } else {
+                    kept.push(successor.as_str());
+                }
+            }
+            successors.insert(atom.name.as_str(), kept);
+        }
+
+        // Mutual reachability partitions the atoms touched by a dropped edge
+        // into their strongly connected components. A self-loop puts one atom
+        // in a component alone, which is a real cycle and reported as one.
+        let mut on_a_cycle: Vec<&str> =
+            dropped.iter().flat_map(|(from, to)| [*from, *to]).collect();
+        on_a_cycle.sort_unstable();
+        on_a_cycle.dedup();
+
+        let mut cycles: Vec<Cycle> = Vec::new();
+        let mut assigned: std::collections::BTreeSet<&str> = Default::default();
+        for atom in &on_a_cycle {
+            if !assigned.insert(atom) {
+                continue;
+            }
+            let mut component = vec![*atom];
+            for other in &on_a_cycle {
+                if other != atom && reaches(atom, other) && reaches(other, atom) {
+                    assigned.insert(other);
+                    component.push(*other);
+                }
+            }
+            component.sort_unstable();
+            let mut edges: Vec<(String, String)> = dropped
+                .iter()
+                .filter(|(from, _)| component.contains(from))
+                .map(|(from, to)| (from.to_string(), to.to_string()))
+                .collect();
+            edges.sort();
+            cycles.push(Cycle {
+                atoms: component.into_iter().map(str::to_string).collect(),
+                dropped: edges,
+            });
+        }
+
+        Forward { successors, cycles }
+    }
+
+    /// What follows `name`, with no cyclic edge in it.
+    pub fn successors(&self, name: &str) -> &[&'a str] {
+        self.successors.get(name).map_or(&[], Vec::as_slice)
+    }
+
+    /// Every atom that can reach `name` through forward edges — the transitive
+    /// upstream closure input coverage is checked against.
+    ///
+    /// Terminating because the graph is acyclic. The visited set is an
+    /// optimisation now; before day#113 it was the only thing keeping this
+    /// from hanging on day's own vocabulary.
+    pub fn ancestors(&self, atoms: &'a [Atom], name: &str) -> Vec<&'a Atom> {
+        let mut found: Vec<&Atom> = Vec::new();
+        let mut frontier = vec![name];
+        let mut seen: std::collections::BTreeSet<&str> = [name].into_iter().collect();
+
+        while let Some(current) = frontier.pop() {
+            for candidate in atoms {
+                if !self.successors(&candidate.name).contains(&current) {
+                    continue;
+                }
+                if !seen.insert(candidate.name.as_str()) {
+                    continue;
+                }
+                frontier.push(candidate.name.as_str());
+                found.push(candidate);
+            }
+        }
+
+        found.sort_by(|a, b| a.name.cmp(&b.name));
+        found
+    }
+
+    /// The cycles that had to be dropped. Empty for a migrated vocabulary.
+    ///
+    /// A consumer holding a [`Forward`] holds this too; that is the guarantee.
+    pub fn cycles(&self) -> &[Cycle] {
+        &self.cycles
+    }
 }
 
 /// Reads every `atom/<slug>` subject's live claims and takes the newest
@@ -271,16 +601,15 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
                 // channel at all.
                 unreadable: true,
                 version_skew: e.is_version_skew(),
+                unchecked: false,
                 message: format!("{subject}: {e} — claim {}", claim.cid),
             }),
-            None => findings.push(Finding {
-                atoms: vec![name.clone()],
-                unreadable: false,
-                version_skew: false,
-                message: format!(
+            None => findings.push(Finding::fault(
+                vec![name.clone()],
+                format!(
                     "{subject}: no `{FENCE_INFO}` interface block on any live claim, so it can't be composition-checked"
                 ),
-            }),
+            )),
         }
     }
 
@@ -509,27 +838,72 @@ pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
 ///
 /// An atom with no upstream atoms is a source; its inputs come from outside
 /// the vocabulary and are not checked.
+///
+/// Since day#113 the closure is [`Forward`]'s, not the raw declaration's, so a
+/// cycle in `next` cannot make every atom on it vacuously upstream of every
+/// other. Where that exclusion is what left an input uncovered, the finding
+/// says so and does not fail — see [`Finding::unchecked`].
 pub fn check(atoms: &[Atom]) -> Vec<Finding> {
     let mut findings = Vec::new();
+    let forward = Forward::build(atoms);
+    let exists = |slug: &String| atoms.iter().any(|a| &a.name == slug);
 
     for atom in atoms {
+        // dag-not-required: the dangling-edge check is about what the claim
+        // *declares*, so it must see an edge even when the ordering dropped it.
         for successor in &atom.interface.next {
-            if !atoms.iter().any(|a| &a.name == successor) {
-                findings.push(Finding {
-                    atoms: vec![atom.name.clone(), successor.clone()],
-                    unreadable: false,
-                    version_skew: false,
-                    message: format!(
+            if !exists(successor) {
+                findings.push(Finding::fault(
+                    vec![atom.name.clone(), successor.clone()],
+                    format!(
                         "{} declares next: {successor}, but no {ATOM_PREFIX}{successor} subject exists in the live vocabulary",
                         atom.subject()
                     ),
-                });
+                ));
+            }
+        }
+        for target in &atom.interface.revisits {
+            if !exists(target) {
+                findings.push(Finding::fault(
+                    vec![atom.name.clone(), target.clone()],
+                    format!(
+                        "{} declares revisits: {target}, but no {ATOM_PREFIX}{target} subject exists in the live vocabulary",
+                        atom.subject()
+                    ),
+                ));
+                continue;
+            }
+            // A revisit is a *return*: it names work this atom's negative
+            // outcome sends you back to, so the target must be somewhere the
+            // path already went. One that is not a return is almost always a
+            // forward edge filed in the wrong field — the exact confusion
+            // day#113 removed — so it is reported rather than accepted.
+            //
+            // A finding, not a refusal: day read the declaration and
+            // understood it, and refusing what it understood is how an
+            // advisory tool becomes a blocking one.
+            if !forward
+                .ancestors(atoms, &atom.name)
+                .iter()
+                .any(|a| &a.name == target)
+            {
+                findings.push(Finding::fault(
+                    vec![atom.name.clone(), target.clone()],
+                    format!(
+                        "{} revisits {target}, but {ATOM_PREFIX}{target} does not reach it through `next` — a revisit that is not a return has no defined meaning; if {target} follows this atom, declare it in `next`",
+                        atom.subject()
+                    ),
+                ));
             }
         }
     }
 
+    for cycle in forward.cycles() {
+        findings.push(Finding::unchecked(cycle.atoms.clone(), cycle.message()));
+    }
+
     for atom in atoms {
-        let upstream = ancestors(atoms, &atom.name);
+        let upstream = forward.ancestors(atoms, &atom.name);
         if upstream.is_empty() {
             continue;
         }
@@ -549,21 +923,40 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
         if !missing.is_empty() {
             let mut implicated: Vec<String> = upstream.iter().map(|a| a.name.clone()).collect();
             implicated.push(atom.name.clone());
-            findings.push(Finding {
-                atoms: implicated,
-                unreadable: false,
-                version_skew: false,
-                message: format!(
-                    "{}: interfaces do not compose — needs input(s) [{}] that nothing upstream produces (upstream {} produce [{}])",
-                    atom.subject(),
-                    missing.join(", "),
-                    upstream
-                        .iter()
-                        .map(|a| a.subject())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    available.join(", "),
-                ),
+            // Would the *declared* closure have covered it? If so, the answer
+            // is unknown because a cycle was excluded, not because the
+            // vocabulary is wrong — and a project whose vocabulary predates
+            // `revisits` must not start failing on upgrade for that.
+            let declared_covers = {
+                let declared: Vec<&str> = declared_ancestors(atoms, &atom.name)
+                    .iter()
+                    .flat_map(|a| a.interface.outputs.iter().map(String::as_str))
+                    .collect();
+                missing.iter().all(|input| declared.contains(input))
+            };
+            let detail = format!(
+                "needs input(s) [{}] that nothing upstream produces (upstream {} produce [{}])",
+                missing.join(", "),
+                upstream
+                    .iter()
+                    .map(|a| a.subject())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                available.join(", "),
+            );
+            findings.push(if declared_covers {
+                Finding::unchecked(
+                    implicated,
+                    format!(
+                        "{}: day could not check that its interfaces compose — {detail}. Every missing input is produced by an atom day had to exclude from the ordering because it is on a cycle through `next`, so this is unknown rather than wrong",
+                        atom.subject(),
+                    ),
+                )
+            } else {
+                Finding::fault(
+                    implicated,
+                    format!("{}: interfaces do not compose — {detail}", atom.subject()),
+                )
             });
         }
     }
@@ -571,17 +964,23 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
     findings
 }
 
-/// Every atom that can reach `name` through `next` edges. Breadth-first with
-/// a visited set, so a cyclic vocabulary terminates rather than hanging —
-/// cycles are legal here (a drift-evaluation atom feeding back into design
-/// is a real pattern), they just must not be walked twice.
-fn ancestors<'a>(atoms: &'a [Atom], name: &str) -> Vec<&'a Atom> {
+/// Every atom that can reach `name` through the **declared** `next` edges,
+/// cycles and all.
+///
+/// Not an ordering and never used as one: its single purpose is to tell
+/// [`check`] whether excluding a cycle is what left an input uncovered, so the
+/// difference between "wrong" and "unknown" can be reported honestly. The
+/// visited set is what keeps it terminating, since this closure is exactly the
+/// one that may be cyclic.
+fn declared_ancestors<'a>(atoms: &'a [Atom], name: &str) -> Vec<&'a Atom> {
     let mut found: Vec<&Atom> = Vec::new();
     let mut frontier = vec![name.to_string()];
     let mut seen: Vec<String> = vec![name.to_string()];
 
     while let Some(current) = frontier.pop() {
         for candidate in atoms {
+            // dag-not-required: this closure is deliberately the raw one — it
+            // exists to be compared against `Forward`'s.
             if !candidate.interface.next.contains(&current) {
                 continue;
             }
@@ -775,16 +1174,27 @@ mod version_gate {
     /// behind**, distinguishably from a block that is simply wrong. The two
     /// need different actions from different people, which is why they are
     /// different variants rather than one message.
+    ///
+    /// The "too new" version is derived from `SUPPORTED_VERSION`, never
+    /// hardcoded. It was hardcoded as `2`, and day#113 made 2 a version day
+    /// reads — so the test that proves version skew is reported would have
+    /// started proving it against a block that parses fine. A fixture pinned to
+    /// a literal cannot stay ahead of the thing it is meant to be ahead of.
     #[test]
     fn a_too_new_block_blames_the_reader_and_a_broken_one_blames_the_claim() {
-        let too_new = parse_block::<Interface>(r#"{"_version":2,"in":["a"]}"#).unwrap_err();
+        let ahead = Interface::SUPPORTED_VERSION + 1;
+        let too_new =
+            parse_block::<Interface>(&format!(r#"{{"_version":{ahead},"in":["a"]}}"#)).unwrap_err();
         assert!(too_new.is_version_skew());
         let rendered = too_new.to_string();
         assert!(
-            rendered.contains('2'),
+            rendered.contains(&ahead.to_string()),
             "names the declared version: {rendered}"
         );
-        assert!(rendered.contains('1'), "and the supported one: {rendered}");
+        assert!(
+            rendered.contains(&Interface::SUPPORTED_VERSION.to_string()),
+            "and the supported one: {rendered}"
+        );
         assert!(
             rendered.contains("upgrade day"),
             "and says whose problem it is: {rendered}"
@@ -822,7 +1232,10 @@ mod version_gate {
     /// the whole-vocabulary blast radius the smallest-unit rule exists to avoid.
     #[test]
     fn a_too_new_block_of_one_type_does_not_affect_another() {
-        assert!(parse_block::<Interface>(r#"{"_version":2,"in":["a"]}"#).is_err());
+        let ahead = Interface::SUPPORTED_VERSION + 1;
+        assert!(
+            parse_block::<Interface>(&format!(r#"{{"_version":{ahead},"in":["a"]}}"#)).is_err()
+        );
         assert!(parse_block::<bridge::Witnesses>(r#"{"witnesses":["a"]}"#).is_ok());
     }
 }
@@ -901,9 +1314,15 @@ mod tests {
                 inputs: inputs.iter().map(|s| s.to_string()).collect(),
                 outputs: outputs.iter().map(|s| s.to_string()).collect(),
                 next: next.iter().map(|s| s.to_string()).collect(),
+                revisits: vec![],
                 done: vec![],
             },
         }
+    }
+
+    fn revisiting(mut atom: Atom, revisits: &[&str]) -> Atom {
+        atom.interface.revisits = revisits.iter().map(|s| s.to_string()).collect();
+        atom
     }
 
     #[test]
@@ -912,6 +1331,7 @@ mod tests {
             inputs: vec!["design-doc".into()],
             outputs: vec!["code-change".into()],
             next: vec!["adversarial-review".into()],
+            revisits: vec![],
             done: vec![],
         };
         let text = interface.to_claim_text("generative-build", None);
@@ -929,6 +1349,8 @@ mod tests {
             .expect("valid json");
         assert_eq!(interface.inputs, vec!["design-doc"]);
         assert_eq!(interface.outputs, vec!["code-change"]);
+        // dag-not-required: asserting what the block deserialized to, which is
+        // the declaration itself and not an ordering over it.
         assert!(interface.next.is_empty());
     }
 
@@ -977,13 +1399,24 @@ mod tests {
         assert_eq!(check(&atoms), vec![]);
     }
 
+    /// A cyclic `next` terminates, and — since day#113 — says so.
+    ///
+    /// It used to assert `check` found *nothing*, which was true and was the
+    /// problem: the vocabulary was one day could not order, and every consumer
+    /// downstream was told it was clean. The finding is `unchecked`, so
+    /// `doctor` still exits zero; a legal declaration written before `revisits`
+    /// existed gets told, not broken.
     #[test]
-    fn a_cyclic_vocabulary_terminates() {
+    fn a_cyclic_vocabulary_terminates_and_reports_that_it_could_not_be_ordered() {
         let atoms = vec![
             atom("design", &["drift-report"], &["design-doc"], &["drift"]),
             atom("drift", &["design-doc"], &["drift-report"], &["design"]),
         ];
-        assert_eq!(check(&atoms), vec![]);
+        let findings = check(&atoms);
+        assert_eq!(findings.len(), 1, "{findings:#?}");
+        assert!(findings[0].unchecked, "{findings:#?}");
+        assert_eq!(findings[0].atoms, vec!["design", "drift"]);
+        assert!(findings[0].message.contains("revisits"), "{findings:#?}");
     }
 
     #[test]
@@ -1000,5 +1433,252 @@ mod tests {
         assert!(findings[0]
             .message
             .contains("no atom/nonexistent subject exists"));
+    }
+
+    /// AC-3, first half: the 2-cycle day's own vocabulary had. Both edges go,
+    /// because "upstream" is undefined for either of them, and the cycle names
+    /// both atoms and both edges so a reader can see which one to move.
+    #[test]
+    fn a_two_cycle_drops_both_edges_and_is_reported_once() {
+        let atoms = vec![
+            atom("build", &[], &["code-change"], &["review"]),
+            atom("review", &[], &["verdict"], &["build"]),
+        ];
+        let forward = Forward::build(&atoms);
+
+        assert!(forward.successors("build").is_empty());
+        assert!(forward.successors("review").is_empty());
+        assert_eq!(forward.cycles().len(), 1);
+        assert_eq!(forward.cycles()[0].atoms, vec!["build", "review"]);
+        assert_eq!(
+            forward.cycles()[0].dropped,
+            vec![
+                ("build".to_string(), "review".to_string()),
+                ("review".to_string(), "build".to_string()),
+            ]
+        );
+    }
+
+    /// AC-3, second half. An acyclic vocabulary is passed through untouched —
+    /// the guarantee must cost a migrated project nothing, or nobody migrates.
+    #[test]
+    fn an_acyclic_vocabulary_keeps_every_edge_and_reports_no_cycle() {
+        let atoms = vec![
+            atom("design", &[], &["design-doc"], &["build"]),
+            atom("build", &[], &["code-change"], &["review"]),
+            atom("review", &[], &["verdict"], &[]),
+        ];
+        let forward = Forward::build(&atoms);
+
+        assert_eq!(forward.successors("design"), ["build"]);
+        assert_eq!(forward.successors("build"), ["review"]);
+        assert!(forward.successors("review").is_empty());
+        assert!(forward.cycles().is_empty());
+        assert_eq!(
+            forward
+                .ancestors(&atoms, "review")
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect::<Vec<_>>(),
+            ["build", "design"]
+        );
+    }
+
+    /// AC-4: a self-loop is a cycle of one. Handled by the same rule as every
+    /// other cycle — `u -> u` is an edge whose target reaches `u` — rather than
+    /// by a special case, which is the point of phrasing the rule that way.
+    #[test]
+    fn a_self_loop_is_a_cycle_of_one() {
+        let atoms = vec![atom("build", &[], &["code-change"], &["build"])];
+        let forward = Forward::build(&atoms);
+
+        assert!(forward.successors("build").is_empty());
+        assert_eq!(forward.cycles().len(), 1);
+        assert_eq!(forward.cycles()[0].atoms, vec!["build"]);
+        assert_eq!(
+            forward.cycles()[0].dropped,
+            vec![("build".to_string(), "build".to_string())]
+        );
+    }
+
+    /// An edge naming an atom that does not exist survives the ordering, so the
+    /// dangling-edge finding still fires. Dropping unknown targets in `Forward`
+    /// would silence `check` on exactly the declaration it exists to report —
+    /// a fix in one place going quiet in another.
+    #[test]
+    fn a_dangling_edge_is_not_swallowed_by_the_ordering() {
+        let atoms = vec![atom("design", &[], &["design-doc"], &["nonexistent"])];
+        let forward = Forward::build(&atoms);
+
+        assert_eq!(forward.successors("design"), ["nonexistent"]);
+        assert!(forward.cycles().is_empty());
+        assert_eq!(check(&atoms).len(), 1);
+    }
+
+    /// AC-9: a coverage question day cannot answer **because it excluded a
+    /// cycle** is reported as unanswered, not as a failure.
+    ///
+    /// The premise is asserted, not assumed: the test proves the fixture
+    /// actually reaches the state — that the declared closure covers `x` and
+    /// the acyclic one does not — before asserting how the finding is
+    /// classified. Without that, the test passes on any fixture that produces
+    /// some finding, which is the "fixture cannot reach the mode" trap.
+    #[test]
+    fn coverage_lost_only_to_a_dropped_cycle_is_unchecked_not_a_failure() {
+        let atoms = vec![
+            atom("design", &[], &["design-doc"], &["a"]),
+            atom("a", &["x"], &["design-doc"], &["b"]),
+            atom("b", &[], &["x"], &["a"]),
+        ];
+
+        // The premise. `b` produces `x` and is an ancestor of `a` only through
+        // the cycle, so excluding the cycle is exactly what makes `x`
+        // uncoverable.
+        let declared: Vec<&str> = declared_ancestors(&atoms, "a")
+            .iter()
+            .map(|at| at.name.as_str())
+            .collect();
+        assert!(declared.contains(&"b"), "declared closure: {declared:?}");
+        let forward = Forward::build(&atoms);
+        let acyclic: Vec<&str> = forward
+            .ancestors(&atoms, "a")
+            .iter()
+            .map(|at| at.name.as_str())
+            .collect();
+        assert!(!acyclic.contains(&"b"), "acyclic closure: {acyclic:?}");
+
+        let findings = check(&atoms);
+        let coverage = findings
+            .iter()
+            .find(|f| f.message.contains("[x]"))
+            .unwrap_or_else(|| panic!("no coverage finding about `x`: {findings:#?}"));
+        assert!(coverage.unchecked, "{coverage:#?}");
+        assert!(
+            coverage.message.contains("could not check"),
+            "{coverage:#?}"
+        );
+    }
+
+    /// The other side of AC-9: coverage that fails for a reason unrelated to
+    /// any cycle is still a **fault**. Without this, marking every coverage
+    /// finding `unchecked` would pass the test above and silently disable the
+    /// composition check.
+    #[test]
+    fn coverage_that_no_cycle_explains_is_still_a_failure() {
+        let atoms = vec![
+            atom("design", &[], &["design-doc"], &["build"]),
+            atom("build", &["nothing-makes-this"], &["code-change"], &[]),
+        ];
+        let findings = check(&atoms);
+        assert_eq!(findings.len(), 1, "{findings:#?}");
+        assert!(!findings[0].unchecked, "{findings:#?}");
+        assert!(
+            findings[0].message.contains("do not compose"),
+            "{findings:#?}"
+        );
+    }
+
+    /// AC-10, both halves, plus the case that must stay silent.
+    #[test]
+    fn a_revisit_is_checked_for_existence_and_for_being_a_return() {
+        let dangling = vec![revisiting(
+            atom("review", &[], &["verdict"], &[]),
+            &["nonexistent"],
+        )];
+        let findings = check(&dangling);
+        assert_eq!(findings.len(), 1, "{findings:#?}");
+        assert!(
+            findings[0].message.contains("no atom/nonexistent subject"),
+            "{findings:#?}"
+        );
+
+        // Exists, but nothing reaches `review` from it: this is a forward edge
+        // in the wrong field.
+        let not_a_return = vec![
+            revisiting(atom("review", &[], &["verdict"], &[]), &["release"]),
+            atom("release", &[], &["published-artifact"], &[]),
+        ];
+        let findings = check(&not_a_return);
+        assert_eq!(findings.len(), 1, "{findings:#?}");
+        assert!(
+            findings[0].message.contains("does not reach it through"),
+            "{findings:#?}"
+        );
+
+        // day's own shape: build precedes review, and review sends you back.
+        let genuine = vec![
+            atom("build", &[], &["code-change"], &["review"]),
+            revisiting(
+                atom("review", &["code-change"], &["verdict"], &[]),
+                &["build"],
+            ),
+        ];
+        assert_eq!(check(&genuine), vec![], "a real return must be silent");
+    }
+
+    /// A `revisits` edge is never an ordering: it must not make its target an
+    /// ancestor, or input coverage would be satisfied by going backwards around
+    /// the loop — which is the vacuous coverage `next`'s cycles used to give.
+    #[test]
+    fn a_revisit_does_not_make_its_target_an_ancestor() {
+        let atoms = vec![
+            atom("build", &[], &["code-change"], &["review"]),
+            revisiting(
+                atom("review", &["code-change"], &["verdict"], &[]),
+                &["build"],
+            ),
+        ];
+        let forward = Forward::build(&atoms);
+        assert!(forward.cycles().is_empty());
+        assert!(
+            forward.ancestors(&atoms, "build").is_empty(),
+            "a revisit pointed `review -> build`; it must not make review an ancestor of build"
+        );
+    }
+
+    /// AC-11: one slug cannot be both a successor and a revisit.
+    #[test]
+    fn an_edge_declared_both_forward_and_backward_is_refused() {
+        let err = parse_block::<Interface>(r#"{"next":["x"],"revisits":["x"]}"#).unwrap_err();
+        assert!(
+            matches!(err, BlockError::Invalid { .. }),
+            "expected Invalid, got {err:?}"
+        );
+        assert!(err.to_string().contains('x'), "{err}");
+        // And not version skew: this is the claim's problem, not the reader's.
+        assert!(!err.is_version_skew(), "{err}");
+    }
+
+    /// AC-1 and AC-2: the stamp appears when — and only when — `revisits` is
+    /// used, and adding the field changed nothing about how an interface
+    /// without it serializes.
+    #[test]
+    fn the_version_stamp_is_the_only_difference_a_revisit_makes() {
+        let plain = Interface {
+            inputs: vec!["design-doc".into()],
+            outputs: vec!["code-change".into()],
+            next: vec!["review".into()],
+            revisits: vec![],
+            done: vec![],
+        };
+        assert_eq!(
+            plain.to_block_json(),
+            r#"{"in":["design-doc"],"out":["code-change"],"next":["review"]}"#,
+            "an interface with no revisits must serialize exactly as it did before the field existed"
+        );
+
+        let with_revisit = Interface {
+            revisits: vec!["build".into()],
+            ..plain.clone()
+        };
+        let stamped = with_revisit.to_block_json();
+        assert_eq!(
+            stamped,
+            format!(
+                r#"{{"_version":{INTERFACE_VERSION_REVISITS},"in":["design-doc"],"out":["code-change"],"next":["review"],"revisits":["build"]}}"#
+            )
+        );
+        // And it round-trips through the reader that will see it.
+        assert_eq!(parse_block::<Interface>(&stamped).unwrap(), with_revisit);
     }
 }

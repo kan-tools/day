@@ -189,9 +189,15 @@ pub enum AtomAction {
         /// A type this atom produces (repeatable)
         #[arg(long = "out")]
         outputs: Vec<String>,
-        /// An atom slug this one composes into (repeatable)
+        /// An atom slug this one composes into, forward only (repeatable).
+        /// Must not form a cycle: use --revisits for an edge that sends you
+        /// back.
         #[arg(long = "next")]
         next: Vec<String>,
+        /// An atom slug a negative outcome here sends you back to (repeatable).
+        /// Feedback, not sequence — it is never treated as an ordering.
+        #[arg(long = "revisits")]
+        revisits: Vec<String>,
         /// A witness type that evidences this atom is done (repeatable).
         /// Resolved through schema/witness, the same probes teloi use.
         #[arg(long = "done")]
@@ -437,6 +443,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             inputs,
             outputs,
             next,
+            revisits,
             done,
             note,
         }) => {
@@ -444,6 +451,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 inputs,
                 outputs,
                 next,
+                revisits,
                 done,
             };
             let outcome = crate::vocabulary::declare(

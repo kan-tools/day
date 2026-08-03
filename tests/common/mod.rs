@@ -14,6 +14,24 @@ use std::path::{Path, PathBuf};
 /// The DID the stub signs claims with, and reports from `kan identity did`.
 pub const STUB_AUTHOR: &str = "did:key:zStubAuthor";
 
+/// A `day-atom` block body **this build cannot read**, because it declares a
+/// version above the one this build supports.
+///
+/// Derived, never hardcoded. Nine fixtures across three files spelled this
+/// `{"_version":2, …}`, which was too new for as long as `day-atom` was v1 and
+/// stopped being too new the moment day#113 shipped v2. Five tests failed
+/// loudly and told us; the ones that would have kept passing are the reason
+/// this is a function. A fixture whose whole job is to be ahead of the reader
+/// has to be *defined* as ahead of the reader — CLAUDE.md's rule that a fixture
+/// must reach the mode the defect lives in, applied to the fixture itself.
+pub fn too_new_atom_body() -> String {
+    use day::atoms::Versioned;
+    format!(
+        r#"{{"_version":{},"in":["a"],"out":["b"]}}"#,
+        day::atoms::Interface::SUPPORTED_VERSION + 1
+    )
+}
+
 /// One canned claim on one subject.
 #[derive(Clone)]
 pub struct StubClaim {

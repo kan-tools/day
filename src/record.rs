@@ -274,15 +274,30 @@ pub fn next(client: &KanClient, name: &str) -> Result<String, Error> {
         .find(|a| a.name == name)
         .ok_or_else(|| Error::NoSuchAtom(name.to_string()))?;
 
-    if atom.interface.next.is_empty() {
+    // Successors come from the acyclic view, never the raw declaration. Before
+    // day#113 `day next adversarial-review` listed `generative-build` and
+    // `pull-request` as equal successors — the fix loop presented as the next
+    // step. Feedback edges are still shown, below, under what they are.
+    let forward = atoms::Forward::build(&atoms_list);
+    let successors = forward.successors(&atom.name);
+
+    if successors.is_empty() && atom.interface.revisits.is_empty() {
         return Ok(format!(
             "{} declares no successors — this is a terminal step in the current vocabulary.\n",
             atom.subject()
         ));
     }
 
-    let mut out = format!("After {}:\n", atom.subject());
-    for successor in &atom.interface.next {
+    let mut out = String::new();
+    if successors.is_empty() {
+        out.push_str(&format!(
+            "{} declares no successors — this is a terminal step in the current vocabulary.\n",
+            atom.subject()
+        ));
+    } else {
+        out.push_str(&format!("After {}:\n", atom.subject()));
+    }
+    for successor in successors {
         match atoms_list.iter().find(|a| &a.name == successor) {
             Some(next_atom) => {
                 out.push_str(&format!(
@@ -312,6 +327,24 @@ pub fn next(client: &KanClient, name: &str) -> Result<String, Error> {
             )),
         }
     }
+
+    if !atom.interface.revisits.is_empty() {
+        out.push_str(&format!(
+            "\nA negative outcome at {} sends you back to:\n",
+            atom.subject()
+        ));
+        for target in &atom.interface.revisits {
+            out.push_str(&format!("  {}{target}\n", atoms::ATOM_PREFIX));
+        }
+        out.push_str("Not a next step: this is work this atom can invalidate.\n");
+    }
+
+    for cycle in forward.cycles() {
+        if cycle.atoms.contains(&atom.name) {
+            out.push_str(&format!("\n  ? {}\n", cycle.message()));
+        }
+    }
+
     Ok(out)
 }
 

@@ -111,6 +111,9 @@ pub struct Status {
     /// Off-sequence findings from [`position::infer`]: a downstream output is
     /// present while an upstream one is not, so a step was skipped.
     pub off_sequence: Vec<String>,
+    /// Orders [`position::infer`] could not establish, because the atoms are on
+    /// a cycle through `next` (day#113). See [`position::Report::unordered`].
+    pub unordered: Vec<String>,
     /// Artifact types that exist but are not written down (day#103): a declared
     /// `material` witness is satisfied for this cycle and the declared `record`
     /// witness is not.
@@ -415,10 +418,17 @@ impl Status {
             out.push('\n');
         }
 
-        if !self.off_sequence.is_empty() {
+        if !self.off_sequence.is_empty() || !self.unordered.is_empty() {
             out.push_str("Off-sequence:\n");
             for finding in &self.off_sequence {
                 out.push_str(&format!("  ! {finding}\n"));
+            }
+            // `?`, not `!`: a check day could not run is not a finding it made.
+            // Rendered even when `off_sequence` is empty, because "nothing to
+            // report" and "could not look" are the two things this section
+            // exists to keep apart.
+            for finding in &self.unordered {
+                out.push_str(&format!("  ? {finding}\n"));
             }
             out.push('\n');
         }
@@ -602,6 +612,12 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         return Ok(Status {
             here: Vec::new(),
             off_sequence: Vec::new(),
+            // Reported even here. A cycle in `next` is a fact about the
+            // declaration, not about the evidence, so "day cannot infer a
+            // position" is no reason to also go quiet about an order day
+            // could not establish — two independent gaps, and one must not
+            // swallow the other.
+            unordered: crate::position::unordered(&atoms),
             unrecorded: Vec::new(),
             unrecorded_boundary: unrecorded_boundary.clone(),
             transition: None,
@@ -637,6 +653,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     let log = ClaimLog::new(client);
 
     let report = position::infer(&atoms, &schema, git, &log, boundary.as_ref());
+    let forward = crate::atoms::Forward::build(&atoms);
     let by_name: BTreeMap<&str, &Atom> = atoms.iter().map(|a| (a.name.as_str(), a)).collect();
 
     let here: Vec<Here> = report
@@ -652,6 +669,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 git,
                 &log,
                 boundary.as_ref(),
+                &forward,
             ))
         })
         .collect();
@@ -669,6 +687,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     Ok(Status {
         here,
         off_sequence: report.off_sequence,
+        unordered: report.unordered,
         unrecorded: report.unrecorded,
         unrecorded_boundary,
         transition,
@@ -817,6 +836,7 @@ fn here_for(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
+    forward: &crate::atoms::Forward<'_>,
 ) -> Here {
     let done = atom
         .interface
@@ -843,7 +863,16 @@ fn here_for(
         inputs_present: standing.inputs_present.clone(),
         inputs_unknown: standing.inputs_unknown.clone(),
         done,
-        next: atom.interface.next.clone(),
+        // From the acyclic view, not the declaration. `next:` here means "what
+        // comes next" on a surface a person reads every session, so an edge day
+        // could not order must not appear as one it did. `doctor` renders the
+        // raw declaration instead, because there the job is to show what the
+        // claim says.
+        next: forward
+            .successors(&atom.name)
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
     }
 }
 
@@ -884,6 +913,7 @@ mod tests {
                 &["review"],
             )],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -906,6 +936,7 @@ mod tests {
         let status = Status {
             here: vec![here("design", vec![], &[]), here("build", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -927,6 +958,7 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -945,6 +977,7 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -973,6 +1006,7 @@ mod tests {
         let mut status = Status {
             here: vec![here("build", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: Some("v1.0.0 is tagged but no `release` claim records it".into()),
             transition: None,
@@ -1025,6 +1059,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec!["code-change".into(), "design-doc".into()],
             unrecorded_boundary: None,
             transition: None,
@@ -1051,6 +1086,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec!["review produced its output but upstream build did not".into()],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -1071,6 +1107,7 @@ mod tests {
         let status = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: Some(Transition {
@@ -1104,6 +1141,7 @@ mod tests {
         let quiet = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -1117,6 +1155,7 @@ mod tests {
         let loud = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec!["build produced its output but upstream design did not".into()],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: Some(Transition {
@@ -1146,6 +1185,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![c], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,

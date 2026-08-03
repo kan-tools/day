@@ -599,6 +599,107 @@ fn a_failed_kan_read_is_never_swallowed() {
     );
 }
 
+/// `.design/forward-only-next.md` AC-14 — **an ordering is read through
+/// [`day::atoms::Forward`], never off the raw declaration.**
+///
+/// The DAG guarantee day#113 buys is only worth what enforces it. `next` is
+/// acyclic *by construction* now, but nothing in the type system stops a future
+/// consumer walking `interface.next` and quietly reinheriting the assumption
+/// that broke the off-sequence check for every milestone day has ever run —
+/// which is day#101's shape exactly: a guarantee that holds at the call sites
+/// its author was thinking about.
+///
+/// A scan rather than prose for the reason
+/// [`a_failed_kan_read_is_never_swallowed`] is one: CLAUDE.md records five
+/// occasions on which a rule stated in one module's doc comment did not reach
+/// the others, and the fifth was written after the rule was added to CLAUDE.md.
+///
+/// **Reading the declaration raw is legitimate and stays possible.** `doctor`
+/// dumps what the claim says and must show an edge the ordering dropped; the
+/// dangling-edge check must see an edge that names nothing. Those sites say so
+/// with a marker, which is the point — the exception becomes visible in review
+/// rather than indistinguishable from an oversight. Per-site, not per-file: a
+/// file-level opt-out would exempt the next unmarked read in the same file for
+/// free.
+#[test]
+fn an_ordering_is_never_read_off_the_raw_next() {
+    const MARKER: &str = "dag-not-required:";
+    /// How far above a read the marker may sit. Wide enough for a doc comment
+    /// on the enclosing function, narrow enough that it cannot drift onto an
+    /// unrelated site further down.
+    const WINDOW: usize = 8;
+
+    let mut offenders = Vec::new();
+    let mut stack = vec![repo_root().join("src")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let raw = std::fs::read_to_string(&path).unwrap();
+            let lines: Vec<&str> = raw.lines().collect();
+
+            for (index, line) in lines.iter().enumerate() {
+                // Comments are stripped before matching, so a doc comment that
+                // *names* `interface.next` — as `Forward`'s does at length —
+                // is not itself an offence. A scan that flags its own
+                // documentation is one that gets switched off.
+                let code = match line.find("//") {
+                    Some(at) => &line[..at],
+                    None => line,
+                };
+                if !reads_raw_next(code) {
+                    continue;
+                }
+                let marked = lines[index.saturating_sub(WINDOW)..=index]
+                    .iter()
+                    .any(|l| l.contains(MARKER));
+                if !marked {
+                    offenders.push(format!("{}:{}", path.display(), index + 1));
+                }
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "`interface.next` is read raw at {offenders:?}.\n\n\
+         `next` is a guaranteed DAG only because every ordering goes through \
+         `atoms::Forward`, which hands back the cycles it had to drop. Walking \
+         the declaration directly reinstates the assumption day#113 removed. \
+         Use `Forward::successors`/`ancestors`, or — if this site renders the \
+         declaration as written rather than treating it as an order — mark it \
+         `{MARKER} <why>`."
+    );
+}
+
+/// `interface` followed by `.next` as a field access, tolerating the whitespace
+/// rustfmt puts in a method chain and rejecting `next_atom`-style prefixes.
+fn reads_raw_next(code: &str) -> bool {
+    let mut from = 0;
+    while let Some(at) = code[from..].find("interface") {
+        let after = from + at + "interface".len();
+        from = after;
+        let rest = code[after..].trim_start();
+        let Some(rest) = rest.strip_prefix('.') else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix("next") else {
+            continue;
+        };
+        // `next` must end here: `interface.next_thing` is a different field.
+        if !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_') {
+            return true;
+        }
+    }
+    false
+}
+
 /// `.design/declared-blocks.md` AC-7. A mechanism a project is meant to *use*
 /// is documented or it does not exist, and the reserved-fence list is exactly
 /// the kind of rule someone hits at the worst moment.
