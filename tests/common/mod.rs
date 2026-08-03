@@ -331,6 +331,29 @@ pub fn missing_kan(dir: &Path) -> PathBuf {
     dir.join("definitely-not-installed-kan")
 }
 
+/// A kan that **runs but cannot read this repo's log**: `--help` succeeds, so
+/// `KanClient::probe` is satisfied, and every read verb fails.
+///
+/// This is day#95's actual state, and it is not the same as kan being absent.
+/// It happens in a git repo with no commits, where kan cannot derive repo
+/// identity — and it is the state in which `day status` exited 2 against a
+/// documented "always exits zero", and `day init` printed `kan: reachable`
+/// while `day doctor` correctly reported the opposite. Neither defect is
+/// reachable with [`missing_kan`], because `probe` fails first and both verbs
+/// take an earlier path.
+pub fn unreadable_kan(dir: &Path) -> PathBuf {
+    let script = dir.join("kan-unreadable.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\ncase \"$1\" in\n  --help) echo \"kan (test stub)\"; exit 0 ;;\n  \
+         *) echo \"could not derive repo identity\" >&2; exit 1 ;;\nesac\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
+}
+
 /// Every write the stub kan received, one entry per invocation, in order.
 /// Entries may span multiple lines — a claim carrying a fenced interface
 /// block does — so they are split on the stub's record marker.

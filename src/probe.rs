@@ -385,7 +385,7 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
             Ok(tags) if tags.is_empty() => {
                 Verdict::Unsatisfied(format!("no tag matches `{pattern}`"))
             }
-            Ok(tags) => Verdict::Satisfied(format!("git tag {}", tags[0])),
+            Ok(tags) => Verdict::Satisfied(summarize_tags(&tags)),
             Err(e) => Verdict::Error(format!("could not list tags: {e}")),
         },
         Probe::Command(argv) => match auth {
@@ -617,6 +617,31 @@ pub fn claims_matching(
     }
 }
 
+/// day#112: an unbounded witness satisfied by many tags must not name one of
+/// them as though it were **the** one.
+///
+/// `assess telos` is deliberately cumulative — `src/position.rs` says so
+/// plainly, and "a tag matching `v*` has ever existed" is the question it
+/// asks — so any matching tag is a correct answer and the verdict was never
+/// wrong. What was wrong was the phrasing: `[MATERIAL] published-artifact: git
+/// tag v0.7.0-beta.2` on a repo whose newest tag was `v0.8.0-beta.1` reads as
+/// a claim about the latest release, because a named instance reads as *the*
+/// instance.
+///
+/// It says "one of N" rather than picking the newest, which would need an
+/// ordering `path` has no definition for and would quietly answer a
+/// cycle-scoped question with cumulative evidence. Naming the arbitrariness is
+/// the smaller change and puts the cumulative-vs-cycle distinction exactly
+/// where a reader is most likely to conflate them. `git tag` sorts
+/// lexicographically, so `tags[0]` is arbitrary with respect to recency in
+/// particular: `v0.10.0` sorts before `v0.7.0`.
+fn summarize_tags(tags: &[String]) -> String {
+    match tags {
+        [one] => format!("git tag {one}"),
+        many => format!("git tag {} (one of {} matching)", many[0], many.len()),
+    }
+}
+
 fn summarize(files: &[String], pathspec: &str) -> String {
     match files {
         [one] => format!("tracked: {one}"),
@@ -690,6 +715,33 @@ mod tests {
             std::env::temp_dir(),
             "definitely-not-a-real-kan-binary".to_string(),
         )
+    }
+
+    /// day#112: a satisfied unbounded witness must not present an arbitrary
+    /// instance as though it were the latest.
+    ///
+    /// `git tag` sorts lexicographically, so the fixture is ordered the way git
+    /// would actually hand them over — `v0.10.0` before `v0.7.0`. That is the
+    /// point: the named tag is not merely "some" tag, it is one a reader would
+    /// most naturally mistake for the newest.
+    #[test]
+    fn a_witness_satisfied_by_many_tags_says_the_instance_is_arbitrary() {
+        let many: Vec<String> = ["v0.10.0", "v0.7.0", "v0.8.0", "v0.9.0"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let summary = summarize_tags(&many);
+        assert!(summary.contains("v0.10.0"), "{summary}");
+        assert!(
+            summary.contains("one of 4 matching"),
+            "the reader must be told the instance is arbitrary: {summary}"
+        );
+
+        // Exactly one match is not arbitrary, and must not be hedged as if it
+        // were — a caveat that fires when there is nothing to caveat is the
+        // same "as loud as the real one" failure one level down.
+        let single = summarize_tags(&["v1.0.0".to_string()]);
+        assert_eq!(single, "git tag v1.0.0");
     }
 
     #[test]

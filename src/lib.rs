@@ -20,6 +20,7 @@ pub mod compat;
 pub mod design;
 pub mod docs;
 pub mod doctor;
+pub mod fold;
 pub mod git;
 pub mod hooks;
 pub mod kan_client;

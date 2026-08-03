@@ -108,6 +108,17 @@ pub fn project(client: &KanClient) -> Projection {
             foreign += 1;
             continue;
         }
+        // day#115: an assessment of the practice is not a practice.
+        //
+        // This is the accumulating fold — each live claim is one item, so
+        // nothing supersedes anything — but it still swept up every kind, and
+        // `kan result practice "…"` was injected into every session as
+        // guidance. Same rule as the telos statement, different shape of fold:
+        // which is why the rule lives in `crate::fold` and not in whichever
+        // module noticed it last.
+        if crate::fold::is_assessment(claim) {
+            continue;
+        }
         let Some(text) = claim.text.as_deref().map(prose_only) else {
             continue;
         };

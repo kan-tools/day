@@ -54,10 +54,41 @@ claim automatically.
   misaligned telos enters a project unnoticed.
 
 **A telos subject carries its declaration and its edges — not commentary
-about it.** That is a rule with a reason: everywhere day renders a telos it
-shows the newest claim carrying text, so anything else recorded there
-displaces the statement. Recording a tension's reason on a telos subject
-used to do exactly that, in day's own log, for four of six teloi.
+about it.** Recording a tension's reason on a telos subject used to displace
+the statement in day's own log, for four of six teloi, which is why the reason
+moved to `tension/<a>--<b>` (day#32).
+
+### How a subject's current state is folded
+
+A kan subject **is** a claim log, so "what does this subject currently say" is
+a computation over its claims, not a field. day folds **by role**, never by
+recency:
+
+| kind | role on a vocabulary subject |
+| ---- | ---- |
+| `Decision` | the declaration — the newest live one wins |
+| `Subject` | the title |
+| `Result` | an assessment *of* the subject, surfaced as a suffix |
+| anything else | context; usable as a declaration only if no `Decision` exists |
+
+**An assessment is never a declaration.** That is the invariant, and it is not
+a style preference: `day assess telos` prints `kan result telos/<slug> "…"` as
+the way to record an assessment, so a reader keyed on recency was broken by the
+write day's own verb instructed. The same defect appeared independently on
+`tension/<a>--<b>` (an assessment became the reason two teloi pull apart) and
+on `practice` (an assessment became injected guidance).
+
+The fallback in the last row is load-bearing. Filtering strictly to `Decision`
+is correct in principle and renders nothing for a telos declared by hand with
+`kan observe` — and a fold that returns "no statement" for a subject that
+plainly has one is a worse defect than the one being fixed.
+
+Fold rules are **day's, and fixed**. What a claim kind *means* is kan's model
+rather than a project's choice, and a misdeclared fold would silently change
+what every surface reports — the exact failure this rule removes. Blocks are
+different: `atom/*`, `bridge/*` and `schema/*` resolve their declaration from
+the newest claim carrying the relevant **fenced block**, which is robust for
+its own reason (the block is a type tag) and needs no rule about kinds.
 
 ## Tensions — `tension/<a>--<b>`
 

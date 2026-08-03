@@ -25,7 +25,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::atoms::{self, prose_only, TELOS_PREFIX};
+use crate::atoms::{self, TELOS_PREFIX};
 use crate::kan_client::KanClient;
 
 /// Subject-name prefix for a tension between two teloi.
@@ -123,11 +123,16 @@ pub fn all(client: &KanClient) -> Result<Vec<Recorded>, Error> {
         }) else {
             continue;
         };
-        let why = claims
-            .iter()
-            .rev()
-            .find_map(|c| c.text.as_deref().map(prose_only))
-            .filter(|s| !s.is_empty());
+        // day#115: folded by role, not by recency. This took the newest claim
+        // carrying *any* prose, with no kind filter at all — so recording
+        // `kan result tension/<a>--<b> "…"` made the assessment render as the
+        // reason those two teloi pull apart, in session-start context.
+        //
+        // Exactly the defect `render_teloi` had two lines of vocabulary away,
+        // fixed there and left here: the fix was applied to the instance rather
+        // than to the rule, which is why this module is now the caller of a
+        // shared fold instead of a fourth hand-rolled one.
+        let why = crate::fold::declaration(&claims);
         out.push(Recorded {
             subject,
             tension,
@@ -164,6 +169,7 @@ pub fn render_for(slug: &str, recorded: &[Recorded]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::atoms::prose_only;
 
     /// REQ-2. Argument order must not decide which subject a tension lands
     /// on, or the same relationship gets recorded twice under two names.
