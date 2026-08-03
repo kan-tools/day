@@ -732,19 +732,32 @@ pub fn session_end(client: &KanClient) -> String {
         }
     }
 
-    if let Ok(subjects) = client.subjects() {
-        let teloi: Vec<&String> = subjects
-            .iter()
-            .filter(|s| s.starts_with(TELOS_PREFIX))
-            .collect();
-        if !teloi.is_empty() {
+    // A failed read used to drop this whole section silently — `if let Ok(..)`
+    // with no `else`, twenty lines below the `client.issues()` read in this same
+    // function that reports its failure properly. One read here was honest and
+    // the next was not, and the scan named for exactly this rule passed on both
+    // because it only knew the `.unwrap_or*`/`.ok()` shapes.
+    match client.subjects() {
+        Ok(subjects) => {
+            let teloi: Vec<&String> = subjects
+                .iter()
+                .filter(|s| s.starts_with(TELOS_PREFIX))
+                .collect();
+            if !teloi.is_empty() {
+                out.push_str(&format!(
+                    "Teloi this work was meant to serve: {}\n\n",
+                    teloi
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+        Err(e) => {
             out.push_str(&format!(
-                "Teloi this work was meant to serve: {}\n\n",
-                teloi
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "Teloi could not be read ({e}), so this handoff does not say what \
+                 the work was meant to serve.\n\n"
             ));
         }
     }

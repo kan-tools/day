@@ -217,15 +217,19 @@ pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
 
 /// Resolution ids already recorded as `decide` claims on a subject.
 ///
-/// A read failure yields an empty set, which means "record everything" — the
-/// safe direction: a duplicate decision is noise in an append-only log, while
-/// skipping one that was never recorded loses it. Stated because the opposite
-/// default would be the silent-loss failure this milestone is about.
+/// A read failure yields an empty set, which means
+/// "record everything" — the safe direction: a duplicate decision is noise in an
+/// append-only log, while skipping one that was never recorded loses it. This is
+/// the one site where failing toward *more* recording is right, so it is the one
+/// site the hatch is spent on. Stated because the opposite default would be the
+/// silent-loss failure this rule is about.
 fn existing_resolution_ids(
     client: &KanClient,
     subject: &str,
     schema: &crate::schema::Schema,
 ) -> std::collections::BTreeSet<String> {
+    // kan-read-may-degrade: failing toward "record everything" is the safe
+    // direction here, and only here — see this function's doc comment.
     let Ok(claims) = client.show(subject) else {
         return std::collections::BTreeSet::new();
     };

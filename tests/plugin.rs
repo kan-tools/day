@@ -510,7 +510,25 @@ fn ac10_conventions_document_the_practice_subject_and_replace_token() {
 ///
 /// **The escape hatch is deliberate and requires a reason.** A test with no way
 /// out gets deleted the first time it is wrong; one that demands an explicit
-/// marker makes the exception visible in review instead.
+/// marker makes the exception visible in review instead. It is per *site*, not
+/// per file — a file-level opt-out exempts every later read in the same file for
+/// free.
+///
+/// **Sixth instance, and a gap in this scan.** The four method shapes above were
+/// the five instances this test was built from, and nothing else. `let Ok(x) =
+/// read else { … }` and `if let Ok(x) = read { … }` discard an `Err` just as
+/// completely, and both were live and unmarked: `record.rs` (deliberate, failing
+/// toward *more* recording, now marked) and `hooks.rs`'s `session_end`, which
+/// dropped a whole section silently twenty lines below a read in the same
+/// function that reports its failure properly. The giveaway for those sits
+/// *before* the read, which is why looking only at the expression after it
+/// missed them.
+///
+/// **Still not caught, stated so this does not overclaim:** a `match` whose
+/// `Err` arm is empty. That is a semantic judgement rather than a shape, and a
+/// scan cannot tell an `Err` arm that reports from one that shrugs. The rule
+/// this test enforces is narrower than the rule `CLAUDE.md` states, and the gap
+/// is named here rather than left for someone to discover as instance seven.
 #[test]
 fn a_failed_kan_read_is_never_swallowed() {
     const MARKER: &str = "kan-read-may-degrade:";
@@ -543,20 +561,29 @@ fn a_failed_kan_read_is_never_swallowed() {
             // a past instance — as `docs.rs` has, recording what day#81 was —
             // reads as a live one, and a scan that cries wolf about its own
             // documentation gets switched off.
-            let text: String = std::fs::read_to_string(&path)
-                .unwrap()
-                .lines()
+            let raw = std::fs::read_to_string(&path).unwrap();
+            // Markers are read from the RAW lines and reads from the stripped
+            // ones. Stripping first and then looking for the marker in the
+            // result finds nothing, because the marker lives in a comment —
+            // which is what the first version of this did, reporting the one
+            // site that had just been marked. Per-line stripping keeps the two
+            // line-indexed the same.
+            let raw_lines: Vec<&str> = raw.lines().collect();
+            let text: String = raw_lines
+                .iter()
                 .map(|l| match l.find("//") {
                     Some(i) => l[..i].to_string(),
-                    None => l.to_string(),
+                    None => (*l).to_string(),
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
 
+            let mut swallowed: Vec<usize> = Vec::new();
             for read in reads {
                 let mut from = 0;
                 while let Some(at) = text[from..].find(read) {
-                    let start = from + at + read.len();
+                    let found = from + at;
+                    let start = found + read.len();
                     from = start;
                     // The expression ends at the next `;` or `?`.
                     let tail = &text[start..text.len().min(start + 240)];
@@ -567,31 +594,55 @@ fn a_failed_kan_read_is_never_swallowed() {
                         .min()
                         .unwrap_or(tail.len());
                     let expr = &tail[..end];
-                    if swallows.iter().any(|s| expr.contains(s)) {
-                        let line = text[..start].matches('\n').count() + 1;
-                        offenders.push(format!("{}:{line}", path.display()));
+                    // **The pattern shapes are checked on the prefix, not the
+                    // expression.** A `let Ok(x) = read else { … }` swallows the
+                    // `Err` just as completely as `.unwrap_or_default()`, and so
+                    // does `if let Ok(x) = read { … }` — but the giveaway sits
+                    // *before* the read, and the four method shapes below sit
+                    // after it. Detecting only the latter is what let two live
+                    // instances stand: `record.rs`'s (deliberate, and now marked)
+                    // and `hooks.rs`'s (not deliberate — it dropped a whole line
+                    // from `session_end` twenty lines below a read in the same
+                    // function that reports its failure properly).
+                    //
+                    // `let Ok(` covers `if let` and `while let` too.
+                    let line_start = text[..found].rfind('\n').map_or(0, |i| i + 1);
+                    let pattern_binding = text[line_start..found].contains("let Ok(");
+                    if pattern_binding || swallows.iter().any(|s| expr.contains(s)) {
+                        swallowed.push(text[..start].matches('\n').count());
                     }
+                }
+            }
+            swallowed.sort_unstable();
+            swallowed.dedup();
+
+            // The marker is **per site**, not per file. A file-level opt-out
+            // exempts every later read in the same file for free, which is the
+            // hole `an_ordering_is_never_read_off_the_raw_next` was just fixed
+            // for — leaving it here would be the same defect twice, knowingly.
+            // Nothing used this hatch before now, so tightening it costs nothing.
+            const WINDOW: usize = 8;
+            let markers: Vec<usize> = raw_lines
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| l.contains(MARKER))
+                .map(|(index, _)| index)
+                .collect();
+            for (nth, &line) in swallowed.iter().enumerate() {
+                let previous = nth.checked_sub(1).map(|p| swallowed[p]);
+                let marked = markers.iter().any(|&marker| {
+                    marker <= line && line - marker <= WINDOW && previous.is_none_or(|p| p < marker)
+                });
+                if !marked {
+                    offenders.push(format!("{}:{}", path.display(), line + 1));
                 }
             }
         }
     }
 
-    // The marker opts a file out, and has to say why.
-    let allowed: Vec<String> = offenders
-        .iter()
-        .filter(|o| {
-            let file = o.split(':').next().unwrap_or_default();
-            std::fs::read_to_string(file)
-                .map(|t| t.contains(MARKER))
-                .unwrap_or(false)
-        })
-        .cloned()
-        .collect();
-
-    let unexplained: Vec<&String> = offenders.iter().filter(|o| !allowed.contains(o)).collect();
     assert!(
-        unexplained.is_empty(),
-        "a kan read's failure is swallowed at {unexplained:?}.\n\n\
+        offenders.is_empty(),
+        "a kan read's failure is swallowed at {offenders:?}.\n\n\
          \"day could not read this\" and \"there is nothing here\" must not be \
          spelled the same way — that has been five separate defects. Either \
          propagate the error and report it (see `status::unreadable_from`), or \
