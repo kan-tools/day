@@ -9,7 +9,8 @@ it always said something else.
 
 ## Where we are
 
-**Shipped: `v0.9.0-beta.1`.** day declares, reads, assesses and records. Eleven
+**Shipped: `v0.9.0-beta.1`. Merged and unreleased: v0.10.** day declares, reads,
+assesses and records. Eleven
 verbs, two commands (`/design`, `/adversarial-review`), three hooks, a status
 line, and three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
@@ -37,18 +38,32 @@ adds the most model.**
 Tracked as GitHub milestones; the issue numbers are the contract, this is the
 reasoning.
 
-**v0.10 — the graph tells the truth.** day#113 splits `next` into forward edges
-and `revisits`, so `next` alone is a **guaranteed DAG**. That is worth more than
-the bug it fixes: reachability, topological ordering and partial-order reporting
-go from unavailable to trivial, and today's constant false "a step was skipped"
-warning disappears because "upstream" stops being undefined in a cycle. With it:
-day#115 (fold rules — a subject's state is an aggregation over its claims, not
-whatever text arrived last), day#112, day#108, day#95.
+**v0.10 — the graph tells the truth. *Merged (#122); not yet released.*** `next`
+is forward-only and a **guaranteed DAG**; feedback lives in `revisits`. The
+constant false "a step was skipped" warning is gone, and reachability,
+topological ordering and partial-order reporting went from unavailable to
+trivial. day#113/#115/#112/#108/#95 all closed.
 
-First because it is the only one of the three a person feels daily. The false
-warning is on the board every session, and a warning present in the normal state
-teaches you to ignore the channel — which `src/compat.rs` already names as how a
-warning gets ignored.
+Two things it turned out to be about, neither of which this section predicted:
+
+- **day#115 was not the generalisation it was filed as.** Two live defects —
+  an assessment rendering as the reason two teloi pull apart, and another
+  injected into every session as working practice. Filed as "the concrete
+  instances are fixed, the rule remains"; the rule was missing from two modules
+  the earlier fix never reached.
+- **The milestone's real yield was in the verifiers.** A cold review found the
+  DAG source scan could be evaded by the multi-line chain `cargo fmt` *itself
+  produces* — and `cargo fmt --check` gates CI, so an offending consumer would
+  have been formatted into the evading shape automatically, while the scan
+  reported clean. Separately, the kan-read scan knew four swallow shapes and
+  there were six, with a live unmarked instance. Both scans' escape hatches were
+  per-file and are now per-site.
+
+That is the third consecutive milestone where an independent review found
+defects the author could not, and the severity has moved from code, to
+fixes-that-introduced-bugs, to tests, to **the scans that check the tests**.
+v0.11 was already the answer to that trajectory; it is now overdue rather than
+speculative.
 
 **v0.11 — verification that can fail.** day#101 (a guarantee wired at a call
 site) and day#116 (a guarantee asserted by a test that cannot observe it) are one
