@@ -20,7 +20,6 @@
 //! built; [`accepts`] is the single place that decision is made, so adding
 //! it later is a change to one function.
 
-use crate::atoms::prose_only;
 use crate::kan_client::{Claim, KanClient};
 
 /// Subject a project records its own working practice on.
@@ -103,29 +102,31 @@ pub fn project(client: &KanClient) -> Projection {
     let mut projection = Projection::default();
     let mut foreign = 0;
 
-    for claim in &claims {
+    // day#115: an assessment of the practice is not a practice.
+    //
+    // This is the accumulating fold — each live claim is one item, so nothing
+    // supersedes anything — but it swept up every kind, and `kan result
+    // practice "…"` was injected into every session as guidance. Same rule as
+    // the telos statement, different shape of fold, which is why it lives in
+    // [`crate::fold`] and not in whichever module noticed it last.
+    //
+    // Routed through `fold::items` rather than re-implemented here. The first
+    // fix inlined `fold::is_assessment` and left `items` a `pub fn` whose only
+    // callers were its own tests — CLAUDE.md's "`pub` suppresses dead-code
+    // detection… either dead or a requirement about to go nominal", introduced
+    // in the commit that quotes it. `items` also owns the prose extraction and
+    // the empty check, so inlining duplicated three things, not one.
+    //
+    // Assessments are filtered *before* the identity check, so a foreign
+    // assessment is no longer counted as "not projected: not locally signed".
+    // That count exists to explain an identity skip; an assessment was never
+    // skipped for that reason, and saying so was the less accurate of the two.
+    for (claim, text) in crate::fold::items(&claims) {
         if !accepts(&local, claim) {
             foreign += 1;
             continue;
         }
-        // day#115: an assessment of the practice is not a practice.
-        //
-        // This is the accumulating fold — each live claim is one item, so
-        // nothing supersedes anything — but it still swept up every kind, and
-        // `kan result practice "…"` was injected into every session as
-        // guidance. Same rule as the telos statement, different shape of fold:
-        // which is why the rule lives in `crate::fold` and not in whichever
-        // module noticed it last.
-        if crate::fold::is_assessment(claim) {
-            continue;
-        }
-        let Some(text) = claim.text.as_deref().map(prose_only) else {
-            continue;
-        };
         let text = text.trim().to_string();
-        if text.is_empty() {
-            continue;
-        }
         if let Some(rest) = text.strip_prefix(REPLACE_TOKEN) {
             match rest.trim() {
                 "practice" => projection.replaces.practice = true,

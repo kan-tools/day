@@ -373,18 +373,26 @@ pub struct Cycle {
 impl Cycle {
     pub fn message(&self) -> String {
         format!(
-            "{} are in a cycle through `next` ({}), so day cannot order them — `next` is \
+            "{} {} a cycle through `next` ({}), so day cannot order {} — `next` is \
              forward-only, and the edge that sends you back belongs in `revisits`",
             self.atoms
                 .iter()
                 .map(|a| format!("{ATOM_PREFIX}{a}"))
                 .collect::<Vec<_>>()
                 .join(" and "),
+            // A self-loop is a cycle of one, and "atom/s are in a cycle" read
+            // as a typo for a plural that was not there.
+            if self.atoms.len() == 1 {
+                "is"
+            } else {
+                "are in"
+            },
             self.dropped
                 .iter()
                 .map(|(from, to)| format!("{from} -> {to}"))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            if self.atoms.len() == 1 { "it" } else { "them" },
         )
     }
 }
@@ -904,7 +912,7 @@ pub fn check(atoms: &[Atom]) -> Vec<Finding> {
                 Finding::unchecked(
                     implicated,
                     format!(
-                        "{}: day could not check that its interfaces compose — {detail}. Every missing input is produced by an atom day had to exclude from the ordering because it is on a cycle through `next`, so this is unknown rather than wrong",
+                        "{}: day could not check that its interfaces compose — {detail}. Every missing input is produced by an atom the declaration reaches only through an edge day dropped as cyclic, so this is unknown rather than wrong",
                         atom.subject(),
                     ),
                 )
@@ -1394,6 +1402,12 @@ mod tests {
             forward.cycles()[0].dropped,
             vec![("build".to_string(), "build".to_string())]
         );
+        // A cycle of one is still a cycle, and must read like one. It said
+        // "atom/build are in a cycle", which reads as a typo for a plural that
+        // is not there — flagged by a cold review of this branch.
+        let message = forward.cycles()[0].message();
+        assert!(message.contains("atom/build is a cycle"), "{message}");
+        assert!(message.contains("cannot order it"), "{message}");
     }
 
     /// An edge naming an atom that does not exist survives the ordering, so the

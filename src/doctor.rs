@@ -106,9 +106,14 @@ impl Report {
 /// even when [`atoms::Forward`] dropped it from the ordering — a reader
 /// comparing this against the cycle report below needs both sides.
 fn edges(atom: &Atom) -> String {
+    // Read once, into a local. Two reads under one marker used to pass the
+    // scan, which meant the second inherited an exemption nobody wrote for it;
+    // the marker now binds to the next read only, so a site that genuinely
+    // needs the declaration twice says so once and uses it twice.
+    let declared_next = &atom.interface.next;
     let mut out = String::new();
-    if !atom.interface.next.is_empty() {
-        out.push_str(&format!(" -> {}", atom.interface.next.join(", ")));
+    if !declared_next.is_empty() {
+        out.push_str(&format!(" -> {}", declared_next.join(", ")));
     }
     if !atom.interface.revisits.is_empty() {
         out.push_str(&format!(

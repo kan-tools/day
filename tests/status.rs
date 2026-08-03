@@ -557,6 +557,28 @@ fn day95_init_does_not_claim_a_log_it_could_not_read() {
     // still printed — degrading is not withholding.
     assert!(stdout.contains("claude mcp add day"), "{stdout}");
 
+    // F6, from the cold review: the honest report is not for `--print` only.
+    // The default invocation died with a bare `error: … (exit status: 1)`,
+    // because the recording path ran before the message was reached — so the
+    // flag nobody passes explained itself and the one everybody uses did not.
+    // That is the exact state day#95 describes.
+    let bare = day(dir.path(), &kan, &git, &["init"]);
+    let bare_out = String::from_utf8_lossy(&bare.stdout);
+    assert!(
+        bare_out.contains("could not be read"),
+        "`day init` without --print must explain itself too: {bare_out}{}",
+        String::from_utf8_lossy(&bare.stderr)
+    );
+    assert!(
+        bare_out.contains("NOT recorded"),
+        "and must say the baseline was skipped rather than imply it landed: {bare_out}"
+    );
+    assert_ne!(
+        bare.status.code(),
+        Some(0),
+        "it did not do what was asked, so the exit code must say so: {bare_out}"
+    );
+
     // And the readable case still says so plainly.
     let good = tempfile::tempdir().unwrap();
     let ok_kan = write_kan_stub(good.path(), &[]);

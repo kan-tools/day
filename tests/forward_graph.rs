@@ -325,3 +325,58 @@ fn ac13_declaring_a_revisit_records_it_and_stamps_the_version() {
          look malformed to it: {recorded}"
     );
 }
+
+/// F1, from the cold review of this branch — **`day next` must not call an
+/// order it could not establish a terminal step.**
+///
+/// `docs/CONVENTIONS.md` gained this guarantee in the same branch, naming this
+/// verb: consumers that need the ordering "drop the cyclic edges **and say that
+/// they did**: could-not-check, never checked-and-clean". `day next` said the
+/// opposite — a positive, false claim ("this is a terminal step in the current
+/// vocabulary") about an atom that declares a successor day merely could not
+/// order.
+///
+/// **AC-12's fixture could not reach this.** It is migrated and acyclic, so
+/// `successors` is non-empty and the early return never fires — the exact
+/// "a mechanism with two modes gets tested in whichever mode this repo is in"
+/// trap `CLAUDE.md` records, on the branch that quotes it. This fixture is
+/// cyclic and asserts that it is.
+#[test]
+fn f1_next_never_calls_an_unorderable_atom_terminal() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &cyclic_claims());
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    // Premise: `review` really does declare a successor, and it really is one
+    // day cannot order.
+    let doctor =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["doctor"]).stdout).into_owned();
+    assert!(
+        doctor.contains("cycle through") && doctor.contains("review -> build"),
+        "premise: review's only `next` edge must be a cyclic one: {doctor}"
+    );
+
+    let out = day(dir.path(), &kan, &git, &["next", "review"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Keyed on the exact false claim, not on the absence of the word
+    // "terminal": the corrected output says "this is NOT a terminal step",
+    // which contains that substring. Keying a check on a phrase being absent
+    // is how day#? filed a reader as `errored` because an unrelated finding
+    // suppressed the phrase it looked for — `CLAUDE.md` states the rule, and
+    // the first version of this assertion broke it.
+    assert!(
+        !stdout.contains("declares no successors"),
+        "`review` declares next: [build]; calling it a terminal step is a false \
+         claim about a graph day could not order:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("cycle through"),
+        "and the reason it has no orderable successor must be stated — \
+         could-not-check, never checked-and-clean:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("not a terminal step"),
+        "the positive signal: day must say plainly that this is not a sink:\n{stdout}"
+    );
+}

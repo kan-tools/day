@@ -342,6 +342,25 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             // claim more than was verified: the string is computed from the
             // read rather than written beside it.
             let log = client.subjects().map(|_| ());
+            // **The honest report is not for `--print` only.** The first fix
+            // computed `log` and then let the recording path below fail with a
+            // bare `error: … failed (exit status: 1)`, so `day init --print`
+            // explained itself and `day init` — the default invocation, in the
+            // exact state day#95 describes — did not. Found by a cold review of
+            // this branch, which ran both.
+            //
+            // Recording genuinely cannot happen against a log day cannot read,
+            // so it is skipped and *said to be skipped*, the wiring is printed
+            // anyway (it is what you need in order to fix this), and the exit
+            // code reports that the requested work did not all happen.
+            if log.is_err() && !print {
+                print!("{}", init_instructions(log.as_ref()));
+                println!(
+                    "\nThe baseline design-doc schema was NOT recorded: that needs a log \
+                     day can read.\nRe-run `day init` once `day doctor` is clean."
+                );
+                return Ok(ExitCode::from(EXIT_UNAVAILABLE));
+            }
             if !print {
                 let slug = crate::schema::DEFAULT_SLUG;
                 if force || !crate::schema::Schema::is_declared(&client, slug)? {

@@ -68,10 +68,18 @@ back the cycles it had to drop. The constant false "a step was skipped" warning
 ## Acceptance Criteria
 
 - [ ] AC-1: (REQ-1) A `day-atom` block with no `revisits` key parses to
-  `revisits == []`, and `Interface::to_claim_text` for an interface with empty
-  `revisits` produces text byte-identical to what this commit's parent produced
-  for the same interface — asserted against the committed block corpus in
-  `tests/fixtures/block-corpus/`.
+  `revisits == []`, and `Interface::to_block_json` for an interface with empty
+  `revisits` serializes byte-identically to what the field's introduction did
+  not change — asserted directly against the expected bytes in
+  `the_version_stamp_is_the_only_difference_a_revisit_makes`.
+
+  **Corrected after a cold review.** This originally said "asserted against the
+  committed block corpus in `tests/fixtures/block-corpus/`", and that mechanism
+  does not exist: `tests/block_corpus.rs` only *deserializes* the bodies old
+  versions wrote, so it checks the read direction and never compares write-side
+  bytes. The property holds and is asserted; the criterion named the wrong
+  evidence for it, which is exactly the "a commit message saying the work was
+  done is not the work" failure one level up.
 - [ ] AC-2: (REQ-2) `Interface::to_claim_text` emits `"_version":2` when `revisits` is
   non-empty and emits no `_version` key when it is empty; `parse_block` accepts
   a `day-atom` body declaring `_version: 2` and rejects `_version: 3` as
@@ -147,7 +155,6 @@ pub struct Forward<'a> { /* successors, cycles */ }
 impl<'a> Forward<'a> {
     pub fn build(atoms: &'a [Atom]) -> Self;
     pub fn successors(&self, name: &str) -> &[&'a str];
-    pub fn predecessors(&self, name: &str) -> Vec<&'a str>;
     pub fn ancestors(&self, atoms: &'a [Atom], name: &str) -> Vec<&'a Atom>;
     pub fn cycles(&self) -> &[Cycle];
 }
@@ -178,7 +185,10 @@ filter on typed flags rather than on message prose, which is what makes adding
 a third flag safe here.
 
 **Off-sequence.** `src/position.rs`'s loop at the `off_sequence` block moves to
-`forward.predecessors`, and `position::Report` gains `unordered: Vec<String>`
+`forward.successors` — the draft above specified a `predecessors` accessor and
+the implementation did not need one, since the loop already walks atoms and asks
+what follows each; it is not built, rather than built and unused. `position::Report`
+gains `unordered: Vec<String>`
 beside the existing `read_failures` and `unrecorded` — the module already
 distinguishes "checked and absent" from "unknowable" through `Presence`, and
 this is the same distinction one level up, at the graph rather than the probe.

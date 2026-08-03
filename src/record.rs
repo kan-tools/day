@@ -280,22 +280,36 @@ pub fn next(client: &KanClient, name: &str) -> Result<String, Error> {
     // step. Feedback edges are still shown, below, under what they are.
     let forward = atoms::Forward::build(&atoms_list);
     let successors = forward.successors(&atom.name);
+    let unordered: Vec<&atoms::Cycle> = forward
+        .cycles()
+        .iter()
+        .filter(|c| c.atoms.contains(&atom.name))
+        .collect();
 
-    if successors.is_empty() && atom.interface.revisits.is_empty() {
-        return Ok(format!(
-            "{} declares no successors — this is a terminal step in the current vocabulary.\n",
-            atom.subject()
-        ));
-    }
-
+    // **"Terminal" is a positive claim, so it may only be made when day could
+    // actually look.** An atom whose only `next` edge was dropped as cyclic has
+    // no *orderable* successor and is not a sink, and saying otherwise is
+    // checked-and-clean standing in for could-not-check — which is the thing
+    // `docs/CONVENTIONS.md` promises this verb does not do, naming it.
+    //
+    // This was an early return that fired before the cycle report below, so
+    // `day next` on an unmigrated vocabulary said "this is a terminal step in
+    // the current vocabulary" about an atom that plainly declares a successor.
+    // Found by a cold review of this branch; AC-12's fixture is migrated and
+    // acyclic, so it could not reach the mode at all.
     let mut out = String::new();
-    if successors.is_empty() {
+    if !successors.is_empty() {
+        out.push_str(&format!("After {}:\n", atom.subject()));
+    } else if unordered.is_empty() {
         out.push_str(&format!(
             "{} declares no successors — this is a terminal step in the current vocabulary.\n",
             atom.subject()
         ));
     } else {
-        out.push_str(&format!("After {}:\n", atom.subject()));
+        out.push_str(&format!(
+            "{} has no successor day can order — this is not a terminal step.\n",
+            atom.subject()
+        ));
     }
     for successor in successors {
         match atoms_list.iter().find(|a| &a.name == successor) {
@@ -339,10 +353,8 @@ pub fn next(client: &KanClient, name: &str) -> Result<String, Error> {
         out.push_str("Not a next step: this is work this atom can invalidate.\n");
     }
 
-    for cycle in forward.cycles() {
-        if cycle.atoms.contains(&atom.name) {
-            out.push_str(&format!("\n  ? {}\n", cycle.message()));
-        }
+    for cycle in unordered {
+        out.push_str(&format!("\n  ? {}\n", cycle.message()));
     }
 
     Ok(out)

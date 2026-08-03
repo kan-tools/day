@@ -621,12 +621,36 @@ fn a_failed_kan_read_is_never_swallowed() {
 /// rather than indistinguishable from an oversight. Per-site, not per-file: a
 /// file-level opt-out would exempt the next unmarked read in the same file for
 /// free.
+///
+/// **What this catches, measured rather than assumed.** The first version was
+/// line-local and window-based, and a cold review of this branch evaded it three
+/// ways — each reproduced by compiling a probe file, not by reading:
+///
+/// - `cargo fmt`'s own multi-line chain (`atom\n.interface\n.next`). This was
+///   the serious one: `cargo fmt --check` gates CI, so an offending consumer was
+///   *formatted into* the evading shape automatically. Fixed by matching over
+///   the whole comment-stripped file instead of per line.
+/// - a local binding (`let iface = &atom.interface; iface.next`), which the
+///   direct matcher cannot see because the type is not in the text. Fixed by
+///   [`interface_bindings`].
+/// - a second read inheriting the marker written for the first. Fixed by
+///   binding a marker to the **next read only**; `doctor::edges` was
+///   restructured to read once rather than have the rule bent for it.
+///
+/// **What it still does not catch, stated so the check does not overclaim:**
+/// destructuring (`let Interface { next, .. } = …`), which needs a parser to
+/// tell from the struct literal this repo uses in a dozen places; and a second
+/// raw read on the *same line* as an explained one, which is one expression the
+/// marker's author had in front of them. Both are could-not-checks. A scan that
+/// reported "clean" while meaning "clean of the shapes I happen to know" would
+/// be the same defect it exists to prevent, one level up.
 #[test]
 fn an_ordering_is_never_read_off_the_raw_next() {
     const MARKER: &str = "dag-not-required:";
-    /// How far above a read the marker may sit. Wide enough for a doc comment
-    /// on the enclosing function, narrow enough that it cannot drift onto an
-    /// unrelated site further down.
+    /// How far above a read the marker may sit — enough for a doc comment on
+    /// the enclosing function. It is a *ceiling*, not the whole rule: a marker
+    /// also binds to the **next read only** (see below), so distance alone
+    /// never decides.
     const WINDOW: usize = 8;
 
     let mut offenders = Vec::new();
@@ -643,24 +667,61 @@ fn an_ordering_is_never_read_off_the_raw_next() {
             }
             let raw = std::fs::read_to_string(&path).unwrap();
             let lines: Vec<&str> = raw.lines().collect();
+            // Comments are stripped before matching, so a doc comment that
+            // *names* `interface.next` — as `Forward`'s does at length — is not
+            // itself an offence. A scan that flags its own documentation is one
+            // that gets switched off.
+            //
+            // Stripped per line and then rejoined, so a byte offset in the
+            // result still maps to a line by counting newlines, while the
+            // matcher gets to see **across** lines.
+            let code_lines: Vec<String> = lines
+                .iter()
+                .map(|l| match l.find("//") {
+                    Some(at) => l[..at].to_string(),
+                    None => (*l).to_string(),
+                })
+                .collect();
+            let code = code_lines.join("\n");
 
-            for (index, line) in lines.iter().enumerate() {
-                // Comments are stripped before matching, so a doc comment that
-                // *names* `interface.next` — as `Forward`'s does at length —
-                // is not itself an offence. A scan that flags its own
-                // documentation is one that gets switched off.
-                let code = match line.find("//") {
-                    Some(at) => &line[..at],
-                    None => line,
-                };
-                if !reads_raw_next(code) {
-                    continue;
+            let mut reads: Vec<usize> = raw_next_offsets(&code)
+                .into_iter()
+                .map(|offset| code[..offset].matches('\n').count())
+                .collect();
+            // ...and the same field reached through a local binding, which the
+            // direct matcher cannot see because the type is not in the text.
+            for name in interface_bindings(&code_lines) {
+                for (index, line) in code_lines.iter().enumerate() {
+                    if reads_binding_next(line, &name) {
+                        reads.push(index);
+                    }
                 }
-                let marked = lines[index.saturating_sub(WINDOW)..=index]
-                    .iter()
-                    .any(|l| l.contains(MARKER));
+            }
+            reads.sort_unstable();
+            reads.dedup();
+
+            let markers: Vec<usize> = lines
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| l.contains(MARKER))
+                .map(|(index, _)| index)
+                .collect();
+
+            for (nth, &line) in reads.iter().enumerate() {
+                let previous = nth.checked_sub(1).map(|p| reads[p]);
+                let marked = markers.iter().any(|&marker| {
+                    marker <= line
+                        && line - marker <= WINDOW
+                        // **A marker binds to the next read only.** Without
+                        // this, a second read added below an explained one
+                        // inherits its exemption silently — which is how an
+                        // escape hatch becomes a hole. Reads are sorted, so it
+                        // is enough that no earlier read sits at or after the
+                        // marker.
+                        && previous.is_none_or(|p| p < marker)
+                });
                 if !marked {
-                    offenders.push(format!("{}:{}", path.display(), index + 1));
+                    offenders.push(format!("{}:{}", path.display(), line + 1));
                 }
             }
         }
@@ -678,22 +739,131 @@ fn an_ordering_is_never_read_off_the_raw_next() {
     );
 }
 
-/// `interface` followed by `.next` as a field access, tolerating the whitespace
-/// rustfmt puts in a method chain and rejecting `next_atom`-style prefixes.
-fn reads_raw_next(code: &str) -> bool {
+/// True when `c` could continue a Rust identifier, so a match can be required
+/// to sit on a token boundary rather than inside a longer name.
+fn ident_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Byte offsets of every `interface` followed by `.next` as a field access.
+///
+/// Runs over the **whole comment-stripped file**, not line by line, because
+/// `cargo fmt` splits a long chain across lines:
+///
+/// ```ignore
+/// atom
+///     .interface
+///     .next
+///     .iter()
+/// ```
+///
+/// The line-local version of this missed exactly that shape — and since
+/// `cargo fmt --check` gates CI, an offending consumer is not merely able to
+/// evade the scan, it is *formatted into* the evading shape automatically. A
+/// check that its own toolchain routes around is worse than none, because it
+/// reports clean. `trim_start` already spans newlines, so whole-file matching
+/// is the entire fix.
+fn raw_next_offsets(code: &str) -> Vec<usize> {
+    let mut out = Vec::new();
     let mut from = 0;
     while let Some(at) = code[from..].find("interface") {
-        let after = from + at + "interface".len();
+        let start = from + at;
+        let after = start + "interface".len();
         from = after;
-        let rest = code[after..].trim_start();
-        let Some(rest) = rest.strip_prefix('.') else {
+        // Token boundaries on both sides: `extract_interface(` is not a read,
+        // and neither is `.interfaces`.
+        if code[..start].ends_with(ident_char) || code[after..].starts_with(ident_char) {
+            continue;
+        }
+        let Some(rest) = code[after..].trim_start().strip_prefix('.') else {
             continue;
         };
         let Some(rest) = rest.trim_start().strip_prefix("next") else {
             continue;
         };
         // `next` must end here: `interface.next_thing` is a different field.
-        if !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_') {
+        if !rest.starts_with(ident_char) {
+            out.push(start);
+        }
+    }
+    out
+}
+
+/// Names bound to an `Interface` — `let iface = &atom.interface;` — so that a
+/// later `iface.next` is caught too.
+///
+/// The direct matcher cannot see this: after the binding, the text says nothing
+/// about the type. Bindings whose value already reaches `.next` are excluded,
+/// because the binding line is itself a read the direct matcher reports, and
+/// the resulting local is a `Vec<String>` rather than an `Interface`.
+///
+/// **Known blind spot, stated rather than papered over:** destructuring
+/// (`let Interface { next, .. } = …`) is not detected. Distinguishing a pattern
+/// from the struct literal this repo uses in a dozen places needs a parser, and
+/// a scan that guessed would fire on legitimate construction. This is a
+/// could-not-check, and naming it is the difference between a bounded check and
+/// one that overclaims.
+fn interface_bindings(code_lines: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in code_lines {
+        let Some(at) = line.find("let ") else {
+            continue;
+        };
+        let Some((pattern, value)) = line[at + "let ".len()..].split_once('=') else {
+            continue;
+        };
+        if raw_next_offsets(value).is_empty() && interface_offsets(value).is_empty() {
+            continue;
+        }
+        if !raw_next_offsets(value).is_empty() {
+            continue;
+        }
+        let name: String = pattern
+            .trim()
+            .trim_start_matches("mut ")
+            .trim()
+            .chars()
+            .take_while(|c| ident_char(*c))
+            .collect();
+        if !name.is_empty() {
+            out.push(name);
+        }
+    }
+    out
+}
+
+/// Offsets of `.interface` as a whole-token field access.
+fn interface_offsets(code: &str) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(at) = code[from..].find(".interface") {
+        let start = from + at;
+        let after = start + ".interface".len();
+        from = after;
+        if !code[after..].starts_with(ident_char) {
+            out.push(start);
+        }
+    }
+    out
+}
+
+/// `<name>.next` as a field access on a binding known to be an `Interface`.
+fn reads_binding_next(code: &str, name: &str) -> bool {
+    let mut from = 0;
+    while let Some(at) = code[from..].find(name) {
+        let start = from + at;
+        let after = start + name.len();
+        from = after;
+        if code[..start].ends_with(ident_char) {
+            continue;
+        }
+        let Some(rest) = code[after..].trim_start().strip_prefix('.') else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix("next") else {
+            continue;
+        };
+        if !rest.starts_with(ident_char) {
             return true;
         }
     }
