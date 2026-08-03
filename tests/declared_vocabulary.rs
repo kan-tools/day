@@ -364,7 +364,7 @@ fn a_declared_cadence_changes_how_often_the_channel_speaks() {
             claim(
                 "atom/future",
                 "bafyf",
-                "F.\n\n```day-atom\n{\"_version\":2,\"in\":[\"a\"],\"out\":[\"b\"]}\n```\n",
+                &format!("F.\n\n```day-atom\n{}\n```\n", common::too_new_atom_body()),
             ),
         ]
     };

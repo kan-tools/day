@@ -2,9 +2,9 @@
   {
     "subject": "atom/from-the-future",
     "fence": "day-atom",
-    "note": "An atom declared by a day newer than the reader. Its `next` names an atom that exists, so the only finding a reader can report is about the parts it could not read.",
+    "note": "An atom declared by a day newer than the reader: its `_version` is above every released day's supported `day-atom` version, and above this build's. It was `_version: 2` and `2` became readable when day#113 shipped `revisits`, which would have quietly turned the from-the-future cell into a cell about a block every reader can parse. `a_from_the_future_block_is_actually_from_the_future` in tests/block_corpus.rs fails the build if that happens again. Its `next` names an atom that exists, so the only finding a reader can report is about the parts it could not read.",
     "body": {
-      "_version": 2,
+      "_version": 3,
       "in": [
         "intent"
       ],

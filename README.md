@@ -92,10 +92,15 @@ Deliberately small. The theory is ambitious; the tool is not.
 **day stores nothing of its own.** Every durable thing it knows is an ordinary
 kan claim under the conventions in [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md)
 — teloi on `telos/<slug>` subjects, process atoms on `atom/<slug>` subjects
-carrying a fenced `day-atom` interface block. day reads them back through
-kan's public CLI and never writes. This is kan's own ADR-18 boundary rule
-observed from the other side: kan owns durable claims and pure reads over
-them; day is entirely a calling convention over those primitives.
+carrying a fenced `day-atom` interface block. day reads and appends them
+through kan's public CLI only — never touching kan's storage, its signing, or
+its log format. The guarantee that matters is that **day cannot alter or
+destroy a subject**: it only ever appends, and kan exposes no destroy path to
+reach. ("day never writes" was the earlier phrasing and was a proxy for this;
+it stopped being true in v0.2, when `day design record` and `day review
+record` landed.) This is kan's own ADR-18 boundary rule observed from the
+other side: kan owns durable claims and pure reads over them; day is entirely
+a calling convention over those primitives.
 
 **Advisory, never blocking.** day's hooks inject context. They do not gate,
 deny, or reject an agent's action, and a test enforces that the shipped hook
@@ -152,8 +157,12 @@ vocabularies, none rejecting unknown fields — and every one of them exists to
 information, it was a false certification.
 
 Blocks now refuse what they cannot account for, and carry a `_version` so the
-refusal can say **why**: *this day reads `day-atom` v1, this block declares v2 —
-upgrade day* rather than a parse error that reads as the project's mistake. A
+refusal can say **why**: *this day reads `day-atom` up to v2, this block
+declares v3 — upgrade day* rather than a parse error that reads as the
+project's mistake. The version is the reader version a block *requires*, so it
+appears only when a block actually uses something older readers lack — `next`
+and `revisits` are the worked example: an atom with no feedback edge is still
+byte-identical to what v0.2 wrote. A
 failed kan read reports as `[UNCHECKED]` rather than as an absent artifact. The
 session hooks say when their own lists are partial, on both the model's channel
 and the human's. And a **version-migration matrix** in CI records what every

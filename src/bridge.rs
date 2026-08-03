@@ -319,6 +319,7 @@ fn walk(
                     atoms: vec![name.clone()],
                     unreadable: false,
                     version_skew: false,
+                    unchecked: false,
                     message: format!(
                         "{}{name} needs [{}] which nothing before it makes available",
                         atoms::ATOM_PREFIX,
@@ -473,6 +474,7 @@ mod tests {
                 inputs: inputs.iter().map(|s| s.to_string()).collect(),
                 outputs: outputs.iter().map(|s| s.to_string()).collect(),
                 next: vec![],
+                revisits: vec![],
                 done: vec![],
             },
         }

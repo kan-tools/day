@@ -173,7 +173,7 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         //   Subject    -> the title
         //   Result     -> an assessment; surfaced as a suffix, never as the text
         //   other      -> context, not the statement
-        let title = claims.iter().rev().find_map(|c| c.title.clone());
+        let title = crate::fold::title(&claims);
         // Prefer the declaration; fall back to any claim that is not an
         // assessment. Filtering strictly to `Decision` was too strict: `kan
         // decide` is the documented way to declare a telos and what `day telos
@@ -181,11 +181,11 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         // rendering nothing for it would trade this defect for a worse one.
         // What must never happen is a `Result` becoming the statement, which is
         // the whole of F12.
-        let statement = atoms::statement_from(&claims);
+        let statement = crate::fold::declaration(&claims);
 
         // An assessment enriches the line instead of replacing it — which is
         // what recording one was supposed to do.
-        let assessed = claims.iter().any(|c| c.kind == "Result");
+        let assessed = crate::fold::is_assessed(&claims);
         let suffix = if assessed { "  [assessed]" } else { "" };
 
         match (title, statement) {
@@ -732,19 +732,32 @@ pub fn session_end(client: &KanClient) -> String {
         }
     }
 
-    if let Ok(subjects) = client.subjects() {
-        let teloi: Vec<&String> = subjects
-            .iter()
-            .filter(|s| s.starts_with(TELOS_PREFIX))
-            .collect();
-        if !teloi.is_empty() {
+    // A failed read used to drop this whole section silently — `if let Ok(..)`
+    // with no `else`, twenty lines below the `client.issues()` read in this same
+    // function that reports its failure properly. One read here was honest and
+    // the next was not, and the scan named for exactly this rule passed on both
+    // because it only knew the `.unwrap_or*`/`.ok()` shapes.
+    match client.subjects() {
+        Ok(subjects) => {
+            let teloi: Vec<&String> = subjects
+                .iter()
+                .filter(|s| s.starts_with(TELOS_PREFIX))
+                .collect();
+            if !teloi.is_empty() {
+                out.push_str(&format!(
+                    "Teloi this work was meant to serve: {}\n\n",
+                    teloi
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+        Err(e) => {
             out.push_str(&format!(
-                "Teloi this work was meant to serve: {}\n\n",
-                teloi
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "Teloi could not be read ({e}), so this handoff does not say what \
+                 the work was meant to serve.\n\n"
             ));
         }
     }

@@ -293,6 +293,17 @@ pub struct Report {
     /// Off-sequence findings: an atom's outputs are present while an upstream
     /// atom's outputs are not, so a step was skipped.
     pub off_sequence: Vec<String>,
+    /// Pairs of atoms whose order day **could not establish**, because they
+    /// are on a cycle through `next` and "upstream" is undefined there
+    /// (day#113).
+    ///
+    /// A separate list rather than more `off_sequence` lines, for the reason
+    /// [`Presence::Unknown`] is separate from [`Presence::Absent`] one level
+    /// down: an order day could not check is not an order it checked and found
+    /// clean, and rendering the two the same way is how a reader stops
+    /// believing either. Empty for any vocabulary that has moved its feedback
+    /// edges to `revisits`, which is every migrated one.
+    pub unordered: Vec<String>,
     /// Reads that could not happen while inferring this position, so a caller
     /// can say the report is partial instead of presenting it as whole
     /// (`.design/declared-blocks.md` REQ-4).
@@ -307,6 +318,31 @@ pub struct Report {
     /// unrecorded artifact look absent and put the atom back in `current`,
     /// which is the collapse this exists to undo.
     pub unrecorded: Vec<String>,
+}
+
+/// The orders day cannot establish over this atom set, phrased for the
+/// off-sequence surface. See [`Report::unordered`].
+///
+/// Public and free-standing because it needs **no probes at all** — a cycle in
+/// `next` is a fact about the declaration. `status::compute` short-circuits to
+/// "uncheckable" when a project has declared no readable witness probe, and
+/// that path must still say the graph could not be ordered: the two are
+/// independent reasons day knows less than the report might imply, and letting
+/// one swallow the other is how a could-not-check goes quiet.
+pub fn unordered(atoms: &[Atom]) -> Vec<String> {
+    let mut out: Vec<String> = crate::atoms::Forward::build(atoms)
+        .cycles()
+        .iter()
+        .map(|cycle| {
+            format!(
+                "whether a step was skipped between {} is unchecked: {}",
+                cycle.atoms.join(" and "),
+                cycle.message()
+            )
+        })
+        .collect();
+    out.sort();
+    out
 }
 
 /// Infers position from the atom set and the witness probes, resolving each
@@ -473,6 +509,13 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
     // accumulates along a path, so a downstream artifact existing while an
     // upstream one is definitely absent means a step was skipped.
     //
+    // The edges come from [`atoms::Forward`], never the raw declaration
+    // (day#113). "Upstream" is undefined inside a cycle — each atom is upstream
+    // of the other — so before the split this fired on whichever half had not
+    // produced yet, which during any build is the whole build phase of every
+    // milestone. What `Forward` had to drop is reported as `unordered` rather
+    // than skipped quietly: could-not-check, never checked-and-clean.
+    //
     // "Definitely absent" is [`Outputs::Absent`], never [`Outputs::Unknown`].
     // An upstream whose output has no probe (or a command probe) is unknowable
     // — not evidence of a skip. Flagging it anyway was a false positive on
@@ -481,6 +524,7 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
     // the test, which only ever used probed artifacts.
     let by_name: BTreeMap<&str, &Standing> =
         standings.iter().map(|s| (s.atom.as_str(), s)).collect();
+    let forward = crate::atoms::Forward::build(atoms);
     let mut off_sequence = Vec::new();
     for atom in atoms {
         let successor_produced = |name: &str| {
@@ -491,7 +535,7 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
         let upstream_definitely_absent = by_name
             .get(atom.name.as_str())
             .is_some_and(|s| s.outputs == Outputs::Absent);
-        for successor in &atom.interface.next {
+        for successor in forward.successors(&atom.name) {
             if successor_produced(successor) && upstream_definitely_absent {
                 off_sequence.push(format!(
                     "{} produced its output but upstream {} did not — a step was skipped",
@@ -504,6 +548,7 @@ fn infer_with(atoms: &[Atom], presence: impl Fn(&str) -> Presence) -> Report {
     off_sequence.dedup();
 
     Report {
+        unordered: unordered(atoms),
         read_failures: Vec::new(),
         // Filled by [`infer`], which is the only caller with the schema needed
         // to answer it. `infer_with` is given a bare presence function and
@@ -531,6 +576,7 @@ mod tests {
                 inputs: inputs.iter().map(|s| s.to_string()).collect(),
                 outputs: outputs.iter().map(|s| s.to_string()).collect(),
                 next: next.iter().map(|s| s.to_string()).collect(),
+                revisits: vec![],
                 done: vec![],
             },
         }

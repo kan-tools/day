@@ -189,3 +189,58 @@ fn ac10_no_captured_shape_carries_a_version_no_release_could_write() {
         }
     }
 }
+
+/// `.design/forward-only-next.md` AC-15 — the block the **migration matrix**
+/// calls "from the future" is actually from the future.
+///
+/// The matrix (`.github/workflows/migration-matrix.yml`) hands
+/// `tests/fixtures/migration-blocks.json` to every released `day` and records
+/// what each one does with it. That measurement means "a released reader,
+/// handed a block it cannot read, refuses honestly" only while the block is
+/// genuinely unreadable — and it was pinned at `_version: 2`, which day#113
+/// made a version day reads. Nothing in the matrix would have noticed: every
+/// released binary still refuses it (they are all v1), so the rows would stay
+/// green while the cell quietly stopped testing what it is named for.
+///
+/// Asserted against `SUPPORTED_VERSION` rather than a literal, because a
+/// literal is exactly what went stale. This is CLAUDE.md's rule for
+/// verification tooling — a check must be able to tell "could not read" from
+/// "read it fine" — applied to the fixture the check is built on.
+#[test]
+fn a_from_the_future_block_is_actually_from_the_future() {
+    use day::atoms::Versioned;
+
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/migration-blocks.json");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{} is unreadable: {e}", path.display()));
+    let blocks: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
+
+    let mut checked = 0;
+    for block in blocks.as_array().expect("an array of blocks") {
+        let Some(version) = block.pointer("/body/_version").and_then(|v| v.as_u64()) else {
+            continue;
+        };
+        checked += 1;
+        let fence = block["fence"].as_str().unwrap_or_default();
+        assert_eq!(
+            fence,
+            day::atoms::Interface::FENCE,
+            "this assertion only knows `day-atom`'s supported version; a versioned \
+             `{fence}` fixture needs its own bound here"
+        );
+        assert!(
+            version > day::atoms::Interface::SUPPORTED_VERSION,
+            "the migration fixture declares {} {version}, which THIS build reads (up to \
+             {}) — so the cell named for a block from the future is measuring a block \
+             every reader can parse. Raise it above `SUPPORTED_VERSION`.",
+            day::atoms::VERSION_KEY,
+            day::atoms::Interface::SUPPORTED_VERSION,
+        );
+    }
+    assert_eq!(
+        checked, 1,
+        "exactly one migration fixture is supposed to be from the future; \
+         finding none means the assertion above ran on nothing"
+    );
+}

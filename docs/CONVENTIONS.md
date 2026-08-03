@@ -54,10 +54,41 @@ claim automatically.
   misaligned telos enters a project unnoticed.
 
 **A telos subject carries its declaration and its edges — not commentary
-about it.** That is a rule with a reason: everywhere day renders a telos it
-shows the newest claim carrying text, so anything else recorded there
-displaces the statement. Recording a tension's reason on a telos subject
-used to do exactly that, in day's own log, for four of six teloi.
+about it.** Recording a tension's reason on a telos subject used to displace
+the statement in day's own log, for four of six teloi, which is why the reason
+moved to `tension/<a>--<b>` (day#32).
+
+### How a subject's current state is folded
+
+A kan subject **is** a claim log, so "what does this subject currently say" is
+a computation over its claims, not a field. day folds **by role**, never by
+recency:
+
+| kind | role on a vocabulary subject |
+| ---- | ---- |
+| `Decision` | the declaration — the newest live one wins |
+| `Subject` | the title |
+| `Result` | an assessment *of* the subject, surfaced as a suffix |
+| anything else | context; usable as a declaration only if no `Decision` exists |
+
+**An assessment is never a declaration.** That is the invariant, and it is not
+a style preference: `day assess telos` prints `kan result telos/<slug> "…"` as
+the way to record an assessment, so a reader keyed on recency was broken by the
+write day's own verb instructed. The same defect appeared independently on
+`tension/<a>--<b>` (an assessment became the reason two teloi pull apart) and
+on `practice` (an assessment became injected guidance).
+
+The fallback in the last row is load-bearing. Filtering strictly to `Decision`
+is correct in principle and renders nothing for a telos declared by hand with
+`kan observe` — and a fold that returns "no statement" for a subject that
+plainly has one is a worse defect than the one being fixed.
+
+Fold rules are **day's, and fixed**. What a claim kind *means* is kan's model
+rather than a project's choice, and a misdeclared fold would silently change
+what every surface reports — the exact failure this rule removes. Blocks are
+different: `atom/*`, `bridge/*` and `schema/*` resolve their declaration from
+the newest claim carrying the relevant **fenced block**, which is robust for
+its own reason (the block is a type tag) and needs no rule about kinds.
 
 ## Tensions — `tension/<a>--<b>`
 
@@ -161,16 +192,64 @@ An atom claim carries a fenced `day-atom` JSON block:
 ```
 ````
 
-| Field  | Meaning |
-| ------ | ------- |
-| `in`   | Type names this atom requires to be applicable |
-| `out`  | Type names this atom produces |
-| `next` | Slugs of atoms this one composes into |
-| `done` | Witness types that evidence this atom is finished |
+| Field      | Meaning |
+| ---------- | ------- |
+| `in`       | Type names this atom requires to be applicable |
+| `out`      | Type names this atom produces |
+| `next`     | Slugs of atoms this one composes into — **forward only** |
+| `revisits` | Slugs a negative outcome here sends you **back** to |
+| `done`     | Witness types that evidence this atom is finished |
 
 Type names are free-form strings. day checks that they *match*; it
 deliberately does not check what they mean. The type vocabulary is the
 project's to choose and evolve.
+
+### `next` is a DAG, and `revisits` is why
+
+**`next` alone is guaranteed acyclic.** That is a guarantee about the field, not
+a convention about how to fill it in: reachability, topological ordering and
+partial-order reporting are all available over `next` and can be relied on by
+anything reading a vocabulary — including a pack that transports one.
+
+The two relations a process graph actually has are *sequence* ("review follows
+build") and *feedback* ("a review sends you back to fix"). `next` carried both
+until day#113, and every consumer that read it as an ordering was wrong on any
+vocabulary with a feedback edge. day's own was one: `generative-build` and
+`adversarial-review` each listed the other, which left "upstream" undefined for
+both and put a false `a step was skipped` warning on the board for the whole
+build phase of every milestone.
+
+```day-atom
+{"_version": 2, "in": ["design-doc", "code-change"], "out": ["verdict"],
+ "next": ["pull-request"], "revisits": ["generative-build"]}
+```
+
+A `revisits` edge is a real relation with its own uses — *what work can this
+atom invalidate?* — not a bin for edges that break the DAG. It is never an
+ordering: it does not contribute to input coverage, does not appear in
+`day next`'s successors, and no traversal walks it.
+
+- **A revisit must be a return.** Its target has to reach the declaring atom
+  through `next`. One that does not is reported: a revisit that is not a return
+  has no defined meaning, and is almost always a forward edge filed in the
+  wrong field.
+- **A slug cannot be in both `next` and `revisits`.** One block cannot say an
+  edge is both what follows and what it sends you back to; such a block is
+  refused.
+
+**A cycle in `next` is a finding, not a failure.** day names it, says which
+edge probably belongs in `revisits`, still reports `composition: ok`, and exits
+zero — an existing project gets told, not broken. Consumers that need the
+ordering (the off-sequence check, `day next`, the status line's `next:`) drop
+the cyclic edges **and say that they did**: could-not-check, never
+checked-and-clean. Where excluding a cycle is the only reason an input looks
+uncovered, that is reported as unknown rather than as a composition failure.
+
+**`revisits` is additive.** A `day-atom` block written before it existed parses
+and composes identically. A block that *uses* it declares `_version: 2`, so an
+older day reports "upgrade day to read it" rather than blaming the claim for a
+field it has never heard of; a block without it emits no `_version` and stays
+byte-identical to what earlier versions wrote.
 
 `done` is the completion story `in`/`out`/`next` leave unstated: they say what
 an atom consumes, produces, and leads to, but nothing about *how you know it
@@ -189,6 +268,11 @@ day atom declare generative-build \
   --in design-doc --out code-change --next adversarial-review \
   --done passing-tests \
   --note "An agent session turns an accepted design into code."
+
+day atom declare adversarial-review \
+  --in design-doc --in code-change --out verdict \
+  --next pull-request --revisits generative-build \
+  --note "A BLOCK or REDIRECT sends the work back to the build."
 ```
 
 day generates the block; you never hand-write the JSON. As with teloi, a
@@ -203,9 +287,10 @@ vocabulary with no slash command behind it. The vocabulary describes the
 process, not the tooling.
 
 `day doctor` reads every `atom/*` subject and checks the set composes: each
-`next` target must exist, and each atom's `in` must be covered by what its
-upstream atoms produce. A failure is reported, never repaired — day has no
-write path into the log.
+`next` and `revisits` target must exist, each `revisits` target must be a
+return, and each atom's `in` must be covered by what its upstream atoms
+produce. A failure is reported, never repaired — day has no write path into the
+log.
 
 Coverage is checked against the **transitive** upstream closure, not just the
 immediate predecessor, because artifacts accumulate along a bridging path
@@ -215,8 +300,13 @@ worked example:
 ```
 design  in[intent]                    out[design-doc]   next[generative-build]
 generative-build  in[design-doc]      out[code-change]  next[adversarial-review]
-adversarial-review  in[design-doc, code-change]  out[verdict]
+adversarial-review  in[design-doc, code-change]  out[verdict]  revisits[generative-build]
 ```
+
+Upstream is `next` only. `adversarial-review` revisits `generative-build`, and
+that edge contributes nothing to the closure — otherwise every atom on a
+feedback loop would be upstream of every other, and coverage would be satisfied
+by walking backwards.
 
 The review needs the design doc as well as the code change, and the design
 doc is still there when the review runs even though the build step didn't

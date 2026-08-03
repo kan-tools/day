@@ -8,7 +8,8 @@ description: Hostile-by-default post-implementation audit against a named north 
 > produces a verdict claim recorded in kan.
 >
 > ```day-atom
-> {"in": ["code-change", "design-doc"], "out": ["verdict"], "next": []}
+> {"_version": 2, "in": ["code-change", "design-doc"], "out": ["verdict"],
+>  "next": ["pull-request"], "revisits": ["generative-build"]}
 > ```
 >
 > Adapted from `forecast-bio/crosslink`'s `architect` skill (its

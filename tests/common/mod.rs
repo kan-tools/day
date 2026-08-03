@@ -14,6 +14,24 @@ use std::path::{Path, PathBuf};
 /// The DID the stub signs claims with, and reports from `kan identity did`.
 pub const STUB_AUTHOR: &str = "did:key:zStubAuthor";
 
+/// A `day-atom` block body **this build cannot read**, because it declares a
+/// version above the one this build supports.
+///
+/// Derived, never hardcoded. Nine fixtures across three files spelled this
+/// `{"_version":2, …}`, which was too new for as long as `day-atom` was v1 and
+/// stopped being too new the moment day#113 shipped v2. Five tests failed
+/// loudly and told us; the ones that would have kept passing are the reason
+/// this is a function. A fixture whose whole job is to be ahead of the reader
+/// has to be *defined* as ahead of the reader — CLAUDE.md's rule that a fixture
+/// must reach the mode the defect lives in, applied to the fixture itself.
+pub fn too_new_atom_body() -> String {
+    use day::atoms::Versioned;
+    format!(
+        r#"{{"_version":{},"in":["a"],"out":["b"]}}"#,
+        day::atoms::Interface::SUPPORTED_VERSION + 1
+    )
+}
+
 /// One canned claim on one subject.
 #[derive(Clone)]
 pub struct StubClaim {
@@ -311,6 +329,29 @@ fn show_filename(subject: &str) -> String {
 /// Path to a binary that does not exist, for the "kan is absent" cases.
 pub fn missing_kan(dir: &Path) -> PathBuf {
     dir.join("definitely-not-installed-kan")
+}
+
+/// A kan that **runs but cannot read this repo's log**: `--help` succeeds, so
+/// `KanClient::probe` is satisfied, and every read verb fails.
+///
+/// This is day#95's actual state, and it is not the same as kan being absent.
+/// It happens in a git repo with no commits, where kan cannot derive repo
+/// identity — and it is the state in which `day status` exited 2 against a
+/// documented "always exits zero", and `day init` printed `kan: reachable`
+/// while `day doctor` correctly reported the opposite. Neither defect is
+/// reachable with [`missing_kan`], because `probe` fails first and both verbs
+/// take an earlier path.
+pub fn unreadable_kan(dir: &Path) -> PathBuf {
+    let script = dir.join("kan-unreadable.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\ncase \"$1\" in\n  --help) echo \"kan (test stub)\"; exit 0 ;;\n  \
+         *) echo \"could not derive repo identity\" >&2; exit 1 ;;\nesac\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
 }
 
 /// Every write the stub kan received, one entry per invocation, in order.

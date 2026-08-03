@@ -44,6 +44,29 @@ pub enum Error {
     Kan(#[from] crate::kan_client::Error),
 }
 
+/// What `day status` prints when it could not read enough to report a position
+/// at all (day#95).
+///
+/// Its whole reason for existing is that the caller **exits zero anyway**. The
+/// verb documents "always exits zero", and a report that can fail a step is not
+/// advisory — so the failure has to be renderable rather than propagated. It is
+/// worded like `day hook session-start`'s degradation for the same state,
+/// because it *is* the same state and a reader meeting it in two places should
+/// not have to work out that they match.
+///
+/// Not a silent empty report: the error is printed, and the reader is pointed
+/// at the verb whose job is to diagnose. "day could not read this" and "there
+/// is nothing here" must not be spelled the same way.
+pub fn render_unreadable(error: &Error) -> String {
+    format!(
+        "day — process position\n\n\
+         kan is installed but its log could not be read here ({error}).\n\
+         If this repo isn't tracked by kan yet, that's expected.\n\n\
+         No position is reported, which is not the same as no work in progress —\n\
+         day could not look. To diagnose:\n  day doctor\n"
+    )
+}
+
 /// One `done` criterion of a current atom, resolved without running commands.
 #[derive(Debug)]
 pub struct Criterion {
@@ -111,6 +134,9 @@ pub struct Status {
     /// Off-sequence findings from [`position::infer`]: a downstream output is
     /// present while an upstream one is not, so a step was skipped.
     pub off_sequence: Vec<String>,
+    /// Orders [`position::infer`] could not establish, because the atoms are on
+    /// a cycle through `next` (day#113). See [`position::Report::unordered`].
+    pub unordered: Vec<String>,
     /// Artifact types that exist but are not written down (day#103): a declared
     /// `material` witness is satisfied for this cycle and the declared `record`
     /// witness is not.
@@ -415,10 +441,17 @@ impl Status {
             out.push('\n');
         }
 
-        if !self.off_sequence.is_empty() {
+        if !self.off_sequence.is_empty() || !self.unordered.is_empty() {
             out.push_str("Off-sequence:\n");
             for finding in &self.off_sequence {
                 out.push_str(&format!("  ! {finding}\n"));
+            }
+            // `?`, not `!`: a check day could not run is not a finding it made.
+            // Rendered even when `off_sequence` is empty, because "nothing to
+            // report" and "could not look" are the two things this section
+            // exists to keep apart.
+            for finding in &self.unordered {
+                out.push_str(&format!("  ? {finding}\n"));
             }
             out.push('\n');
         }
@@ -437,13 +470,35 @@ impl Status {
     pub fn render_line(&self) -> String {
         let mut lines = Vec::new();
 
+        // day#108: the bar is read hundreds of times a session, always
+        // peripherally, never with `--help` at hand. It gets ~40 characters and
+        // used to spend them on `candidates:` — a word whose referent it never
+        // stated. Read cold, `candidates: generative-build, release` looks like
+        // a list of failures, or a menu.
+        //
+        // So the domain is named (`atom`), and the separator carries the state:
+        // `atom:` is one day inferred, `atom?` is several the evidence does not
+        // distinguish. That plurality is a deliberate property — day names them
+        // all rather than guessing — and it now reads as one instead of as a
+        // complaint.
         if self.uncheckable {
-            lines.push("day · no witness probes declared".to_string());
+            // A setup step, not a diagnostic. This is what a fresh repo shows,
+            // and "no witness probes declared" reads as an error about the
+            // *work*. `day doctor` gets this right for the empty-vocabulary
+            // case — "a valid starting state, not an error" — and the bar was
+            // the one surface that did not.
+            //
+            // It names `schema/witness`, NOT `day init`. day#108 suggested
+            // `not set up (day init)`, and that would send a reader to a verb
+            // which records a `schema/design-doc` starter and no witnesses at
+            // all — a remedy that does not remedy this. The long form carries
+            // the full `kan observe` invocation.
+            lines.push("day · setup: declare schema/witness".to_string());
         } else {
             match self.here.as_slice() {
-                [] => lines.push("day · no current atom".to_string()),
+                [] => lines.push("day · no atom in play".to_string()),
                 [here] => {
-                    let mut parts = vec![format!("day · {}", here.atom)];
+                    let mut parts = vec![format!("day · atom: {}", here.atom)];
                     let (met, total) = here.done_counts();
                     if total > 0 {
                         parts.push(format!("{met}/{total} done"));
@@ -455,8 +510,13 @@ impl Status {
                     lines.push(parts.join(" · "));
                 }
                 many => {
+                    // Named, not counted. `atom? 2` would be shorter and the
+                    // names are the actionable part — knowing you are in
+                    // *either* build or release tells you what to do next;
+                    // knowing there are two does not. `|` reads as "or", which
+                    // is what ambiguity means here.
                     let names: Vec<&str> = many.iter().map(|h| h.atom.as_str()).collect();
-                    lines.push(format!("day · candidates: {}", names.join(", ")));
+                    lines.push(format!("day · atom? {}", names.join(" | ")));
                 }
             }
         }
@@ -602,6 +662,12 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
         return Ok(Status {
             here: Vec::new(),
             off_sequence: Vec::new(),
+            // Reported even here. A cycle in `next` is a fact about the
+            // declaration, not about the evidence, so "day cannot infer a
+            // position" is no reason to also go quiet about an order day
+            // could not establish — two independent gaps, and one must not
+            // swallow the other.
+            unordered: crate::position::unordered(&atoms),
             unrecorded: Vec::new(),
             unrecorded_boundary: unrecorded_boundary.clone(),
             transition: None,
@@ -637,6 +703,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     let log = ClaimLog::new(client);
 
     let report = position::infer(&atoms, &schema, git, &log, boundary.as_ref());
+    let forward = crate::atoms::Forward::build(&atoms);
     let by_name: BTreeMap<&str, &Atom> = atoms.iter().map(|a| (a.name.as_str(), a)).collect();
 
     let here: Vec<Here> = report
@@ -652,6 +719,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 git,
                 &log,
                 boundary.as_ref(),
+                &forward,
             ))
         })
         .collect();
@@ -669,6 +737,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     Ok(Status {
         here,
         off_sequence: report.off_sequence,
+        unordered: report.unordered,
         unrecorded: report.unrecorded,
         unrecorded_boundary,
         transition,
@@ -817,6 +886,7 @@ fn here_for(
     git: &Git,
     log: &ClaimLog<'_>,
     boundary: Option<&Boundary>,
+    forward: &crate::atoms::Forward<'_>,
 ) -> Here {
     let done = atom
         .interface
@@ -843,7 +913,16 @@ fn here_for(
         inputs_present: standing.inputs_present.clone(),
         inputs_unknown: standing.inputs_unknown.clone(),
         done,
-        next: atom.interface.next.clone(),
+        // From the acyclic view, not the declaration. `next:` here means "what
+        // comes next" on a surface a person reads every session, so an edge day
+        // could not order must not appear as one it did. `doctor` renders the
+        // raw declaration instead, because there the job is to show what the
+        // claim says.
+        next: forward
+            .successors(&atom.name)
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
     }
 }
 
@@ -868,6 +947,23 @@ mod tests {
         }
     }
 
+    /// A `Status` with nothing set, so a test can name only the field it is
+    /// about. The struct has eight fields and a test that spells all of them
+    /// buries its own subject.
+    fn blank() -> Status {
+        Status {
+            here: vec![],
+            off_sequence: vec![],
+            unordered: vec![],
+            unrecorded: vec![],
+            unrecorded_boundary: None,
+            transition: None,
+            uncheckable: false,
+            unreadable: Vec::new(),
+            cadence: crate::cache::DEFAULT_CADENCE,
+        }
+    }
+
     fn unmet(witness: &str) -> Criterion {
         Criterion {
             witness: witness.to_string(),
@@ -884,6 +980,7 @@ mod tests {
                 &["review"],
             )],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -898,7 +995,7 @@ mod tests {
         assert!(long.contains("next: review"), "{long}");
 
         let line = status.render_line();
-        assert_eq!(line, "day · build · 1/2 done · next: review");
+        assert_eq!(line, "day · atom: build · 1/2 done · next: review");
     }
 
     #[test]
@@ -906,6 +1003,7 @@ mod tests {
         let status = Status {
             here: vec![here("design", vec![], &[]), here("build", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -919,7 +1017,7 @@ mod tests {
         assert!(long.contains("- build"), "{long}");
 
         let line = status.render_line();
-        assert_eq!(line, "day · candidates: design, build");
+        assert_eq!(line, "day · atom? design | build");
     }
 
     #[test]
@@ -927,6 +1025,7 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -937,7 +1036,7 @@ mod tests {
         assert!(status
             .render_long()
             .contains("No atom is currently in play"));
-        assert_eq!(status.render_line(), "day · no current atom");
+        assert_eq!(status.render_line(), "day · no atom in play");
     }
 
     #[test]
@@ -945,6 +1044,7 @@ mod tests {
         let status = Status {
             here: vec![],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -955,7 +1055,62 @@ mod tests {
         assert!(status
             .render_long()
             .contains("No witness probes are declared"));
-        assert_eq!(status.render_line(), "day · no witness probes declared");
+        assert_eq!(status.render_line(), "day · setup: declare schema/witness");
+
+        // day#108, and the part that is a *property* rather than a literal:
+        // the bar must name the thing that actually fixes this. The issue
+        // suggested `not set up (day init)`, and `day init` records a
+        // `schema/design-doc` starter and no witnesses at all — so it would
+        // send a first-time reader to a verb that leaves the bar saying the
+        // same thing. The literal above can be rewritten freely; this cannot.
+        let line = status.render_line();
+        assert!(
+            line.contains(crate::telos::WITNESS_SLUG),
+            "the setup line must name the subject that resolves it: {line}"
+        );
+        assert!(
+            !line.contains("day init"),
+            "`day init` does not declare witnesses, so pointing at it here would \
+             be a remedy that does not remedy: {line}"
+        );
+    }
+
+    /// day#108 — the bar distinguishes "day inferred one atom" from "several
+    /// fit the evidence", and says which domain it is talking about.
+    ///
+    /// `candidates: generative-build, release` read cold looks like a list of
+    /// failures, or a menu, or a queue. The plurality is a deliberate design
+    /// property — day names them all rather than guessing which one you are in
+    /// — and none of that survived into forty characters.
+    ///
+    /// Asserted as the distinction rather than as two literals: what must hold
+    /// is that a reader can tell the two states apart and knows what is being
+    /// named, not that either renders any particular way.
+    #[test]
+    fn the_bar_names_its_domain_and_marks_ambiguity() {
+        let one = Status {
+            here: vec![here("build", vec![], &[])],
+            ..blank()
+        };
+        let several = Status {
+            here: vec![here("build", vec![], &[]), here("release", vec![], &[])],
+            ..blank()
+        };
+
+        let (one, several) = (one.render_line(), several.render_line());
+        assert!(one.contains("atom"), "the domain must be named: {one}");
+        assert!(several.contains("atom"), "in both states: {several}");
+        assert_ne!(
+            one.contains("atom?"),
+            several.contains("atom?"),
+            "one inferred atom and several candidates must not render alike — \
+             that ambiguity is information:\n  {one}\n  {several}"
+        );
+        assert!(
+            several.contains("build") && several.contains("release"),
+            "the names are the actionable part, so ambiguity is named and not \
+             merely counted: {several}"
+        );
     }
 
     /// Off-sequence is a warning and gets its own line even in the terse form:
@@ -973,6 +1128,7 @@ mod tests {
         let mut status = Status {
             here: vec![here("build", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: Some("v1.0.0 is tagged but no `release` claim records it".into()),
             transition: None,
@@ -1025,6 +1181,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec!["code-change".into(), "design-doc".into()],
             unrecorded_boundary: None,
             transition: None,
@@ -1051,6 +1208,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec!["review produced its output but upstream build did not".into()],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -1071,6 +1229,7 @@ mod tests {
         let status = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: Some(Transition {
@@ -1104,6 +1263,7 @@ mod tests {
         let quiet = Status {
             here: vec![here("build", vec![], &["review"])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,
@@ -1117,6 +1277,7 @@ mod tests {
         let loud = Status {
             here: vec![here("review", vec![], &[])],
             off_sequence: vec!["build produced its output but upstream design did not".into()],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: Some(Transition {
@@ -1146,6 +1307,7 @@ mod tests {
         let status = Status {
             here: vec![here("build", vec![c], &[])],
             off_sequence: vec![],
+            unordered: vec![],
             unrecorded: vec![],
             unrecorded_boundary: None,
             transition: None,

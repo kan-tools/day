@@ -196,11 +196,7 @@ fn ac4_version_skew_and_a_broken_block_read_differently() {
     let kan = write_kan_stub(
         dir.path(),
         &[
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
             atom_block("broken", "bafyx", r#"{"in":["a"],"out":["b"],}"#),
             atom_block("fine", "bafyok", r#"{"in":["a"],"out":["b"]}"#),
         ],
@@ -398,11 +394,7 @@ fn ac6_the_human_notice_differentiates_by_cause() {
         dir.path(),
         &[
             witness.clone(),
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
         ],
     );
     let skew = String::from_utf8_lossy(&day(dir.path(), &kan, &["hook", "session-notice"]).stdout)
@@ -462,11 +454,7 @@ fn ac7_the_mid_session_channel_is_rationed_and_quiet_when_healthy() {
         dir.path(),
         &[
             witness.clone(),
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
         ],
     );
 
@@ -528,11 +516,7 @@ fn ac8_deleting_the_cache_changes_nothing_day_reports() {
                 "bafyw",
                 "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
             ),
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
             atom_block("ok", "bafyo", r#"{"in":["code"],"out":["b"]}"#),
         ],
     );
@@ -664,11 +648,7 @@ fn user_prompt_costs_a_bounded_fingerprint_read_and_never_recomputes() {
                 "bafyw",
                 "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
             ),
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
         ],
     );
 
@@ -1056,11 +1036,7 @@ fn user_prompt_rerenders_the_status_line_when_it_recomputes() {
                 "bafyw",
                 "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
             ),
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
         ],
     );
 
@@ -1104,11 +1080,7 @@ fn a_deleted_cache_makes_user_prompt_recompute_not_go_quiet() {
                 "bafyw",
                 "W.\n\n```day-witness\n{\"code\":{\"path\":\"src/*\"}}\n```\n",
             ),
-            atom_block(
-                "future",
-                "bafyf",
-                r#"{"_version":2,"in":["a"],"out":["b"]}"#,
-            ),
+            atom_block("future", "bafyf", &common::too_new_atom_body()),
         ],
     );
 
@@ -1144,14 +1116,18 @@ fn every_unreadable_cause_reaches_both_channels() {
     // unknown field, and — the one that used to slip past — an empty `next`
     // list is fine, so use a genuinely invalid *structure* via a bad JSON shape.
     for (label, body, expect_skew) in [
-        ("too-new", r#"{"_version":2,"in":["a"],"out":["b"]}"#, true),
-        ("unknown-field", r#"{"in":["a"],"nope":1}"#, false),
-        ("malformed", r#"{"in":["a"],}"#, false),
+        ("too-new", common::too_new_atom_body(), true),
+        (
+            "unknown-field",
+            r#"{"in":["a"],"nope":1}"#.to_string(),
+            false,
+        ),
+        ("malformed", r#"{"in":["a"],}"#.to_string(), false),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let kan = write_kan_stub(
             dir.path(),
-            &[witness.clone(), atom_block("bad", "bafyb", body)],
+            &[witness.clone(), atom_block("bad", "bafyb", &body)],
         );
 
         let human =

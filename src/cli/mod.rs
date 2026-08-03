@@ -189,9 +189,15 @@ pub enum AtomAction {
         /// A type this atom produces (repeatable)
         #[arg(long = "out")]
         outputs: Vec<String>,
-        /// An atom slug this one composes into (repeatable)
+        /// An atom slug this one composes into, forward only (repeatable).
+        /// Must not form a cycle: use --revisits for an edge that sends you
+        /// back.
         #[arg(long = "next")]
         next: Vec<String>,
+        /// An atom slug a negative outcome here sends you back to (repeatable).
+        /// Feedback, not sequence — it is never treated as an ordering.
+        #[arg(long = "revisits")]
+        revisits: Vec<String>,
         /// A witness type that evidences this atom is done (repeatable).
         /// Resolved through schema/witness, the same probes teloi use.
         #[arg(long = "done")]
@@ -324,6 +330,37 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         // setup command.
         Command::Init { print, force } => {
             client.probe()?;
+            // day#95: `probe` proves the *binary* runs. It does not prove this
+            // repo's log can be read, and `init` printed "kan: reachable" on
+            // the strength of it — so in a repo where kan cannot derive
+            // identity (a git repo with no commits, say), `day init --print`
+            // said "you are set up" while `day doctor` correctly said the
+            // opposite. day's two health checks disagreed, and the one that
+            // disagreed is the one a new project runs first.
+            //
+            // Asked here, once, and handed to the renderer, so the line cannot
+            // claim more than was verified: the string is computed from the
+            // read rather than written beside it.
+            let log = client.subjects().map(|_| ());
+            // **The honest report is not for `--print` only.** The first fix
+            // computed `log` and then let the recording path below fail with a
+            // bare `error: … failed (exit status: 1)`, so `day init --print`
+            // explained itself and `day init` — the default invocation, in the
+            // exact state day#95 describes — did not. Found by a cold review of
+            // this branch, which ran both.
+            //
+            // Recording genuinely cannot happen against a log day cannot read,
+            // so it is skipped and *said to be skipped*, the wiring is printed
+            // anyway (it is what you need in order to fix this), and the exit
+            // code reports that the requested work did not all happen.
+            if log.is_err() && !print {
+                print!("{}", init_instructions(log.as_ref()));
+                println!(
+                    "\nThe baseline design-doc schema was NOT recorded: that needs a log \
+                     day can read.\nRe-run `day init` once `day doctor` is clean."
+                );
+                return Ok(ExitCode::from(EXIT_UNAVAILABLE));
+            }
             if !print {
                 let slug = crate::schema::DEFAULT_SLUG;
                 if force || !crate::schema::Schema::is_declared(&client, slug)? {
@@ -336,7 +373,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     );
                 }
             }
-            print!("{}", init_instructions());
+            print!("{}", init_instructions(log.as_ref()));
             Ok(ExitCode::SUCCESS)
         }
         Command::Telos(TelosAction::Declare {
@@ -437,6 +474,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             inputs,
             outputs,
             next,
+            revisits,
             done,
             note,
         }) => {
@@ -444,6 +482,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 inputs,
                 outputs,
                 next,
+                revisits,
                 done,
             };
             let outcome = crate::vocabulary::declare(
@@ -562,10 +601,25 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         // a status finding never fails a script that merely asked where it is.
         // Runs no command probe — position and `done` are resolved with
         // Authorization::Report inside `status::compute`.
+        // **Always exits zero, including when the read fails** (day#95).
+        //
+        // `--help` states that contract, and anything wiring `day status` into
+        // a hook, a prompt or a CI step is entitled to rely on it — a position
+        // report that can fail a step is not advisory, which is what
+        // `telos/affordance-not-enforcement` forbids. It exited 2 whenever
+        // `kan status --json` failed, e.g. in a git repo with no commits.
+        //
+        // Degrading is not going quiet: the error is printed, in the same
+        // "installed but not readable here" shape `day hook session-start`
+        // already uses for this exact state. `day doctor` keeps exiting
+        // non-zero — diagnosing is its job, and it is the command whose failure
+        // is supposed to mean something.
         Command::Status => {
             let git = crate::git::Git::new(cwd.clone());
-            let status = crate::status::compute(&client, &git)?;
-            print!("{}", status.render_long());
+            match crate::status::compute(&client, &git) {
+                Ok(status) => print!("{}", status.render_long()),
+                Err(e) => print!("{}", crate::status::render_unreadable(&e)),
+            }
             Ok(ExitCode::SUCCESS)
         }
         // The one place day reads the cache. It never touches kan or git —
@@ -772,13 +826,26 @@ fn statusline_root(fallback: PathBuf) -> PathBuf {
 
 /// Prints, never mutates — the same contract `kan mcp install` set. day
 /// touches a user's Claude Code config only by telling them what to add.
-pub fn init_instructions() -> String {
+///
+/// `log` is the result of actually reading this repo's log, not a description
+/// of it (day#95). Taking the `Result` rather than a `bool` or a pre-rendered
+/// string is deliberate: the caller cannot hand over a verdict it did not
+/// obtain, and the error it did obtain is the thing worth printing.
+pub fn init_instructions(log: Result<&(), &crate::kan_client::Error>) -> String {
     let exe = std::env::current_exe()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "day".to_string());
 
     let mut out = String::new();
-    out.push_str("kan: reachable\n\n");
+    match log {
+        Ok(()) => out.push_str("kan: reachable, and this repo's log reads\n\n"),
+        // Reported, and the wiring below is still printed: the steps are what
+        // you need in order to fix this, so withholding them would be the least
+        // useful moment to go quiet.
+        Err(e) => out.push_str(&format!(
+            "kan: found on PATH, but this repo's log could not be read ({e}).\n                  That is expected if kan has never seen this repo. `day doctor` says more.\n                  The wiring below applies either way.\n\n"
+        )),
+    }
     out.push_str("Wire day into this repo — either path works.\n\n");
     out.push_str("1. As a Claude Code plugin (recommended; brings the skills and the\n");
     out.push_str("   session-start hook with it):\n");

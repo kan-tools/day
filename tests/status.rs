@@ -198,7 +198,7 @@ fn ac8_the_status_line_reads_only_the_cache() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("day · build"),
+        stdout.contains("day · atom: build"),
         "should render from the cache: {stdout:?}"
     );
 }
@@ -483,4 +483,107 @@ fn status_reports_uncheckable_when_no_witness_schema_is_declared() {
     let out = day(dir.path(), &kan, &git, &["status"]);
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("No witness probes are declared"),);
+}
+
+/// day#95 — **`day status` exits zero even when it cannot read the log at
+/// all.**
+///
+/// `--help` states "always exits zero", and the contract is load-bearing:
+/// anything wiring this into a hook, a prompt or a CI step is entitled to rely
+/// on it, and a position report that can fail a step is not advisory —
+/// `telos/affordance-not-enforcement` forbids exactly that. It exited 2.
+///
+/// The fixture is [`common::unreadable_kan`], not [`common::missing_kan`]:
+/// with kan absent, `probe` fails first and this path is never reached. Every
+/// existing test used a working stub or no kan at all, so the mode the defect
+/// lives in had no fixture — which is why it survived. The premise is asserted
+/// below: the same stub must make `day doctor` fail, or "status exits zero"
+/// proves nothing.
+#[test]
+fn day95_status_exits_zero_and_explains_itself_when_the_log_cannot_be_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = common::unreadable_kan(dir.path());
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    // Premise: this really is a kan whose log cannot be read.
+    let doctor = day(dir.path(), &kan, &git, &["doctor"]);
+    assert_ne!(
+        doctor.status.code(),
+        Some(0),
+        "premise: doctor must fail on this fixture, or status exiting zero is \
+         not evidence of anything"
+    );
+
+    let out = day(dir.path(), &kan, &git, &["status"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "`day status` documents \"always exits zero\": {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout.contains("could not be read"),
+        "and must not go quiet about why: {stdout}"
+    );
+    assert!(
+        stdout.contains("day doctor"),
+        "pointing at the verb whose job is to diagnose: {stdout}"
+    );
+}
+
+/// day#95 — `day init` may not claim the log reads when it never tried.
+///
+/// It printed `kan: reachable` after probing only that the binary runs, so
+/// day's two health checks disagreed about the same repo — and the one that
+/// disagreed is the one a new project runs first.
+#[test]
+fn day95_init_does_not_claim_a_log_it_could_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = common::unreadable_kan(dir.path());
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["init", "--print"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("kan: reachable"),
+        "init must not report a log it never read: {stdout}"
+    );
+    assert!(
+        stdout.contains("could not be read"),
+        "it must say what it found instead: {stdout}"
+    );
+    // The wiring steps are what you need in order to fix this, so they are
+    // still printed — degrading is not withholding.
+    assert!(stdout.contains("claude mcp add day"), "{stdout}");
+
+    // F6, from the cold review: the honest report is not for `--print` only.
+    // The default invocation died with a bare `error: … (exit status: 1)`,
+    // because the recording path ran before the message was reached — so the
+    // flag nobody passes explained itself and the one everybody uses did not.
+    // That is the exact state day#95 describes.
+    let bare = day(dir.path(), &kan, &git, &["init"]);
+    let bare_out = String::from_utf8_lossy(&bare.stdout);
+    assert!(
+        bare_out.contains("could not be read"),
+        "`day init` without --print must explain itself too: {bare_out}{}",
+        String::from_utf8_lossy(&bare.stderr)
+    );
+    assert!(
+        bare_out.contains("NOT recorded"),
+        "and must say the baseline was skipped rather than imply it landed: {bare_out}"
+    );
+    assert_ne!(
+        bare.status.code(),
+        Some(0),
+        "it did not do what was asked, so the exit code must say so: {bare_out}"
+    );
+
+    // And the readable case still says so plainly.
+    let good = tempfile::tempdir().unwrap();
+    let ok_kan = write_kan_stub(good.path(), &[]);
+    let ok = day(good.path(), &ok_kan, &git, &["init", "--print"]);
+    let ok_out = String::from_utf8_lossy(&ok.stdout);
+    assert!(ok_out.contains("kan: reachable"), "{ok_out}");
+    assert!(!ok_out.contains("could not be read"), "{ok_out}");
 }
