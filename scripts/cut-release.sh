@@ -250,7 +250,7 @@ esac
 # what day#118 exists to remove, reintroduced by its own fix.
 #
 # Left uncommitted, every failure below leaves one dirty tracked file that
-# `git checkout` discards, and the die messages say so.
+# `git restore --staged --worktree` discards, and the die messages say so.
 printf '%s\t%s\n' "$tag" "$outcome" >> "$expectations"
 printf 'measured row: %s\t%s (not yet committed)\n' "$tag" "$outcome"
 

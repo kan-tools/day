@@ -496,6 +496,11 @@ impl ScratchCrate {
             "[package]\nname = \"scratch\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\
              [workspace]\n",
         );
+        // The `.gitignore` any Rust repo has. Without it, a scenario that builds
+        // before committing sweeps `target/` into the commit, and the next
+        // reverse-patch fails on a `.d` file — a fixture failing for a reason
+        // that has nothing to do with what it is testing.
+        me.write(".gitignore", "target/\n");
         me
     }
 

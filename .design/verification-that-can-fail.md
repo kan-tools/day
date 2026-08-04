@@ -314,12 +314,22 @@ The scan's value is not that it is complete; it is that adding a documented
 fallback now costs a test, and that the existing fifteen-odd sites get triaged
 once.
 
-**`cut-release.sh`'s ordering** becomes: verify the tree and the remote → build,
-test, clippy, fmt → `day assess docs` → **measure and commit the migration row**
-→ record the release claim → tag. The row commit sits between the last read-only
-check and the two write steps, and it is the reason the origin/main guard's
-meaning narrows (REQ-17). That narrowing is a real cost of the unification and is
-written at the guard rather than in a design document nobody re-reads.
+**`cut-release.sh`'s ordering** becomes: verify the tree and the remote →
+refuse if any earlier tag lacks a row → build, test, clippy, fmt →
+`day assess docs` → **measure and append** the migration row → record the release
+claim → **commit** the row → tag.
+
+The measure and the commit are deliberately not adjacent, and the first version
+had them so. Everything between them can still fail — empty release notes, a
+failed `kan result`, a Ctrl-D at the prompt — and each of those left a commit
+standing while printing "nothing has been tagged", after which the origin/main
+guard refused the retry and advised a push that would publish a row for a tag
+nobody cut. Deferring the commit to *after* the last thing that can fail leaves
+one dirty tracked file instead, which one command discards.
+
+The row commit is still the reason the origin/main guard's meaning narrows
+(REQ-17). That narrowing is a real cost of the unification and is written at the
+guard rather than in a design document nobody re-reads.
 
 **Nothing here touches day's shipped behaviour**, with one exception: REQ-21's
 back-fill may find a fallback that is wrong, in which case the fix is day's
@@ -337,11 +347,21 @@ required the measurement to be recorded either way. It is:
 | one demonstration, cold | **11.9 s** |
 | one demonstration, warm | **2.0 s** |
 | the same demonstration, test target unqualified | **3 m 54 s** |
-| substantive commits | 9 |
-| carrying a `Demonstrated-by:` trailer | 6 |
-| exempt, with the reason stated in the commit | 3 |
-| `VACUOUS` outcomes | 0 |
-| defects found by *using* the tooling, not by testing it | 8 |
+| defects found by *using* the tooling, not by testing it | 9 |
+
+**The commit accounting is not here, deliberately.** It was: a hand-written count
+of demonstrated and exempt commits, and it was wrong in three consecutive rounds
+— first omitting the commit that introduces the rule, then miscounting after that
+was fixed, then miscounting again. Each round corrected the numbers and left the
+mechanism, which `CLAUDE.md` already has a rule about: *generate expectation
+tables from a measurement run, then review them.*
+
+So `scripts/demonstration-census.py` counts it, and
+`every_commit_is_accounted_for_under_the_demonstration_rule` asserts the only
+thing a script can assert — that **no commit is unaccounted**: changed something
+other than prose, claims no demonstration, and states no reason. Whether a stated
+exemption is *true* is a judgement left to review, which is where the false one
+was caught.
 
 So the rule ships. The load-bearing number is the third row: an unqualified
 `cargo test` filter builds every integration target three times over, and

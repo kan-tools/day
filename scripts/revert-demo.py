@@ -336,18 +336,23 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
                 "says nothing about whether they assert the fix.",
             )
         require_ran(names, ran, "under revert")
-        # **`caught` is the named tests that FAILED, not all the named ones.**
-        # A run naming three tests where one failed reported DEMONSTRATED and
-        # printed a trailer naming all three — so the trailer claimed that three
-        # tests observe the finding when one did. Found by bundling two
-        # independent fixes into one demonstration and reading the output.
+        # **`caught` is the SPECS that caught it, not the libtest names.**
         #
-        # The trailer therefore names only the catchers, which makes it a true
+        # A trailer names only the tests that failed, so that it is a true
         # statement whatever was named on the command line, and `verify()` can
-        # then require EVERY test a trailer names to fail.
-        caught = sorted(failed)
-        outcome = DEMONSTRATED if failed else VACUOUS
-        quiet = [n for n in names if cargo_args(n)[1] not in failed]
+        # then require every test a trailer names to fail. That much was right.
+        #
+        # What was wrong is the matching. A spec is a cargo *filter*
+        # (`t::demo_test`), and libtest reports a *name* (`demo_test_two`); the
+        # first version compared them with `in` / `==` against a set of names,
+        # while `require_ran` matches them by substring. So a prefix filter — the
+        # shape `CLAUDE.md` itself documents — produced an empty trailer that the
+        # harness's own parser rejects, and a note falsely saying the test had not
+        # failed. Both sides speak in specs now, and substring matching is the one
+        # rule.
+        caught = [n for n in names if any(cargo_args(n)[1] in f for f in failed)]
+        outcome = DEMONSTRATED if caught else VACUOUS
+        quiet = [n for n in names if n not in caught]
         if outcome == DEMONSTRATED and quiet:
             print(f"note: named but did not fail under revert, so NOT in the "
                   f"trailer: {quiet}")
@@ -460,7 +465,13 @@ def verify(spec: str, root: pathlib.Path) -> int:
         # A trailer names only the tests that caught it, so every one of them
         # must catch it again. Accepting "at least one" would let a trailer carry
         # passengers that never observed the finding.
-        if outcome == DEMONSTRATED and sorted(cargo_args(n)[1] for n in names) != caught:
+        #
+        # Compared as SPECS on both sides. Comparing a spec list against libtest
+        # names made an honest trailer verify as VACUOUS whenever its filter also
+        # matched a second failing test — a verifier reporting
+        # checked-and-found-a-defect where it could not check, and telling the
+        # author to fix a test that was fine.
+        if outcome == DEMONSTRATED and sorted(names) != sorted(caught):
             outcome = VACUOUS
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(tree)],
@@ -541,9 +552,8 @@ def main() -> int:
     # produced a paste-ready line that misstated what had been inverted.
     if args_rev in (None, "HEAD"):
         print("\nPaste into the commit message:\n")
-        trailer_tests = [n for n in names if cargo_args(n)[1] in caught]
         print(f"    {TRAILER} revert=HEAD "
-              f"tests={','.join(trailer_tests)} outcome={DEMONSTRATED}")
+              f"tests={','.join(caught)} outcome={DEMONSTRATED}")
     else:
         print(f"\nNo trailer printed: this demonstrated {args_rev}, which is not "
               f"the commit a trailer would land on.\nRe-run without `--rev` on the "

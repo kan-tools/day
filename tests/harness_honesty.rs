@@ -765,3 +765,41 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
          maintainer just tried to fix."
     );
 }
+
+/// **No commit on this branch is unaccounted for under the demonstration rule.**
+///
+/// The accounting used to be a hand-written table in the design doc, and it was
+/// wrong in three consecutive review rounds — first omitting the commit that
+/// introduces the rule, then miscounting after that was fixed, then miscounting
+/// again. Each round corrected the numbers and left the mechanism.
+///
+/// `CLAUDE.md` already has the rule this violated: *generate expectation tables
+/// from a measurement run, then review them.* So the count is generated, and
+/// what is asserted is the only thing a script can decide — that every commit is
+/// either demonstrated, exempt **with a stated reason**, or prose. Whether a
+/// stated reason is *true* is a judgement, and a false one has already been
+/// caught by review rather than here.
+///
+/// Reports could-not-check rather than passing when the range is empty.
+#[test]
+fn every_commit_is_accounted_for_under_the_demonstration_rule() {
+    let out = Command::new("python3")
+        .arg(repo_root().join("scripts/demonstration-census.py"))
+        .current_dir(repo_root())
+        .output()
+        .expect("python3 should be runnable");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !text.contains("could not check"),
+        "the census had no commits to be complete about, which is not a pass: {text}"
+    );
+    assert!(
+        out.status.success(),
+        "a commit changed something other than prose, carries no \
+         `Demonstrated-by:` trailer, and states no `No trailer:` reason:\n{text}"
+    );
+}

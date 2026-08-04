@@ -540,3 +540,51 @@ fn a_trailer_names_only_the_tests_that_caught_it() {
         "every test a trailer names must catch it; `t::unrelated` does not: {verified}"
     );
 }
+
+/// **A prefix filter produces a correct trailer, and a filter that matches a
+/// second failing test still verifies.**
+///
+/// Round 2 made a trailer name only its catchers, and compared cargo *filters*
+/// against libtest *names* to decide which those were — while `require_ran`
+/// matched the same two by substring. Two failures fell out, both found by a
+/// cold review driving the shapes rather than reading them:
+///
+/// - a prefix filter (the shape `CLAUDE.md` documents) emitted `tests=` empty,
+///   which the harness's own parser rejects, alongside a note falsely reporting
+///   that the test had not failed;
+/// - an honest trailer whose filter also matched a second failing test verified
+///   as `VACUOUS`, telling the author to fix a test that was fine.
+#[test]
+fn a_prefix_filter_and_a_multi_match_filter_are_both_handled() {
+    let two_tests = "#[test]\nfn demo_test() { assert_eq!(scratch::answer(), 2); }\n\
+                     #[test]\nfn demo_test_two() { assert_eq!(scratch::answer(), 2); }\n";
+
+    // A filter that is a strict PREFIX of the test it names.
+    let s = Scratch::new(BUGGY, FIXED, two_tests);
+    let (text, ok) = s.run(&["--tests", "t::demo_test"]);
+    assert!(ok, "{text}");
+    assert!(
+        text.contains("Demonstrated-by: revert=HEAD tests=t::demo_test outcome=DEMONSTRATED"),
+        "the trailer must carry the spec as given, not an empty list: {text}"
+    );
+    assert!(
+        !text.contains("named but did not fail"),
+        "the named test DID fail; saying otherwise is a false statement in the \
+         honesty harness: {text}"
+    );
+
+    // And that same trailer must re-derive, even though its filter matches two
+    // failing tests.
+    s.git(&["add", "-A"]);
+    s.git(&[
+        "commit",
+        "-qm",
+        "fix\n\nDemonstrated-by: revert=HEAD tests=t::demo_test outcome=DEMONSTRATED",
+    ]);
+    let (verified, verified_ok) = s.run(&["--verify", "HEAD"]);
+    assert!(
+        verified_ok && verified.contains("DEMONSTRATED"),
+        "a filter matching two failing tests is not a passenger; reporting \
+         VACUOUS here is could-not-check dressed as a finding: {verified}"
+    );
+}
