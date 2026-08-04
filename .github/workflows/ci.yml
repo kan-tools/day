@@ -18,6 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags, not just the tip. `every_released_tag_has_a_migration_expectation`
+          # asserts the expectation file has a row for every released tag, and a
+          # shallow checkout fetches no tags at all — over an empty set that
+          # check is vacuously true. It reports could-not-check rather than
+          # passing, which turns a silent hole into a red build; this is what
+          # keeps it from being red for the wrong reason.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

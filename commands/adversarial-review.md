@@ -228,6 +228,25 @@ Report what the graph says rather than naming a step from memory. A project
 that loops review back into design has declared that; another may terminate
 here.
 
+**A round of fixes to a BLOCK gets its own review** — kan's ADR-52, stated here
+rather than left as something a person has to remember. It has now been
+validated **eight times** in this repo, and three times consecutively in one
+milestone, where each round found defects the previous round's author could not
+see. The severity moved as it went: round 1 found code defects, round 2 found a
+bug the round-1 fix introduced, and round 3 found that *"the code changes in this
+round are correct… what is wrong is the evidence."*
+
+So when this review returns BLOCK, the fixes are a new implementation, not an
+addendum to the reviewed one, and they are reviewed as such. The author of a fix
+round is the least able person to see what it missed, which is the same argument
+that makes this atom cold in the first place (Step 0).
+
+If the fix round closes a finding, its commit carries a `Demonstrated-by:`
+trailer from `scripts/revert-demo.py` — revert the fix, watch the named test
+fail, restore, watch it pass. A round that says "fixed and the suite is green"
+has asserted the weaker of the two things, and day#116's first instance is a fix
+whose entire reversion left 337/337 tests passing.
+
 ## Rules
 
 - **Probes leave traces.** Verifying a defect by running the real command

@@ -1,0 +1,102 @@
+name: Revert demonstrations
+
+# Re-derive what every `Demonstrated-by:` trailer on this branch claims.
+#
+# The trailer says: "I reverted this fix and named test T failed; I restored it
+# and T passed." That is a claim about the work, and `docs/CONVENTIONS.md`'s rule
+# about evidence applies to it — a statement nothing can contradict is not
+# evidence. This job is what can contradict it: it reverts the commit again, in a
+# detached worktree, and checks the named tests actually fail.
+#
+# Without it the trailer is a sentence an author typed, which is the ceremony the
+# roadmap warns about. day#116 asked for a demonstrated before/after rather than
+# a passing suite; a demonstration nobody re-derives is a passing suite with
+# extra words.
+#
+# COST, stated rather than discovered. Each verification builds the commit's own
+# tree in a fresh worktree — deliberately, because sharing the caller's
+# CARGO_TARGET_DIR leaked into a test that shells out to cargo and changed the
+# answer. A verifier whose environment can change the result reports
+# could-not-check as checked. So this is roughly two to three minutes per
+# trailer-carrying commit, and it is why the job is separate from `ci.yml`
+# rather than blocking every push's fast feedback.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the range below needs the merge base, and each
+          # verification needs the commit's parent to diff against.
+          fetch-depth: 0
+          # On a pull_request, the default checkout is the MERGE commit, whose
+          # message carries no trailer and whose parents are not the branch.
+          # Verify what was actually written.
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - id: range
+        name: Find the commits to verify
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main || true
+          if ! base="$(git merge-base refs/remotes/origin/main HEAD)"; then
+            # Could-not-check, and it must not read as clean. Every other
+            # outcome in this milestone's tooling distinguishes the two, and a
+            # verification job that passes because it could not find the
+            # commits is the exact defect it exists to catch.
+            echo "::error::could not compute a merge base with origin/main, so \
+            no commit range could be built. This is a could-not-check, not a pass."
+            exit 1
+          fi
+          # `%H %(trailers:key=Demonstrated-by,valueonly)` would fold multi-line
+          # trailers; the script parses the message itself, so this only needs to
+          # decide WHICH commits to hand it.
+          commits=""
+          for sha in $(git rev-list "$base..HEAD"); do
+            if git log -1 --format=%B "$sha" | grep -q '^Demonstrated-by:'; then
+              commits="$commits $sha"
+            fi
+          done
+          echo "commits=$commits" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          if [ -z "$commits" ]; then
+            echo "No commit in $base..HEAD carries a Demonstrated-by trailer."
+          else
+            echo "Verifying:$commits"
+          fi
+
+      - name: Re-derive each demonstration
+        run: |
+          set -euo pipefail
+          commits="${{ steps.range.outputs.commits }}"
+          if [ -z "$commits" ]; then
+            echo "Nothing to verify." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          failed=""
+          for sha in $commits; do
+            subject="$(git log -1 --format=%s "$sha")"
+            echo "::group::$sha  $subject"
+            if python3 scripts/revert-demo.py --verify "$sha"; then
+              echo "- \`${sha:0:8}\` re-derived — $subject" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failed="$failed $sha"
+              echo "- **\`${sha:0:8}\` FAILED to re-derive** — $subject" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::these commits claim a demonstration that does not \
+            re-derive:$failed"
+            exit 1
+          fi

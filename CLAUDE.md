@@ -264,6 +264,51 @@ Two corollaries with teeth:
   mutation. If a test covers a finding, mutate the exact line the finding was
   about, not the feature around it.
 
+## A fix that closes a finding demonstrates that it fixes something
+
+**Mutation and reversion are different questions**, and conflating them is what
+let day#116's first instance survive three review rounds:
+
+- *Mutation* asks: does **any** test assert this line?
+- *Reversion* asks: does **the test written for this finding** fail when the
+  finding is reintroduced?
+
+Mutating an adjacent line, or the feature around the finding, answers the first
+and looks like the second. The rule above — "mutate the exact line the finding
+was about" — is not specific enough, because the exact line is usually ambiguous
+after a restructure. Reverting the change is not.
+
+So: **a commit that closes a finding carries a `Demonstrated-by:` trailer**,
+produced verbatim by `scripts/revert-demo.py` and re-derived in CI by
+`.github/workflows/revert-demo.yml`. Not a passing suite — a demonstrated
+before/after, which is a property of the commit rather than of a reviewer's
+attention.
+
+```
+python3 scripts/revert-demo.py --tests harness_honesty::the_matrix_does_not_exclude_the_tag
+```
+
+**This rule shipped only because the tooling made it nearly free**, which is the
+condition `docs/ROADMAP.md` set and the reason the harness was built first: a
+rule that costs something on every fix commit with no tooling behind it is
+ceremony, and ceremony is what people route around. Measured over v0.11's own
+commits: **11.9 s cold, 2.0 s warm**, one command, and the trailer is pasted
+rather than written. Qualifying the test target (`plugin::some_test`, not
+`some_test`) is what buys that — the unqualified form builds every integration
+target three times and took **3m54s**.
+
+Two cases where it does not apply, both of which the harness says out loud
+rather than leaving to judgement:
+
+- **A commit that adds a guard rather than fixing behaviour** has nothing to
+  invert; `revert-demo.py` reports `REVERT-FAILED (the change is test-only)`. A
+  guard demonstrates by being shown to *fire* — both directions, and against the
+  instance it was written for where one exists. day#101's scan is asserted
+  against the tree at `1e02220^`, where it finds exactly `Compat::is_notable`.
+- **`VACUOUS` is a finding, not a nuisance.** It means the fix was taken away and
+  the test written to close the finding passed anyway. That is day#116 itself,
+  and the commit is not ready.
+
 ## Two tools, already written — use them rather than reinventing them
 
 - **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says
@@ -275,6 +320,13 @@ Two corollaries with teeth:
   a survived mutation, and a stale anchor is not a passing test — and restores the
   file visibly (`copy`, not `copy2`, then `touch`, because preserving mtime hides
   the restore from cargo and corrupts the *next* run).
+- **`scripts/revert-demo.py`** — one demonstration, honestly reported, per the
+  rule above. Seven outcomes, never conflated, could-not-check outranking
+  checked-and-clean: **DEMONSTRATED / VACUOUS / BASELINE-RED / NO-SUCH-TEST /
+  DID-NOT-COMPILE / REVERT-FAILED / NOT-RESTORED**. It does **not** revert the
+  test half of a change — a deleted test cannot fail — and both failure modes of
+  that heuristic are loud: excluding too much reports `VACUOUS`, excluding too
+  little reports `NO-SUCH-TEST`, and neither degrades to a pass.
 - **`scripts/capture-block-corpus.sh`** — regenerates the backward-compatibility
   corpus by building every released tag and driving that tag's own binary. Run it
   by hand after changing a block shape; `tests/block_corpus.rs` consumes the

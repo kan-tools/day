@@ -244,3 +244,58 @@ fn run_git(cwd: &Path, args: &[&str]) {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// AC-24 — **`/adversarial-review` states ADR-52 and the demonstration rule.**
+///
+/// kan's rule — a round of fixes to a `BLOCK` gets its own review — has been
+/// validated eight times in this repo and was still a thing a person had to
+/// remember. The atom that produces the BLOCK is the right place for it, because
+/// that is what a reviewer reads at the moment it applies.
+#[test]
+fn the_review_atom_states_adr_52_and_the_demonstration_rule() {
+    let text = read("commands/adversarial-review.md");
+    assert!(
+        text.contains("ADR-52"),
+        "the review command must name ADR-52: a round of fixes to a BLOCK gets \
+         its own review"
+    );
+    assert!(
+        text.contains("Demonstrated-by:"),
+        "a fix round closing a finding must be told to carry a demonstration; \
+         \"fixed and the suite is green\" is the weaker of the two claims"
+    );
+}
+
+/// AC-12's other half, and REQ-9 — **the re-derivation job exists and cannot
+/// pass by finding nothing.**
+///
+/// The behaviour is asserted against a real repository in
+/// `tests/revert_demo.rs`; what is asserted here is the *wiring*, which is the
+/// half a behaviour test cannot see. Both halves matter: a verifier that works
+/// and is not wired reaches nobody, which is this repo's most-repeated failure.
+#[test]
+fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
+    let yaml = read(".github/workflows/revert-demo.yml");
+    assert!(
+        yaml.contains("scripts/revert-demo.py --verify"),
+        "the job must re-derive with the harness, not read the trailer"
+    );
+    assert!(
+        yaml.contains("could not compute a merge base") && yaml.contains("exit 1"),
+        "a job that cannot build its commit range must fail rather than pass \
+         with nothing to do — could-not-check outranks checked-and-clean, and a \
+         verification job is the last place to get that backwards"
+    );
+    assert!(
+        yaml.contains("github.event.pull_request.head.sha"),
+        "on a pull_request the default checkout is the MERGE commit, whose \
+         message carries no trailer; the job must verify what was written"
+    );
+
+    let ci = read(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("fetch-depth: 0"),
+        "ci.yml must fetch tags, or `every_released_tag_has_a_migration_expectation` \
+         has an empty set to be complete about"
+    );
+}

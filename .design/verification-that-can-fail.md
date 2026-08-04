@@ -327,6 +327,39 @@ behaviour and gets its own demonstration. That is the expected outcome rather
 than a surprise — day#91's evidence is that these paths are the ones a fresh
 clone runs.
 
+## What the milestone measured about itself
+
+REQ-29 made the rule conditional on the demonstration being nearly free, and
+required the measurement to be recorded either way. It is:
+
+| | measured |
+| --- | --- |
+| one demonstration, cold | **11.9 s** |
+| one demonstration, warm | **2.0 s** |
+| the same demonstration, test target unqualified | **3 m 54 s** |
+| demonstrations run over the milestone's own commits | 3 `DEMONSTRATED`, 2 `REVERT-FAILED` (test-only), 0 `VACUOUS` |
+| defects the harness found that the suite did not | 6 |
+
+So the rule ships. The load-bearing number is the third row: an unqualified
+`cargo test` filter builds every integration target three times over, and
+qualifying it (`plugin::some_test`) is the difference between a rule that
+describes what already happens and one that gets routed around.
+
+The two `REVERT-FAILED` outcomes are day#101 and day#89, whose commits add a
+guard rather than fix behaviour — there is nothing to invert, the harness says so
+in those words, and the guard is instead shown to fire. That case is written into
+`CLAUDE.md` beside the rule rather than left to judgement.
+
+**The six defects are the stronger argument, and none was found by a test.**
+Five were in `revert-demo.py` itself: `--quiet` suppressing the very lines that
+prove a test ran; the test half of a change being reverted with it; default diff
+context merging a fix and its adjacent test module into one hunk; `--verify
+HEAD~1` re-resolving against the worktree's own HEAD and verifying the wrong
+commit; and `--verify` perturbing the tree it was checking through
+`CARGO_TARGET_DIR`. The sixth was in `tests/common`, found by running `--verify`
+on the commit that had just added the tests. Every one of them would have shipped
+a harness that reported confidently and wrongly.
+
 ## Resolved Questions
 
 ### Q1: Does REQ-26's scan produce a tolerable number of pre-existing offenders?
