@@ -291,6 +291,14 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         "on a pull_request the default checkout is the MERGE commit, whose \
          message carries no trailer; the job must verify what was written"
     );
+    // A trigger whose commit range is always empty is a green job that checked
+    // nothing. After a merge, `merge-base(origin/main, HEAD)` IS `HEAD`, so a
+    // `push: branches: [main]` trigger can never have a commit to verify.
+    assert!(
+        !yaml.contains("branches: [main]"),
+        "the job must not run on pushes to main: the range is empty there by \
+         construction, so it would be permanently green for having found nothing"
+    );
 
     let ci = read(".github/workflows/ci.yml");
     assert!(

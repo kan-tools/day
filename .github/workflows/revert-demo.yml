@@ -21,10 +21,17 @@ name: Revert demonstrations
 # trailer-carrying commit, and it is why the job is separate from `ci.yml`
 # rather than blocking every push's fast feedback.
 
+# **`pull_request` only, deliberately.** The first version also ran on pushes to
+# `main`, which looks like belt-and-braces and is a check that cannot fail: after
+# a merge, `merge-base(origin/main, HEAD)` IS `HEAD`, so the commit range is
+# always empty and the job is permanently green for having found nothing. That is
+# the defect this whole milestone is named for, in the job that enforces it —
+# found by pushing the branch and noticing the run that never appeared.
+#
+# The pull request is where the gate belongs anyway: it is the last point at
+# which a trailer that does not re-derive is still cheap to fix.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 jobs:
   verify:
