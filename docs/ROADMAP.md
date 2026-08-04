@@ -86,15 +86,18 @@ the test target is what buys it — unqualified, the same demonstration takes
 
 Three things it turned out to be about, none of which this section predicted:
 
-- **The harness found six defects, none of them findable by a test, and five
-  were in the harness itself.** `--quiet` suppressing the very lines that prove a
-  named test ran; the test half of a change being reverted along with the fix;
-  `cargo fmt`-shaped diff context merging a fix and its test module into one
+- **Using the tooling found seven defects, none of them findable by a test, and
+  six were in the tooling itself.** `--quiet` suppressing the very lines that
+  prove a named test ran; the test half of a change being reverted along with the
+  fix; `cargo fmt`-shaped diff context merging a fix and its test module into one
   hunk; `--verify HEAD~1` re-resolving the rev against the *worktree's* HEAD and
-  verifying the wrong commit; and `--verify` perturbing the tree it was checking
-  through `CARGO_TARGET_DIR`. Every one would have shipped a verifier that
-  reported confidently and wrongly, which is the failure the milestone is named
-  for, in the thing built to end it.
+  verifying the wrong commit; `--verify` perturbing the tree it was checking
+  through `CARGO_TARGET_DIR`; and — one commit *after* the rule was written —
+  the CI job that enforces it triggering on pushes to `main`, where the commit
+  range is empty by construction, so it was permanently green for having found
+  nothing. Every one would have shipped a verifier that reported confidently and
+  wrongly, which is the failure the milestone is named for, in the things built
+  to end it.
 - **A guard is not a fix, and the rule had to say so.** day#101 and day#89 add
   checks rather than change behaviour, so there is nothing to invert. The harness
   reports `REVERT-FAILED (the change is test-only)` and the guard demonstrates by

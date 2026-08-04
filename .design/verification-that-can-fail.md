@@ -337,8 +337,8 @@ required the measurement to be recorded either way. It is:
 | one demonstration, cold | **11.9 s** |
 | one demonstration, warm | **2.0 s** |
 | the same demonstration, test target unqualified | **3 m 54 s** |
-| demonstrations run over the milestone's own commits | 3 `DEMONSTRATED`, 2 `REVERT-FAILED` (test-only), 0 `VACUOUS` |
-| defects the harness found that the suite did not | 6 |
+| demonstrations run over the milestone's own commits | 4 `DEMONSTRATED`, 2 `REVERT-FAILED` (test-only), 0 `VACUOUS` |
+| defects found by *using* the tooling, not by testing it | 7 |
 
 So the rule ships. The load-bearing number is the third row: an unqualified
 `cargo test` filter builds every integration target three times over, and
@@ -350,7 +350,7 @@ guard rather than fix behaviour — there is nothing to invert, the harness says
 in those words, and the guard is instead shown to fire. That case is written into
 `CLAUDE.md` beside the rule rather than left to judgement.
 
-**The six defects are the stronger argument, and none was found by a test.**
+**The seven defects are the stronger argument, and none was found by a test.**
 Five were in `revert-demo.py` itself: `--quiet` suppressing the very lines that
 prove a test ran; the test half of a change being reverted with it; default diff
 context merging a fix and its adjacent test module into one hunk; `--verify
@@ -359,6 +359,16 @@ commit; and `--verify` perturbing the tree it was checking through
 `CARGO_TARGET_DIR`. The sixth was in `tests/common`, found by running `--verify`
 on the commit that had just added the tests. Every one of them would have shipped
 a harness that reported confidently and wrongly.
+
+**The seventh arrived after this table first said six, and is the sharpest of
+them.** `.github/workflows/revert-demo.yml` also triggered on pushes to `main`,
+where `merge-base(origin/main, HEAD)` *is* `HEAD` — so the commit range is empty
+by construction and the job was permanently green for having found nothing. A
+check that reports clean by finding nothing, in the job built to enforce the rule
+against exactly that, written one commit after the rule. It was found by pushing
+the branch and noticing the run that never appeared, which is dogfooding and not
+review or testing. Recorded by correcting the count rather than by leaving the
+table at the number that was true when it was written.
 
 ## Resolved Questions
 
