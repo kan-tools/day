@@ -135,8 +135,8 @@ cargo_version="$(printf '%s' "$cargo_meta" | jq -r '.packages[0].version')"
 
 # --- 1b. every EARLIER release already has its expectation row ---------------
 #
-# Braces to step 4b's belt (day#118). Step 4b measures and commits this release's
-# row, so in the normal case this check has nothing to find; it exists for the
+# Braces to the belt below (day#118). Step 3b measures this release's row and
+# step 4b commits it, so in the normal case this check has nothing to find; it exists for the
 # case where a row was lost — reverted, dropped in a rebase, or written by a
 # version of this script that did not do 4b. The alternative is where that
 # absence used to surface: a red `migration-matrix` on somebody's tag push a
@@ -254,9 +254,18 @@ esac
 printf '%s\t%s\n' "$tag" "$outcome" >> "$expectations"
 printf 'measured row: %s\t%s (not yet committed)\n' "$tag" "$outcome"
 
+# `git restore --staged --worktree`, NOT `git checkout -- <path>`.
+#
+# The advice was `git checkout -- "$expectations"`, which restores from the
+# INDEX. It is correct at the two call sites where nothing has been staged, and
+# silently does nothing at the third (step 4b), where `git add` has already run —
+# so a maintainer whose `git commit` failed would run the printed command, see no
+# change, and hit "working tree is dirty" on the next attempt, named after the
+# thing they had just tried to fix. Correct at two of three sites is how it got
+# missed; one command that is right everywhere is the fix.
 undo_row() {
   printf '\nThe measured row was appended but NOT committed. Discard it with:\n' >&2
-  printf '    git checkout -- %s\n' "$expectations" >&2
+  printf '    git restore --staged --worktree %s\n' "$expectations" >&2
 }
 
 # --- 4. RECORD THE RELEASE, BEFORE THE TAG EXISTS ----------------------------
@@ -293,7 +302,10 @@ printf 'recorded %s\n' "$cid"
 # on a name this script has already checked. So the window in which a commit can
 # be stranded is as small as the ordering can make it.
 
-git add "$expectations"
+if ! git add "$expectations"; then
+  undo_row
+  die "could not stage the migration row; nothing has been tagged"
+fi
 if ! git commit -q -m "migration matrix: the measured row for $tag" -m \
 "Measured by scripts/cut-release.sh against the release binary built from this
 tree, before the tag. day#118: the row used to be added by hand after the tag,
@@ -314,7 +326,7 @@ claim is superseded by appending, never by deletion. Nothing has been pushed."
 fi
 printf '\nTagged %s locally. Nothing has been pushed.\n' "$tag"
 # Both, in one command, deliberately. The tagged commit is the row commit this
-# script made in step 3b, so it is not on origin; pushing the tag alone would
+# script made in step 4b, so it is not on origin; pushing the tag alone would
 # publish a tag whose commit the remote does not have.
 printf 'Push the branch and the tag together:\n\n    git push origin main %s\n\n' "$tag"
 printf 'Then verify against the ARTIFACT, not the workflow exit code:\n'

@@ -679,36 +679,69 @@ fn a_string_literal_does_not_register_a_fallback_test() {
 /// that day#83 passes under `sh`. So the `sh` path is a fallback whose favourable
 /// mode is the one this repo is always in — day#91 applied to day#89's own work,
 /// which the first round of this milestone did not do.
+/// **The first version of this test was vacuous**, which a second cold review
+/// caught: it wrote a probe script it never read, then asserted that
+/// `sh -c 'echo v9.9.9*'` emits a `*` and `sh -c 'exit 0'` exits 0 — two
+/// properties of `sh`, neither able to fail, in the round that fixed the premise
+/// check for exactly this. It never invoked day at all.
+///
+/// What it must assert is the property the fallback carries: **a real documented
+/// invocation still runs under `sh`.** Narrower coverage is the price of the
+/// fallback; not running at all would make it worthless.
 #[test]
 fn fallback_documented_invocations_without_zsh() {
     let dir = tempfile::tempdir().unwrap();
-    let script = dir.path().join("probe.sh");
-    std::fs::write(&script, "day telos declare x \"y\" --scope 'a=v0.5*'\n").unwrap();
+    let bin = dir.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_day"), bin.join("day")).unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
 
-    // premise: `sh` is not zsh, and does not fail on an unmatched glob — which is
-    // exactly why the corpus must not be run through it when zsh exists.
-    let sh = Command::new("sh")
+    // premise: `sh` is NOT zsh, and passes an unmatched glob through literally —
+    // which is the whole reason the corpus prefers zsh, and the reason this
+    // fallback buys less than the mode it replaces.
+    let glob = Command::new("sh")
         .arg("-c")
-        .arg("echo v9.9.9* ")
+        .arg("echo v9.9.9*")
         .output()
         .expect("sh should be runnable");
     assert!(
-        sh.status.success() && String::from_utf8_lossy(&sh.stdout).contains('*'),
-        "premise: `sh` must pass an unmatched glob through literally; if it \
-         started failing, the fallback shell would no longer be the permissive \
-         one and this test would be measuring something else"
+        glob.status.success() && String::from_utf8_lossy(&glob.stdout).contains('*'),
+        "premise: `sh` must pass an unmatched glob through literally. If it \
+         started refusing, the fallback would no longer be the permissive shell \
+         and this test would be measuring something else."
     );
 
-    // The property the fallback must keep: the corpus still RUNS under sh. A
-    // fallback that cannot run is worse than the narrower coverage it buys.
+    // A real invocation from `docs/CONVENTIONS.md`, run through the fallback
+    // shell against a stub kan — the same bar `documented_invocations.rs` holds
+    // the corpus to: it must parse and run.
+    let documented = "day telos declare v05-shipped \"day v0.5 is published.\" \
+                      --witness published-artifact --scope 'published-artifact=v0.5*'";
     let out = Command::new("sh")
         .arg("-c")
-        .arg("exit 0")
+        .arg(documented)
         .current_dir(dir.path())
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        )
+        .env("DAY_KAN_BIN", &kan)
+        .stdin(std::process::Stdio::null())
         .output()
         .expect("sh should be runnable");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(
-        out.status.success(),
-        "the fallback shell must be usable at all"
+        !text.contains("For more information, try '--help'") && !text.contains("command not found"),
+        "a documented invocation must still parse and run under the fallback \
+         shell: {text}"
+    );
+    assert!(
+        common::appends(dir.path())
+            .iter()
+            .any(|a| a.contains("v05-shipped")),
+        "and it must actually reach kan, not merely exit quietly"
     );
 }

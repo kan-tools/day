@@ -336,8 +336,21 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
                 "says nothing about whether they assert the fix.",
             )
         require_ran(names, ran, "under revert")
-        outcome = DEMONSTRATED if failed else VACUOUS
+        # **`caught` is the named tests that FAILED, not all the named ones.**
+        # A run naming three tests where one failed reported DEMONSTRATED and
+        # printed a trailer naming all three — so the trailer claimed that three
+        # tests observe the finding when one did. Found by bundling two
+        # independent fixes into one demonstration and reading the output.
+        #
+        # The trailer therefore names only the catchers, which makes it a true
+        # statement whatever was named on the command line, and `verify()` can
+        # then require EVERY test a trailer names to fail.
         caught = sorted(failed)
+        outcome = DEMONSTRATED if failed else VACUOUS
+        quiet = [n for n in names if cargo_args(n)[1] not in failed]
+        if outcome == DEMONSTRATED and quiet:
+            print(f"note: named but did not fail under revert, so NOT in the "
+                  f"trailer: {quiet}")
     finally:
         restore(root, snapshot)
 
@@ -398,8 +411,12 @@ def read_trailer(rev: str, cwd: pathlib.Path):
     if not m:
         raise CouldNotCheck(
             REVERT_FAILED,
-            f"{rev} carries a `{TRAILER}` line that does not parse. Expected:\n"
-            f"  {TRAILER} revert=<ref> tests=<a>,<b> outcome=<OUTCOME>",
+            f"{rev} carries a `{TRAILER}` line that does not parse. Expected, "
+            f"exactly:\n"
+            f"  {TRAILER} revert=HEAD tests=<target::name>,... outcome=DEMONSTRATED\n"
+            f"`revert=HEAD` and `outcome=DEMONSTRATED` are literal: a trailer is "
+            f"always about the commit carrying it, and DEMONSTRATED is the only "
+            f"outcome worth claiming. Run the harness and paste what it prints.",
         )
     return m.group("rev"), [t for t in m.group("tests").split(",") if t], m.group("outcome")
 
@@ -440,6 +457,11 @@ def verify(spec: str, root: pathlib.Path) -> int:
     try:
         patch = patch_for_rev(rev, cwd=tree)
         outcome, caught = demonstrate(tree, patch, names, rev, [], [], None)
+        # A trailer names only the tests that caught it, so every one of them
+        # must catch it again. Accepting "at least one" would let a trailer carry
+        # passengers that never observed the finding.
+        if outcome == DEMONSTRATED and sorted(cargo_args(n)[1] for n in names) != caught:
+            outcome = VACUOUS
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(tree)],
                        cwd=root, capture_output=True, text=True)
@@ -501,6 +523,7 @@ def main() -> int:
         outcome, caught = demonstrate(
             root, patch, names, label, args.include, args.exclude, None
         )
+        args_rev = args.rev
     except CouldNotCheck as e:
         print(f"{e.outcome}: {e.detail}")
         return 1
@@ -511,9 +534,20 @@ def main() -> int:
         return 1
 
     print(f"\n{DEMONSTRATED} — failed under revert: {', '.join(caught)}")
-    print("\nPaste into the commit message:\n")
-    print(f"    {TRAILER} revert=HEAD "
-          f"tests={','.join(names)} outcome={DEMONSTRATED}")
+    # A trailer belongs on the commit that carries the change it describes, so it
+    # is printed only when this run inverted something that IS that commit: the
+    # working tree (about to be committed) or HEAD. Under `--rev <older>` the
+    # demonstration is a re-check of history, and printing `revert=HEAD` there
+    # produced a paste-ready line that misstated what had been inverted.
+    if args_rev in (None, "HEAD"):
+        print("\nPaste into the commit message:\n")
+        trailer_tests = [n for n in names if cargo_args(n)[1] in caught]
+        print(f"    {TRAILER} revert=HEAD "
+              f"tests={','.join(trailer_tests)} outcome={DEMONSTRATED}")
+    else:
+        print(f"\nNo trailer printed: this demonstrated {args_rev}, which is not "
+              f"the commit a trailer would land on.\nRe-run without `--rev` on the "
+              f"change you are about to commit, or amend that commit.")
     return 0
 
 

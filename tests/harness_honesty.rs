@@ -178,15 +178,29 @@ fn the_matrix_does_not_exclude_the_tag_being_released() {
          excluded at its own push gets no cell, so its missing row cannot fail \
          until the next release.\nstages: {stages:?}"
     );
-    assert!(
-        stages[0].starts_with("git tag --list 'v*.*.*'"),
-        "the first stage must list every released tag; got {:?}",
-        stages[0]
-    );
-    assert!(
-        stages[1].starts_with("jq -R -s -c"),
-        "the second stage must only shape the list into JSON; got {:?}",
-        stages[1]
+    // **Exact equality, not `starts_with`.** Counting stages caught a filter
+    // added as a third command and missed one FOLDED INTO the two that are
+    // already there — `jq 'split(…) | map(select(. != $c))'` is still two
+    // stages, and `git tag --list … --no-contains $c` is still one command.
+    // `map(select(. != $c))` was among the evasions the first review named, and
+    // the natural place to write it is inside the jq program that is already
+    // here. A `starts_with` check on a command whose tail is the interesting
+    // part is a prefix check wearing a structural check's clothes.
+    //
+    // Equality means any change to either stage fails, including a harmless
+    // one. That is deliberate: this is a six-line command in a release-gating
+    // workflow, and "the enumeration changed, look at it" is the right amount
+    // of friction. Both expected forms are written out so the diff says what
+    // moved.
+    assert_eq!(
+        stages,
+        vec![
+            "git tag --list 'v*.*.*' --sort=creatordate".to_string(),
+            "jq -R -s -c 'split(\"\\n\") | map(select(length > 0))'".to_string(),
+        ],
+        "the tag enumeration must be exactly these two commands. A filter can be \
+         folded into either without changing the stage count, which is how \
+         day#118's window comes back."
     );
 }
 
@@ -463,6 +477,30 @@ fn the_workflow_classifiers_catch_the_evasions_they_were_keyed_around() {
          command as two and the check miscounts what it is counting"
     );
 
+    // **The two evasions that keep the stage count at two.** A second cold
+    // review found both, after the count replaced `!contains("grep -v")` — the
+    // third round of this class, and the reason the check is now equality.
+    let folded_into_jq = clean.replace(
+        "map(select(length > 0))",
+        "map(select(length > 0)) | map(select(. != $c))",
+    );
+    let folded_into_git =
+        clean.replace("--sort=creatordate", "--sort=creatordate --no-contains $c");
+    for (name, evasion) in [
+        ("a filter folded into the jq program", folded_into_jq),
+        ("a filtering flag on git tag", folded_into_git),
+    ] {
+        let stages = tag_enumeration_stages(&evasion);
+        assert_eq!(stages.len(), 2, "{name} keeps the stage count at two");
+        assert_ne!(
+            stages,
+            tag_enumeration_stages(clean),
+            "{name} must still be seen: counting stages cannot catch a filter \
+             written inside one of them, which is why the real check compares \
+             the commands themselves"
+        );
+    }
+
     // The block form of a trigger, which the literal `branches: [main]` misses.
     let block_form =
         "name: x\n\non:\n  pull_request:\n  push:\n    branches:\n      - main\n\njobs:\n  y:\n";
@@ -474,4 +512,256 @@ fn the_workflow_classifiers_catch_the_evasions_they_were_keyed_around() {
     );
     let only_pr = "name: x\n\non:\n  pull_request:\n\njobs:\n  y:\n";
     assert_eq!(workflow_triggers(only_pr), vec!["pull_request".to_string()]);
+}
+
+/// AC-11 — **after a full run, the tagged commit contains a row for its own
+/// tag.**
+///
+/// This was the milestone's headline claim about day#118 and it was driven
+/// nowhere: the only coverage of the 3b/4/4b reorder was two `contains()` scans
+/// over the script's prose, which satisfy AC-27 as written and say nothing about
+/// what the script does. A second cold review found a recovery instruction that
+/// could not recover, in a release gate, which is what an unasserted fix costs.
+///
+/// Driven end to end against stubs for everything the script resolves through
+/// PATH, so the assertion is about the tagged tree rather than about the source
+/// order.
+#[test]
+fn cut_release_puts_the_measured_row_in_the_tagged_commit() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let repo = dir.path();
+    let bin = repo.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+
+    stub(&bin, "kan", "echo bafyreistubbedcid\n");
+    stub(&bin, "day", "exit 0\n");
+    stub(&bin, "jq", "echo 9.9.9\n");
+    // `metadata` must emit JSON for the jq stub to read; everything else — the
+    // build, test, clippy and fmt block, and the release build — just succeeds.
+    stub(
+        &bin,
+        "cargo",
+        "echo \"$@\" >> \"$(dirname \"$0\")/../cargo.log\"\necho '{}'\nexit 0\n",
+    );
+
+    for cmd in [
+        vec!["init", "-q", "-b", "main"],
+        vec!["config", "user.email", "t@example.com"],
+        vec!["config", "user.name", "t"],
+    ] {
+        run_git(repo, &cmd);
+    }
+    std::fs::create_dir_all(repo.join("tests/fixtures")).unwrap();
+    std::fs::write(
+        repo.join("tests/fixtures/migration-expectations.tsv"),
+        "# tag\texpected-outcome\n",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("Cargo.toml"),
+        "[package]\nname='x'\nversion='9.9.9'\n",
+    )
+    .unwrap();
+    // The cell script is resolved relative to the working directory, so the
+    // scratch repo needs one. It reports a real outcome token.
+    std::fs::create_dir_all(repo.join("scripts")).unwrap();
+    stub(
+        &repo.join("scripts"),
+        "run-migration-cell.sh",
+        "echo refused-honestly\n",
+    );
+    run_git(repo, &["add", "-A"]);
+    run_git(repo, &["commit", "-qm", "init"]);
+
+    let script = repo_root().join("scripts/cut-release.sh");
+    let mut child = std::process::Command::new("sh")
+        .arg(&script)
+        .arg("v9.9.9")
+        .current_dir(repo)
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        )
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the release script should be runnable");
+    // The release-notes prompt reads to EOF.
+    use std::io::Write;
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"what shipped\n")
+        .unwrap();
+    let out = child.wait_with_output().expect("the script should finish");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "the script should complete: {text}");
+
+    // AC-11: the row is IN the tagged tree, not in a follow-up commit.
+    let tagged = String::from_utf8(
+        std::process::Command::new("git")
+            .args(["show", "v9.9.9:tests/fixtures/migration-expectations.tsv"])
+            .current_dir(repo)
+            .output()
+            .expect("git should be runnable")
+            .stdout,
+    )
+    .unwrap();
+    assert!(
+        tagged.contains("v9.9.9\trefused-honestly"),
+        "the tagged commit must contain a row for its own tag — that is the whole \
+         of day#118, and it is what the workflow's dropped exclusion now relies \
+         on. Got:\n{tagged}"
+    );
+
+    // And the claim was recorded BEFORE the tag existed, which is the ordering
+    // two releases were published without.
+    assert!(
+        text.contains("recorded bafyreistubbedcid"),
+        "the release claim must be recorded, and before the tag: {text}"
+    );
+}
+
+/// **The recovery instruction actually recovers, at the site where the file is
+/// staged.**
+///
+/// It printed `git checkout -- <path>`, which restores from the INDEX. Correct
+/// at the two call sites where nothing is staged, and a no-op at the third,
+/// where `git add` has already run — so a maintainer whose commit failed would
+/// run the printed command, see nothing change, and meet "working tree is dirty"
+/// on the next attempt, named after the thing they had just tried to fix.
+///
+/// Induced with a failing `pre-commit` hook, which is one of the real ways step
+/// 4b's commit fails (gpg signing and an unset `user.email` are others). The
+/// assertion is that the printed command, executed, leaves the tree clean —
+/// checking that the script *contains* the right string would be checking day's
+/// own side of the interface.
+#[test]
+fn the_release_scripts_recovery_instruction_actually_recovers() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let repo = dir.path();
+    let bin = repo.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    stub(&bin, "kan", "echo bafyreistubbedcid\n");
+    stub(&bin, "day", "exit 0\n");
+    stub(&bin, "jq", "echo 9.9.9\n");
+    stub(&bin, "cargo", "echo '{}'\nexit 0\n");
+
+    for cmd in [
+        vec!["init", "-q", "-b", "main"],
+        vec!["config", "user.email", "t@example.com"],
+        vec!["config", "user.name", "t"],
+    ] {
+        run_git(repo, &cmd);
+    }
+    std::fs::create_dir_all(repo.join("tests/fixtures")).unwrap();
+    std::fs::write(
+        repo.join("tests/fixtures/migration-expectations.tsv"),
+        "# tag\texpected-outcome\n",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("Cargo.toml"),
+        "[package]\nname='x'\nversion='9.9.9'\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(repo.join("scripts")).unwrap();
+    stub(
+        &repo.join("scripts"),
+        "run-migration-cell.sh",
+        "echo refused-honestly\n",
+    );
+    run_git(repo, &["add", "-A"]);
+    run_git(repo, &["commit", "-qm", "init"]);
+    // The commit at step 4b now fails, after `git add` has staged the row.
+    stub(&repo.join(".git/hooks"), "pre-commit", "exit 1\n");
+
+    let script = repo_root().join("scripts/cut-release.sh");
+    let mut child = std::process::Command::new("sh")
+        .arg(&script)
+        .arg("v9.9.9")
+        .current_dir(repo)
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        )
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the release script should be runnable");
+    use std::io::Write;
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"what shipped\n")
+        .unwrap();
+    let out = child.wait_with_output().expect("the script should finish");
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    assert!(
+        !out.status.success(),
+        "the commit failed, so the script must: {stderr}"
+    );
+
+    // premise: the row really is staged at this point — the state the wrong
+    // instruction was a no-op in. Without this the test passes for the trivial
+    // reason that nothing needed restoring.
+    let staged = String::from_utf8(
+        std::process::Command::new("git")
+            .args(["diff", "--cached", "--name-only"])
+            .current_dir(repo)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    assert!(
+        staged.contains("migration-expectations.tsv"),
+        "premise: the row must be STAGED when the script dies here; got {staged:?}"
+    );
+
+    // Now run exactly what it told the maintainer to run.
+    let printed = stderr
+        .lines()
+        .find(|l| {
+            l.trim_start().starts_with("git restore") || l.trim_start().starts_with("git checkout")
+        })
+        .unwrap_or_else(|| panic!("no recovery command was printed:\n{stderr}"))
+        .trim()
+        .to_string();
+    let recovered = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&printed)
+        .current_dir(repo)
+        .output()
+        .expect("the printed command should be runnable");
+    assert!(
+        recovered.status.success(),
+        "`{printed}` failed: {}",
+        String::from_utf8_lossy(&recovered.stderr)
+    );
+
+    let porcelain = String::from_utf8(
+        std::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(repo)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    assert!(
+        porcelain.trim().is_empty(),
+        "`{printed}` was printed as the recovery and left the tree dirty:\n{porcelain}\n\
+         The next run dies with \"working tree is dirty\", naming the thing the \
+         maintainer just tried to fix."
+    );
 }

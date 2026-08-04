@@ -464,3 +464,79 @@ fn include_overrides_the_test_side_drop() {
          and leaves nothing for the heuristic to decide: {included}"
     );
 }
+
+/// **No trailer is printed for a demonstration of an older commit.**
+///
+/// A trailer belongs on the commit carrying the change it describes, and
+/// `revert=HEAD` is literal in the grammar. Under `--rev <older>` the run is a
+/// re-check of history, and printing the paste-ready line there produced an
+/// artifact that misstated what had been inverted — the grammar was tightened
+/// and the thing that emits it was not.
+#[test]
+fn demonstrating_an_older_commit_prints_no_paste_ready_trailer() {
+    let s = Scratch::new(BUGGY, FIXED, ASSERTS_THE_FIX);
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", "fix the answer"]);
+    // One more commit, so the fix is no longer HEAD.
+    std::fs::write(s.root().join("README.md"), "unrelated\n").unwrap();
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", "unrelated"]);
+
+    let (text, ok) = s.run(&["--rev", "HEAD~1", "--tests", "t::demo_test"]);
+    assert!(ok && text.contains("DEMONSTRATED"), "{text}");
+    assert!(
+        !text.contains("Demonstrated-by:"),
+        "a trailer here would say revert=HEAD about a commit that is not HEAD: {text}"
+    );
+    assert!(
+        text.contains("No trailer printed"),
+        "and it must say why, rather than leaving the absence to be noticed: {text}"
+    );
+}
+
+/// **A trailer names only the tests that caught the revert.**
+///
+/// Naming three tests where one failed reported DEMONSTRATED and printed a
+/// trailer naming all three, so the trailer claimed three tests observe the
+/// finding when one did. Found by bundling two independent fixes into one
+/// demonstration and reading the output — the harness was right about the
+/// outcome and wrong about the evidence, which is where this milestone's
+/// severity kept landing.
+///
+/// The consequence for `--verify` is the other half: because a trailer names
+/// only catchers, every test it names must fail on re-derivation.
+#[test]
+fn a_trailer_names_only_the_tests_that_caught_it() {
+    let s = Scratch::new(
+        BUGGY,
+        FIXED,
+        "#[test]\nfn demo_test() { assert_eq!(scratch::answer(), 2); }\n\
+         #[test]\nfn unrelated() { assert!(true); }\n",
+    );
+
+    let (text, ok) = s.run(&["--tests", "t::demo_test,t::unrelated"]);
+    assert!(ok && text.contains("DEMONSTRATED"), "{text}");
+    assert!(
+        text.contains("Demonstrated-by: revert=HEAD tests=t::demo_test outcome=DEMONSTRATED"),
+        "the trailer must carry only the catcher: {text}"
+    );
+    assert!(
+        text.contains("named but did not fail under revert"),
+        "and it must say which named tests it dropped, rather than dropping them \
+         silently: {text}"
+    );
+
+    // The other half: a trailer naming a passenger must not re-derive.
+    s.git(&["add", "-A"]);
+    s.git(&[
+        "commit",
+        "-qm",
+        "fix\n\nDemonstrated-by: revert=HEAD tests=t::demo_test,t::unrelated \
+         outcome=DEMONSTRATED",
+    ]);
+    let (verified, verified_ok) = s.run(&["--verify", "HEAD"]);
+    assert!(
+        !verified_ok,
+        "every test a trailer names must catch it; `t::unrelated` does not: {verified}"
+    );
+}

@@ -1138,16 +1138,34 @@ fn the_boundary_check_is_wired_where_every_channel_reads() {
 /// for the whole file. Found by a cold review probing the scan rather than
 /// reading it.
 fn cfg_test_module_line(lines: &[&str]) -> usize {
+    let declares_a_module = |l: &str| {
+        let t = l.trim_start();
+        t.starts_with("mod ") || t.starts_with("pub mod ")
+    };
     lines
         .iter()
         .enumerate()
         .find(|(n, l)| {
-            l.trim_start().starts_with("#[cfg(test)]")
-                && lines[*n..]
-                    .iter()
-                    .skip(1)
-                    .find(|next| !next.trim_start().starts_with('#') && !next.trim().is_empty())
-                    .is_some_and(|next| next.trim_start().starts_with("mod "))
+            let line = l.trim_start();
+            if !line.starts_with("#[cfg(test)]") {
+                return false;
+            }
+            // **The attribute and the `mod` on ONE line** — `#[cfg(test)] mod
+            // tests {` — is the shape that made the first version of this fix
+            // worse than what it replaced: it matched no `mod` on a later line,
+            // returned `lines.len()`, and classified an entire test module as
+            // production, so test-only callers counted as production callers and
+            // the scan silently stopped firing for that file. All nineteen `src/`
+            // files use the two-line form today, so it was latent, and its
+            // failure direction is the silent one this whole fix exists to end.
+            if declares_a_module(line.trim_start_matches("#[cfg(test)]")) {
+                return true;
+            }
+            lines[*n..]
+                .iter()
+                .skip(1)
+                .find(|next| !next.trim_start().starts_with('#') && !next.trim().is_empty())
+                .is_some_and(|next| declares_a_module(next))
         })
         .map_or(lines.len(), |(n, _)| n)
 }
@@ -1389,6 +1407,21 @@ fn the_test_only_caller_scan_sees_qualified_definitions() {
             "`pub {qualifier}fn` must be seen; it defines a pub fn like any other"
         );
     }
+
+    // The attribute and the `mod` on ONE line — the shape the first version of
+    // `cfg_test_module_line` missed, classifying a whole test module as
+    // production and silently switching the scan off for that file.
+    let one_line = (
+        "src/probe.rs".to_string(),
+        "pub fn only_tests_call_me() {}\n\n#[cfg(test)] mod tests {\n\
+         #[test] fn t() { super::only_tests_call_me(); }\n}\n"
+            .to_string(),
+    );
+    assert_eq!(
+        pub_fns_with_only_test_callers(std::slice::from_ref(&one_line), &[]).len(),
+        1,
+        "`#[cfg(test)] mod tests {{` on one line must still end the production half"
+    );
 
     // A `#[cfg(test)]` on something that is not a `mod` must not end the
     // production half.

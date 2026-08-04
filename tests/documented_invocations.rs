@@ -327,10 +327,10 @@ fn the_corpus_covers_every_page_that_carries_a_shell_block() {
 #[test]
 fn the_check_catches_day_83s_unquoted_glob() {
     if shell() != "zsh" {
-        // **Could-not-check, and cargo hides a passing test's stdout**, so the
-        // first version's `println!` and `return` was a silent skip in every
-        // practical sense — the shape `tests/kan_conformance.rs` exists as the
-        // deliberate exception to.
+        // **Could-not-check**, and libtest captures BOTH streams for a passing
+        // test — so neither `println!` nor `eprintln!` makes this visible on its
+        // own, and an earlier comment here claiming stdout specifically was
+        // wrong. The stream is not what fixes it.
         //
         // The resolution is that suite's, exactly: the skip stays legitimate on
         // a developer machine that has no zsh, and **CI installs zsh** so the
