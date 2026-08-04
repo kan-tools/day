@@ -118,6 +118,8 @@ fn prose(claim: &Claim) -> Option<String> {
 /// for a subject that plainly has one is a worse defect than the one being
 /// fixed. That is the constraint day#115 names explicitly, and it is the part
 /// a tidier exhaustive-match design gets wrong.
+///
+/// fallback: telos-without-a-declaration
 pub fn declaration(claims: &[Claim]) -> Option<String> {
     claims
         .iter()

@@ -65,21 +65,59 @@ fixes-that-introduced-bugs, to tests, to **the scans that check the tests**.
 v0.11 was already the answer to that trajectory; it is now overdue rather than
 speculative.
 
-**v0.11 — verification that can fail.** day#101 (a guarantee wired at a call
-site) and day#116 (a guarantee asserted by a test that cannot observe it) are one
-defect from two sides; day#114 and day#118 are the tooling that would catch
-either. The deliverable is a **revert harness** — apply the inverse of a named
-change, assert named tests fail, restore, assert they pass — plus the rule that a
-commit closing a finding demonstrates it.
+**v0.11 — verification that can fail. *Built; not yet released.*** day#101 (a
+guarantee wired at a call site) and day#116 (a guarantee asserted by a test that
+cannot observe it) are one defect from two sides; day#114 and day#118 are the
+tooling that would catch either. All six issues closed —
+day#116/#114/#118/#101/#91/#89.
 
-**Build the harness before writing the rule into `CLAUDE.md`.** A rule that costs
-something on every fix commit with no tooling behind it is ceremony, and ceremony
-is what people route around — crosslink's blocking hooks are that failure wearing
-a different hat. If the harness makes the demonstration nearly free, the rule
-describes what already happens; if it does not, the rule should not ship. The
-milestone is held to its own rule, which is the only honest way to find out.
+The deliverable is `scripts/revert-demo.py`: apply the inverse of a named change,
+assert named tests fail, restore, assert they pass. Seven outcomes, never
+conflated, could-not-check outranking checked-and-clean. A commit closing a
+finding now carries a `Demonstrated-by:` trailer, and CI **re-derives** it rather
+than reading it — the trailer is a claim about the work, and a claim nothing can
+contradict is not evidence.
 
-Scope is every harness in `scripts/` and `.github/workflows/`, not just
+**The harness was built before the rule, and the condition was met.** Measured
+over the milestone's own commits: **11.9 s cold, 2.0 s warm**, one command, the
+trailer pasted rather than written. The load-bearing detail is that qualifying
+the test target is what buys it — unqualified, the same demonstration takes
+**3 m 54 s**, and at that price the rule would have been ceremony.
+
+Three things it turned out to be about, none of which this section predicted:
+
+- **Using the tooling found defect after defect in the tooling, and almost none
+  of them was findable by a test.** `--quiet` suppressing the very lines that
+  prove a named test ran; the test half of a change being reverted along with the
+  fix; `cargo fmt`-shaped diff context merging a fix and its test module into one
+  hunk; `--verify HEAD~1` re-resolving the rev against the *worktree's* HEAD;
+  `--verify` perturbing the tree it was checking through `CARGO_TARGET_DIR`; the
+  CI job that enforces the rule triggering on `main`, where the range is empty by
+  construction, so it was permanently green for having found nothing; a trailer
+  naming tests that had not failed; and the commit census reporting a git failure
+  as a finding about a commit that does not exist. This is a sample, not the list:
+  the count has been hand-written in two documents, and the two disagreed about
+  both the number and the membership in three consecutive rounds — including
+  after a commit that claimed to have consolidated them. **No number is given
+  here on purpose.** day#133 asks for the same treatment the commit census got,
+  which is the only thing that has retired a class of this kind in this
+  milestone: generate it, or stop asserting it.
+
+- **A guard is not a fix, and the rule had to say so.** day#101 and day#89 add
+  checks rather than change behaviour, so there is nothing executable to invert:
+  day#89's run reports `REVERT-FAILED` and day#101's reports `VACUOUS`, because
+  its only non-test change is a design document and reverting prose cannot fail a
+  test. Each guard demonstrates by being shown to *fire* instead — day#101's scan
+  against the tree at `1e02220^`, where it finds exactly the instance the issue
+  named.
+- **day#118's fix was to stop deferring a reading, not to add a step.** A version
+  was excluded from the migration matrix at its own tag push, so its missing row
+  could not fail until the *next* release — an omission invisible while anyone
+  was looking at it, and dropped three releases running. `cut-release.sh` now
+  measures and commits the row *before* tagging, and the workflow's exclusion is
+  gone. One invariant, no window.
+
+Scope was every harness in `scripts/` and `.github/workflows/`, not just
 `mutate.py`: in the single session that produced this section, four separate
 measurement tools asserted more than they verified, and none of it was in day's
 shipped behaviour.

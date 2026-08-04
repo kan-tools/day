@@ -573,6 +573,8 @@ pub fn assess(
     // left the one that instructs the write. Prefer the declaration; fall back
     // to any claim that is not an assessment; never let a `Result` stand in for
     // the statement.
+    //
+    // fallback: telos-without-a-declaration
     let statement = crate::fold::declaration(&claims);
     // Loaded only when there is something to check, so a telos with no
     // witnesses reports that rather than a missing-schema error it cannot

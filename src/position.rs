@@ -34,6 +34,8 @@
 //! None of that reaches assessment. `assess telos` and `assess atom` ask
 //! whether a witness was *ever* produced and keep calling
 //! [`probe::evaluate`], which has no boundary to pass.
+//!
+//! fallback: no-release-boundary
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};

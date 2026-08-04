@@ -1,6 +1,7 @@
 # What each RELEASED version of day does when handed the block shapes this
-# commit writes. One row per tag; the tag being released is excluded, since a
-# version cannot be a historical reader of its own release.
+# commit writes. One row per tag, with no exceptions — including the tag being
+# released, whose row `scripts/cut-release.sh` measures and commits before the
+# tag exists.
 #
 # EVERY ROW BELOW WAS MEASURED, not assumed. The first draft of this file said
 # `silently-widened` for all eight, which was wrong for five of them -- and the
@@ -54,13 +55,25 @@
 # row that moved on its own is the matrix telling you something you did not
 # intend.
 #
-# ADDING A ROW IS ALSO A RELEASE STEP, and an ungated one. A version is excluded
-# from the matrix on the tag push that releases it — it cannot be a historical
-# reader of its own release — so its row is not needed until the NEXT release,
-# which is when its absence fails the build. v0.8.0-beta.1's row was missed that
-# way and surfaced a release later. Same shape as the two missing `release`
-# claims: a record step whose omission is invisible until something downstream
-# trips over it. Filed as day#118.
+# ADDING A ROW USED TO BE AN UNGATED RELEASE STEP (day#118, fixed in v0.11). A
+# version was excluded from the matrix on the tag push that released it — it
+# cannot be a historical reader of its own release — so its row was not needed
+# until the NEXT release, which is when its absence failed the build. The
+# omission could not fail while anyone was looking at it, and it was dropped
+# three releases running: v0.8.0-beta.1's row surfaced a release later, and both
+# v0.10 rows were added by hand afterwards.
+#
+# `scripts/cut-release.sh` now measures the row against the release binary and
+# commits it BEFORE the tag, so the tagged tree carries its own row and the
+# workflow enumerates every tag with no exception. The tag being released does
+# get a cell now; what it measures is that binary against its own commit's
+# shapes, and the next release re-measures it against the corpus of that commit.
+# A row that moves between those two readings is the blast radius moving, which
+# is exactly what this file exists to make visible.
+#
+# The script also refuses to cut a release while any EARLIER tag lacks a row, so
+# a row lost in a rebase fails on the maintainer's machine at the start of the
+# next cut rather than in someone else's CI a release later.
 #
 # tag	expected-outcome
 v0.1.1-beta.1	protocol-mismatch

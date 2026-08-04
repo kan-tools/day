@@ -264,6 +264,79 @@ Two corollaries with teeth:
   mutation. If a test covers a finding, mutate the exact line the finding was
   about, not the feature around it.
 
+## A fix that closes a finding demonstrates that it fixes something
+
+**Mutation and reversion are different questions**, and conflating them is what
+let day#116's first instance survive three review rounds:
+
+- *Mutation* asks: does **any** test assert this line?
+- *Reversion* asks: does **the test written for this finding** fail when the
+  finding is reintroduced?
+
+Mutating an adjacent line, or the feature around the finding, answers the first
+and looks like the second. The rule above — "mutate the exact line the finding
+was about" — is not specific enough, because the exact line is usually ambiguous
+after a restructure. Reverting the change is not.
+
+So: **a commit that closes a finding carries a `Demonstrated-by:` trailer**,
+produced verbatim by `scripts/revert-demo.py` and re-derived in CI by
+`.github/workflows/revert-demo.yml`. Not a passing suite — a demonstrated
+before/after, which is a property of the commit rather than of a reviewer's
+attention.
+
+```
+python3 scripts/revert-demo.py --tests harness_honesty::the_matrix_does_not_exclude_the_tag
+```
+
+**This rule shipped only because the tooling made it nearly free**, which is the
+condition `docs/ROADMAP.md` set and the reason the harness was built first: a
+rule that costs something on every fix commit with no tooling behind it is
+ceremony, and ceremony is what people route around. Measured over v0.11's own
+commits: **11.9 s cold, 2.0 s warm**, one command, and the trailer is pasted
+rather than written. Qualifying the test target (`plugin::some_test`, not
+`some_test`) is what buys that — the unqualified form builds every integration
+target three times and took **3m54s**.
+
+**`VACUOUS` is a finding, not a nuisance.** It means the fix was taken away and
+the test written to close the finding passed anyway — day#116 itself, and the
+commit is not ready.
+
+**Where the rule does not apply.** Each case below names the outcome the harness
+actually reports for it, so an exemption is checked against what the tool prints
+rather than against this list. That distinction is not decorative: an exemption
+claimed from the list rather than from the tool survived two review rounds, and
+another named an outcome the tool does not produce.
+
+- **A guard rather than a fix** has nothing executable to invert, and what the
+  harness says depends on what else the commit touched. day#89's guard reports
+  `REVERT-FAILED`, whose message is a *disjunction* — "Either the change is
+  test-only, or `--include`/`--exclude` excluded the fix" — so it narrows rather
+  than decides. day#101's reports `VACUOUS`, because its only non-test change is
+  a design document and reverting prose cannot fail a test; that is the harness
+  having nothing to work with, not a test failing to observe its finding.
+  A guard demonstrates by being shown to **fire** — both directions, and against
+  the instance it was written for where one exists. day#101's scan checks out the
+  tree at `1e02220^` and asserts it finds exactly `Compat::is_notable`
+  (`the_test_only_caller_scan_finds_the_instance_it_was_written_for`).
+- **A fix and its test in one file under `tests/`**, with no `#[cfg(test)]`
+  boundary between them: `--include` reverts the whole file, the test goes with
+  it, and the harness reports `NO-SUCH-TEST` — correctly, and unhelpfully. This
+  is where a scan's mechanism lives, so it recurs whenever a source scan is
+  fixed.
+- **A bootstrap commit** — the one introducing the harness — can only show that
+  deleting the instrument breaks the instrument's tests. The harness reports
+  `DEMONSTRATED` and the claim is worth nothing, which is the one case here the
+  tool's own output does *not* flag. State the reason instead.
+
+**Check the exemption against the commit, not against the list.** v0.11's fix
+round claimed the same-file exemption for a commit whose fix half was
+`CLAUDE.md` and two workflows and whose test half was `tests/harness_honesty.rs`
+— the case the *default* rule handles. A cold review ran the harness on it and
+had a trailer in ninety seconds. An exemption reached for rather than checked is
+the rule being routed around by the person who wrote it, which is the failure
+mode the roadmap predicted for a rule with no tooling behind it, arriving even
+though the tooling exists.
+
 ## Two tools, already written — use them rather than reinventing them
 
 - **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says
@@ -275,6 +348,13 @@ Two corollaries with teeth:
   a survived mutation, and a stale anchor is not a passing test — and restores the
   file visibly (`copy`, not `copy2`, then `touch`, because preserving mtime hides
   the restore from cargo and corrupts the *next* run).
+- **`scripts/revert-demo.py`** — one demonstration, honestly reported, per the
+  rule above. Seven outcomes, never conflated, could-not-check outranking
+  checked-and-clean: **DEMONSTRATED / VACUOUS / BASELINE-RED / NO-SUCH-TEST /
+  DID-NOT-COMPILE / REVERT-FAILED / NOT-RESTORED**. It does **not** revert the
+  test half of a change — a deleted test cannot fail — and both failure modes of
+  that heuristic are loud: excluding too much reports `VACUOUS`, excluding too
+  little reports `NO-SUCH-TEST`, and neither degrades to a pass.
 - **`scripts/capture-block-corpus.sh`** — regenerates the backward-compatibility
   corpus by building every released tag and driving that tag's own binary. Run it
   by hand after changing a block shape; `tests/block_corpus.rs` consumes the

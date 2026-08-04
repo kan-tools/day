@@ -18,6 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags, not just the tip. `every_released_tag_has_a_migration_expectation`
+          # asserts the expectation file has a row for every released tag, and a
+          # shallow checkout fetches no tags at all — over an empty set that
+          # check is vacuously true. It reports could-not-check rather than
+          # passing, which turns a silent hole into a red build; this is what
+          # keeps it from being red for the wrong reason.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -53,6 +61,17 @@ jobs:
           # exit code.
           kan --version
           test -x "$(command -v kan)"
+
+      # Same reason the kan install above exists, and the same failure it
+      # prevents. `tests/documented_invocations.rs` runs day's documented
+      # examples through zsh where it is available and `sh` otherwise — and the
+      # defect it exists for, day#83's unquoted glob, PASSES under `sh`. Without
+      # zsh here, the one criterion that reproduces day#83 would be a permanent
+      # could-not-check, which is a silent skip wearing a different hat.
+      - name: Install zsh, so the docs corpus runs in the shell the bug is in
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+          zsh -c 'exit 0'
 
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace

@@ -52,11 +52,25 @@ jobs:
       - id: tags
         name: Enumerate released tags
         run: |
-          # Every released tag except the one being released now: a version
-          # cannot be a historical reader of its own release.
-          current="${GITHUB_REF_NAME}"
+          # EVERY released tag, including the one being released now.
+          #
+          # This used to exclude `GITHUB_REF_NAME`, on the reasoning that a
+          # version cannot be a historical reader of its own release. The
+          # reasoning is sound and the exclusion was still wrong (day#118): it
+          # meant a release got no cell at its own tag push, so its row was not
+          # needed until the NEXT release — which is when its absence failed the
+          # build, in someone else's release, about a version they did not ship.
+          # A missing row could not fail while anyone was looking at it, and it
+          # was dropped three releases running.
+          #
+          # `scripts/cut-release.sh` now measures the row and commits it BEFORE
+          # tagging, so the tagged tree contains its own row and this job can ask
+          # the same question of every tag without an exception. What the current
+          # tag's cell measures is narrower than the others — that binary against
+          # its own commit's shapes — and the next release re-measures it against
+          # the corpus of that commit, which is where a moved blast radius shows
+          # up. Deferring the first reading bought nothing and cost the row.
           json=$(git tag --list 'v*.*.*' --sort=creatordate \
-                 | grep -v "^${current}$" \
                  | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "json=$json" >> "$GITHUB_OUTPUT"
           echo "matrix: $json"

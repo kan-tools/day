@@ -537,6 +537,11 @@ pub fn assess(
     // the same boundary position does. An unreadable declaration falls back to
     // release semantics and is reported, rather than silently disagreeing with
     // position about what "since" means.
+    //
+    // fallback-untested: reaching it needs a `schema/cycle` claim that parses as
+    // a block and then fails validation, which no fixture builds yet — day#130.
+    // The finding it produces IS reported, which is the property that matters
+    // most here, and that half is covered.
     let cycle = match crate::blocks::CycleSchema::load(client) {
         Ok(c) => c,
         Err(e) => {

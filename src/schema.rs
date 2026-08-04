@@ -10,6 +10,11 @@
 //! It does not silently fall back to an opinion: a check that quietly
 //! validates against something you never chose is worse than one that
 //! declines to guess.
+//!
+//! fallback-untested: the phrase above appears in a DENIAL — this module states
+//! that it does *not* fall back to an opinion, and there is no degrade path here
+//! to reach. The scan cannot tell a described fallback from a refused one, which
+//! is the cost of detecting the words an author naturally writes.
 
 use serde::{Deserialize, Serialize};
 

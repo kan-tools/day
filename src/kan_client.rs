@@ -101,6 +101,8 @@ pub struct Claim {
     /// among several `atom/*` subjects needs a global order, and larger is
     /// newer. Additive and optional, so a kan that omits it degrades to no
     /// ordering rather than failing.
+    ///
+    /// fallback: kan-omits-recorded-at
     #[serde(default)]
     pub recorded_at: Option<i64>,
 }
