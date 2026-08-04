@@ -59,6 +59,16 @@ branch="$(git branch --show-current 2>/dev/null || true)"
 # trusting the branch name — tagging a commit the remote does not have produces
 # a release nobody can check out. Read-only: `ls-remote` fetches nothing.
 #
+# WHAT THIS PROVES NARROWED IN v0.11, and it is worth stating rather than
+# leaving to be re-derived. Step 4b below MAKES A COMMIT — the migration-matrix
+# row for the tag being cut — so the commit that ends up tagged is by
+# construction one the remote has never seen. This check therefore now proves
+# that the tagged commit's PARENT is on origin, not the tagged commit itself.
+# The residual risk is one commit this script wrote and printed, and the closing
+# instruction pushes `main` and the tag together so the two cannot separate.
+# That is a real weakening of a guard that was itself a review finding, taken
+# deliberately in exchange for the tag containing its own expectation row.
+#
 # THE FIRST VERSION OF THIS COULD NOT FAIL. It was
 #   remote_main="$(git ls-remote origin ... 2>/dev/null | cut -f1)"
 # and a pipeline's status is its LAST command's, so a failed `ls-remote`
@@ -123,6 +133,39 @@ cargo_version="$(printf '%s' "$cargo_meta" | jq -r '.packages[0].version')"
 [ "${tag#v}" = "$cargo_version" ] \
   || die "tag $tag does not match Cargo.toml version $cargo_version — bump one of them"
 
+# --- 1b. every EARLIER release already has its expectation row ---------------
+#
+# Braces to step 4b's belt (day#118). Step 4b measures and commits this release's
+# row, so in the normal case this check has nothing to find; it exists for the
+# case where a row was lost — reverted, dropped in a rebase, or written by a
+# version of this script that did not do 4b. The alternative is where that
+# absence used to surface: a red `migration-matrix` on somebody's tag push a
+# whole release later, about a version they did not ship, needing a historical
+# binary to diagnose. This lands it here instead, before anything is built.
+#
+# Deliberately BEFORE the ten-minute verify block, so the cheapest failure is
+# also the earliest.
+
+expectations="tests/fixtures/migration-expectations.tsv"
+[ -f "$expectations" ] || die "$expectations is missing; the migration matrix cannot be checked"
+
+missing=""
+for released in $(git tag --list 'v*.*.*'); do
+  # `awk`'s exit status, not a pipeline's: the pipeline-status defect this
+  # script already carries two comments about is one `| grep -q` away here.
+  if ! awk -v t="$released" '$1 == t { found = 1 } END { exit !found }' "$expectations"; then
+    missing="$missing $released"
+  fi
+done
+if [ -n "$missing" ]; then
+  die "these released tags have no row in $expectations:$missing
+
+A row is measured, never assumed. For each one:
+    git worktree add --detach /tmp/reader <tag> && (cd /tmp/reader && cargo build --release)
+    scripts/run-migration-cell.sh /tmp/reader/target/release/day
+and append '<tag><TAB><outcome>' to $expectations."
+fi
+
 # --- 2. it builds and passes -------------------------------------------------
 #
 # Re-run here rather than trusting a green CI badge: the point of this script is
@@ -137,6 +180,62 @@ cargo fmt --all -- --check
 # --- 3. the docs match, per day's own assessment -----------------------------
 
 day assess docs || die "'day assess docs' failed; fix the docs before releasing"
+
+# --- 3b. MEASURE THIS RELEASE'S MIGRATION ROW, BEFORE THE TAG EXISTS ---------
+#
+# day#118. Adding a row used to be an ungated ritual, done by hand after the
+# tag, and it was dropped three releases running — with a failure mode worse
+# than "a step gets forgotten": a version is excluded from the matrix on the tag
+# push that releases it, so its missing row cannot fail until the NEXT release.
+# The absence was undetectable while anyone was looking at it.
+#
+# So the row is measured here and committed BEFORE the tag, which means the
+# tagged tree contains its own row and `migration-matrix.yml` no longer needs to
+# exclude the tag being released. One invariant, no window: every released tag
+# has a measured row.
+#
+# "A version cannot be a historical reader of its own release" is still true and
+# is not what this contradicts. This cell asks a well-defined question — what
+# does the binary being released do with the block shapes this commit writes —
+# and the next release re-asks it against THAT commit's corpus. If the shapes
+# moved in between, the matrix reports that the blast radius moved, which is the
+# failure it exists to produce rather than one it should be deferring.
+#
+# Release profile, matching what `migration-matrix.yml` builds for every other
+# cell. Measuring the debug binary would be cheaper and would introduce an
+# assumption (that the classification is profile-independent) whose failure mode
+# is a red matrix on the next release; building it removes the assumption
+# instead of stating it.
+
+printf 'Measuring the migration-matrix row for %s.\n' "$tag"
+cargo build --release --bin day
+
+if ! outcome="$(scripts/run-migration-cell.sh target/release/day)"; then
+  die "run-migration-cell.sh failed for the release binary; nothing has been tagged.
+That is a harness fault, not an outcome — do not record a row for it."
+fi
+
+case "$outcome" in
+  refused-honestly|silently-widened|protocol-mismatch) ;;
+  errored|unbuildable)
+    # The tsv's own header says a limit of the harness must never be filed as a
+    # fact about a released version, and `errored` from a binary this script
+    # just built and tested is a harness fault by elimination.
+    die "the migration cell reported '$outcome' for the binary just built.
+Nothing has been tagged. Diagnose it before releasing — recording this row
+would file a broken invocation as a characterization of $tag." ;;
+  *)
+    die "the migration cell reported an unrecognised outcome '$outcome'.
+Nothing has been tagged." ;;
+esac
+
+printf '%s\t%s\n' "$tag" "$outcome" >> "$expectations"
+git add "$expectations"
+git commit -q -m "migration matrix: the measured row for $tag" -m \
+"Measured by scripts/cut-release.sh against the release binary built from this
+tree, before the tag. day#118: the row used to be added by hand after the tag,
+where its absence could not fail until the next release."
+printf 'recorded row: %s\t%s (committed)\n' "$tag" "$outcome"
 
 # --- 4. RECORD THE RELEASE, BEFORE THE TAG EXISTS ----------------------------
 #
@@ -164,7 +263,10 @@ printf 'recorded %s\n' "$cid"
 
 git tag -a "$tag" -m "$tag"
 printf '\nTagged %s locally. Nothing has been pushed.\n' "$tag"
-printf 'Push it yourself when ready:\n\n    git push origin %s\n\n' "$tag"
+# Both, in one command, deliberately. The tagged commit is the row commit this
+# script made in step 3b, so it is not on origin; pushing the tag alone would
+# publish a tag whose commit the remote does not have.
+printf 'Push the branch and the tag together:\n\n    git push origin main %s\n\n' "$tag"
 printf 'Then verify against the ARTIFACT, not the workflow exit code:\n'
 printf '  cargo install day --version %s --locked --root /tmp/day-verify\n' "${tag#v}"
 printf '  /tmp/day-verify/bin/day doctor\n'
