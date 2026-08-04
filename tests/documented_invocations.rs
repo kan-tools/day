@@ -214,6 +214,7 @@ impl Sandbox {
 fn every_documented_day_invocation_parses_and_runs() {
     let sandbox = Sandbox::new();
     let mut ran = 0;
+    let mut skipped = 0;
     let mut failures = Vec::new();
 
     for page in PAGES {
@@ -227,6 +228,7 @@ fn every_documented_day_invocation_parses_and_runs() {
                     "skip {}:{} — {why}\n     {}",
                     inv.page, inv.line, inv.command
                 );
+                skipped += 1;
                 continue;
             }
             ran += 1;
@@ -239,10 +241,19 @@ fn every_documented_day_invocation_parses_and_runs() {
         }
     }
 
-    assert!(
-        ran >= 8,
-        "could not check: only {ran} invocations were extracted, which is fewer \
-         than this repo documents. The extractor is broken, not the docs."
+    // **An exact expectation, not a floor.** `ran >= 8` passed with a third of
+    // the corpus missing, which is the failure `capture-block-corpus.sh` had
+    // twice: a generator whose failure mode is less output needs an exhaustive
+    // expectation. Changing this number is a decision about coverage, and the
+    // message says so.
+    const EXPECTED_RUN: usize = 12;
+    const EXPECTED_SKIPPED: usize = 3;
+    assert_eq!(
+        (ran, skipped),
+        (EXPECTED_RUN, EXPECTED_SKIPPED),
+        "the documented corpus changed size. If an example was added or removed \
+         deliberately, update these numbers in the same commit; if not, the \
+         extractor stopped seeing something it used to see."
     );
     assert!(
         failures.is_empty(),
@@ -316,12 +327,26 @@ fn the_corpus_covers_every_page_that_carries_a_shell_block() {
 #[test]
 fn the_check_catches_day_83s_unquoted_glob() {
     if shell() != "zsh" {
-        // Could-not-check, said out loud. `sh` does not fail on an unmatched
-        // glob, so on a machine without zsh this criterion is unobservable — and
-        // reporting a pass would be the defect the file is about.
-        println!(
-            "could not check: zsh is not available, and `sh` does not fail on an \
-             unmatched glob. day#83 is only reachable under zsh."
+        // **Could-not-check, and cargo hides a passing test's stdout**, so the
+        // first version's `println!` and `return` was a silent skip in every
+        // practical sense — the shape `tests/kan_conformance.rs` exists as the
+        // deliberate exception to.
+        //
+        // The resolution is that suite's, exactly: the skip stays legitimate on
+        // a developer machine that has no zsh, and **CI installs zsh** so the
+        // criterion is never skipped where it counts. What must not happen is
+        // the skip becoming permanent without anyone noticing, so the CI
+        // guarantee is itself asserted, below.
+        eprintln!(
+            "COULD NOT CHECK: zsh is not available, and `sh` does not fail on an \
+             unmatched glob, so day#83 is unreachable here. This is not a pass. \
+             CI installs zsh so this criterion always runs there."
+        );
+        let ci = std::fs::read_to_string(repo_root().join(".github/workflows/ci.yml")).unwrap();
+        assert!(
+            ci.contains("install -y -qq zsh"),
+            "the local skip is only acceptable because CI installs zsh; without \
+             that, this criterion is dead everywhere and day#83 has no test"
         );
         return;
     }

@@ -367,3 +367,100 @@ fn a_symbolic_rev_resolves_against_the_callers_repo_not_the_worktree() {
         "the diff reverted must be the trailer-carrying commit's own: {text}"
     );
 }
+
+/// **A trailer may only claim `DEMONSTRATED`.**
+///
+/// `--verify` compared the re-derived outcome to the claimed one and exited 0 on
+/// equality, so a trailer saying `outcome=VACUOUS` re-derived as VACUOUS,
+/// matched, and passed — the one outcome the rule names as disqualifying,
+/// clearing the gate that enforces the rule, and writing a green check onto the
+/// pull request. day#116's own shape inside the tool built to end it, found by a
+/// cold review of this branch.
+#[test]
+fn a_trailer_claiming_vacuous_is_refused_even_though_it_re_derives() {
+    let s = Scratch::new(
+        BUGGY,
+        FIXED,
+        "#[test]\nfn demo_test() { assert!(scratch::answer() > 0); }\n",
+    );
+    s.git(&["add", "-A"]);
+    s.git(&[
+        "commit",
+        "-qm",
+        "fix the answer\n\nDemonstrated-by: revert=HEAD tests=t::demo_test \
+         outcome=VACUOUS",
+    ]);
+
+    let (text, ok) = s.run(&["--verify", "HEAD"]);
+    assert!(
+        !ok,
+        "re-deriving VACUOUS confirms the claim; it does not make it a \
+         demonstration: {text}"
+    );
+    assert!(
+        text.contains("may only claim DEMONSTRATED"),
+        "the refusal must say why, so the author fixes the test rather than the \
+         trailer: {text}"
+    );
+}
+
+/// **An `#[ignore]`d test did not run.**
+///
+/// libtest prints `test x ... ignored`, which the result parser accepted as
+/// evidence the named test ran. `require_ran` was then satisfied, no failure was
+/// seen, and the harness reported `VACUOUS` — a finding *about the test*,
+/// derived from an observation nobody made. day#114's shape mirrored: a
+/// could-not-check dressed as the strongest available answer.
+#[test]
+fn an_ignored_test_is_not_evidence_that_anything_ran() {
+    let s = Scratch::new(
+        BUGGY,
+        FIXED,
+        "#[test]\n#[ignore]\nfn demo_test() { assert_eq!(scratch::answer(), 2); }\n",
+    );
+    let (text, ok) = s.run(&["--tests", "t::demo_test"]);
+
+    assert!(text.contains("NO-SUCH-TEST"), "{text}");
+    assert!(!ok, "{text}");
+    assert!(
+        !text.contains("VACUOUS"),
+        "an ignored test says nothing about whether the fix is observed; \
+         reporting VACUOUS blames a test that never ran: {text}"
+    );
+}
+
+/// **`--include` overrides the `tests/` drop**, which REQ-3 promised and the
+/// first implementation did not do.
+///
+/// The default rule assumes the test half lives under `tests/`. That is a
+/// default, not a law, and while it was unconditional no fix under `tests/`
+/// could ever be demonstrated — including this milestone's own sixth defect,
+/// which was in `tests/common/mod.rs`. The tool could not have demonstrated the
+/// fix for a defect it had itself found.
+#[test]
+fn include_overrides_the_test_side_drop() {
+    let s = Scratch::new(FIXED, FIXED, ASSERTS_THE_FIX);
+    // A helper under `tests/` that the assertion depends on: the fix is there.
+    s.crate_
+        .write("tests/helper.rs", "pub fn expected() -> i32 { 1 }\n");
+    s.crate_.write(
+        "tests/t.rs",
+        "mod helper;\n#[test]\nfn demo_test() { assert_eq!(scratch::answer(), helper::expected()); }\n",
+    );
+    s.crate_.commit_all("before the fix");
+    s.crate_
+        .write("tests/helper.rs", "pub fn expected() -> i32 { 2 }\n");
+
+    let (skipped, _) = s.run(&["--tests", "t::demo_test"]);
+    assert!(
+        skipped.contains("REVERT-FAILED"),
+        "by default a change under tests/ is the test half: {skipped}"
+    );
+
+    let (included, ok) = s.run(&["--include", "tests/helper.rs", "--tests", "t::demo_test"]);
+    assert!(
+        ok && included.contains("DEMONSTRATED"),
+        "naming the path explicitly is the author saying which half is the fix, \
+         and leaves nothing for the heuristic to decide: {included}"
+    );
+}

@@ -326,6 +326,65 @@ const PHRASES: [&str; 5] = [
     "fallback",
 ];
 
+/// The fallback tests a registry actually defines, by slug.
+///
+/// **Definitions at column zero, never a substring.** The lookup used to be
+/// `registry.contains("fn fallback_<slug>(")`, and this file contains that exact
+/// string as a *literal* inside
+/// [`the_fallback_scan_does_not_see_an_undocumented_degrade_path`] — so deleting
+/// [`fallback_no_release_boundary`], day#91's flagship instance, left both sites
+/// that name it still "covered", with the suite green.
+///
+/// The same defect had already been found and fixed eighty lines below, in
+/// [`every_fallback_test_asserts_its_premise`], and the fix was wired at that
+/// call site rather than at the mechanism both callers share. That is day#101,
+/// committed inside the fix for day#91. It is now one function, and there is no
+/// second place to get it right.
+fn registered_tests(registry: &str) -> Vec<String> {
+    registry
+        .lines()
+        .filter_map(|l| l.strip_prefix("fn fallback_"))
+        .filter_map(|rest| rest.split_once('(').map(|(name, _)| name.to_string()))
+        .collect()
+}
+
+/// Fallback tests whose body contains no premise **assertion**.
+///
+/// **Comments are stripped first, and that is the whole point.** The check used
+/// to search the raw body for `premise:`, which a bare
+/// `// premise: the fixture is empty` satisfies — so a test could claim a
+/// premise it never asserted, which is AC-15's own subject one level up. The
+/// convention is an `assert…` whose message begins `premise:`; stripping `//`
+/// leaves only assertions to find it in.
+fn tests_without_a_premise_assertion(registry: &str) -> Vec<String> {
+    // Split on the DEFINITION, at column zero. Splitting on the bare string
+    // `fn fallback_` also matched this file's own string literals and reported
+    // two nonexistent tests with no premise. A registry that is its own source
+    // file has to parse itself precisely.
+    let bodies: Vec<&str> = registry.split("\nfn fallback_").skip(1).collect();
+    assert!(
+        !bodies.is_empty(),
+        "could not check: no fallback tests were found in the registry"
+    );
+    let mut missing = Vec::new();
+    for body in bodies {
+        let name: String = body.chars().take_while(|c| *c != '(').collect();
+        let end = body.find("\n}\n").unwrap_or(body.len());
+        let code: String = body[..end]
+            .lines()
+            .map(|l| match l.find("//") {
+                Some(i) => &l[..i],
+                None => l,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !code.contains("premise:") {
+            missing.push(name);
+        }
+    }
+    missing
+}
+
 fn comment_sites(text: &str) -> Vec<(usize, String)> {
     let lines: Vec<&str> = text.lines().collect();
     // Only the production half: a comment inside a `#[cfg(test)]` module is
@@ -396,9 +455,9 @@ fn unregistered_fallback_sites(sources: &[(String, String)], registry: &str) -> 
                 .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
                 .collect();
-            let wanted = format!("fn fallback_{}(", slug.replace('-', "_"));
-            if slug.is_empty() || !registry.contains(&wanted) {
-                offenders.push(format!("{path}:{} (no `{wanted}`)", n + 1));
+            let wanted = slug.replace('-', "_");
+            if slug.is_empty() || !registered_tests(registry).contains(&wanted) {
+                offenders.push(format!("{path}:{} (no `fn fallback_{wanted}(`)", n + 1));
             }
         }
     }
@@ -432,7 +491,20 @@ fn registry() -> String {
     std::fs::read_to_string(repo_root().join("tests/fallbacks.rs")).unwrap()
 }
 
-/// AC-14 — **a documented fallback with no test fails the build.**
+/// AC-14 — **a documented fallback names a registered test, or is hatched.**
+///
+/// **What it does not do, so the name is not read as more than it is.** It
+/// checks that the slug on a site names a `fallback_<slug>` test that exists;
+/// nothing binds a slug to the site it sits on, so `// fallback:
+/// no-release-boundary` on an unrelated degrade path satisfies it. Binding them
+/// would need the scan to understand what the code below the comment does.
+///
+/// **Three shapes it cannot see**, added after a cold review found the stated
+/// list was shorter than the real one: a trailing comment (`let x = y; // falls
+/// back to …`), a `/* */` block, and a phrase split across two wrapped comment
+/// lines. None occurs in `src/` today — checked, not assumed — and all three are
+/// false negatives, which is the safe direction for a guard whose false
+/// positives get hatched away.
 ///
 /// Detection-first, hatch-to-exempt: the same direction as
 /// `a_failed_kan_read_is_never_swallowed` and
@@ -469,25 +541,7 @@ fn a_documented_fallback_names_a_test_that_reaches_it() {
 /// convention is a message beginning "premise:".
 #[test]
 fn every_fallback_test_asserts_its_premise() {
-    let text = registry();
-    let mut missing = Vec::new();
-    // Split on the DEFINITION, at column zero. Splitting on the bare string
-    // `fn fallback_` also matched this file's own string literals — the ones in
-    // `the_fallback_scan_does_not_see_an_undocumented_degrade_path` — and
-    // reported two nonexistent tests with no premise. A registry that is its own
-    // source file has to parse itself precisely.
-    let bodies: Vec<&str> = text.split("\nfn fallback_").skip(1).collect();
-    assert!(
-        !bodies.is_empty(),
-        "could not check: no fallback tests were found in this file"
-    );
-    for body in &bodies {
-        let name: String = body.chars().take_while(|c| *c != '(').collect();
-        let end = body.find("\n}\n").unwrap_or(body.len());
-        if !body[..end].contains("premise:") {
-            missing.push(name);
-        }
-    }
+    let missing = tests_without_a_premise_assertion(&registry());
     assert!(
         missing.is_empty(),
         "these fallback tests assert no premise: {missing:?}\n\n\
@@ -545,5 +599,116 @@ fn the_fallback_scan_does_not_see_an_undocumented_degrade_path() {
         unregistered_fallback_sites(&[(seen.0, hatched)], "").is_empty(),
         "a per-site hatch must clear it — a check with no way out gets deleted \
          the first time it is wrong"
+    );
+}
+
+/// AC-15's other direction — **the premise check has been shown to fire.**
+///
+/// It had not been. It ran only over this file, which has no offender, so it was
+/// a scan whose passing said nothing — the standard `tests/plugin.rs` states in
+/// as many words: *"a scan that has never been shown to fire is a scan nobody
+/// has reason to believe."* Both shapes are driven here, and the second is the
+/// one a cold review found: a **comment** claiming a premise that no assertion
+/// makes.
+#[test]
+fn the_premise_check_fires_on_a_test_that_only_claims_one() {
+    let real = "\nfn fallback_x() {\n    assert!(cond, \"premise: the repo has no tag\");\n}\n";
+    assert!(
+        tests_without_a_premise_assertion(real).is_empty(),
+        "an assertion whose message names the premise must satisfy it"
+    );
+
+    let commented =
+        "\nfn fallback_x() {\n    // premise: the repo has no tag\n    assert!(cond);\n}\n";
+    assert_eq!(
+        tests_without_a_premise_assertion(commented),
+        vec!["x".to_string()],
+        "a COMMENT claiming a premise must not satisfy it — a premise that is \
+         described rather than asserted is exactly the vacuous entry this check \
+         exists to keep out"
+    );
+
+    let neither = "\nfn fallback_x() {\n    assert!(cond);\n}\n";
+    assert_eq!(
+        tests_without_a_premise_assertion(neither),
+        vec!["x".to_string()]
+    );
+}
+
+/// The registry lookup is by **definition**, not by substring — the finding a
+/// cold review made about AC-16's own subject.
+///
+/// `registry.contains("fn fallback_no_release_boundary(")` was satisfied by this
+/// file's own string literal, so deleting day#91's flagship test left both sites
+/// naming it still "covered" with the suite green.
+#[test]
+fn a_string_literal_does_not_register_a_fallback_test() {
+    let literal_only = "assert!(x, \"fn fallback_ghost(\");\n";
+    assert!(
+        registered_tests(literal_only).is_empty(),
+        "a mention inside a string is not a test definition"
+    );
+    let defined = "\nfn fallback_ghost() {\n}\n";
+    assert_eq!(registered_tests(defined), vec!["ghost".to_string()]);
+
+    // And end to end: a site naming a slug that only ever appears as a literal
+    // must still be flagged.
+    let site = (
+        "src/probe.rs".to_string(),
+        "// With no boundary this falls back to the cumulative reading.\n\
+         // fallback: ghost\n\
+         fn f() {}\n"
+            .to_string(),
+    );
+    // Not a count: the marker line itself contains the word "fallback", so it is
+    // one of the phrase sites too. What matters is that the slug is reported as
+    // unbacked, which is the property, and a count here would be asserting an
+    // incidental of the extractor.
+    let offenders = unregistered_fallback_sites(std::slice::from_ref(&site), literal_only);
+    assert!(
+        !offenders.is_empty() && offenders.iter().all(|o| o.contains("fn fallback_ghost(")),
+        "a slug backed only by a string literal must not count as covered; got \
+         {offenders:?}"
+    );
+}
+
+/// fallback: documented-invocations-without-zsh
+///
+/// REQ-23. `tests/documented_invocations.rs` runs the documented corpus under
+/// zsh where it exists and `sh` otherwise, and the whole reason it prefers zsh is
+/// that day#83 passes under `sh`. So the `sh` path is a fallback whose favourable
+/// mode is the one this repo is always in — day#91 applied to day#89's own work,
+/// which the first round of this milestone did not do.
+#[test]
+fn fallback_documented_invocations_without_zsh() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("probe.sh");
+    std::fs::write(&script, "day telos declare x \"y\" --scope 'a=v0.5*'\n").unwrap();
+
+    // premise: `sh` is not zsh, and does not fail on an unmatched glob — which is
+    // exactly why the corpus must not be run through it when zsh exists.
+    let sh = Command::new("sh")
+        .arg("-c")
+        .arg("echo v9.9.9* ")
+        .output()
+        .expect("sh should be runnable");
+    assert!(
+        sh.status.success() && String::from_utf8_lossy(&sh.stdout).contains('*'),
+        "premise: `sh` must pass an unmatched glob through literally; if it \
+         started failing, the fallback shell would no longer be the permissive \
+         one and this test would be measuring something else"
+    );
+
+    // The property the fallback must keep: the corpus still RUNS under sh. A
+    // fallback that cannot run is worse than the narrower coverage it buys.
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg("exit 0")
+        .current_dir(dir.path())
+        .output()
+        .expect("sh should be runnable");
+    assert!(
+        out.status.success(),
+        "the fallback shell must be usable at all"
     );
 }

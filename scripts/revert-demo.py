@@ -80,8 +80,13 @@ UNIFIED_ZERO = "--unified=0"
 TRAILER = "Demonstrated-by:"
 # Deliberately strict, and asserted by `tests/revert_demo.rs`: a trailer is a
 # claim about the work, and a grammar that accepts anything cannot refute one.
+#
+# `revert=HEAD` is literal rather than a field. It was a free-form value that was
+# parsed and then discarded, so any string survived — a fabricable field that
+# nothing read. A trailer is always about the commit carrying it, so there is
+# nothing for it to vary over.
 TRAILER_RE = re.compile(
-    r"^Demonstrated-by:\s+revert=(?P<rev>\S+)\s+tests=(?P<tests>\S+)\s+"
+    r"^Demonstrated-by:\s+revert=(?P<rev>HEAD)\s+tests=(?P<tests>\S+)\s+"
     r"outcome=(?P<outcome>[A-Z-]+)\s*$",
     re.MULTILINE,
 )
@@ -174,8 +179,18 @@ def filter_patch(patch: str, root: pathlib.Path, include: list[str], exclude: li
         if include and not matches(path, include):
             report.append(f"  skipped {path} (not in --include)")
             continue
-        if matches(path, exclude) or path.startswith("tests/"):
-            report.append(f"  skipped {path} (test side)")
+        if matches(path, exclude):
+            report.append(f"  skipped {path} (excluded)")
+            continue
+        # **`--include` overrides the `tests/` drop, which it did not.** The
+        # default rule assumes the test half lives under `tests/`; that is a
+        # default, not a law, and while it stood no fix under `tests/` could ever
+        # be demonstrated. This milestone's own sixth defect was in
+        # `tests/common/mod.rs`, so the tool could not have demonstrated the fix
+        # for it. Naming a path explicitly is the author saying "this one is the
+        # fix", and there is nothing left for the heuristic to decide.
+        if not matches(path, include) and path.startswith("tests/"):
+            report.append(f"  skipped {path} (test side; --include it to revert it)")
             continue
 
         header, hunks = split_hunks(section)
@@ -193,7 +208,13 @@ def filter_patch(patch: str, root: pathlib.Path, include: list[str], exclude: li
 
 # --- running the named tests -------------------------------------------------
 
-RESULT_RE = re.compile(r"^test (?P<name>\S+) \.\.\. (?P<verdict>ok|FAILED|ignored)", re.M)
+# `ok` and `FAILED` only. **`ignored` is deliberately absent**: an `#[ignore]`d
+# test did not run, and counting it as having run satisfies `require_ran` and
+# then reports VACUOUS -- a finding *about the test* derived from an observation
+# nobody made. That is day#114's shape mirrored: could-not-check dressed as the
+# strongest available answer. An ignored named test now falls through to
+# NO-SUCH-TEST, which is what it is.
+RESULT_RE = re.compile(r"^test (?P<name>\S+) \.\.\. (?P<verdict>ok|FAILED)", re.M)
 
 
 def cargo_args(spec: str) -> tuple[list[str], str]:
@@ -424,8 +445,26 @@ def verify(spec: str, root: pathlib.Path) -> int:
                        cwd=root, capture_output=True, text=True)
         shutil.rmtree(work, ignore_errors=True)
 
+    # **Two conditions, not one.** Comparing the re-derived outcome to the
+    # claimed one is necessary and was not sufficient: a trailer claiming
+    # `outcome=VACUOUS` re-derived as VACUOUS, matched, and exited 0 — so the one
+    # outcome the rule names as disqualifying passed the gate that enforces it.
+    # A green check and a `Demonstrated-by:` trailer, for a commit whose test
+    # does not observe its finding. day#116's shape inside the tool built to end
+    # it, found by a cold review of this branch.
+    #
+    # DEMONSTRATED is the only outcome a trailer may carry, so both halves are
+    # checked: what was claimed, and whether it is the thing worth claiming.
     if outcome != claimed:
         print(f"{spec}: *** {outcome} *** — the trailer claims {claimed}")
+        return 1
+    if outcome != DEMONSTRATED:
+        print(
+            f"{spec}: *** {outcome} *** — a trailer may only claim {DEMONSTRATED}.\n"
+            f"  Re-deriving {outcome} confirms the claim and does not make it a "
+            f"demonstration:\n  the fix was reverted and the named tests did not "
+            f"observe it. Fix the test."
+        )
         return 1
     print(f"{spec}: {outcome} (re-derived; caught by {', '.join(caught)})")
     return 0
@@ -473,7 +512,7 @@ def main() -> int:
 
     print(f"\n{DEMONSTRATED} — failed under revert: {', '.join(caught)}")
     print("\nPaste into the commit message:\n")
-    print(f"    {TRAILER} revert={label if args.rev else 'HEAD'} "
+    print(f"    {TRAILER} revert=HEAD "
           f"tests={','.join(names)} outcome={DEMONSTRATED}")
     return 0
 

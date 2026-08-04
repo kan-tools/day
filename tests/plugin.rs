@@ -1129,14 +1129,34 @@ fn the_boundary_check_is_wired_where_every_channel_reads() {
     );
 }
 
+/// Where a file's trailing `#[cfg(test)] mod` begins, or `lines.len()`.
+///
+/// **`#[cfg(test)]` on anything other than a `mod` does not end the production
+/// half.** The first version cut at the first line starting with the attribute,
+/// so a single `#[cfg(test)] use std::…;` near the top of a file — an ordinary
+/// thing to write — exempted every `pub fn` below it from the scan, silently and
+/// for the whole file. Found by a cold review probing the scan rather than
+/// reading it.
+fn cfg_test_module_line(lines: &[&str]) -> usize {
+    lines
+        .iter()
+        .enumerate()
+        .find(|(n, l)| {
+            l.trim_start().starts_with("#[cfg(test)]")
+                && lines[*n..]
+                    .iter()
+                    .skip(1)
+                    .find(|next| !next.trim_start().starts_with('#') && !next.trim().is_empty())
+                    .is_some_and(|next| next.trim_start().starts_with("mod "))
+        })
+        .map_or(lines.len(), |(n, _)| n)
+}
+
 /// A file's code with `//` comments removed and its trailing `#[cfg(test)]`
 /// module split off. Shared by the two scans below.
 fn production_half(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
-    let cut = lines
-        .iter()
-        .position(|l| l.trim_start().starts_with("#[cfg(test)]"))
-        .unwrap_or(lines.len());
+    let cut = cfg_test_module_line(&lines);
     lines[..cut]
         .iter()
         .map(|l| match l.find("//") {
@@ -1149,10 +1169,7 @@ fn production_half(text: &str) -> String {
 
 fn test_half(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
-    let cut = lines
-        .iter()
-        .position(|l| l.trim_start().starts_with("#[cfg(test)]"))
-        .unwrap_or(lines.len());
+    let cut = cfg_test_module_line(&lines);
     lines[cut..].join("\n")
 }
 
@@ -1181,6 +1198,27 @@ fn rust_sources(rel: &str) -> Vec<(String, String)> {
 }
 
 const TEST_ONLY_HATCH: &str = "test-only-caller-ok:";
+
+/// The text after `pub fn ` on a definition line, allowing the qualifiers Rust
+/// puts between them.
+///
+/// **`pub fn ` alone was not enough.** `pub async fn`, `pub const fn` and
+/// `pub unsafe fn` all define a `pub fn` the scan could not see, and `src/` has
+/// two `pub async fn` today (`cli::run`, `mcp::serve`). A scan whose stated
+/// blind spot is "a name that also occurs elsewhere" while its real blind spot
+/// is "three of the four ways to write the thing it looks for" overclaims, which
+/// is what the doc comment is for.
+fn pub_fn_name_start(line: &str) -> Option<&str> {
+    let mut rest = line.trim_start().strip_prefix("pub ")?;
+    // `pub(crate)` is deliberately not matched: dead-code detection is not
+    // suppressed for it, so clippy already covers that case.
+    for qualifier in ["async ", "const ", "unsafe ", "extern \"C\" "] {
+        while let Some(stripped) = rest.strip_prefix(qualifier) {
+            rest = stripped;
+        }
+    }
+    rest.strip_prefix("fn ")
+}
 
 /// The scan itself, over a corpus rather than over the filesystem, so the two
 /// directions of AC-20 can be driven with synthetic inputs instead of by writing
@@ -1216,7 +1254,7 @@ fn pub_fns_with_only_test_callers(src: &[(String, String)], test_texts: &[String
         let lines: Vec<&str> = code.lines().collect();
         let raw_lines: Vec<&str> = text.lines().collect();
         for (n, line) in lines.iter().enumerate() {
-            let Some(rest) = line.trim_start().strip_prefix("pub fn ") else {
+            let Some(rest) = pub_fn_name_start(line) else {
                 continue;
             };
             let name: String = rest.chars().take_while(|c| ident_char(*c)).collect();
@@ -1324,5 +1362,140 @@ fn the_test_only_caller_scan_fires_and_can_be_hatched() {
     assert!(
         pub_fns_with_only_test_callers(&[called], &[]).is_empty(),
         "a pub fn with a production caller must not be flagged"
+    );
+}
+
+/// The `pub fn` scan sees the qualified forms, and a stray `#[cfg(test)]`
+/// attribute does not exempt the rest of a file.
+///
+/// Both were found by a cold review probing the scan rather than reading it:
+/// `pub async fn` / `pub const fn` / `pub unsafe fn` were invisible, and one
+/// `#[cfg(test)] use …` anywhere above a definition silently truncated the
+/// production half. `src/` has two `pub async fn` today, so the first was not
+/// hypothetical.
+#[test]
+fn the_test_only_caller_scan_sees_qualified_definitions() {
+    for qualifier in ["", "async ", "const ", "unsafe "] {
+        let src = (
+            "src/probe.rs".to_string(),
+            format!(
+                "pub {qualifier}fn only_tests_call_me() {{}}\n\n#[cfg(test)]\nmod tests {{\n\
+                 #[test] fn t() {{ super::only_tests_call_me(); }}\n}}\n"
+            ),
+        );
+        assert_eq!(
+            pub_fns_with_only_test_callers(std::slice::from_ref(&src), &[]).len(),
+            1,
+            "`pub {qualifier}fn` must be seen; it defines a pub fn like any other"
+        );
+    }
+
+    // A `#[cfg(test)]` on something that is not a `mod` must not end the
+    // production half.
+    let stray = (
+        "src/probe.rs".to_string(),
+        "#[cfg(test)]\nuse std::fmt;\n\npub fn only_tests_call_me() {}\n\n#[cfg(test)]\n\
+         mod tests {\n#[test] fn t() { super::only_tests_call_me(); }\n}\n"
+            .to_string(),
+    );
+    assert_eq!(
+        pub_fns_with_only_test_callers(std::slice::from_ref(&stray), &[]).len(),
+        1,
+        "one `#[cfg(test)] use` must not exempt every definition below it"
+    );
+}
+
+/// **The historical validation is asserted, not recounted.**
+///
+/// `CLAUDE.md` said the scan "is asserted against the tree at `1e02220^`", and
+/// nothing asserted it — a one-time manual measurement written in the grammar of
+/// an enforced constraint, which is the shape this milestone exists to remove.
+/// It is now run: the scan is pure text, so the historical tree needs a checkout
+/// and no build.
+///
+/// It reports could-not-check rather than passing when the commit is not
+/// reachable, which a shallow clone would cause.
+#[test]
+fn the_test_only_caller_scan_finds_the_instance_it_was_written_for() {
+    const BEFORE_THE_FIX: &str = "1e02220^";
+
+    let rev = std::process::Command::new("git")
+        .args([
+            "rev-parse",
+            "--verify",
+            &format!("{BEFORE_THE_FIX}{{commit}}"),
+        ])
+        .current_dir(repo_root())
+        .output()
+        .expect("git should be runnable");
+    if !rev.status.success() {
+        panic!(
+            "could not check: {BEFORE_THE_FIX} is not reachable, so the one tree \
+             known to contain an instance cannot be scanned. That is not a pass \
+             — a shallow clone is the usual cause, and ci.yml fetches full \
+             history for exactly this kind of reason."
+        );
+    }
+
+    let work = tempfile::tempdir().expect("a scratch dir");
+    let tree = work.path().join("tree");
+    let added = std::process::Command::new("git")
+        .args([
+            "worktree",
+            "add",
+            "--detach",
+            &tree.to_string_lossy(),
+            BEFORE_THE_FIX,
+        ])
+        .current_dir(repo_root())
+        .output()
+        .expect("git should be runnable");
+    assert!(
+        added.status.success(),
+        "could not check: the historical worktree could not be created: {}",
+        String::from_utf8_lossy(&added.stderr)
+    );
+
+    let read_all = |sub: &str| -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        let mut stack = vec![tree.join(sub)];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let name = path.strip_prefix(&tree).unwrap_or(&path);
+                    out.push((
+                        name.to_string_lossy().to_string(),
+                        std::fs::read_to_string(&path).unwrap(),
+                    ));
+                }
+            }
+        }
+        out.sort();
+        out
+    };
+    let src = read_all("src");
+    let tests: Vec<String> = read_all("tests").into_iter().map(|(_, t)| t).collect();
+    let offenders = pub_fns_with_only_test_callers(&src, &tests);
+
+    let _ = std::process::Command::new("git")
+        .args(["worktree", "remove", "--force", &tree.to_string_lossy()])
+        .current_dir(repo_root())
+        .output();
+
+    assert_eq!(
+        offenders.len(),
+        1,
+        "the scan must find exactly the instance day#101 named at \
+         {BEFORE_THE_FIX}, and nothing else; got {offenders:?}"
+    );
+    assert!(
+        offenders[0].contains("compat.rs") && offenders[0].ends_with("is_notable"),
+        "the one offender must be `Compat::is_notable`; got {offenders:?}"
     );
 }

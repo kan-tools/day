@@ -20,6 +20,43 @@ fn read(rel: &str) -> String {
         .unwrap_or_else(|e| panic!("{} should be readable: {e}", path.display()))
 }
 
+/// A shell pipeline's stages, splitting on `|` **outside quotes** and joining
+/// `\`-continuations.
+///
+/// Quote-aware because it has to be: the `jq` program in the migration matrix is
+/// `'split("\n") | map(select(length > 0))'`, whose own `|` is not a pipe. A
+/// naive split reads one command as two, and a check that miscounts the thing it
+/// is counting is not a check.
+fn pipeline_stages(command: &str) -> Vec<String> {
+    let mut stages = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    for c in command.chars() {
+        match (quote, c) {
+            (Some(q), _) if c == q => {
+                quote = None;
+                current.push(c);
+            }
+            (Some(_), _) => current.push(c),
+            (None, '\'') | (None, '"') => {
+                quote = Some(c);
+                current.push(c);
+            }
+            (None, '|') => {
+                stages.push(std::mem::take(&mut current));
+            }
+            (None, '\\') => {}
+            (None, _) => current.push(c),
+        }
+    }
+    stages.push(current);
+    stages
+        .into_iter()
+        .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 fn released_tags() -> Vec<String> {
     let out = Command::new("git")
         .args(["tag", "--list", "v*.*.*"])
@@ -81,15 +118,10 @@ fn every_released_tag_has_a_migration_expectation() {
     );
 }
 
-/// AC-12 — **the matrix enumerates the tag being released, like every other.**
-///
-/// The exclusion was correct about its stated reason and wrong about its
-/// consequence, so what is asserted here is the absence of the mechanism rather
-/// than the presence of a comment: a workflow that filters `GITHUB_REF_NAME` out
-/// of the tag list has the window back regardless of what it says about why.
-#[test]
-fn the_matrix_does_not_exclude_the_tag_being_released() {
-    let yaml = read(".github/workflows/migration-matrix.yml");
+/// The pipeline stages of the workflow's tag enumeration. Taken as text so the
+/// evasions a cold review named can be driven against it directly, rather than
+/// only against the file that currently happens to be clean.
+fn tag_enumeration_stages(yaml: &str) -> Vec<String> {
     let enumerate = yaml
         .split("- id: tags")
         .nth(1)
@@ -98,16 +130,63 @@ fn the_matrix_does_not_exclude_the_tag_being_released() {
         .next()
         .expect("the `tags` step should be followed by another");
 
+    // The one command that produces the matrix, with its `\`-continuations
+    // joined, as a list of pipeline stages.
+    let assignment = enumerate
+        .lines()
+        .map(str::trim)
+        .skip_while(|l| !l.starts_with("json=$("))
+        .take_while(|l| !l.starts_with("echo "))
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        !enumerate.contains("grep -v"),
-        "the tag enumeration filters its list again:\n{enumerate}\n\n\
-         day#118: excluding the tag being released is what left a version with \
-         no cell at its own push, so its missing row could not fail until the \
-         next release."
+        !assignment.is_empty(),
+        "could not check: no `json=$(…)` assignment was found in the tags step. \
+         This test would otherwise pass by finding nothing.\n{enumerate}"
+    );
+
+    pipeline_stages(
+        assignment
+            .trim_start_matches("json=$(")
+            .trim_end_matches(')'),
+    )
+}
+
+/// AC-12 — **the matrix enumerates the tag being released, like every other.**
+///
+/// **Keyed on the pipeline's shape, not on the absence of `grep -v`.** The first
+/// version forbade that one spelling, and `grep -vx`, `sed "/$c/d"`,
+/// `jq 'map(select(. != $c))'` and `comm` all reinstate the window with the test
+/// green — an absence-keyed classifier, in a milestone whose rules forbid them,
+/// asserting "the absence of the mechanism" while asserting the absence of one
+/// way to spell it.
+///
+/// What is checked instead is positive and exhaustive: the enumeration is
+/// **exactly two stages**, `git tag --list` and the `jq` that shapes it into
+/// JSON. Any third stage fails, whatever it is and however it is spelled, and a
+/// filter cannot be smuggled into either without changing them. Driven against
+/// the named evasions in
+/// [`the_workflow_classifiers_catch_the_evasions_they_were_keyed_around`].
+#[test]
+fn the_matrix_does_not_exclude_the_tag_being_released() {
+    let stages = tag_enumeration_stages(&read(".github/workflows/migration-matrix.yml"));
+    assert_eq!(
+        stages.len(),
+        2,
+        "the tag enumeration must be exactly `git tag --list … | jq …`. A third \
+         stage is a filter, whatever it is called: day#118 is that a version \
+         excluded at its own push gets no cell, so its missing row cannot fail \
+         until the next release.\nstages: {stages:?}"
     );
     assert!(
-        enumerate.contains("git tag --list 'v*.*.*'"),
-        "the tag enumeration no longer lists released tags at all:\n{enumerate}"
+        stages[0].starts_with("git tag --list 'v*.*.*'"),
+        "the first stage must list every released tag; got {:?}",
+        stages[0]
+    );
+    assert!(
+        stages[1].starts_with("jq -R -s -c"),
+        "the second stage must only shape the list into JSON; got {:?}",
+        stages[1]
     );
 }
 
@@ -291,13 +370,27 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         "on a pull_request the default checkout is the MERGE commit, whose \
          message carries no trailer; the job must verify what was written"
     );
-    // A trigger whose commit range is always empty is a green job that checked
-    // nothing. After a merge, `merge-base(origin/main, HEAD)` IS `HEAD`, so a
-    // `push: branches: [main]` trigger can never have a commit to verify.
-    assert!(
-        !yaml.contains("branches: [main]"),
-        "the job must not run on pushes to main: the range is empty there by \
-         construction, so it would be permanently green for having found nothing"
+    // **The trigger set, positively.** A trigger whose commit range is always
+    // empty is a green job that checked nothing: after a merge,
+    // `merge-base(origin/main, HEAD)` IS `HEAD`.
+    //
+    // The first version of this forbade the literal `branches: [main]`, which
+    // the ordinary block form
+    //     push:
+    //       branches:
+    //         - main
+    // walks straight past — an absence-keyed classifier added in the commit that
+    // fixed a can't-fail check, and its `Demonstrated-by:` trailer passed only
+    // because reversion happens to restore that exact spelling. A demonstration
+    // cannot see this class of weakness, which is worth knowing about the rule
+    // as much as about this test.
+    assert_eq!(
+        workflow_triggers(&yaml),
+        vec!["pull_request"],
+        "the job must trigger on `pull_request` and nothing else. On a push to \
+         main the commit range is empty by construction, so the job would be \
+         permanently green for having found nothing — which is the defect it \
+         exists to catch."
     );
 
     let ci = read(".github/workflows/ci.yml");
@@ -306,4 +399,79 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         "ci.yml must fetch tags, or `every_released_tag_has_a_migration_expectation` \
          has an empty set to be complete about"
     );
+}
+
+/// The events a workflow's `on:` block declares, whatever form they are written
+/// in. Taken as text for the same reason [`tag_enumeration_stages`] is.
+fn workflow_triggers(yaml: &str) -> Vec<String> {
+    let on = yaml
+        .split("\non:\n")
+        .nth(1)
+        .expect("the workflow must have an `on:` block")
+        .split("\njobs:")
+        .next()
+        .expect("`on:` must be followed by `jobs:`");
+    on.lines()
+        .filter(|l| l.starts_with("  ") && !l.starts_with("    "))
+        .map(|l| l.trim().trim_end_matches(':').to_string())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect()
+}
+
+/// **Both classifiers, driven against the evasions a cold review named.**
+///
+/// Each had been keyed on the absence of one spelling — `grep -v` for the tag
+/// filter, the literal `branches: [main]` for the trigger — and each was
+/// therefore evadable by writing the same thing a different way. The trigger one
+/// was added in the commit that fixed a can't-fail check, which is the pattern
+/// worth remembering: an absence-keyed classifier is what a hurried fix reaches
+/// for.
+///
+/// Neither of the replacements could be validated by the real files, which are
+/// clean by construction. They are validated here.
+#[test]
+fn the_workflow_classifiers_catch_the_evasions_they_were_keyed_around() {
+    // A filter that is not spelled `grep -v`. The review named `grep -vx`,
+    // `sed "/$c/d"`, `jq 'map(select(. != $c))'` and `comm`; the shape they
+    // share is a third pipeline stage, which is what is checked.
+    let evaded = "\
+      - id: tags\n\
+      \x20       run: |\n\
+      \x20         json=$(git tag --list 'v*.*.*' --sort=creatordate \\\n\
+      \x20                | grep -vx \"$current\" \\\n\
+      \x20                | jq -R -s -c 'split(\"\\n\") | map(select(length > 0))')\n\
+      \x20         echo \"json=$json\"\n\
+      - id: hash\n";
+    assert_eq!(
+        tag_enumeration_stages(evaded).len(),
+        3,
+        "a filter spelled any other way is still a third stage, and must be seen"
+    );
+
+    // And the clean shape is two, so the check is not simply always failing.
+    let clean = "\
+      - id: tags\n\
+      \x20       run: |\n\
+      \x20         json=$(git tag --list 'v*.*.*' --sort=creatordate \\\n\
+      \x20                | jq -R -s -c 'split(\"\\n\") | map(select(length > 0))')\n\
+      \x20         echo \"json=$json\"\n\
+      - id: hash\n";
+    assert_eq!(
+        tag_enumeration_stages(clean).len(),
+        2,
+        "the jq program's own `|` is not a pipe; a quote-blind split reads one \
+         command as two and the check miscounts what it is counting"
+    );
+
+    // The block form of a trigger, which the literal `branches: [main]` misses.
+    let block_form =
+        "name: x\n\non:\n  pull_request:\n  push:\n    branches:\n      - main\n\njobs:\n  y:\n";
+    assert_eq!(
+        workflow_triggers(block_form),
+        vec!["pull_request".to_string(), "push".to_string()],
+        "an ordinary block-form trigger must be seen; the flow-form literal is \
+         one of several spellings and forbidding it forbids nothing"
+    );
+    let only_pr = "name: x\n\non:\n  pull_request:\n\njobs:\n  y:\n";
+    assert_eq!(workflow_triggers(only_pr), vec!["pull_request".to_string()]);
 }

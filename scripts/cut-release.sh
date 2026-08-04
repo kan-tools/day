@@ -149,8 +149,16 @@ cargo_version="$(printf '%s' "$cargo_meta" | jq -r '.packages[0].version')"
 expectations="tests/fixtures/migration-expectations.tsv"
 [ -f "$expectations" ] || die "$expectations is missing; the migration matrix cannot be checked"
 
+# Captured rather than iterated inline, so a failed `git tag` is could-not-check
+# and not an empty set that satisfies the loop by having nothing to check. Zero
+# tags is a legitimate state — a first release — and is not the same thing.
+if ! released_tags="$(git tag --list 'v*.*.*')"; then
+  die "could not list tags, so completeness of $expectations cannot be checked.
+That is a could-not-check, not a clean bill."
+fi
+
 missing=""
-for released in $(git tag --list 'v*.*.*'); do
+for released in $released_tags; do
   # `awk`'s exit status, not a pipeline's: the pipeline-status defect this
   # script already carries two comments about is one `| grep -q` away here.
   if ! awk -v t="$released" '$1 == t { found = 1 } END { exit !found }' "$expectations"; then
@@ -229,13 +237,27 @@ would file a broken invocation as a characterization of $tag." ;;
 Nothing has been tagged." ;;
 esac
 
+# APPENDED, NOT YET COMMITTED. The commit is deferred to step 4b, after the
+# release claim, and the ordering is the whole point.
+#
+# The first version committed here. Everything after it could still `die` —
+# empty release notes, a failed `kan result`, or a Ctrl-D at the prompt — and
+# each of those printed "nothing has been tagged", which was true and
+# incomplete: a commit stood. Worse, the retry was then refused by the
+# origin/main guard, whose advice ("pull or push first") would publish a row for
+# a tag nobody cut, and a second run appended a DUPLICATE row that the matrix
+# catches a release later with a confusing message. That deferral is precisely
+# what day#118 exists to remove, reintroduced by its own fix.
+#
+# Left uncommitted, every failure below leaves one dirty tracked file that
+# `git checkout` discards, and the die messages say so.
 printf '%s\t%s\n' "$tag" "$outcome" >> "$expectations"
-git add "$expectations"
-git commit -q -m "migration matrix: the measured row for $tag" -m \
-"Measured by scripts/cut-release.sh against the release binary built from this
-tree, before the tag. day#118: the row used to be added by hand after the tag,
-where its absence could not fail until the next release."
-printf 'recorded row: %s\t%s (committed)\n' "$tag" "$outcome"
+printf 'measured row: %s\t%s (not yet committed)\n' "$tag" "$outcome"
+
+undo_row() {
+  printf '\nThe measured row was appended but NOT committed. Discard it with:\n' >&2
+  printf '    git checkout -- %s\n' "$expectations" >&2
+}
 
 # --- 4. RECORD THE RELEASE, BEFORE THE TAG EXISTS ----------------------------
 #
@@ -253,15 +275,43 @@ printf 'What shipped, verified against the artifact.\n' >&2
 printf 'Finish with Ctrl-D on a blank line:\n' >&2
 
 notes="$(cat)"
-[ -n "$notes" ] || die "a release claim with no text is not a record; aborting"
+if [ -z "$notes" ]; then
+  undo_row
+  die "a release claim with no text is not a record; aborting"
+fi
 
-cid="$(kan result release "$tag — $notes")" \
-  || die "recording the release claim failed; nothing has been tagged"
+if ! cid="$(kan result release "$tag — $notes")"; then
+  undo_row
+  die "recording the release claim failed; nothing has been tagged"
+fi
 printf 'recorded %s\n' "$cid"
+
+# --- 4b. now commit the row --------------------------------------------------
+#
+# After the claim and before the tag: the last thing that can fail before this
+# point is the claim, and the last thing after it is `git tag`, which fails only
+# on a name this script has already checked. So the window in which a commit can
+# be stranded is as small as the ordering can make it.
+
+git add "$expectations"
+if ! git commit -q -m "migration matrix: the measured row for $tag" -m \
+"Measured by scripts/cut-release.sh against the release binary built from this
+tree, before the tag. day#118: the row used to be added by hand after the tag,
+where its absence could not fail until the next release."; then
+  undo_row
+  die "committing the migration row failed. The release claim IS recorded, so
+'day assess docs' will report a boundary nobody cut until this is resolved —
+which is the loud direction."
+fi
+printf 'committed the row for %s\n' "$tag"
 
 # --- 5. only now, the tag ----------------------------------------------------
 
-git tag -a "$tag" -m "$tag"
+if ! git tag -a "$tag" -m "$tag"; then
+  die "tagging failed after the row was committed and the claim recorded.
+Both are recoverable: 'git reset --hard HEAD~1' drops the row commit, and the
+claim is superseded by appending, never by deletion. Nothing has been pushed."
+fi
 printf '\nTagged %s locally. Nothing has been pushed.\n' "$tag"
 # Both, in one command, deliberately. The tagged commit is the row commit this
 # script made in step 3b, so it is not on origin; pushing the tag alone would

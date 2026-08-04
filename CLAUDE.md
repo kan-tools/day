@@ -303,11 +303,21 @@ rather than leaving to judgement:
 - **A commit that adds a guard rather than fixing behaviour** has nothing to
   invert; `revert-demo.py` reports `REVERT-FAILED (the change is test-only)`. A
   guard demonstrates by being shown to *fire* — both directions, and against the
-  instance it was written for where one exists. day#101's scan is asserted
-  against the tree at `1e02220^`, where it finds exactly `Compat::is_notable`.
+  instance it was written for where one exists. day#101's scan checks out the
+  tree at `1e02220^` and asserts it finds exactly `Compat::is_notable`
+  (`the_test_only_caller_scan_finds_the_instance_it_was_written_for`). That
+  sentence used to be true only as prose, which is a one-time measurement written
+  in the grammar of an enforced constraint.
 - **`VACUOUS` is a finding, not a nuisance.** It means the fix was taken away and
   the test written to close the finding passed anyway. That is day#116 itself,
   and the commit is not ready.
+- **A fix and its test in one file under `tests/`, with no `#[cfg(test)]`
+  boundary between them, cannot be demonstrated by reversion.** `--include`
+  reverts the whole file, the new test goes with it, and the harness reports
+  `NO-SUCH-TEST` — correctly, and unhelpfully. This is where a scan's mechanism
+  lives, so it comes up whenever a source scan is fixed; those are guards and
+  demonstrate by firing. Learned in v0.11's own fix round rather than designed
+  for, and worth knowing before reaching for `--include`.
 
 ## Two tools, already written — use them rather than reinventing them
 
