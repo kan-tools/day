@@ -65,10 +65,18 @@ def main() -> int:
     span = sys.argv[1] if len(sys.argv) > 1 else "main..HEAD"
     shas = git("rev-list", "--reverse", "--no-merges", span).split()
     if not shas:
-        # Could-not-check, said plainly. An empty range means the census has
-        # nothing to be complete about, which is not the same as a clean branch.
-        print(f"could not check: no commits in {span}")
-        return 1
+        # Could-not-check, said plainly AND distinguishably. An empty range means
+        # the census has nothing to be complete about, which is not the same as a
+        # clean branch.
+        #
+        # Exit 2, not 1, and that is the point: a caller has to tell the two
+        # apart, and the first version left it to tell them apart by grepping the
+        # output for "could not check" — which a COMMIT SUBJECT on this very
+        # branch contains ("a mutation run against a red baseline could not
+        # check"). Keying on the absence of a phrase, in the check that exists to
+        # stop hand-written evidence. Third occurrence in this milestone.
+        print(f"COULD-NOT-CHECK: no commits in {span}")
+        return 2
 
     buckets: dict[str, list[str]] = {
         "demonstrated": [],

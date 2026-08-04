@@ -383,10 +383,15 @@ this milestone's severity kept landing.
 The three that remain exempt:
 
 - **day#101 and day#89** add a guard rather than fix behaviour. There is nothing
-  to invert; the harness reports `REVERT-FAILED (the change is test-only)` in
-  those words, and each guard is instead shown to fire — in both directions, and
-  for day#101 against the historical tree where the instance it was written for
-  actually lives.
+  to invert. For day#89 the harness reports `REVERT-FAILED`, whose message is a
+  disjunction — *"Either the change is test-only, or --include/--exclude excluded
+  the fix"* — so it narrows rather than decides, and the reader confirms which.
+  For day#101 it reports **VACUOUS**, because that commit's only non-test change
+  is this document and reverting prose cannot fail a test; that is the harness
+  having nothing to work with rather than a test failing to observe its finding,
+  and the two read identically without this sentence. Each guard is instead shown
+  to fire — in both directions, and for day#101 against the historical tree where
+  the instance it was written for actually lives.
 - **day#116, the commit that introduces `revert-demo.py` itself.** Reverting it
   deletes the instrument, so the only demonstration available is that the tests
   which invoke the script fail when the script is gone. That is true and it is
@@ -395,7 +400,7 @@ The three that remain exempt:
   rather than left as an absence, because an unexplained missing trailer and a
   reasoned exemption look identical in a log.
 
-**The seven defects are the stronger argument, and none was found by a test.**
+**The defects are the stronger argument, and none was found by a test.**
 Five were in `revert-demo.py` itself: `--quiet` suppressing the very lines that
 prove a test ran; the test half of a change being reverted with it; default diff
 context merging a fix and its adjacent test module into one hunk; `--verify
@@ -404,6 +409,11 @@ commit; and `--verify` perturbing the tree it was checking through
 `CARGO_TARGET_DIR`. The sixth was in `tests/common`, found by running `--verify`
 on the commit that had just added the tests. Every one of them would have shipped
 a harness that reported confidently and wrongly.
+
+**The count above is the row most likely to be stale, and has been twice.** It
+is a narrative fact rather than a derived one — unlike the commit accounting,
+which is now generated — so it is stated once, here, and the prose below does not
+restate it.
 
 **The seventh arrived after this table first said six, and is the sharpest of
 them.** `.github/workflows/revert-demo.yml` also triggered on pushes to `main`,
@@ -414,6 +424,13 @@ against exactly that, written one commit after the rule. It was found by pushing
 the branch and noticing the run that never appeared, which is dogfooding and not
 review or testing. Recorded by correcting the count rather than by leaving the
 table at the number that was true when it was written.
+
+**The eighth and ninth came from using the harness on this milestone's own fix
+rounds.** Naming two tests where one failed reported `DEMONSTRATED` and put both
+in the trailer, so it claimed two tests observe a finding when one did; a trailer
+now names only its catchers. And a scratch crate swept its own `target/` into a
+commit, so a later reverse-patch failed on a `.d` file — a fixture failing for a
+reason that has nothing to do with what it tests.
 
 ## Resolved Questions
 

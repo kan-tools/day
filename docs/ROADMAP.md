@@ -86,8 +86,8 @@ the test target is what buys it — unqualified, the same demonstration takes
 
 Three things it turned out to be about, none of which this section predicted:
 
-- **Using the tooling found seven defects, none of them findable by a test, and
-  six were in the tooling itself.** `--quiet` suppressing the very lines that
+- **Using the tooling found nine defects, none of them findable by a test, and
+  eight were in the tooling itself.** `--quiet` suppressing the very lines that
   prove a named test ran; the test half of a change being reverted along with the
   fix; `cargo fmt`-shaped diff context merging a fix and its test module into one
   hunk; `--verify HEAD~1` re-resolving the rev against the *worktree's* HEAD and

@@ -793,13 +793,60 @@ fn every_commit_is_accounted_for_under_the_demonstration_rule() {
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(
-        !text.contains("could not check"),
+    // Exit CODES, not the presence or absence of a phrase in the output. The
+    // first version asserted `!text.contains("could not check")` — and a commit
+    // subject on this branch contains that phrase, so the check fired on a clean
+    // census. Keying on an absence, inside the test that exists to stop
+    // hand-written evidence; the third occurrence of that shape in this
+    // milestone, which is the argument for reaching for a positive signal first
+    // rather than after.
+    assert_ne!(
+        out.status.code(),
+        Some(2),
         "the census had no commits to be complete about, which is not a pass: {text}"
     );
     assert!(
         out.status.success(),
         "a commit changed something other than prose, carries no \
          `Demonstrated-by:` trailer, and states no `No trailer:` reason:\n{text}"
+    );
+}
+
+/// **An empty range is could-not-check, and says so distinguishably.**
+///
+/// A census over no commits is vacuously complete, which is the failure class
+/// this whole milestone is about. It must not exit 0, and it must not exit the
+/// same way as "a commit is unaccounted" — a caller that cannot tell those apart
+/// has to grep the output, which is how the absence-keyed assertion above got
+/// written in the first place.
+///
+/// Induced with `HEAD..HEAD`, which is a real range with nothing in it.
+#[test]
+fn the_census_reports_an_empty_range_as_could_not_check() {
+    let out = Command::new("python3")
+        .arg(repo_root().join("scripts/demonstration-census.py"))
+        .arg("HEAD..HEAD")
+        .current_dir(repo_root())
+        .output()
+        .expect("python3 should be runnable");
+
+    // premise: the range really is empty — otherwise this passes for the
+    // ordinary reason that the branch is clean.
+    let listed = Command::new("git")
+        .args(["rev-list", "HEAD..HEAD"])
+        .current_dir(repo_root())
+        .output()
+        .expect("git should be runnable");
+    assert!(
+        String::from_utf8_lossy(&listed.stdout).trim().is_empty(),
+        "premise: `HEAD..HEAD` must contain no commits"
+    );
+
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "an empty range must exit 2 — distinct from 1, which means a commit is \
+         unaccounted. Sharing an exit code forces the caller to read the prose, \
+         and the prose contains phrases that also appear in commit subjects."
     );
 }
