@@ -23,7 +23,7 @@ So this counts. Every commit lands in exactly one bucket:
                  executes its own documentation and "it is only prose" has been
                  the wrong guess twice.
 
-Only `unaccounted` is a verdict; the other three are a census. Whether an
+Only `unaccounted` is a verdict; the other two are a census. Whether an
 exemption is *true* is a judgement a script cannot make — see
 `tests/harness_honesty.rs`, which asserts the count of unaccounted commits is
 zero and leaves the reasons to review.

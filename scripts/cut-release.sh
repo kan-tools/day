@@ -309,7 +309,13 @@ fi
 if ! git commit -q -m "migration matrix: the measured row for $tag" -m \
 "Measured by scripts/cut-release.sh against the release binary built from this
 tree, before the tag. day#118: the row used to be added by hand after the tag,
-where its absence could not fail until the next release."; then
+where its absence could not fail until the next release.
+
+No trailer: the change is one measured row in a fixture, appended by this script
+rather than written. There is no fix to invert -- and without this paragraph the
+commit is UNACCOUNTED to scripts/demonstration-census.py, so any \`cargo test\` run
+between this commit and pushing the tag would fail naming the release commit
+itself."; then
   undo_row
   die "committing the migration row failed. The release claim IS recorded, so
 'day assess docs' will report a boundary nobody cut until this is resolved —

@@ -782,9 +782,15 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
 fn interpret_census(code: Option<i32>, head_is_published: bool) -> Result<(), String> {
     match code {
         Some(0) => Ok(()),
-        // Legitimately nothing to account for — `main` after a merge. The
-        // premise is checked rather than trusted: a feature branch with commits
-        // of its own must never reach this arm.
+        // Legitimately nothing to account for — `main` after a merge.
+        //
+        // **`head_is_published` is weaker than it sounds, and saying so is the
+        // point.** It means "HEAD is reachable from some `origin/*` ref", which
+        // every pushed branch satisfies — this branch included. It is not "HEAD
+        // has no commits of its own". What makes the arm safe is the code
+        // itself: exit 3 means the census found no commits between the base and
+        // HEAD, so HEAD already *is* the base. The predicate is a second opinion,
+        // not the guard, and an earlier comment here claimed it was the guard.
         Some(3) if head_is_published => Ok(()),
         Some(3) => Err(
             "the census found no commits to check, but HEAD is ahead of what has \

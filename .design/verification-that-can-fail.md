@@ -347,7 +347,7 @@ required the measurement to be recorded either way. It is:
 | one demonstration, cold | **11.9 s** |
 | one demonstration, warm | **2.0 s** |
 | the same demonstration, test target unqualified | **3 m 54 s** |
-| defects found by *using* the tooling, not by testing it | 9 |
+| defects found by *using* the tooling, not by testing it | see day#133 |
 
 **The commit accounting is not here, deliberately.** It was: a hand-written count
 of demonstrated and exempt commits, and it was wrong in three consecutive rounds
@@ -410,10 +410,13 @@ commit; and `--verify` perturbing the tree it was checking through
 on the commit that had just added the tests. Every one of them would have shipped
 a harness that reported confidently and wrongly.
 
-**The count above is the row most likely to be stale, and has been twice.** It
-is a narrative fact rather than a derived one — unlike the commit accounting,
-which is now generated — so it is stated once, here, and the prose below does not
-restate it.
+**The count that used to sit in that row was stale three times running**, most
+recently in the round that claimed to have consolidated it. It was a narrative
+fact rather than a derived one — unlike the commit accounting, which is generated
+— and every attempt to fix it by writing a better number failed the same way. So
+there is no number: day#133 asks for it to be derived or dropped, which is what
+worked for the census. The enumeration below is what the milestone actually
+found, and it is deliberately not summarised.
 
 **The seventh arrived after this table first said six, and is the sharpest of
 them.** `.github/workflows/revert-demo.yml` also triggered on pushes to `main`,

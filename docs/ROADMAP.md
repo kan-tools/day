@@ -95,10 +95,13 @@ Three things it turned out to be about, none of which this section predicted:
   CI job that enforces the rule triggering on `main`, where the range is empty by
   construction, so it was permanently green for having found nothing; a trailer
   naming tests that had not failed; and the commit census reporting a git failure
-  as a finding about a commit that does not exist. The full list, and how each was
-  found, is in `.design/verification-that-can-fail.md` — **kept in one place
-  deliberately**, because it was carried in two and the two disagreed about both
-  the number and the membership, three rounds running.
+  as a finding about a commit that does not exist. This is a sample, not the list:
+  the count has been hand-written in two documents, and the two disagreed about
+  both the number and the membership in three consecutive rounds — including
+  after a commit that claimed to have consolidated them. **No number is given
+  here on purpose.** day#133 asks for the same treatment the commit census got,
+  which is the only thing that has retired a class of this kind in this
+  milestone: generate it, or stop asserting it.
 
 - **A guard is not a fix, and the rule had to say so.** day#101 and day#89 add
   checks rather than change behaviour, so there is nothing executable to invert:
