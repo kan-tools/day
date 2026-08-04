@@ -65,21 +65,49 @@ fixes-that-introduced-bugs, to tests, to **the scans that check the tests**.
 v0.11 was already the answer to that trajectory; it is now overdue rather than
 speculative.
 
-**v0.11 — verification that can fail.** day#101 (a guarantee wired at a call
-site) and day#116 (a guarantee asserted by a test that cannot observe it) are one
-defect from two sides; day#114 and day#118 are the tooling that would catch
-either. The deliverable is a **revert harness** — apply the inverse of a named
-change, assert named tests fail, restore, assert they pass — plus the rule that a
-commit closing a finding demonstrates it.
+**v0.11 — verification that can fail. *Built; not yet released.*** day#101 (a
+guarantee wired at a call site) and day#116 (a guarantee asserted by a test that
+cannot observe it) are one defect from two sides; day#114 and day#118 are the
+tooling that would catch either. All six issues closed —
+day#116/#114/#118/#101/#91/#89.
 
-**Build the harness before writing the rule into `CLAUDE.md`.** A rule that costs
-something on every fix commit with no tooling behind it is ceremony, and ceremony
-is what people route around — crosslink's blocking hooks are that failure wearing
-a different hat. If the harness makes the demonstration nearly free, the rule
-describes what already happens; if it does not, the rule should not ship. The
-milestone is held to its own rule, which is the only honest way to find out.
+The deliverable is `scripts/revert-demo.py`: apply the inverse of a named change,
+assert named tests fail, restore, assert they pass. Seven outcomes, never
+conflated, could-not-check outranking checked-and-clean. A commit closing a
+finding now carries a `Demonstrated-by:` trailer, and CI **re-derives** it rather
+than reading it — the trailer is a claim about the work, and a claim nothing can
+contradict is not evidence.
 
-Scope is every harness in `scripts/` and `.github/workflows/`, not just
+**The harness was built before the rule, and the condition was met.** Measured
+over the milestone's own commits: **11.9 s cold, 2.0 s warm**, one command, the
+trailer pasted rather than written. The load-bearing detail is that qualifying
+the test target is what buys it — unqualified, the same demonstration takes
+**3 m 54 s**, and at that price the rule would have been ceremony.
+
+Three things it turned out to be about, none of which this section predicted:
+
+- **The harness found six defects, none of them findable by a test, and five
+  were in the harness itself.** `--quiet` suppressing the very lines that prove a
+  named test ran; the test half of a change being reverted along with the fix;
+  `cargo fmt`-shaped diff context merging a fix and its test module into one
+  hunk; `--verify HEAD~1` re-resolving the rev against the *worktree's* HEAD and
+  verifying the wrong commit; and `--verify` perturbing the tree it was checking
+  through `CARGO_TARGET_DIR`. Every one would have shipped a verifier that
+  reported confidently and wrongly, which is the failure the milestone is named
+  for, in the thing built to end it.
+- **A guard is not a fix, and the rule had to say so.** day#101 and day#89 add
+  checks rather than change behaviour, so there is nothing to invert. The harness
+  reports `REVERT-FAILED (the change is test-only)` and the guard demonstrates by
+  being shown to *fire* — day#101's scan against the tree at `1e02220^`, where it
+  finds exactly the instance the issue named.
+- **day#118's fix was to stop deferring a reading, not to add a step.** A version
+  was excluded from the migration matrix at its own tag push, so its missing row
+  could not fail until the *next* release — an omission invisible while anyone
+  was looking at it, and dropped three releases running. `cut-release.sh` now
+  measures and commits the row *before* tagging, and the workflow's exclusion is
+  gone. One invariant, no window.
+
+Scope was every harness in `scripts/` and `.github/workflows/`, not just
 `mutate.py`: in the single session that produced this section, four separate
 measurement tools asserted more than they verified, and none of it was in day's
 shipped behaviour.
