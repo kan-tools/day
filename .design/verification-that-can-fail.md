@@ -337,18 +337,43 @@ required the measurement to be recorded either way. It is:
 | one demonstration, cold | **11.9 s** |
 | one demonstration, warm | **2.0 s** |
 | the same demonstration, test target unqualified | **3 m 54 s** |
-| demonstrations run over the milestone's own commits | 4 `DEMONSTRATED`, 2 `REVERT-FAILED` (test-only), 0 `VACUOUS` |
-| defects found by *using* the tooling, not by testing it | 7 |
+| substantive commits | 9 |
+| carrying a `Demonstrated-by:` trailer | 6 |
+| exempt, with the reason stated in the commit | 3 |
+| `VACUOUS` outcomes | 0 |
+| defects found by *using* the tooling, not by testing it | 8 |
 
 So the rule ships. The load-bearing number is the third row: an unqualified
 `cargo test` filter builds every integration target three times over, and
 qualifying it (`plugin::some_test`) is the difference between a rule that
 describes what already happens and one that gets routed around.
 
-The two `REVERT-FAILED` outcomes are day#101 and day#89, whose commits add a
-guard rather than fix behaviour — there is nothing to invert, the harness says so
-in those words, and the guard is instead shown to fire. That case is written into
-`CLAUDE.md` beside the rule rather than left to judgement.
+**The three exemptions, each with its own reason, because a single rule did not
+cover them.** This table's first version said "4 DEMONSTRATED, 2 REVERT-FAILED
+(test-only)" — six commits out of nine, with the other three unaccounted. A cold
+review found the omission and, worse, found that the stated exemption did not
+describe the commit it was used on: *"The rule, now that the tooling makes it
+nearly free"* had a fix half in `CLAUDE.md` and two workflows and a test half in
+`tests/harness_honesty.rs`, which is the case the **default** rule handles. The
+harness printed a trailer for it in ninety seconds when someone finally ran it.
+That commit now carries one. A measurement table that omits the case against its
+own thesis is `telos/honest-reads` failing in the evidence layer, which is where
+this milestone's severity kept landing.
+
+The three that remain exempt:
+
+- **day#101 and day#89** add a guard rather than fix behaviour. There is nothing
+  to invert; the harness reports `REVERT-FAILED (the change is test-only)` in
+  those words, and each guard is instead shown to fire — in both directions, and
+  for day#101 against the historical tree where the instance it was written for
+  actually lives.
+- **day#116, the commit that introduces `revert-demo.py` itself.** Reverting it
+  deletes the instrument, so the only demonstration available is that the tests
+  which invoke the script fail when the script is gone. That is true and it is
+  not evidence about the harness's behaviour — it is a bootstrap, and dressing it
+  as a demonstration would put a trailer on a claim worth nothing. Stated here
+  rather than left as an absence, because an unexplained missing trailer and a
+  reasoned exemption look identical in a log.
 
 **The seven defects are the stronger argument, and none was found by a test.**
 Five were in `revert-demo.py` itself: `--quiet` suppressing the very lines that

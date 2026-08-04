@@ -318,6 +318,18 @@ rather than leaving to judgement:
   lives, so it comes up whenever a source scan is fixed; those are guards and
   demonstrate by firing. Learned in v0.11's own fix round rather than designed
   for, and worth knowing before reaching for `--include`.
+- **A bootstrap commit** — the one that introduces the harness — can only
+  demonstrate that deleting the instrument breaks the instrument's tests. True,
+  and not evidence about behaviour.
+
+**Check the exemption against the commit, not against the list.** v0.11's fix
+round claimed the same-file exemption for a commit whose fix half was
+`CLAUDE.md` and two workflows and whose test half was `tests/harness_honesty.rs`
+— the case the *default* rule handles. A cold review ran the harness on it and
+had a trailer in ninety seconds. An exemption reached for rather than checked is
+the rule being routed around by the person who wrote it, which is the failure
+mode the roadmap predicted for a rule with no tooling behind it, arriving even
+though the tooling exists.
 
 ## Two tools, already written — use them rather than reinventing them
 
