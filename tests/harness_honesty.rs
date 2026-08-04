@@ -766,6 +766,84 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
     );
 }
 
+/// What each census exit code means to its caller.
+///
+/// **Extracted so it can be driven.** The version before this gave the census a
+/// fourth code (3, an empty range) and left this caller asserting the three-code
+/// contract — so on `main` after a merge, where the range is legitimately empty,
+/// it reported the phantom accusation the round it shipped in was named for. A
+/// guarantee fixed in the mechanism and not in its only caller: day#101, fourth
+/// instance, inside this milestone's own tooling.
+///
+/// It was unobservable from inside the test that held it, because the empty-range
+/// mode is one this repo is never in — day#91, on top. A function can be handed
+/// the code directly, which is what
+/// [`every_census_exit_code_means_something_different_to_the_caller`] does.
+fn interpret_census(code: Option<i32>, head_is_published: bool) -> Result<(), String> {
+    match code {
+        Some(0) => Ok(()),
+        // Legitimately nothing to account for — `main` after a merge. The
+        // premise is checked rather than trusted: a feature branch with commits
+        // of its own must never reach this arm.
+        Some(3) if head_is_published => Ok(()),
+        Some(3) => Err(
+            "the census found no commits to check, but HEAD is ahead of what has \
+             been published, so there were commits it should have found"
+                .to_string(),
+        ),
+        Some(2) => Err(
+            "the census could not determine a range, which is a could-not-check \
+             and not a pass"
+                .to_string(),
+        ),
+        _ => Err(
+            "a commit carries no `Demonstrated-by:` trailer and states no \
+             `No trailer:` reason. A docs-only commit needs one too — this repo \
+             executes its own documentation."
+                .to_string(),
+        ),
+    }
+}
+
+/// Every exit code means something different to the caller, including the two
+/// the caller could not see before.
+#[test]
+fn every_census_exit_code_means_something_different_to_the_caller() {
+    assert!(
+        interpret_census(Some(0), false).is_ok(),
+        "0 is accounted-for"
+    );
+    assert!(
+        interpret_census(Some(3), true).is_ok(),
+        "an empty range on published HEAD is `main` after a merge, and must pass \
+         — otherwise the suite is red on main forever and cut-release.sh, which \
+         runs it, can never cut another release"
+    );
+    assert!(
+        interpret_census(Some(3), false).is_err(),
+        "an empty range on a branch with unpublished commits is a real failure"
+    );
+    assert!(
+        interpret_census(Some(2), false).is_err(),
+        "could-not-check is not a pass"
+    );
+    assert!(
+        interpret_census(Some(1), false).is_err(),
+        "unaccounted fails"
+    );
+
+    // And the distinctions are not cosmetic: each error says a different thing,
+    // so the reader is not sent after a phantom commit when git failed.
+    let unaccounted = interpret_census(Some(1), false).unwrap_err();
+    let unknowable = interpret_census(Some(2), false).unwrap_err();
+    assert_ne!(
+        unaccounted, unknowable,
+        "a git failure and a missing demonstration must not read identically — \
+         that is exactly what turned CI red while accusing a commit that does \
+         not exist"
+    );
+}
+
 /// **No commit on this branch is unaccounted for under the demonstration rule.**
 ///
 /// The accounting used to be a hand-written table in the design doc, and it was
@@ -776,7 +854,7 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
 /// `CLAUDE.md` already has the rule this violated: *generate expectation tables
 /// from a measurement run, then review them.* So the count is generated, and
 /// what is asserted is the only thing a script can decide — that every commit is
-/// either demonstrated, exempt **with a stated reason**, or prose. Whether a
+/// either demonstrated or exempt **with a stated reason**. Whether a
 /// stated reason is *true* is a judgement, and a false one has already been
 /// caught by review rather than here.
 ///
@@ -793,23 +871,31 @@ fn every_commit_is_accounted_for_under_the_demonstration_rule() {
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    // Exit CODES, not the presence or absence of a phrase in the output. The
-    // first version asserted `!text.contains("could not check")` — and a commit
+    // Exit CODES, not the presence or absence of a phrase in the output. An
+    // earlier version asserted `!text.contains("could not check")` — and a commit
     // subject on this branch contains that phrase, so the check fired on a clean
     // census. Keying on an absence, inside the test that exists to stop
-    // hand-written evidence; the third occurrence of that shape in this
-    // milestone, which is the argument for reaching for a positive signal first
-    // rather than after.
-    assert_ne!(
-        out.status.code(),
-        Some(2),
-        "the census had no commits to be complete about, which is not a pass: {text}"
-    );
-    assert!(
-        out.status.success(),
-        "a commit changed something other than prose, carries no \
-         `Demonstrated-by:` trailer, and states no `No trailer:` reason:\n{text}"
-    );
+    // hand-written evidence.
+    //
+    // **All four codes are handled here, and that is the point.** The version
+    // before this one gave the census a fourth code (3, an empty range) and left
+    // this caller asserting the three-code contract, so on `main` after a merge —
+    // where the range is legitimately empty — it reported the phantom accusation
+    // the round it shipped in was named for. A guarantee fixed in the mechanism
+    // and not in its only caller: day#101, fourth instance, in this milestone's
+    // own tooling.
+    let ahead = String::from_utf8(
+        Command::new("git")
+            .args(["rev-list", "--count", "HEAD", "--not", "--remotes=origin"])
+            .current_dir(repo_root())
+            .output()
+            .expect("git should be runnable")
+            .stdout,
+    )
+    .unwrap();
+    if let Err(why) = interpret_census(out.status.code(), ahead.trim() == "0") {
+        panic!("{why}\n{text}");
+    }
 }
 
 /// **An empty range is its own outcome, distinct from could-not-check.**
@@ -896,77 +982,5 @@ fn the_census_reports_an_unresolvable_range_as_could_not_check() {
     assert!(
         !text.contains("Traceback"),
         "and it must not crash: a stack trace is not a verdict.\n{text}"
-    );
-}
-
-/// **The census's prose paths are read by no test**, which is the premise its
-/// `prose` bucket rests on.
-///
-/// The first version keyed that bucket on the `.md` and `.tsv` *extensions*, and
-/// this repo is the counter-example: `tests/documented_invocations.rs` executes
-/// the examples in `README.md`, `docs/CONVENTIONS.md` and `commands/*.md`;
-/// `tests/plugin.rs` reads `CLAUDE.md`; this file reads
-/// `commands/adversarial-review.md` and `tests/fixtures/*.tsv`. A `.md`-only
-/// commit editing any of those changes test-covered behaviour and is fully
-/// demonstrable — day#83 is precisely that — and was being accounted for as
-/// "there is no behaviour to invert".
-///
-/// So the bucket is an allowlist now, and the allowlist's premise is asserted
-/// rather than assumed: no file under `tests/` may mention any of these paths.
-#[test]
-fn the_prose_paths_are_read_by_no_test() {
-    let census = read("scripts/demonstration-census.py");
-    let listed = census
-        .split("PROSE_PATHS = (")
-        .nth(1)
-        .expect("the census must declare PROSE_PATHS")
-        .split(')')
-        .next()
-        .expect("PROSE_PATHS must be a tuple");
-    let paths: Vec<String> = listed
-        .split(',')
-        .map(|p| p.trim().trim_matches('"').to_string())
-        .filter(|p| !p.is_empty())
-        .collect();
-    assert!(
-        !paths.is_empty(),
-        "could not check: no prose paths were parsed out of the census"
-    );
-
-    let mut offenders = Vec::new();
-    for entry in std::fs::read_dir(repo_root().join("tests"))
-        .unwrap()
-        .flatten()
-    {
-        let path = entry.path();
-        if path.extension().is_none_or(|e| e != "rs") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        // Only the file's own code, not this test's doc comment, which names
-        // every path it is about.
-        // A path mentioned alongside `repo_root()` is a read of THIS repo's
-        // copy. The same string in a scratch fixture — five test files build a
-        // `.design/<slug>.md` in a temp dir — is not, and the first version of
-        // this scan reported all five. What the census's premise needs is that
-        // no test reads the repo's own copy.
-        for (n, line) in text.lines().enumerate() {
-            if line.trim_start().starts_with("//") || !line.contains("repo_root()") {
-                continue;
-            }
-            for prose in &paths {
-                if line.contains(prose.as_str()) {
-                    offenders.push(format!("{}:{} reads {prose}", path.display(), n + 1));
-                }
-            }
-        }
-    }
-    assert!(
-        offenders.is_empty(),
-        "the census treats these paths as un-invertible prose, and a test reads \
-         them: {offenders:?}\n\n\
-         Either the path is not prose — a commit touching only it IS \
-         demonstrable, so it must carry a trailer or state a reason — or the \
-         test should not be reading it."
     );
 }

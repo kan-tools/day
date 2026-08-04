@@ -297,34 +297,36 @@ rather than written. Qualifying the test target (`plugin::some_test`, not
 `some_test`) is what buys that — the unqualified form builds every integration
 target three times and took **3m54s**.
 
-Cases where it does not apply. Each names the outcome the harness reports, so
-the exemption can be checked against what the tool actually prints rather than
-against this list — which is how a false one survived two rounds:
+**`VACUOUS` is a finding, not a nuisance.** It means the fix was taken away and
+the test written to close the finding passed anyway — day#116 itself, and the
+commit is not ready.
 
-- **A commit that adds a guard rather than fixing behaviour** has nothing to
-  invert; `revert-demo.py` reports `REVERT-FAILED`, whose message is a
-  disjunction — *"Either the change is test-only, or --include/--exclude excluded
-  the fix"* — so it narrows the possibilities rather than deciding between them,
-  and the reader still has to look. A
-  guard demonstrates by being shown to *fire* — both directions, and against the
-  instance it was written for where one exists. day#101's scan checks out the
+**Where the rule does not apply.** Each case below names the outcome the harness
+actually reports for it, so an exemption is checked against what the tool prints
+rather than against this list. That distinction is not decorative: an exemption
+claimed from the list rather than from the tool survived two review rounds, and
+another named an outcome the tool does not produce.
+
+- **A guard rather than a fix** has nothing executable to invert, and what the
+  harness says depends on what else the commit touched. day#89's guard reports
+  `REVERT-FAILED`, whose message is a *disjunction* — "Either the change is
+  test-only, or `--include`/`--exclude` excluded the fix" — so it narrows rather
+  than decides. day#101's reports `VACUOUS`, because its only non-test change is
+  a design document and reverting prose cannot fail a test; that is the harness
+  having nothing to work with, not a test failing to observe its finding.
+  A guard demonstrates by being shown to **fire** — both directions, and against
+  the instance it was written for where one exists. day#101's scan checks out the
   tree at `1e02220^` and asserts it finds exactly `Compat::is_notable`
-  (`the_test_only_caller_scan_finds_the_instance_it_was_written_for`). That
-  sentence used to be true only as prose, which is a one-time measurement written
-  in the grammar of an enforced constraint.
-- **`VACUOUS` is a finding, not a nuisance.** It means the fix was taken away and
-  the test written to close the finding passed anyway. That is day#116 itself,
-  and the commit is not ready.
-- **A fix and its test in one file under `tests/`, with no `#[cfg(test)]`
-  boundary between them, cannot be demonstrated by reversion.** `--include`
-  reverts the whole file, the new test goes with it, and the harness reports
-  `NO-SUCH-TEST` — correctly, and unhelpfully. This is where a scan's mechanism
-  lives, so it comes up whenever a source scan is fixed; those are guards and
-  demonstrate by firing. Learned in v0.11's own fix round rather than designed
-  for, and worth knowing before reaching for `--include`.
-- **A bootstrap commit** — the one that introduces the harness — can only
-  demonstrate that deleting the instrument breaks the instrument's tests. True,
-  and not evidence about behaviour.
+  (`the_test_only_caller_scan_finds_the_instance_it_was_written_for`).
+- **A fix and its test in one file under `tests/`**, with no `#[cfg(test)]`
+  boundary between them: `--include` reverts the whole file, the test goes with
+  it, and the harness reports `NO-SUCH-TEST` — correctly, and unhelpfully. This
+  is where a scan's mechanism lives, so it recurs whenever a source scan is
+  fixed.
+- **A bootstrap commit** — the one introducing the harness — can only show that
+  deleting the instrument breaks the instrument's tests. The harness reports
+  `DEMONSTRATED` and the claim is worth nothing, which is the one case here the
+  tool's own output does *not* flag. State the reason instead.
 
 **Check the exemption against the commit, not against the list.** v0.11's fix
 round claimed the same-file exemption for a commit whose fix half was

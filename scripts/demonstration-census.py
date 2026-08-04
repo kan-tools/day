@@ -18,9 +18,10 @@ So this counts. Every commit lands in exactly one bucket:
 
   demonstrated   carries a `Demonstrated-by:` trailer that PARSES
   exempt         states a reason, in a `No trailer:` paragraph
-  prose          changes only prose (`.md`) — there is no behaviour to invert
-  unaccounted    none of the above. THE FAILURE. A commit that changed code,
-                 claims no demonstration, and gives no reason.
+  unaccounted    neither. THE FAILURE. A commit that claims no demonstration and
+                 gives no reason — including a docs-only one, because this repo
+                 executes its own documentation and "it is only prose" has been
+                 the wrong guess twice.
 
 Only `unaccounted` is a verdict; the other three are a census. Whether an
 exemption is *true* is a judgement a script cannot make — see
@@ -41,21 +42,21 @@ TRAILER_RE = re.compile(
 )
 EXEMPTION_RE = re.compile(r"^No trailer:", re.MULTILINE)
 
-# **Paths no test reads**, which is what makes a commit touching only them
-# genuinely un-invertible.
+# **There is no `prose` bucket, and that is the third answer to this question.**
 #
-# The first version keyed `prose` on the `.md` and `.tsv` EXTENSIONS, and this
-# repo is the counter-example: `tests/documented_invocations.rs` executes the
-# examples in `README.md`, `docs/CONVENTIONS.md` and `commands/*.md`;
-# `tests/plugin.rs` reads `CLAUDE.md`; `tests/harness_honesty.rs` reads
-# `commands/adversarial-review.md` and `tests/fixtures/*.tsv`. A `.md`-only
-# commit editing any of those changes test-covered behaviour and is fully
-# demonstrable — and was being accounted for as "there is no behaviour to
-# invert". day#83 is the same point: prose IS invertible here.
+# The first version exempted a commit whose files were all `.md` or `.tsv`. The
+# second narrowed that to an allowlist of paths "no test reads". Both were
+# guesses about which files are invertible, and both were wrong: this repo
+# EXECUTES the examples in `README.md`, `docs/CONVENTIONS.md` and `commands/*.md`
+# (`tests/documented_invocations.rs`), reads `CLAUDE.md` (`tests/plugin.rs`), and
+# reads every `.md` under `docs/` by joining the directory — so the allowlist's
+# own premise could not even be scanned for reliably, and the scan written to
+# check it flagged five scratch fixtures instead. day#83 is a bug in prose.
 #
-# `the_prose_paths_are_read_by_no_test` asserts this list, so it is a checked
-# premise rather than an assumption.
-PROSE_PATHS = (".design/", "docs/ROADMAP.md", "docs/TELOS.md")
+# So the classifier stops guessing. A commit either demonstrates, or states a
+# reason. "This is only a design document" is a perfectly good reason and costs
+# one line; what it no longer does is get inferred from a file extension by a
+# check that has been wrong every time it tried.
 
 OK, UNACCOUNTED, COULD_NOT_CHECK, NOTHING_TO_CHECK = 0, 1, 2, 3
 
@@ -85,9 +86,6 @@ def classify(sha: str) -> tuple[str, str]:
         return "demonstrated", subject
     if EXEMPTION_RE.search(body):
         return "exempt", subject
-    files = [f for f in git("show", "--format=", "--name-only", sha).split() if f]
-    if files and all(f.startswith(PROSE_PATHS) for f in files):
-        return "prose", subject
     return "unaccounted", subject
 
 
@@ -101,13 +99,17 @@ def resolve_span(argv: list[str]) -> tuple[str, list[str]]:
         span = argv[0]
         return span, git("rev-list", "--reverse", "--no-merges", span).split()
     for base_ref in ("refs/remotes/origin/main", "main"):
+        # The whole attempt is guarded, not just the `rev-parse`. A ref can
+        # resolve and still share no history with HEAD, and `merge-base` then
+        # fails — which propagated straight out of a loop whose shape says "try
+        # both", so the local `main` fallback was never reached.
         try:
             git("rev-parse", "--verify", f"{base_ref}^{{commit}}")
+            base = git("merge-base", base_ref, "HEAD").strip()
+            commits = git("rev-list", "--reverse", "--no-merges", f"{base}..HEAD").split()
         except CouldNotCheck:
             continue
-        base = git("merge-base", base_ref, "HEAD").strip()
-        span = f"{base[:7]}..HEAD"
-        return span, git("rev-list", "--reverse", "--no-merges", f"{base}..HEAD").split()
+        return f"{base[:7]}..HEAD", commits
     raise CouldNotCheck(
         "no `main` or `origin/main` to take a merge base from, so there is no "
         "range to account for"
@@ -132,7 +134,6 @@ def main() -> int:
     buckets: dict[str, list[str]] = {
         "demonstrated": [],
         "exempt": [],
-        "prose": [],
         "unaccounted": [],
     }
     try:
@@ -145,10 +146,10 @@ def main() -> int:
 
     print(f"span: {span}")
     print("| bucket | count |\n| --- | --- |")
-    for name in ("demonstrated", "exempt", "prose", "unaccounted"):
+    for name in ("demonstrated", "exempt", "unaccounted"):
         print(f"| {name} | {len(buckets[name])} |")
     print(f"| **total** | **{len(shas)}** |")
-    for name in ("demonstrated", "exempt", "prose", "unaccounted"):
+    for name in ("demonstrated", "exempt", "unaccounted"):
         if buckets[name]:
             print(f"\n{name}:")
             for line in buckets[name]:
@@ -156,8 +157,9 @@ def main() -> int:
 
     if buckets["unaccounted"]:
         print(
-            "\nUNACCOUNTED: these commits changed something other than prose, "
-            "carry no demonstration, and state no reason."
+            "\nUNACCOUNTED: these commits carry no demonstration and state no "
+            "reason. A docs-only commit needs one too — this repo executes its "
+            "own documentation."
         )
         return UNACCOUNTED
     return OK

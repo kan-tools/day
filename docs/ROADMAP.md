@@ -86,21 +86,20 @@ the test target is what buys it — unqualified, the same demonstration takes
 
 Three things it turned out to be about, none of which this section predicted:
 
-- **Using the tooling found nine defects, none of them findable by a test, and
-  every one of them in the tooling rather than in day.** `--quiet` suppressing
-  the very lines that prove a named test ran; the test half of a change being reverted along with the
+- **Using the tooling found defect after defect in the tooling, and almost none
+  of them was findable by a test.** `--quiet` suppressing the very lines that
+  prove a named test ran; the test half of a change being reverted along with the
   fix; `cargo fmt`-shaped diff context merging a fix and its test module into one
-  hunk; `--verify HEAD~1` re-resolving the rev against the *worktree's* HEAD and
-  verifying the wrong commit; `--verify` perturbing the tree it was checking
-  through `CARGO_TARGET_DIR`; and — one commit *after* the rule was written —
-  the CI job that enforces it triggering on pushes to `main`, where the commit
-  range is empty by construction, so it was permanently green for having found
-  nothing; a trailer naming tests that had not failed; and a check written to end
-  hand-written evidence whose own first CI run accused a commit that does not
-  exist. Every one would have shipped a verifier that reported confidently and
-  wrongly, which is the failure the milestone is named for, in the things built
-  to end it. Four cold reviews found the last several; none was findable by a
-  test, which is the milestone's own thesis holding against itself.
+  hunk; `--verify HEAD~1` re-resolving the rev against the *worktree's* HEAD;
+  `--verify` perturbing the tree it was checking through `CARGO_TARGET_DIR`; the
+  CI job that enforces the rule triggering on `main`, where the range is empty by
+  construction, so it was permanently green for having found nothing; a trailer
+  naming tests that had not failed; and the commit census reporting a git failure
+  as a finding about a commit that does not exist. The full list, and how each was
+  found, is in `.design/verification-that-can-fail.md` — **kept in one place
+  deliberately**, because it was carried in two and the two disagreed about both
+  the number and the membership, three rounds running.
+
 - **A guard is not a fix, and the rule had to say so.** day#101 and day#89 add
   checks rather than change behaviour, so there is nothing executable to invert:
   day#89's run reports `REVERT-FAILED` and day#101's reports `VACUOUS`, because
