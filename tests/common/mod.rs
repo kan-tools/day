@@ -471,3 +471,112 @@ if not any(s["subject"] == subj for s in status["subjects"]):
     with open(status_path, "w") as fh:
         json.dump(status, fh)
 "#;
+
+/// A throwaway Cargo crate in a temp dir, for driving the harnesses in
+/// `scripts/` end to end.
+///
+/// **The harnesses are tested against a real crate and a real cargo**, never
+/// against a mocked one. Both `mutate.py` and `revert-demo.py` decide what they
+/// report by reading libtest's output, so a mock would validate each harness
+/// against its author's idea of that output — the stub-shaped blind spot
+/// `tests/kan_conformance.rs` exists as the deliberate exception to. Each
+/// scratch crate has no dependencies, so a scenario costs one trivial compile.
+pub struct ScratchCrate {
+    dir: tempfile::TempDir,
+}
+
+impl ScratchCrate {
+    /// A crate with a `Cargo.toml` and nothing else. `[workspace]` is declared
+    /// so the crate is not silently adopted into an enclosing workspace.
+    pub fn new() -> Self {
+        let dir = tempfile::tempdir().expect("a scratch dir");
+        let me = Self { dir };
+        me.write(
+            "Cargo.toml",
+            "[package]\nname = \"scratch\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\
+             [workspace]\n",
+        );
+        me
+    }
+
+    pub fn root(&self) -> &Path {
+        self.dir.path()
+    }
+
+    pub fn write(&self, rel: &str, contents: &str) -> &Self {
+        let path = self.root().join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, contents).unwrap();
+        self
+    }
+
+    pub fn read(&self, rel: &str) -> String {
+        std::fs::read_to_string(self.root().join(rel))
+            .unwrap_or_else(|e| panic!("{rel} should be readable: {e}"))
+    }
+
+    pub fn git(&self, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(self.root())
+            .output()
+            .expect("git should be runnable");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
+    /// An initialised repo with one commit of whatever has been written so far.
+    pub fn commit_all(&self, message: &str) -> &Self {
+        if !self.root().join(".git").exists() {
+            self.git(&["init", "-q", "-b", "main"]);
+            self.git(&["config", "user.email", "t@example.com"]);
+            self.git(&["config", "user.name", "t"]);
+        }
+        self.git(&["add", "-A"]);
+        self.git(&["commit", "-qm", message]);
+        self
+    }
+
+    /// Run one of day's own `scripts/` against this crate, and return its
+    /// combined output plus whether it exited 0.
+    pub fn run_script(&self, script: &str, args: &[&str]) -> (String, bool) {
+        let path = repo_root().join("scripts").join(script);
+        let out = std::process::Command::new("python3")
+            .arg(&path)
+            .args(args)
+            .current_dir(self.root())
+            // A scratch crate must build into its OWN tree, whatever the
+            // ambient environment says. `revert-demo.py --verify` sets
+            // `CARGO_TARGET_DIR` so a worktree shares the caller's artifact
+            // cache, and that variable is inherited all the way down to the
+            // scratch crate's cargo — so `<scratch>/target/debug/scratch` was
+            // never created and the mutation test failed for a reason that had
+            // nothing to do with mutation.
+            //
+            // Found by running `--verify` on the commit that added these tests,
+            // which is the harness catching a test of the harness. It is day#91
+            // exactly: a mode this repo is never in until something puts it
+            // there.
+            .env_remove("CARGO_TARGET_DIR")
+            .output()
+            .expect("python3 should be runnable");
+        (
+            format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            ),
+            out.status.success(),
+        )
+    }
+}
+
+impl Default for ScratchCrate {
+    fn default() -> Self {
+        Self::new()
+    }
+}
