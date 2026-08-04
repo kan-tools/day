@@ -588,3 +588,54 @@ fn a_prefix_filter_and_a_multi_match_filter_are_both_handled() {
          VACUOUS here is could-not-check dressed as a finding: {verified}"
     );
 }
+
+/// **A filter that selects a passing test alongside a failing one is not a
+/// catcher.**
+///
+/// Third attempt at this rule, and the two before it failed in opposite
+/// directions: comparing cargo filters to libtest names by *equality* broke
+/// prefix filters, and comparing by *substring* credited a filter for a test it
+/// merely overlapped. Both were found by cold review, and neither existing test
+/// reached this cell — they used non-overlapping names, or overlapping names
+/// where **both** fail.
+///
+/// The rule is selection: a filter catches only if every test it selected
+/// failed. `t::demo_test` selects `demo_test` and `demo_test_two`, so if the
+/// first passes the filter has not demonstrated anything, and putting it in a
+/// trailer would make the trailer false.
+#[test]
+fn a_filter_that_also_selects_a_passing_test_is_not_a_catcher() {
+    let s = Scratch::new(
+        BUGGY,
+        FIXED,
+        "#[test]\nfn demo_test() { assert!(scratch::answer() > 0); }\n\
+         #[test]\nfn demo_test_two() { assert_eq!(scratch::answer(), 2); }\n",
+    );
+
+    let (text, ok) = s.run(&["--tests", "t::demo_test,t::demo_test_two"]);
+    assert!(ok && text.contains("DEMONSTRATED"), "{text}");
+    assert!(
+        text.contains("Demonstrated-by: revert=HEAD tests=t::demo_test_two outcome=DEMONSTRATED"),
+        "only `t::demo_test_two` selected a test that failed; `t::demo_test` \
+         selects a passing test too and must be dropped: {text}"
+    );
+    assert!(
+        text.contains("NOT in the trailer: ['t::demo_test']"),
+        "and the dropped filter must be named: {text}"
+    );
+
+    // The other half: a trailer that claims the passenger must not re-derive.
+    s.git(&["add", "-A"]);
+    s.git(&[
+        "commit",
+        "-qm",
+        "fix\n\nDemonstrated-by: revert=HEAD tests=t::demo_test,t::demo_test_two \
+         outcome=DEMONSTRATED",
+    ]);
+    let (verified, verified_ok) = s.run(&["--verify", "HEAD"]);
+    assert!(
+        !verified_ok,
+        "a trailer naming a filter that selects a passing test must be refused: \
+         {verified}"
+    );
+}

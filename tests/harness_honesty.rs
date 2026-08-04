@@ -812,7 +812,7 @@ fn every_commit_is_accounted_for_under_the_demonstration_rule() {
     );
 }
 
-/// **An empty range is could-not-check, and says so distinguishably.**
+/// **An empty range is its own outcome, distinct from could-not-check.**
 ///
 /// A census over no commits is vacuously complete, which is the failure class
 /// this whole milestone is about. It must not exit 0, and it must not exit the
@@ -822,7 +822,7 @@ fn every_commit_is_accounted_for_under_the_demonstration_rule() {
 ///
 /// Induced with `HEAD..HEAD`, which is a real range with nothing in it.
 #[test]
-fn the_census_reports_an_empty_range_as_could_not_check() {
+fn the_census_reports_an_empty_range_distinctly() {
     let out = Command::new("python3")
         .arg(repo_root().join("scripts/demonstration-census.py"))
         .arg("HEAD..HEAD")
@@ -844,9 +844,129 @@ fn the_census_reports_an_empty_range_as_could_not_check() {
 
     assert_eq!(
         out.status.code(),
+        Some(3),
+        "an empty range must exit 3 — distinct from 1 (a commit is unaccounted) \
+         and from 2 (the range could not be determined at all). On `main` after \
+         a merge the range is legitimately empty, and sharing a code with either \
+         of the others made the check impossible to pass there — which would \
+         have blocked the next release, since cut-release.sh runs the suite."
+    );
+}
+
+/// **A range that cannot be determined is could-not-check, and does not look
+/// like a finding.**
+///
+/// This is the defect that turned CI red on this branch: the census let a failed
+/// `git` raise, Python exited 1, and 1 is its code for "a commit is
+/// unaccounted" — so the first run outside the author's machine accused a
+/// commit that does not exist. `actions/checkout` creates no local `main`, which
+/// is a state this repo is never in and every CI run is.
+#[test]
+fn the_census_reports_an_unresolvable_range_as_could_not_check() {
+    let out = Command::new("python3")
+        .arg(repo_root().join("scripts/demonstration-census.py"))
+        .arg("no-such-ref..HEAD")
+        .current_dir(repo_root())
+        .output()
+        .expect("python3 should be runnable");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // premise: the ref really is absent, so the range really is unknowable.
+    let resolved = Command::new("git")
+        .args(["rev-parse", "--verify", "no-such-ref"])
+        .current_dir(repo_root())
+        .output()
+        .expect("git should be runnable");
+    assert!(
+        !resolved.status.success(),
+        "premise: `no-such-ref` must not resolve, or this measures nothing"
+    );
+
+    assert_eq!(
+        out.status.code(),
         Some(2),
-        "an empty range must exit 2 — distinct from 1, which means a commit is \
-         unaccounted. Sharing an exit code forces the caller to read the prose, \
-         and the prose contains phrases that also appear in commit subjects."
+        "an unknowable range must exit 2, not 1: a git failure is not a finding \
+         about a commit, and reporting it as one is could-not-check dressed as \
+         checked-and-found-a-defect.\n{text}"
+    );
+    assert!(
+        !text.contains("Traceback"),
+        "and it must not crash: a stack trace is not a verdict.\n{text}"
+    );
+}
+
+/// **The census's prose paths are read by no test**, which is the premise its
+/// `prose` bucket rests on.
+///
+/// The first version keyed that bucket on the `.md` and `.tsv` *extensions*, and
+/// this repo is the counter-example: `tests/documented_invocations.rs` executes
+/// the examples in `README.md`, `docs/CONVENTIONS.md` and `commands/*.md`;
+/// `tests/plugin.rs` reads `CLAUDE.md`; this file reads
+/// `commands/adversarial-review.md` and `tests/fixtures/*.tsv`. A `.md`-only
+/// commit editing any of those changes test-covered behaviour and is fully
+/// demonstrable — day#83 is precisely that — and was being accounted for as
+/// "there is no behaviour to invert".
+///
+/// So the bucket is an allowlist now, and the allowlist's premise is asserted
+/// rather than assumed: no file under `tests/` may mention any of these paths.
+#[test]
+fn the_prose_paths_are_read_by_no_test() {
+    let census = read("scripts/demonstration-census.py");
+    let listed = census
+        .split("PROSE_PATHS = (")
+        .nth(1)
+        .expect("the census must declare PROSE_PATHS")
+        .split(')')
+        .next()
+        .expect("PROSE_PATHS must be a tuple");
+    let paths: Vec<String> = listed
+        .split(',')
+        .map(|p| p.trim().trim_matches('"').to_string())
+        .filter(|p| !p.is_empty())
+        .collect();
+    assert!(
+        !paths.is_empty(),
+        "could not check: no prose paths were parsed out of the census"
+    );
+
+    let mut offenders = Vec::new();
+    for entry in std::fs::read_dir(repo_root().join("tests"))
+        .unwrap()
+        .flatten()
+    {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        // Only the file's own code, not this test's doc comment, which names
+        // every path it is about.
+        // A path mentioned alongside `repo_root()` is a read of THIS repo's
+        // copy. The same string in a scratch fixture — five test files build a
+        // `.design/<slug>.md` in a temp dir — is not, and the first version of
+        // this scan reported all five. What the census's premise needs is that
+        // no test reads the repo's own copy.
+        for (n, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("//") || !line.contains("repo_root()") {
+                continue;
+            }
+            for prose in &paths {
+                if line.contains(prose.as_str()) {
+                    offenders.push(format!("{}:{} reads {prose}", path.display(), n + 1));
+                }
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "the census treats these paths as un-invertible prose, and a test reads \
+         them: {offenders:?}\n\n\
+         Either the path is not prose — a commit touching only it IS \
+         demonstrable, so it must carry a trailer or state a reason — or the \
+         test should not be reading it."
     );
 }

@@ -41,11 +41,41 @@ TRAILER_RE = re.compile(
 )
 EXEMPTION_RE = re.compile(r"^No trailer:", re.MULTILINE)
 
+# **Paths no test reads**, which is what makes a commit touching only them
+# genuinely un-invertible.
+#
+# The first version keyed `prose` on the `.md` and `.tsv` EXTENSIONS, and this
+# repo is the counter-example: `tests/documented_invocations.rs` executes the
+# examples in `README.md`, `docs/CONVENTIONS.md` and `commands/*.md`;
+# `tests/plugin.rs` reads `CLAUDE.md`; `tests/harness_honesty.rs` reads
+# `commands/adversarial-review.md` and `tests/fixtures/*.tsv`. A `.md`-only
+# commit editing any of those changes test-covered behaviour and is fully
+# demonstrable — and was being accounted for as "there is no behaviour to
+# invert". day#83 is the same point: prose IS invertible here.
+#
+# `the_prose_paths_are_read_by_no_test` asserts this list, so it is a checked
+# premise rather than an assumption.
+PROSE_PATHS = (".design/", "docs/ROADMAP.md", "docs/TELOS.md")
+
+OK, UNACCOUNTED, COULD_NOT_CHECK, NOTHING_TO_CHECK = 0, 1, 2, 3
+
+
+class CouldNotCheck(Exception):
+    pass
+
 
 def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=True
-    ).stdout
+    r = subprocess.run(["git", *args], capture_output=True, text=True)
+    if r.returncode != 0:
+        # **Not an uncaught exception.** A `CalledProcessError` exits 1, which is
+        # this script's code for "a commit is unaccounted" — so a git failure was
+        # reported as a substantive finding about a commit that does not exist.
+        # It fired the first time this ran outside the author's machine:
+        # `actions/checkout` creates no local `main`, so `main..HEAD` exited 128
+        # and CI accused a phantom commit. Could-not-check reported as
+        # checked-and-found-a-defect, in the check written to end that.
+        raise CouldNotCheck(f"git {' '.join(args)}: {r.stderr.strip()}")
+    return r.stdout
 
 
 def classify(sha: str) -> tuple[str, str]:
@@ -55,28 +85,49 @@ def classify(sha: str) -> tuple[str, str]:
         return "demonstrated", subject
     if EXEMPTION_RE.search(body):
         return "exempt", subject
-    files = [f for f in git("show", "--stat=200", "--format=", "--name-only", sha).split() if f]
-    if files and all(f.endswith(".md") or f.endswith(".tsv") for f in files):
+    files = [f for f in git("show", "--format=", "--name-only", sha).split() if f]
+    if files and all(f.startswith(PROSE_PATHS) for f in files):
         return "prose", subject
     return "unaccounted", subject
 
 
+def resolve_span(argv: list[str]) -> tuple[str, list[str]]:
+    """(description, commits). Raises CouldNotCheck when the range is unknowable.
+
+    The default is the merge base with `main` — resolved through `origin/main`
+    first, because a CI checkout has the remote ref and no local branch.
+    """
+    if argv:
+        span = argv[0]
+        return span, git("rev-list", "--reverse", "--no-merges", span).split()
+    for base_ref in ("refs/remotes/origin/main", "main"):
+        try:
+            git("rev-parse", "--verify", f"{base_ref}^{{commit}}")
+        except CouldNotCheck:
+            continue
+        base = git("merge-base", base_ref, "HEAD").strip()
+        span = f"{base[:7]}..HEAD"
+        return span, git("rev-list", "--reverse", "--no-merges", f"{base}..HEAD").split()
+    raise CouldNotCheck(
+        "no `main` or `origin/main` to take a merge base from, so there is no "
+        "range to account for"
+    )
+
+
 def main() -> int:
-    span = sys.argv[1] if len(sys.argv) > 1 else "main..HEAD"
-    shas = git("rev-list", "--reverse", "--no-merges", span).split()
+    try:
+        span, shas = resolve_span(sys.argv[1:])
+    except CouldNotCheck as e:
+        print(f"COULD-NOT-CHECK: {e}")
+        return COULD_NOT_CHECK
+
     if not shas:
-        # Could-not-check, said plainly AND distinguishably. An empty range means
-        # the census has nothing to be complete about, which is not the same as a
-        # clean branch.
-        #
-        # Exit 2, not 1, and that is the point: a caller has to tell the two
-        # apart, and the first version left it to tell them apart by grepping the
-        # output for "could not check" — which a COMMIT SUBJECT on this very
-        # branch contains ("a mutation run against a red baseline could not
-        # check"). Keying on the absence of a phrase, in the check that exists to
-        # stop hand-written evidence. Third occurrence in this milestone.
-        print(f"COULD-NOT-CHECK: no commits in {span}")
-        return 2
+        # Distinct from could-not-check, and from clean. On `main` after a merge
+        # the range is legitimately empty; sharing a code with either of the
+        # others made the check impossible to pass there, which would have
+        # blocked the next release the first time anyone ran the suite on main.
+        print(f"NOTHING-TO-CHECK: no commits in {span}")
+        return NOTHING_TO_CHECK
 
     buckets: dict[str, list[str]] = {
         "demonstrated": [],
@@ -84,11 +135,16 @@ def main() -> int:
         "prose": [],
         "unaccounted": [],
     }
-    for sha in shas:
-        bucket, subject = classify(sha)
-        buckets[bucket].append(f"{sha[:7]} {subject}")
+    try:
+        for sha in shas:
+            bucket, subject = classify(sha)
+            buckets[bucket].append(f"{sha[:7]} {subject}")
+    except CouldNotCheck as e:
+        print(f"COULD-NOT-CHECK: {e}")
+        return COULD_NOT_CHECK
 
-    print(f"| bucket | count |\n| --- | --- |")
+    print(f"span: {span}")
+    print("| bucket | count |\n| --- | --- |")
     for name in ("demonstrated", "exempt", "prose", "unaccounted"):
         print(f"| {name} | {len(buckets[name])} |")
     print(f"| **total** | **{len(shas)}** |")
@@ -103,8 +159,8 @@ def main() -> int:
             "\nUNACCOUNTED: these commits changed something other than prose, "
             "carry no demonstration, and state no reason."
         )
-        return 1
-    return 0
+        return UNACCOUNTED
+    return OK
 
 
 if __name__ == "__main__":

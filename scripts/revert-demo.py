@@ -235,15 +235,19 @@ def cargo_args(spec: str) -> tuple[list[str], str]:
 
 
 def run_tests(specs: list[str], cwd: pathlib.Path, target_dir: str | None):
-    """(ran, failed, compiled) for the named tests, by libtest filter name.
+    """(per-spec {spec: (ran, failed)}, compiled) by libtest name.
+
+    **Per spec, not aggregated.** Which tests a filter selected is the question
+    the catcher rule below turns on, and a union across filters cannot answer it:
+    one spec's selection would be credited to another whose filter happens to be
+    a substring of it.
 
     `ran` is measured from libtest's own per-test lines rather than from the exit
     code, because a filter matching nothing exits 0 -- which is day#116's shape
     exactly: the absence of an observation reported as the strongest result.
     """
     env = {**os.environ, "CARGO_TARGET_DIR": target_dir} if target_dir else None
-    ran: set[str] = set()
-    failed: set[str] = set()
+    results: dict[str, tuple[set[str], set[str]]] = {}
     for spec in specs:
         args, _ = cargo_args(spec)
         r = subprocess.run(
@@ -256,16 +260,38 @@ def run_tests(specs: list[str], cwd: pathlib.Path, target_dir: str | None):
         )
         out = r.stdout + r.stderr
         if "could not compile" in out or "\nerror[" in out or out.startswith("error["):
-            return ran, failed, False
+            return results, False
+        ran, failed = set(), set()
         for m in RESULT_RE.finditer(out):
             ran.add(m.group("name"))
             if m.group("verdict") == "FAILED":
                 failed.add(m.group("name"))
-    return ran, failed, True
+        results[spec] = (ran, failed)
+    return results, True
 
 
-def require_ran(specs: list[str], ran: set[str], when: str) -> None:
-    missing = [s for s in specs if not any(cargo_args(s)[1] in r for r in ran)]
+def caught_by(results: dict) -> list[str]:
+    """The specs whose EVERY selected test failed.
+
+    A filter selects a set of tests; the demonstration is meaningful only if the
+    set it selected failed. "At least one failed" credits a filter for a test it
+    merely overlaps: with `demo_test` passing and `demo_test_two` failing, the
+    filter `t::demo_test` selects both, and a substring rule put it in the
+    trailer as a catcher. Found by a cold review probing the shape the two
+    existing tests did not reach -- overlapping names where one PASSES.
+
+    A filter that selected nothing catches nothing; `require_ran` reports that
+    separately as NO-SUCH-TEST.
+    """
+    return [
+        spec
+        for spec, (ran, failed) in results.items()
+        if ran and ran <= failed
+    ]
+
+
+def require_ran(specs: list[str], results: dict, when: str) -> None:
+    missing = [s for s in specs if not results.get(s, (set(), set()))[0]]
     if missing:
         raise CouldNotCheck(
             NO_SUCH_TEST,
@@ -294,10 +320,11 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
 
     # Baseline BEFORE touching anything (day#114's rule, applied where the
     # harness is written rather than retrofitted onto it).
-    ran, failed, compiled = run_tests(names, root, target_dir)
+    results, compiled = run_tests(names, root, target_dir)
     if not compiled:
         raise CouldNotCheck(DID_NOT_COMPILE, "the tree does not build before any revert")
-    require_ran(names, ran, "baseline")
+    require_ran(names, results, "baseline")
+    failed = set().union(*(f for _, f in results.values())) if results else set()
     if failed:
         raise CouldNotCheck(
             BASELINE_RED,
@@ -328,29 +355,26 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
             raise CouldNotCheck(
                 REVERT_FAILED, f"the reverse patch did not apply: {r.stderr.strip()}"
             )
-        ran, failed, compiled = run_tests(names, root, target_dir)
+        results, compiled = run_tests(names, root, target_dir)
         if not compiled:
             raise CouldNotCheck(
                 DID_NOT_COMPILE,
                 "the reverted tree does not build, so the tests could not run. This "
                 "says nothing about whether they assert the fix.",
             )
-        require_ran(names, ran, "under revert")
+        require_ran(names, results, "under revert")
         # **`caught` is the SPECS that caught it, not the libtest names.**
         #
-        # A trailer names only the tests that failed, so that it is a true
+        # A trailer names only the tests that caught it, so that it is a true
         # statement whatever was named on the command line, and `verify()` can
-        # then require every test a trailer names to fail. That much was right.
+        # then require every test a trailer names to fail.
         #
-        # What was wrong is the matching. A spec is a cargo *filter*
-        # (`t::demo_test`), and libtest reports a *name* (`demo_test_two`); the
-        # first version compared them with `in` / `==` against a set of names,
-        # while `require_ran` matches them by substring. So a prefix filter — the
-        # shape `CLAUDE.md` itself documents — produced an empty trailer that the
-        # harness's own parser rejects, and a note falsely saying the test had not
-        # failed. Both sides speak in specs now, and substring matching is the one
-        # rule.
-        caught = [n for n in names if any(cargo_args(n)[1] in f for f in failed)]
+        # `caught_by` decides "caught" as **every selected test failed**, which
+        # is the third attempt at this rule. Comparing filters to libtest names
+        # by equality broke prefix filters; comparing by substring credited a
+        # filter for a test it merely overlapped. Selection is the thing that
+        # actually matters, and it is now measured per spec.
+        caught = caught_by(results)
         outcome = DEMONSTRATED if caught else VACUOUS
         quiet = [n for n in names if n not in caught]
         if outcome == DEMONSTRATED and quiet:
@@ -365,11 +389,14 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
             NOT_RESTORED,
             "the working tree did not come back byte-for-byte after the revert",
         )
-    ran, failed, compiled = run_tests(names, root, target_dir)
-    if not compiled or failed:
+    results, compiled = run_tests(names, root, target_dir)
+    still_failing = (
+        set().union(*(f for _, f in results.values())) if results else set()
+    )
+    if not compiled or still_failing:
         raise CouldNotCheck(
             NOT_RESTORED,
-            f"the named tests do not pass again after restoring: {sorted(failed)}",
+            f"the named tests do not pass again after restoring: {sorted(still_failing)}",
         )
     return outcome, caught
 

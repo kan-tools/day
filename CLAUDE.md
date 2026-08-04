@@ -297,9 +297,9 @@ rather than written. Qualifying the test target (`plugin::some_test`, not
 `some_test`) is what buys that — the unqualified form builds every integration
 target three times and took **3m54s**.
 
-Cases where it does not apply. The first two the harness says out loud; the rest
-are judgements, and the count is not restated here because it was already stale
-at three:
+Cases where it does not apply. Each names the outcome the harness reports, so
+the exemption can be checked against what the tool actually prints rather than
+against this list — which is how a false one survived two rounds:
 
 - **A commit that adds a guard rather than fixing behaviour** has nothing to
   invert; `revert-demo.py` reports `REVERT-FAILED`, whose message is a
