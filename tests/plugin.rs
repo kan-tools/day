@@ -1128,3 +1128,201 @@ fn the_boundary_check_is_wired_where_every_channel_reads() {
          still reaches every channel, mark it `{MARKER} <why>`."
     );
 }
+
+/// A file's code with `//` comments removed and its trailing `#[cfg(test)]`
+/// module split off. Shared by the two scans below.
+fn production_half(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let cut = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("#[cfg(test)]"))
+        .unwrap_or(lines.len());
+    lines[..cut]
+        .iter()
+        .map(|l| match l.find("//") {
+            Some(i) => l[..i].to_string(),
+            None => (*l).to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn test_half(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let cut = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("#[cfg(test)]"))
+        .unwrap_or(lines.len());
+    lines[cut..].join("\n")
+}
+
+/// Every `.rs` file under a directory, as `(repo-relative path, text)`.
+fn rust_sources(rel: &str) -> Vec<(String, String)> {
+    let base = repo_root().join(rel);
+    let mut out = Vec::new();
+    let mut stack = vec![base.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let name = path
+                    .strip_prefix(repo_root())
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
+                out.push((name, std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+const TEST_ONLY_HATCH: &str = "test-only-caller-ok:";
+
+/// The scan itself, over a corpus rather than over the filesystem, so the two
+/// directions of AC-20 can be driven with synthetic inputs instead of by writing
+/// probe files into `src/` — which is how a real module declaration got reverted
+/// by a probe in an earlier session.
+fn pub_fns_with_only_test_callers(src: &[(String, String)], test_texts: &[String]) -> Vec<String> {
+    let production: String = src
+        .iter()
+        .map(|(_, text)| production_half(text))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tests: String = src
+        .iter()
+        .map(|(_, text)| test_half(text))
+        .chain(test_texts.iter().cloned())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mentions = |corpus: &str, name: &str| -> usize {
+        corpus
+            .match_indices(name)
+            .filter(|(at, _)| {
+                let before = corpus[..*at].chars().next_back();
+                let after = corpus[at + name.len()..].chars().next();
+                !before.is_some_and(ident_char) && !after.is_some_and(ident_char)
+            })
+            .count()
+    };
+
+    let mut offenders = Vec::new();
+    for (path, text) in src {
+        let code = production_half(text);
+        let lines: Vec<&str> = code.lines().collect();
+        let raw_lines: Vec<&str> = text.lines().collect();
+        for (n, line) in lines.iter().enumerate() {
+            let Some(rest) = line.trim_start().strip_prefix("pub fn ") else {
+                continue;
+            };
+            let name: String = rest.chars().take_while(|c| ident_char(*c)).collect();
+            if name.is_empty() {
+                continue;
+            }
+            // The definition itself is one mention; anything above one means a
+            // caller exists somewhere that is not a test.
+            if mentions(&production, &name) > 1 || mentions(&tests, &name) == 0 {
+                continue;
+            }
+            let hatched = raw_lines[n.saturating_sub(6)..=n]
+                .iter()
+                .any(|l| l.contains(TEST_ONLY_HATCH));
+            if !hatched {
+                offenders.push(format!("{path}:{}: {name}", n + 1));
+            }
+        }
+    }
+    offenders
+}
+
+/// day#101 — **a `pub fn` whose only callers are tests fails the build.**
+///
+/// `BlockSchemas::extract` and `Compat::is_notable` were both exactly this: a
+/// check that existed, was tested, and was called from nowhere. Both were `pub`,
+/// and `pub` suppresses dead-code detection, so clippy was silent for both. A
+/// `pub fn` whose only callers are `#[cfg(test)]` is either dead or a
+/// requirement about to go nominal, and day#101's whole point is that
+/// `/adversarial-review` was the only thing catching either.
+///
+/// **Measured before it was written, and validated against the instance it was
+/// written for.** Over `src/` today: 163 `pub fn` definitions, **0 offenders**.
+/// Run over the tree at `1e02220^` — the commit that dropped the dead code — it
+/// reports exactly one, `src/compat.rs: is_notable`, and nothing else. A scan
+/// that has never been shown to fire is a scan nobody has reason to believe.
+///
+/// **What it does not catch, so it does not overclaim:** a `pub fn` whose name
+/// also occurs in production for an unrelated reason (a short or common
+/// identifier) is not flagged — the mention count cannot tell a call from a
+/// coincidence without a parser. That is a false *negative*, which is the safe
+/// direction for a guard whose false positives would be hatched away.
+#[test]
+fn a_pub_fn_whose_only_callers_are_tests_fails_the_build() {
+    let src = rust_sources("src");
+    let tests: Vec<String> = rust_sources("tests")
+        .into_iter()
+        .map(|(_, text)| text)
+        .collect();
+    let offenders = pub_fns_with_only_test_callers(&src, &tests);
+
+    assert!(
+        !src.is_empty(),
+        "could not check: no sources were read from src/"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these `pub fn`s are called only from tests: {offenders:?}\n\n\
+         Either wire the guarantee into the path that needs it, delete it, or \
+         mark the definition `{TEST_ONLY_HATCH} <why this one is genuinely \
+         different>`. `pub` suppresses dead-code detection, so nothing else \
+         will tell you (day#101)."
+    );
+}
+
+/// AC-20 — **both directions**: the scan flags the shape, and the hatch clears
+/// it.
+///
+/// Synthetic corpora rather than probe files under `src/`: a scan asserted only
+/// against a tree that has no offenders is a scan that has never been observed
+/// to fail, which is this milestone's subject.
+#[test]
+fn the_test_only_caller_scan_fires_and_can_be_hatched() {
+    let offender = (
+        "src/probe.rs".to_string(),
+        "pub fn only_tests_call_me() {}\n\n#[cfg(test)]\nmod tests {\n\
+         #[test] fn t() { super::only_tests_call_me(); }\n}\n"
+            .to_string(),
+    );
+    assert_eq!(
+        pub_fns_with_only_test_callers(&[offender.clone()], &[]).len(),
+        1,
+        "the scan must flag a pub fn reached only from a #[cfg(test)] module"
+    );
+
+    let hatched = (
+        offender.0.clone(),
+        format!(
+            "// {TEST_ONLY_HATCH} it is the public API a downstream crate calls\n{}",
+            offender.1
+        ),
+    );
+    assert!(
+        pub_fns_with_only_test_callers(&[hatched], &[]).is_empty(),
+        "a per-site hatch must clear it — a check with no way out gets deleted \
+         the first time it is wrong"
+    );
+
+    let called = (
+        "src/probe.rs".to_string(),
+        "pub fn used() {}\npub fn caller() { used(); }\n\n#[cfg(test)]\nmod tests {\n\
+         #[test] fn t() { super::used(); }\n}\n"
+            .to_string(),
+    );
+    assert!(
+        pub_fns_with_only_test_callers(&[called], &[]).is_empty(),
+        "a pub fn with a production caller must not be flagged"
+    );
+}

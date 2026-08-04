@@ -327,30 +327,29 @@ behaviour and gets its own demonstration. That is the expected outcome rather
 than a surprise — day#91's evidence is that these paths are the ones a fresh
 clone runs.
 
-## Open Questions
+## Resolved Questions
 
-<!-- OPEN: Q1 -->
 ### Q1: Does REQ-26's scan produce a tolerable number of pre-existing offenders?
 
-`src/` has nineteen files with `#[cfg(test)]` modules and day is a library as
-well as a binary, so a `pub fn` may legitimately have no in-crate caller because
-it is public API. The scan is worth having only if the initial offender list is
-small enough to triage honestly, one hatch at a time, each with its own reason.
+**Measured, then decided.** Over `src/` at the head of this milestone: **163
+`pub fn` definitions outside `#[cfg(test)]`, and 0 offenders.** So REQ-26 ships
+as specified, with no hatches in its initial landing — which resolves AC-21 by
+making it vacuous, and that is worth saying rather than leaving to be inferred.
 
-Options, to be decided by **running the scan and counting** rather than by
-reasoning about it:
+A scan that has never been observed to fire is a scan nobody has reason to
+believe, and "0 offenders" is exactly the reading that would be produced by a
+scan that does not work. So it was validated against the instance day#101 named:
+run over the tree at `1e02220^` — the commit that dropped the dead code — it
+reports **exactly one**, `src/compat.rs: is_notable`, and nothing else. The other
+named instance, `BlockSchemas::extract`, has since gained a production caller,
+which is why it is correctly silent today.
 
-- If the count is small (say under ten), ship as specified in REQ-26.
-- If it is large and dominated by genuine public API, narrow the scan to `pub fn`
-  items **not re-exported from `src/lib.rs`**, and state that narrowing as the
-  scan's blind spot.
-- If it is large and dominated by neither, the scan is measuring the wrong thing
-  and REQ-26 is cut from the milestone with the count recorded here — which is
-  the honest outcome, and better than a scan hatched into meaninglessness.
-
-**To resolve**: Edit this section with the measured count and the decision, and
-remove the `<!-- OPEN -->` marker.
-<!-- /OPEN -->
+`BlockSchemas::extract` and `Compat::is_notable` were the two the issue lists,
+and both were `pub` with only `#[cfg(test)]` callers, which is why clippy was
+silent for both. The fear that motivated this question — that day being a library
+means many `pub fn`s legitimately have no in-crate caller — did not materialise,
+because a library item still appears in the production corpus at its definition
+*and* wherever the crate re-exports or calls it.
 
 ## Out of Scope
 
