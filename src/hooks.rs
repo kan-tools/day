@@ -28,6 +28,8 @@ const TELOS_EXCERPT: usize = 240;
 /// `.day/` cache, so the status line can render instantly instead of being
 /// cancelled mid-shell-out at Claude Code's 300ms cutoff. This is where the
 /// AC-5 guarantee earns real coverage: inference genuinely runs here.
+///
+/// fallback: hook-degrades-when-kan-cannot-read
 pub fn session_start(client: &KanClient, root: &Path) -> String {
     let mut out = String::from("## day — process layer\n\n");
 
@@ -181,6 +183,8 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         // rendering nothing for it would trade this defect for a worse one.
         // What must never happen is a `Result` becoming the statement, which is
         // the whole of F12.
+        //
+        // fallback: telos-without-a-declaration
         let statement = crate::fold::declaration(&claims);
 
         // An assessment enriches the line instead of replacing it — which is
@@ -330,6 +334,8 @@ fn position_cache_fingerprint(git: &Git, client: &KanClient) -> Option<String> {
 /// Infallible like the rest of the hook: a failed computation degrades to
 /// nothing rather than derailing the session, and a failed cache write leaves
 /// the status line showing its documented empty state.
+///
+/// fallback: hook-degrades-when-kan-cannot-read
 fn render_position(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
     let status = match crate::status::compute(client, &git) {
@@ -500,6 +506,8 @@ pub struct UnknownEvent(pub String);
 /// is the once-per-session *event* marker on top of that, and the status line
 /// is the visibility floor if `systemMessage` ever renders differently on
 /// SessionStart than it did where it was verified.
+///
+/// fallback: hook-degrades-when-kan-cannot-read
 pub fn session_notice(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
     let Ok(status) = crate::status::compute(client, &git) else {
@@ -541,6 +549,8 @@ pub fn session_notice(client: &KanClient, root: &Path) -> String {
 /// Emits nothing when there is nothing to say, and cannot fail: every error path
 /// degrades to empty output, because a hook that breaks a prompt would be the
 /// gate `telos/affordance-not-enforcement` forbids.
+///
+/// fallback: hook-degrades-when-kan-cannot-read
 pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
 

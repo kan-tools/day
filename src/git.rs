@@ -209,6 +209,8 @@ impl Git {
     /// It deliberately does **not** cover `claim` probes, which read the kan log
     /// — those need the expensive path (day#71), and day says so rather than
     /// implying live coverage it does not have.
+    ///
+    /// fallback: no-boundary-fingerprint
     pub fn position_fingerprint(&self) -> Result<String, Error> {
         use std::hash::{Hash, Hasher};
 
@@ -223,6 +225,8 @@ impl Git {
         // The tracked set, which is what the no-boundary fallback reads. Hashed
         // rather than inlined: a repo's file list is long, and this value is
         // written to the cache and compared, not read by a person.
+        //
+        // fallback: no-boundary-fingerprint
         let mut tracked = self.tracked_files("*").unwrap_or_default();
         tracked.sort();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();

@@ -647,6 +647,8 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // A missing witness schema is not an error here: it means position is
     // uncheckable, which the report says plainly. `assess` needs the schema
     // and errors without it; `status` degrades to "cannot infer".
+    //
+    // fallback: uncheckable-without-witness-schema
     let schema = match WitnessSchema::load(client) {
         Ok(schema) => schema,
         Err(crate::telos::Error::NotDeclared { .. }) => WitnessSchema::default(),
@@ -697,6 +699,8 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
     // A git read that fails leaves it `None`, which is the same state a repo
     // with no boundary is in — position falls back to its cumulative reading
     // rather than failing.
+    //
+    // fallback: no-release-boundary
     let boundary = git.cycle_boundary_matching(&cycle.tags).unwrap_or(None);
 
     // One read of the log, shared by every claim probe below.

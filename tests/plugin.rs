@@ -1297,7 +1297,7 @@ fn the_test_only_caller_scan_fires_and_can_be_hatched() {
             .to_string(),
     );
     assert_eq!(
-        pub_fns_with_only_test_callers(&[offender.clone()], &[]).len(),
+        pub_fns_with_only_test_callers(std::slice::from_ref(&offender), &[]).len(),
         1,
         "the scan must flag a pub fn reached only from a #[cfg(test)] module"
     );

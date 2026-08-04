@@ -145,6 +145,8 @@ pub fn standing(root: &Path) -> Option<Standing> {
     // An older cache with no cadence line falls back to the default rather than
     // failing the whole read: losing it costs a repetition, never a fact, which
     // is the same rule the rest of this file holds.
+    //
+    // fallback: stale-cache-without-cadence
     let cadence = lines
         .next()
         .and_then(|l| l.trim().parse().ok())

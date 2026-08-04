@@ -801,6 +801,11 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
 /// `day status-line` at a prompt must not have it block waiting for EOF on
 /// their terminal, and a harness always pipes JSON (or nothing) rather than a
 /// tty. An unparseable or dir-less payload falls back to the process cwd.
+///
+/// fallback-untested: four sub-states reach that `return fallback` — a tty,
+/// empty stdin, unparseable JSON, and JSON with no `current_dir` — and none has
+/// a fixture, because reaching them means driving the hidden `status-line` verb
+/// with a stdin no test builds today. day#130, rather than hatched silently.
 fn statusline_root(fallback: PathBuf) -> PathBuf {
     use std::io::{IsTerminal, Read};
 
