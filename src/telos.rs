@@ -540,6 +540,32 @@ impl Report {
                     ));
                 }
             }
+            // REQ-12. Three of day's four foundational teloi are witnessed
+            // entirely by `command` probes, because day's structural properties
+            // are evidenced by its own tests rather than by artifacts (day#86).
+            // Unauthorized, every one reports NOT RUN — which is correct, and
+            // leaves a reader looking at a telos with nothing material and no
+            // stated way to get any.
+            //
+            // Naming the invocation is deliberately ALL this does. RQ-10
+            // proposed making such a telos satisfiable another way, by counting
+            // a recorded assessment; RQ-11 rejected that, because a witness
+            // whose evidence is "someone said so" consumes a flattened verdict
+            // and makes the flattening durable. So: legibility, not a second
+            // route to green.
+            let unrun = self
+                .findings
+                .iter()
+                .filter(|f| matches!(f.verdict, Some(Verdict::NotRun(_))))
+                .count();
+            if unrun > 0 {
+                out.push_str(&format!(
+                    "\n  {unrun} witness(es) name a command that was not run, so nothing \
+                     material\n  was checked for them. To resolve them:\n    \
+                     day assess telos {} --run\n",
+                    self.telos
+                ));
+            }
         }
 
         if !self.prompts.is_empty() {
@@ -554,6 +580,19 @@ impl Report {
              To record it:\n{}\n",
             self.record_command
         ));
+        // AC-27. The exit code is a **lens** over the witness state above, not
+        // a property of the telos: a filter applied to get an up/down readout
+        // for a script or a status bar, derived on each invocation and never
+        // stored. Said out loud because the whole surface reads like a pass/fail
+        // otherwise, and a telos that can be permanently green is one whose
+        // assessment has been replaced by a token — which is exactly what RQ-11
+        // forbids a witness from consuming. day already refuses to store it;
+        // this is the report refusing to imply it.
+        out.push_str(
+            "\n  The exit code is a reading taken from the evidence above, not a verdict\n  \
+             stored on the telos. A telos is never permanently met: assess it again and\n  \
+             the answer is recomputed from whatever is true then.\n",
+        );
         out.push_str(
             "\n  Assessed within a single frame. Cross-frame reconciliation\n  \
              (docs/TELOS.md) is not checked and is not implied.\n",

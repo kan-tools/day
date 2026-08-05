@@ -643,3 +643,72 @@ fn an_any_of_group_fails_when_no_member_is_satisfied() {
         "a disjunction is not a way to never fail: {stdout}"
     );
 }
+
+/// AC-16 — **a telos witnessed only by commands names the exact invocation.**
+///
+/// Premise first, day#91-style: the fixture must genuinely be in the state
+/// where nothing material was checked, or the assertion is about a report that
+/// had evidence anyway.
+///
+/// This is REQ-12's whole answer, and it is deliberately only legibility. RQ-10
+/// proposed making such a telos satisfiable a second way -- by counting a
+/// recorded assessment -- and RQ-11 rejected it: a witness whose evidence is
+/// "someone said so" consumes a flattened verdict and makes the flattening
+/// durable.
+#[test]
+fn a_command_only_telos_names_the_run_invocation_it_needs() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("guarded", "bafyreit", &["passing-tests"]),
+            witness_schema("bafyreiw", r#"{"passing-tests":{"command":"true"}}"#),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "guarded"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        stdout.contains("[NOT RUN]"),
+        "premise: nothing material may have been checked: {stdout}"
+    );
+    assert!(
+        stdout.contains("day assess telos guarded --run"),
+        "the report must name the exact invocation, not just the flag: {stdout}"
+    );
+    // Absence of evidence is still not failure.
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
+
+/// AC-27 — **the report says its exit code is derived**, so a clean exit cannot
+/// be read as a durable property of the telos.
+///
+/// The fine-grained witness state is the assessment; the binary is a lens over
+/// it, recomputed per invocation and never stored. day already refuses to store
+/// one -- `kan result` on a telos is prose, not a boolean -- and this is the
+/// report refusing to imply one.
+#[test]
+fn the_report_says_its_verdict_is_a_reading_rather_than_a_stored_result() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("shipped", "bafyreit", &["published-artifact"]),
+            witness_schema("bafyreiw", r#"{"published-artifact":{"tag":"v*"}}"#),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &["v1.0.0"], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "shipped"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[MATERIAL]"),
+        "premise: this run must actually be clean, or the disclaimer is moot: {stdout}"
+    );
+    assert!(
+        stdout.contains("never permanently met"),
+        "a clean assessment must not read as a property the telos now has: {stdout}"
+    );
+}

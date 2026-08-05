@@ -84,11 +84,10 @@ declaring no witnesses (day#86).
 - [ ] AC-15: (REQ-1, REQ-4) A fallbacks-style test asserts its premise — that
   the fixture telos really declares no witnesses — before asserting the
   interview remedy is what gets rendered.
-- [ ] AC-16: (REQ-11) `day assess telos` with no `--run` reports at least one
-  material verdict for each of the four foundational teloi. This is satisfied by
-  the disjunctive group the companion pass adds, so it is the one criterion here
-  that lands only once that pass does — stated as a dependency rather than left
-  to be discovered.
+- [ ] AC-16: (REQ-11) `day assess telos` with no `--run` names the exact `--run`
+  invocation for each unrun command witness of the four foundational teloi, so
+  the material section is never empty without saying what would fill it. Per the
+  superseded RQ-4, this is legibility rather than a second route to green.
 
 ## Architecture
 
@@ -150,11 +149,16 @@ fix applied to the document that found it.
   the prospective case and `--revisits` from `assess-telos` for the retrospective
   one. Both are real occasions, and declaring only one leaves the other with no
   route to the atom.
-- RQ-4: The unrun-command problem (REQ-11) is served by the **disjunction** the
-  companion pass adds, not by new machinery here: a group whose members are the
-  command probe and a recorded assessment is satisfied either by running the
-  check or by someone having recorded that they did. Running guard probes at
-  assessment time was rejected — `--run` is one of the four rules bounding
+- RQ-4: ~~The unrun-command problem is served by the disjunction~~ —
+  **superseded**, by `.design/witness-model.md`'s RQ-11 and the kan claim that
+  records it. A recorded assessment cannot be the alternative member: the
+  `assessment` witness is scoped to `atom/*` and would report these teloi green
+  on unrelated evidence, it cannot be narrowed because `effective_probe` refuses
+  `--scope` on claim probes, and most generally **a witness must never be a
+  flattened verdict**. The four foundational teloi keep their command probes
+  alone and report `NOT RUN` by default; REQ-11 is met by naming the exact
+  `--run` invocation rather than by a second route to green. Running guard probes
+  at assessment time stays rejected — `--run` is one of the four rules bounding
   `src/probe.rs`.
 - RQ-5: A **disjunctive witness set is not expressible**, found by running this
   interview, and it is a separate design pass rather than a decision to take

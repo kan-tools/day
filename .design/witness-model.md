@@ -63,10 +63,14 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - REQ-12: A telos whose witnesses are all `command` probes is not silent by
   default. `src/probe.rs` correctly treats an unauthorized command as absence of
   evidence rather than failure, and the consequence is that three of day's four
-  foundational teloi show nothing material unless someone passes `--run`. This is
-  served by REQ-1's disjunction rather than by new machinery: a group whose
-  members are the command probe and a recorded assessment is satisfied either by
-  running the check or by someone having recorded that they did.
+  foundational teloi show nothing material unless someone passes `--run`. Per
+  RQ-11 this is answered by *naming the invocation*, not by making the telos
+  checkable some other way: the material section states the exact `--run` command
+  that would resolve each unrun witness. Legibility, not a second route to green.
+- REQ-19: No witness type is satisfied by the *existence* of a verdict. A probe
+  whose evidence is "someone recorded that this was met" consumes a flattened
+  assessment and makes the flattening durable, which is RQ-11's rule stated as a
+  requirement on `schema/witness` rather than as a principle.
 - REQ-13: The `verdict` witness's anchor is **declared, not compiled in**.
   `day review record` hardcodes the `adversarial review of` prefix, so a second
   review atom's verdict is unrecordable and is mislabelled into the first atom's
@@ -138,9 +142,15 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - [ ] AC-15: (REQ-11) The missing-witness-schema failure prints a starter block
   that can be pasted into a `kan observe` without editing, and a test asserts the
   printed block parses as a `day-witness` map.
-- [ ] AC-16: (REQ-12) A foundational telos declaring a disjunctive group whose
-  members are a `command` probe and a recorded assessment reports clean with no
-  `--run`, when the assessment exists and the command has not been authorized.
+- [ ] AC-16: (REQ-12) `day assess telos` with no `--run` prints the exact `--run`
+  invocation for each unrun command witness, and a telos whose witnesses are all
+  command probes never renders an empty material section.
+- [ ] AC-26: (REQ-19) A witness type whose probe matches a claim asserting a
+  telos was met is refused or reported, and a test drives the `{kind: Result}`
+  shape that RQ-10 would have declared.
+- [ ] AC-27: (REQ-19, RQ-11) `day assess telos` states that its exit code is a
+  reading derived from the witness state rather than a stored verdict, so a
+  reader cannot take a clean exit as a durable property of the telos.
 - [ ] AC-17: (REQ-13) The review anchor is read from a declaration; a second
   review atom declaring its own anchor records a verdict that resolves to that
   atom and not to the first.
@@ -268,12 +278,37 @@ polish — a witness nobody can see declared is not a witness.
   requirement with real machinery risk, so it is implemented after the other
   eight and can be dropped without unpicking them. It closes day#103's own case,
   open across two milestones and the reason the pair mechanism exists.
-- RQ-10: **The unrun-command problem is served by disjunction, not by new
-  machinery.** A group whose members are the command probe and a recorded
-  assessment is satisfied either by running the check or by someone having
-  recorded that they ran it. This makes the telos genuinely checkable by default
-  rather than merely better explained, and it is the first evidence that REQ-1
-  pays for itself beyond the case that prompted it.
+- RQ-10: ~~The unrun-command problem is served by disjunction~~ — **superseded
+  by RQ-11.** It proposed a group whose members were the command probe and a
+  recorded assessment. Kept here rather than rewritten, because the wrong turn
+  is the useful part: it read as obviously right and did not survive being
+  built.
+- RQ-11: **A witness must never be a flattened verdict, and a telos has no
+  permanent green.** RQ-10 fails three ways, in increasing depth. `assessment`
+  is `{kind: Result, subject: "atom/*"}` — an *atom* assessment, `[MATERIAL]` on
+  this repo today on the strength of one claim on `atom/assess-docs`, so it
+  would have reported three foundational teloi green on unrelated evidence. It
+  cannot be narrowed, because `effective_probe` ignores `--scope` for a claim
+  probe on the grounds that replacing its marker could *widen* what counts. And
+  the general reason: an assessment has fine-grained structure — which witnesses
+  resolved, how, against what — while "a `Result` exists" keeps one bit and
+  discards the rest. A witness consuming that bit makes the flattening durable,
+  and the telos is green forever because somebody once said so.
+
+  So the binary is a **lens**: a filter over the fine-grained witness state to
+  get an up/down readout for an exit code or a status bar, derived per
+  invocation and never stored. day is already partly this shape — `kan result`
+  on a telos is prose rather than a boolean, `is_clean` counts only material
+  `Unsatisfied` so absence of evidence cannot fail a telos, and the render
+  refuses a cross-frame reading. What is missing is that nothing says so, and
+  nothing stops a witness type from being a flattened verdict.
+
+  REQ-12 is therefore re-answered with the option RQ-10 rejected: render the
+  exact `--run` invocation where the material section would otherwise be empty.
+  The four foundational teloi carry their command probes alone and report
+  `NOT RUN` by default, which is honest — day#86 predicted that day's
+  foundational properties are evidenced by its own tests, and a test's evidence
+  is running it.
 
 ## Out of Scope
 
