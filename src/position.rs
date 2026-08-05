@@ -134,6 +134,12 @@ pub fn resolve_corresponding(
         // to a cycle would weaken it to "every design recorded since the last
         // release", which goes quiet exactly while a milestone is in progress.
         (Probe::Every(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
+        // Cumulative, and never executing: `evaluate` carries the same
+        // `Authorization::Report` every other inference read does, so a
+        // forbidden *command* reports NOT RUN here exactly as a positive one
+        // would. Absence is a standing property rather than a cycle's work, so
+        // narrowing it to a boundary would answer a different question.
+        (Probe::Absent(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
         // No boundary — the cumulative reading. A claim probe is handled here
         // rather than falling into `evaluate` so it can still report a read it
         // could not make: `evaluate` has nowhere to put one.

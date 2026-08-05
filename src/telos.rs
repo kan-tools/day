@@ -551,6 +551,16 @@ fn effective_probe(probe: &Probe, scope: Option<&String>) -> (Probe, Option<Stri
                  `subject_with` anchor, and there is no single pattern to replace"
             )),
         ),
+        // Same reason once more: an absence wraps two probes and has no single
+        // pattern argument. Narrowing the inner one from here would also let a
+        // telos redefine what is forbidden, which is a wider power than scope.
+        Probe::Absent(_) => (
+            probe.clone(),
+            Some(format!(
+                "scope `{scope}` ignored: an `absent` probe wraps its own probes, and \
+                 there is no single pattern to replace"
+            )),
+        ),
         Probe::Command(_) => (
             probe.clone(),
             Some(format!(

@@ -97,6 +97,61 @@ pub enum Probe {
     /// so it tracks the property instead of accumulating toward it.
     #[serde(rename = "every")]
     Every(Universal),
+    /// **The forbidden thing is not there.** Every probe above is an existence
+    /// check, so a telos satisfied by an *absence* — day#125's "our tooling
+    /// leaves no trace on repositories we are guests in" — was unprobeable in
+    /// principle.
+    ///
+    /// Absence invariants are a real class and a natural one for process
+    /// discipline: no secrets committed, no vendored copies, no build outputs
+    /// tracked, no `TODO` in mainline. None of them was expressible.
+    ///
+    /// A wrapper rather than a `"negate": true` flag beside a probe, which is
+    /// what day#125 sketched: [`Probe`] is an externally-tagged enum, so
+    /// `{"path": …, "negate": true}` is not a shape serde can read. The
+    /// substance of that proposal survives — the inner probe's evaluation is
+    /// reused rather than duplicated.
+    #[serde(rename = "absent")]
+    Absent(Absence),
+}
+
+/// An absence, and what makes claiming it meaningful.
+///
+/// **The `given` half is required, and it is the whole design.** A negated probe
+/// is satisfied by everything that does not exist, which is the cannot-fail
+/// problem day#86 names, inverted. Something has to establish that the forbidden
+/// thing *could* have happened, or "it is not there" is a fact about an empty
+/// world.
+///
+/// Deciding that from history was the intuitive rule and is wrong: if day left
+/// no trace in a guest tree, there is no history of a trace either, so the probe
+/// would report vacuous forever — precisely when the telos is genuinely held.
+/// Absence of the artifact is also absence of the evidence that anything could
+/// have produced it. A companion positive witness has no such circularity, and
+/// it is not git-shaped, so it answers `claim` and `command` negation on the
+/// same terms.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Absence {
+    /// What must NOT be found.
+    pub forbidden: Box<Probe>,
+    /// What establishes the forbidden thing could have occurred. Until this
+    /// resolves, the absence is [`Verdict::Vacuous`].
+    pub given: Box<Probe>,
+    /// Which non-zero exit of a *forbidden* command means "ran and found
+    /// nothing" — **required** when `forbidden` is a command probe.
+    ///
+    /// `run_command` maps every non-zero exit to `Unsatisfied`, which is
+    /// conservative for an existence check and a **false clean** once inverted:
+    /// `grep -r SECRET srcc/` exits 2 for a mistyped path exactly as it exits 1
+    /// for finding nothing, so the secret would report absent (day#137). Any
+    /// other non-zero code is [`Verdict::Error`], never satisfied.
+    ///
+    /// It lives here rather than on [`Probe::Command`] because it only means
+    /// anything under negation — a positive command probe is satisfied by exit
+    /// zero and has no use for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub found_nothing_exit: Option<i32>,
 }
 
 /// The two halves of an [`Probe::Every`]: which subjects are in scope, and what
@@ -475,6 +530,7 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
         // it to "every design recorded since the last release", which goes
         // quiet exactly while a milestone is in progress.
         Probe::Every(universal) => every_subject(universal, log),
+        Probe::Absent(absence) => evaluate_absence(absence, git, log, auth),
     }
 }
 
@@ -609,7 +665,93 @@ pub fn instances(probe: &Probe, git: &Git) -> Option<Vec<String>> {
     match probe {
         Probe::Tag(pattern) => git.tags_matching(pattern).ok(),
         Probe::Path(pathspec) => git.tracked_files(pathspec).ok(),
-        Probe::Command(_) | Probe::Claim(_) | Probe::Every(_) => None,
+        Probe::Command(_) | Probe::Claim(_) | Probe::Every(_) | Probe::Absent(_) => None,
+    }
+}
+
+/// Evaluates a [`Probe::Absent`]: the forbidden thing is not there, and
+/// something establishes it could have been.
+///
+/// Order matters. The `given` half is checked **first**, so a project that has
+/// not yet done the thing the telos is about reports `VACUOUS` rather than a
+/// satisfaction it did not earn. Checking `forbidden` first and then qualifying
+/// it would leave the satisfied-by-an-empty-world reading on screen.
+fn evaluate_absence(
+    absence: &Absence,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    auth: Authorization,
+) -> Verdict {
+    match evaluate(&absence.given, git, log, auth) {
+        Verdict::Satisfied(_) => {}
+        // Not "unsatisfied": nothing about the telos was established either
+        // way. Distinguishing them is the point of having the verdict.
+        Verdict::Unsatisfied(detail) => {
+            return Verdict::Vacuous(format!(
+                "nothing establishes this could have happened ({detail}), so its absence \
+                 shows only that the situation never arose"
+            ))
+        }
+        // A `given` that could not be read leaves the absence unanswerable, and
+        // that outranks reporting it clean.
+        other => {
+            return Verdict::Error(format!(
+                "the precondition for this absence could not be established: {}",
+                other.detail()
+            ))
+        }
+    }
+
+    // A forbidden command needs its exit code declared, or a mistyped pathspec
+    // reads as "found nothing" (day#137). Refused before running, so the error
+    // does not depend on what the command happened to do.
+    if let Probe::Command(argv) = absence.forbidden.as_ref() {
+        let Some(expected) = absence.found_nothing_exit else {
+            return Verdict::Error(format!(
+                "`{argv}` is forbidden but declares no `found_nothing_exit`, so day cannot \
+                 tell \"ran and found nothing\" from \"failed for another reason\" -- and \
+                 reading the second as the first would report the forbidden thing absent"
+            ));
+        };
+        let Authorization::Run { timeout } = auth else {
+            return Verdict::NotRun(format!(
+                "would run `{argv}` to check it finds nothing -- re-run with --run"
+            ));
+        };
+        return match run_command_status(argv, git.root(), timeout) {
+            CommandOutcome::Exited(0) => {
+                Verdict::Unsatisfied(format!("`{argv}` exited 0 -- it found what is forbidden"))
+            }
+            CommandOutcome::Exited(code) if code == expected => {
+                Verdict::Satisfied(format!("`{argv}` exited {code}: nothing forbidden found"))
+            }
+            CommandOutcome::Exited(code) => Verdict::Error(format!(
+                "`{argv}` exited {code}, which is neither 0 nor the declared \
+                 `found_nothing_exit` of {expected} -- it failed for some other reason, and \
+                 treating that as \"found nothing\" is exactly the false clean this guards"
+            )),
+            CommandOutcome::NoStatus => {
+                Verdict::Error(format!("`{argv}` was killed before it exited"))
+            }
+            CommandOutcome::TimedOut => {
+                Verdict::TimedOut(format!("`{argv}` exceeded {}s", timeout.as_secs()))
+            }
+            CommandOutcome::Failed(why) => Verdict::Error(why),
+        };
+    }
+
+    match evaluate(&absence.forbidden, git, log, auth) {
+        Verdict::Satisfied(detail) => {
+            Verdict::Unsatisfied(format!("the forbidden thing is present: {detail}"))
+        }
+        Verdict::Unsatisfied(detail) => {
+            Verdict::Satisfied(format!("absent, as required ({detail})"))
+        }
+        // Everything else is a read that did not happen. Inverting one would
+        // turn "day could not look" into "day looked and it was clean", which
+        // is the inversion `telos/honest-reads` exists to forbid — and the
+        // direction negation makes dangerous.
+        other => other,
     }
 }
 
@@ -882,10 +1024,41 @@ fn summarize(files: &[String], pathspec: &str) -> String {
 /// `echo` with the literal arguments `hi;`, `rm`, `-rf`, `/`. That costs
 /// pipelines and redirection in probe definitions, which is the right trade
 /// for a check whose entire value is being hard to game.
+/// What a command probe's process actually did, before it is read as evidence.
+///
+/// Separated from [`run_command`]'s `Verdict` because negation needs the exit
+/// code itself. `Verdict::Unsatisfied` carries prose for a human — "`grep …`
+/// exited 1" — and recovering a number from a sentence is the mistake this
+/// milestone already refused for correspondence.
+#[derive(Debug, PartialEq, Eq)]
+enum CommandOutcome {
+    Exited(i32),
+    /// Killed by a signal, so there is no code to compare against.
+    NoStatus,
+    TimedOut,
+    Failed(String),
+}
+
 fn run_command(argv: &str, cwd: &Path, timeout: Duration) -> Verdict {
+    match run_command_status(argv, cwd, timeout) {
+        CommandOutcome::Exited(0) => Verdict::Satisfied(format!("`{argv}` exited 0")),
+        CommandOutcome::Exited(code) => {
+            Verdict::Unsatisfied(format!("`{argv}` exited with status {code}"))
+        }
+        CommandOutcome::NoStatus => {
+            Verdict::Unsatisfied(format!("`{argv}` was killed before it exited"))
+        }
+        CommandOutcome::TimedOut => {
+            Verdict::TimedOut(format!("`{argv}` exceeded {}s", timeout.as_secs()))
+        }
+        CommandOutcome::Failed(why) => Verdict::Error(why),
+    }
+}
+
+fn run_command_status(argv: &str, cwd: &Path, timeout: Duration) -> CommandOutcome {
     let mut parts = argv.split_whitespace();
     let Some(program) = parts.next() else {
-        return Verdict::Error("probe command is empty".to_string());
+        return CommandOutcome::Failed("probe command is empty".to_string());
     };
     let args: Vec<&str> = parts.collect();
 
@@ -902,28 +1075,27 @@ fn run_command(argv: &str, cwd: &Path, timeout: Duration) -> Verdict {
 
     let mut child = match child {
         Ok(c) => c,
-        Err(e) => return Verdict::Error(format!("could not run `{argv}`: {e}")),
+        Err(e) => return CommandOutcome::Failed(format!("could not run `{argv}`: {e}")),
     };
 
     let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                return if status.success() {
-                    Verdict::Satisfied(format!("`{argv}` exited 0"))
-                } else {
-                    Verdict::Unsatisfied(format!("`{argv}` exited {status}"))
+                return match status.code() {
+                    Some(code) => CommandOutcome::Exited(code),
+                    None => CommandOutcome::NoStatus,
                 };
             }
             Ok(None) => {}
-            Err(e) => return Verdict::Error(format!("could not wait on `{argv}`: {e}")),
+            Err(e) => return CommandOutcome::Failed(format!("could not wait on `{argv}`: {e}")),
         }
         if Instant::now() >= deadline {
             // Kill and reap, so the probe cannot outlive the assessment as
             // an orphan holding the terminal.
             let _ = child.kill();
             let _ = child.wait();
-            return Verdict::TimedOut(format!("`{argv}` exceeded {}s", timeout.as_secs()));
+            return CommandOutcome::TimedOut;
         }
         std::thread::sleep(POLL);
     }

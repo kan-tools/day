@@ -712,3 +712,213 @@ fn the_report_says_its_verdict_is_a_reading_rather_than_a_stored_result() {
         "a clean assessment must not read as a property the telos now has: {stdout}"
     );
 }
+
+/// Writes a script that exits with `code`, for the negated-command cases.
+/// A file rather than `sh -c "exit N"`: argv is split on whitespace and exec'd
+/// directly, which is guardrail 1 and the reason day#125's `test -z "$(...)"`
+/// workaround is correctly unexpressible.
+fn exits_with(dir: &Path, name: &str, code: i32) -> std::path::PathBuf {
+    let script = dir.join(name);
+    std::fs::write(&script, format!("#!/bin/sh\nexit {code}\n")).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
+}
+
+/// REQ-4/REQ-5 — **an absence is probeable, and is `VACUOUS` without a
+/// precondition.**
+///
+/// day#125's guest-tree telos -- "our tooling leaves no trace on repositories we
+/// are guests in" -- is satisfied by the *absence* of tracked files, and every
+/// probe day had was an existence check. All three states are driven, because
+/// the middle one is what makes the other two mean anything.
+#[test]
+fn an_absence_is_probeable_and_vacuous_without_its_precondition() {
+    let probes = r#"{"leaves-no-trace": {"absent": {
+        "forbidden": {"path": ".kan/*"},
+        "given": {"claim": {"kind": "Decision"}}
+    }}}"#;
+    let run = |dir: &Path, claims: Vec<StubClaim>, tracked: &[&str]| {
+        let mut all = vec![
+            telos_claim("guest", "bafyreit", &["leaves-no-trace"]),
+            witness_schema("bafyreiw", probes),
+        ];
+        all.extend(claims);
+        let kan = write_kan_stub(dir, &all);
+        let git = write_git_stub(dir, &[], tracked);
+        let out = day(dir, &kan, &git, &["assess", "telos", "guest"]);
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            out.status.code(),
+        )
+    };
+    let worked = || {
+        vec![common::decision_claim(
+            "some/work",
+            "bafyreid",
+            "We did work here.",
+            10,
+        )]
+    };
+
+    // (1) VACUOUS — day never ran here, so the absence of its files shows only
+    // that the situation never arose. Deciding this from git history instead
+    // would report vacuous FOREVER, because leaving no trace also leaves no
+    // history of a trace.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = run(dir.path(), vec![], &[]);
+    assert!(
+        stdout.contains("[VACUOUS]"),
+        "absence without a precondition establishes nothing: {stdout}"
+    );
+    assert_eq!(code, Some(0), "vacuous is not a failure: {stdout}");
+
+    // (2) SATISFIED — work happened here and left nothing tracked.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = run(dir.path(), worked(), &["src/lib.rs"]);
+    assert!(stdout.contains("[MATERIAL]"), "{stdout}");
+    assert!(stdout.contains("absent, as required"), "{stdout}");
+    assert_eq!(code, Some(0), "{stdout}");
+
+    // (3) UNSATISFIED — work happened and left a trace. The telos is violated,
+    // and this is the state the whole probe exists to reach.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = run(dir.path(), worked(), &[".kan/seed-id"]);
+    assert!(
+        stdout.contains("[MISSING]") && stdout.contains("forbidden thing is present"),
+        "{stdout}"
+    );
+    assert_eq!(code, Some(1), "{stdout}");
+}
+
+/// day#137 / REQ-18 — **a forbidden command must declare which non-zero exit
+/// means "found nothing", and any other code is an error rather than a pass.**
+///
+/// `run_command` maps every non-zero exit to `Unsatisfied`, which is
+/// conservative for an existence check and a false clean once inverted: a
+/// mistyped pathspec exits non-zero exactly as "searched and found nothing"
+/// does, so the forbidden thing would report absent.
+#[test]
+fn a_forbidden_command_must_declare_what_finding_nothing_looks_like() {
+    let telos_and_schema = |dir: &Path, probe: &str| {
+        let kan = write_kan_stub(
+            dir,
+            &[
+                telos_claim("clean", "bafyreit", &["no-secrets"]),
+                witness_schema("bafyreiw", &format!(r#"{{"no-secrets": {probe}}}"#)),
+                common::decision_claim("some/work", "bafyreid", "Work happened.", 10),
+            ],
+        );
+        let git = write_git_stub(dir, &[], &[]);
+        (kan, git)
+    };
+
+    // Undeclared: refused before running, so the error cannot depend on what
+    // the command happened to do.
+    let dir = tempfile::tempdir().unwrap();
+    let scan = exits_with(dir.path(), "scan.sh", 1);
+    let (kan, git) = telos_and_schema(
+        dir.path(),
+        &format!(
+            r#"{{"absent": {{"forbidden": {{"command": "{}"}},
+                            "given": {{"claim": {{"kind": "Decision"}}}}}}}}"#,
+            scan.display()
+        ),
+    );
+    let out = day(
+        dir.path(),
+        &kan,
+        &git,
+        &["assess", "telos", "clean", "--run"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[ERROR]") && stdout.contains("found_nothing_exit"),
+        "an undeclared exit code must refuse, not guess: {stdout}"
+    );
+
+    // Declared, and the command exits with it: the forbidden thing is absent.
+    let dir = tempfile::tempdir().unwrap();
+    let scan = exits_with(dir.path(), "scan.sh", 1);
+    let (kan, git) = telos_and_schema(
+        dir.path(),
+        &format!(
+            r#"{{"absent": {{"forbidden": {{"command": "{}"}},
+                            "given": {{"claim": {{"kind": "Decision"}}}},
+                            "found_nothing_exit": 1}}}}"#,
+            scan.display()
+        ),
+    );
+    let out = day(
+        dir.path(),
+        &kan,
+        &git,
+        &["assess", "telos", "clean", "--run"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[MATERIAL]"), "{stdout}");
+
+    // day#137's case: the command fails for a DIFFERENT reason. Exit 2 is not
+    // the declared "found nothing", and reporting it as absent is the false
+    // clean this guards.
+    let dir = tempfile::tempdir().unwrap();
+    let broken = exits_with(dir.path(), "scan.sh", 2);
+    let (kan, git) = telos_and_schema(
+        dir.path(),
+        &format!(
+            r#"{{"absent": {{"forbidden": {{"command": "{}"}},
+                            "given": {{"claim": {{"kind": "Decision"}}}},
+                            "found_nothing_exit": 1}}}}"#,
+            broken.display()
+        ),
+    );
+    let out = day(
+        dir.path(),
+        &kan,
+        &git,
+        &["assess", "telos", "clean", "--run"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[ERROR]") && stdout.contains("neither 0 nor"),
+        "a command that failed for another reason must not read as \"found nothing\": {stdout}"
+    );
+    assert!(
+        !stdout.contains("[MATERIAL]"),
+        "and it must certainly not report the forbidden thing absent: {stdout}"
+    );
+}
+
+/// A forbidden command is not executed without `--run`, exactly as a positive
+/// one is not. Negation widens what can be *expressed*, never what runs.
+#[test]
+fn a_forbidden_command_is_not_run_without_authorization() {
+    let dir = tempfile::tempdir().unwrap();
+    let sentinel = dir.path().join("it-ran");
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("clean", "bafyreit", &["no-secrets"]),
+            witness_schema(
+                "bafyreiw",
+                &format!(
+                    r#"{{"no-secrets": {{"absent": {{
+                        "forbidden": {{"command": "touch {}"}},
+                        "given": {{"claim": {{"kind": "Decision"}}}},
+                        "found_nothing_exit": 1}}}}}}"#,
+                    sentinel.display()
+                ),
+            ),
+            common::decision_claim("some/work", "bafyreid", "Work happened.", 10),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "clean"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[NOT RUN]"), "{stdout}");
+    assert!(
+        !sentinel.exists(),
+        "a forbidden command executed without --run: {stdout}"
+    );
+}

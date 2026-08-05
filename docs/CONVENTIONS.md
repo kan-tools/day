@@ -590,6 +590,59 @@ recorded". An unanswerable comparison is never silence.
 file cannot witness a telos — being committed is the stronger claim, and it
 costs no new dependency.
 
+**An `absent` probe witnesses something that is *not* there.** Every other probe
+is an existence check, so a telos satisfied by an absence — *"our tooling leaves
+no trace on repositories we are guests in"* — was unprobeable in principle
+(day#125). Absence invariants are a real class: no secrets committed, no
+vendored copies, no build outputs tracked, no `TODO` in mainline.
+
+```day-witness
+{
+  "leaves-no-trace": {"absent": {
+    "forbidden": {"path": ".kan/*"},
+    "given":     {"claim": {"kind": "Decision"}}
+  }}
+}
+```
+
+**`given` is required, and it is the whole design.** An absence is satisfied by
+everything that does not exist, which is "a witness that cannot fail" inverted.
+Something has to establish the forbidden thing *could* have happened, or "it is
+not there" is a fact about an empty world. Until `given` resolves, the witness
+reports **`VACUOUS`**.
+
+Deciding that from git history is the intuitive rule and is wrong: if the tooling
+left no trace, there is no history of a trace either, so the probe would report
+vacuous forever — exactly when the telos is genuinely held. A companion positive
+probe has no such circularity and is not git-shaped, so it works for `claim` and
+`command` alike.
+
+A **forbidden `command`** must declare `found_nothing_exit`:
+
+```day-witness
+{
+  "no-secrets": {"absent": {
+    "forbidden": {"command": "scripts/scan-secrets.sh"},
+    "given":     {"claim": {"kind": "Decision"}},
+    "found_nothing_exit": 1
+  }}
+}
+```
+
+A command probe normally reads exit zero as satisfied and *any* non-zero as not,
+which is conservative when it is an existence check and a **false clean** once
+inverted — a mistyped pathspec exits non-zero exactly as "searched and found
+nothing" does. So a forbidden command says which code means it ran and found
+nothing; exit 0 means the forbidden thing is present, and any other code is an
+error rather than a pass. Without the declaration the witness is refused before
+running.
+
+Negation widens what can be *expressed*, never what runs: a forbidden command
+reports `NOT RUN` without `--run`, exactly as a positive one does. Everything
+day cannot read — an error, a timeout, an unrun command — passes through
+uninverted, because turning "day could not look" into "day looked and it was
+clean" is the one direction negation makes dangerous.
+
 **An `every` probe is the one that can fail.** Every probe above asks *does one
 exist*, and over an append-only log that question can only start answering yes
 and never stop. A witness built from existence checks reports its telos met
