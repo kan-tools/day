@@ -560,3 +560,87 @@ fn a_one_member_witness_any_is_refused() {
         "nothing should be recorded for a refused declaration"
     );
 }
+
+/// day#138 — **a witness that cannot fail is reported at declare time.**
+///
+/// `telos/legible-process` was declared with three witnesses that were all
+/// already satisfied on this repo, so it reported met forever — day#86's own
+/// objection, inside the declaration written to close day#86. Nothing said so
+/// until someone assessed the telos and read the numbers.
+///
+/// A `claim` probe is the structural case: kan is append-only and day never
+/// retracts, so a claim that matched once matches forever. That is the
+/// guarantee day is built on, read as a limitation.
+#[test]
+fn a_witness_that_cannot_fail_is_reported_when_it_is_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyreiw",
+                "Probes.\n\n```day-witness\n{\"verdict\":{\"claim\":{\"kind\":\"Decision\"}}}\n```\n",
+            ),
+            // Premise: a matching claim must already exist, or "already
+            // satisfied" is not the state under test.
+            claim("some/subject", "bafyreid", "A decision."),
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "t",
+            "Statement.",
+            "--witness",
+            "verdict",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "reported, never refused -- affordance, not enforcement: {stdout}"
+    );
+    assert!(
+        stdout.contains("declared `telos/t`"),
+        "the declaration still happens: {stdout}"
+    );
+    assert!(
+        stdout.contains("cannot stop being satisfied"),
+        "an append-only probe cannot report absent once satisfied: {stdout}"
+    );
+    assert!(stdout.contains("day#86"), "{stdout}");
+}
+
+/// The other half: a witness with no probe is named, which is day#125's
+/// friction 2 — four teloi were declared with witnesses and the fact that none
+/// was checkable surfaced much later, at `day status`.
+#[test]
+fn a_witness_with_no_declared_probe_is_named_at_declare_time() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "t",
+            "Statement.",
+            "--witness",
+            "certificate",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("certificate") && stdout.contains("no probe is declared"),
+        "a witness with nothing behind it must be named when it is written, not \
+         discovered at `day status` later: {stdout}"
+    );
+}

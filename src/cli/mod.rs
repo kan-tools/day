@@ -432,6 +432,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             // Witnesses are appended as a block only when given, so a telos
             // stays a plain statement unless it opts into being a
             // machine-checkable bridge target.
+            let groups_for_caution = groups.clone();
             let text = if groups.is_empty() && scopes.is_empty() {
                 statement.clone()
             } else {
@@ -454,6 +455,23 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 },
             )?;
             print!("{}", outcome.render());
+            // After the declaration, never instead of it. day#138: three
+            // witnesses were declared that could not fail, and nothing said so
+            // until someone assessed the telos and read the numbers.
+            let types: Vec<String> = groups_for_caution
+                .iter()
+                .flat_map(|g| {
+                    g.members()
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            let git = crate::git::Git::new(cwd.clone());
+            print!(
+                "{}",
+                crate::telos::render_cautions(&crate::telos::cautions(&client, &git, &types)?)
+            );
             Ok(ExitCode::SUCCESS)
         }
         // Emits both a claim and a pair of edges. The claim carries the

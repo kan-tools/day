@@ -78,6 +78,144 @@ pub fn unwitnessed_remedy(slug: &str, consequence: &str) -> String {
     )
 }
 
+/// Whether a probe's evidence, once found, can ever stop being found.
+///
+/// **Structural for `claim`, and only for `claim`.** kan is append-only and day
+/// never retracts, so a claim that matched once matches forever — the guarantee
+/// day is built on, read as a limitation. A `path` or `tag` probe *can* stop
+/// matching (files get deleted, tags get moved), so calling those monotone would
+/// be a heuristic dressed as a fact. A `command` probe is the opposite: going
+/// red is exactly what it is for.
+///
+/// This is the vacuity guard from the other side. A negated probe that can never
+/// fire is vacuous; a positive probe that can never stop firing is equally
+/// uninformative. Both are "this witness cannot distinguish".
+pub fn is_monotone(probe: &Probe) -> bool {
+    matches!(probe, Probe::Claim(_))
+}
+
+/// A reason a declared witness will not distinguish work done from here.
+///
+/// Reported, never refused: `telos/affordance-not-enforcement` governs day's own
+/// verbs, and a project may legitimately want a floor-style witness knowing it
+/// is already met.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Caution {
+    pub witness: String,
+    /// The probe resolves right now, so the telos is born green on this
+    /// witness and it cannot evidence anything done afterwards.
+    pub already_satisfied: bool,
+    /// And it can never stop resolving. Together with the above this is
+    /// day#86's "a witness that cannot fail", established rather than guessed.
+    pub monotone: bool,
+    /// No probe is declared for the type, so nothing could be checked. day#125
+    /// declared four teloi with witnesses and found out much later, at
+    /// `day status`, that none of them was checkable.
+    pub no_probe: bool,
+}
+
+/// Evaluates declared witness types at declare time and reports what will not
+/// distinguish.
+///
+/// **Command probes are never run here.** `--run` is opt-in per invocation and
+/// declaring is not that invocation, so a command witness is left unevaluated
+/// rather than executed — the same line `path`/`tag`/`claim` versus `command`
+/// is drawn at session start. The consequence is that a command-witnessed telos
+/// gets no already-satisfied reading, which is correct: whether a test passes
+/// today says nothing about whether it can fail.
+pub fn cautions(
+    client: &KanClient,
+    git: &Git,
+    witnesses: &[String],
+) -> Result<Vec<Caution>, Error> {
+    if witnesses.is_empty() {
+        return Ok(Vec::new());
+    }
+    let schema = match WitnessSchema::load(client) {
+        Ok(schema) => schema,
+        // A project with no witness schema yet is the fresh-repo state, and
+        // "you have no probes at all" is `day status`'s message to give, not
+        // this one's. Every witness reports `no_probe`, which is the honest
+        // reading and is what day#125 asked for.
+        // kan-read-may-degrade: an absent schema is a state, not a read failure
+        Err(Error::NotDeclared { .. }) => WitnessSchema::default(),
+        Err(e) => return Err(e),
+    };
+    let log = ClaimLog::new(client);
+    let mut out = Vec::new();
+    for witness in witnesses {
+        let Some(probe) = schema.probes.get(witness) else {
+            out.push(Caution {
+                witness: witness.clone(),
+                already_satisfied: false,
+                monotone: false,
+                no_probe: true,
+            });
+            continue;
+        };
+        let monotone = is_monotone(probe);
+        let already_satisfied = match probe {
+            Probe::Command(_) => false,
+            _ => matches!(
+                probe::evaluate(probe, git, &log, Authorization::Report),
+                Verdict::Satisfied(_)
+            ),
+        };
+        if already_satisfied || monotone {
+            out.push(Caution {
+                witness: witness.clone(),
+                already_satisfied,
+                monotone,
+                no_probe: false,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// How `day telos declare` reports [`cautions`]. Empty when there is nothing
+/// to say, so a clean declaration prints nothing extra.
+pub fn render_cautions(cautions: &[Caution]) -> String {
+    if cautions.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("\n  Declared, and worth knowing:\n");
+    for c in cautions {
+        if c.no_probe {
+            out.push_str(&format!(
+                "    {}: no probe is declared for this type in `schema/witness`, so it\n      \
+                 cannot be checked yet. The declaration is still valid.\n",
+                c.witness
+            ));
+        } else if c.already_satisfied && c.monotone {
+            out.push_str(&format!(
+                "    {}: already satisfied, and cannot stop being satisfied -- it reads\n      \
+                 the append-only log, so nothing can take this evidence away. This\n      \
+                 witness cannot fail, which day#86 holds is worse than none.\n",
+                c.witness
+            ));
+        } else if c.already_satisfied {
+            out.push_str(&format!(
+                "    {}: already satisfied, so the telos is met on this witness before any\n      \
+                 work is done. It cannot evidence anything from here.\n",
+                c.witness
+            ));
+        } else {
+            out.push_str(&format!(
+                "    {}: reads the append-only log, so once satisfied it cannot report\n      \
+                 absent again.\n",
+                c.witness
+            ));
+        }
+    }
+    out.push_str(
+        "  Nothing is refused -- a floor you know is already met is a legitimate\n  \
+         thing to declare. Said because a witness that cannot fail is the one\n  \
+         failure mode a telos cannot recover from on its own.\n",
+    );
+    out
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
