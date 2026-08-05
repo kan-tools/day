@@ -17,6 +17,23 @@ jobs:
     environment: crates-io
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history and every branch ref, for the same reason `ci.yml` gives:
+          # a test in the suite this job re-runs needs them.
+          #
+          # `every_commit_is_accounted_for_under_the_demonstration_rule` asks the
+          # commit census what is unaccounted between `main` and HEAD. At a TAG
+          # checkout with the default fetch depth there is no `main` and no
+          # `origin/main`, so the census correctly reports COULD-NOT-CHECK and
+          # the test correctly refuses to call that a pass — and the release does
+          # not publish. That is the census being right and the environment being
+          # wrong.
+          #
+          # Found by v0.11.0-beta.1's own release failing to publish. It is the
+          # FIFTH context in this milestone where a check met a mode this repo is
+          # never in, and the third distinct CI context where this particular
+          # base resolution had to be taught one (PR head, push to main, tag).
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:

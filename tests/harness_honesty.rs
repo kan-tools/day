@@ -990,3 +990,56 @@ fn the_census_reports_an_unresolvable_range_as_could_not_check() {
         "and it must not crash: a stack trace is not a verdict.\n{text}"
     );
 }
+
+/// **Every workflow that runs the suite fetches what the suite needs.**
+///
+/// `every_commit_is_accounted_for_under_the_demonstration_rule` asks the census
+/// for the range between `main` and HEAD. A checkout without full history has
+/// neither `main` nor `origin/main`, so the census reports could-not-check and
+/// the test refuses to call that a pass — correctly, and the job fails.
+///
+/// That is not hypothetical and not cheap: `release.yml` had the default depth,
+/// so `v0.11.0-beta.1` was tagged and **did not publish**. `ci.yml` passed at the
+/// same tag, because it already fetched full history. One workflow had been
+/// taught and the other had not, which is a guarantee wired at one call site —
+/// day#101 — expressed in YAML.
+#[test]
+fn every_workflow_that_runs_the_suite_fetches_full_history() {
+    let mut offenders = Vec::new();
+    let mut checked = 0;
+    for entry in std::fs::read_dir(repo_root().join(".github/workflows"))
+        .unwrap()
+        .flatten()
+    {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "yml") {
+            continue;
+        }
+        let yaml = std::fs::read_to_string(&path).unwrap();
+        // Only workflows that actually run the suite need the refs.
+        if !yaml.contains("cargo test --workspace") {
+            continue;
+        }
+        checked += 1;
+        if !yaml.contains("fetch-depth: 0") {
+            offenders.push(path.display().to_string());
+        }
+    }
+    // premise: at least one workflow runs the suite, or this is complete about
+    // nothing. That is the vacuity the whole milestone is about, and the first
+    // draft of this test guarded it with `|| true`, which is worse than not
+    // guarding it.
+    assert!(
+        checked > 0,
+        "could not check: no workflow was found running `cargo test --workspace`"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these workflows run `cargo test --workspace` without full history: \
+         {offenders:?}\n\n\
+         The census needs `main` or `origin/main` to take a merge base from, and \
+         a shallow checkout has neither — so the suite fails with a \
+         could-not-check. v0.11.0-beta.1 was tagged and did not publish for \
+         exactly this."
+    );
+}
