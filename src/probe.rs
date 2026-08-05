@@ -251,6 +251,20 @@ pub struct ClaimShape {
     /// to "not recorded".
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mentions_material: bool,
+    /// Evidence **not authored by** this identity — a `did:key:…`, or the
+    /// sentinel `"self"` for whoever is running day.
+    ///
+    /// A telos about adoption, review, or anyone else's judgement is otherwise
+    /// satisfiable by the person who declared it. day#86 holds that a witness
+    /// which cannot fail is worse than none; a witness its own author can
+    /// satisfy at will is the same defect with a person in the loop.
+    ///
+    /// `"self"` is resolved before matching, not here, and a run that cannot
+    /// establish its own identity reports [`Verdict::Error`] rather than
+    /// matching everything — an exclusion that silently stops excluding is the
+    /// quiet check this milestone is about.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_authored_by: Option<String>,
 }
 
 impl ClaimShape {
@@ -263,14 +277,47 @@ impl ClaimShape {
     /// `kan show --json` renders a claim within a subject rather than on one;
     /// [`ClaimLog`] already carries the `(subject, claim)` pair, so scoping
     /// costs no extra read.
+    /// [`Self::matches_with`] with no authorship exclusion.
+    ///
+    /// `#[cfg(test)]` because that is what it now is. Every production caller
+    /// passes a resolved exclusion, so this is the arity the unit tests drive
+    /// and nothing else — and clippy said so the moment the last production
+    /// caller moved, which is day#101's corollary working as intended on a
+    /// private fn. Leaving it un-gated would have left a wrapper that reads
+    /// like production surface and is reachable only from tests.
+    #[cfg(test)]
     fn matches(
         &self,
         subject: &str,
         claim: &crate::kan_client::Claim,
         block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome>,
     ) -> bool {
+        self.matches_with(subject, claim, block_check, None)
+    }
+
+    /// [`Self::matches`] with the authorship exclusion already resolved.
+    ///
+    /// Split rather than given a fourth positional argument everywhere, because
+    /// `"self"` cannot be resolved *here*: the answer depends on the running
+    /// identity, and a shape that cannot resolve it must report an error rather
+    /// than quietly match. The resolution happens once at each entry point;
+    /// this applies it. Production callers use this form so the conjunct cannot
+    /// be forgotten at a call site — the failure `CLAUDE.md` records three
+    /// times over.
+    fn matches_with(
+        &self,
+        subject: &str,
+        claim: &crate::kan_client::Claim,
+        block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome>,
+        exclude_author: Option<&str>,
+    ) -> bool {
         if claim.kind != self.kind {
             return false;
+        }
+        if let Some(excluded) = exclude_author {
+            if claim.author.as_deref() == Some(excluded) {
+                return false;
+            }
         }
         // A conjunction of independent predicates: every present one must
         // hold, an absent one is vacuously satisfied. Written as a chain of
@@ -561,6 +608,10 @@ pub struct ClaimLog<'a> {
     /// project that declares no block predicate pays nothing, which is why the
     /// declaration is not simply threaded through `claims_matching`'s signature.
     schemas: std::cell::OnceCell<Result<crate::blocks::BlockSchemas, String>>,
+    /// This workspace's identity, read once and only when a shape excludes an
+    /// author. `None` means kan could not establish one — a blocked keychain, a
+    /// missing key — which is a could-not-check rather than "no author".
+    identity: std::cell::OnceCell<Option<String>>,
 }
 
 impl<'a> ClaimLog<'a> {
@@ -569,6 +620,7 @@ impl<'a> ClaimLog<'a> {
             client,
             loaded: std::cell::OnceCell::new(),
             schemas: std::cell::OnceCell::new(),
+            identity: std::cell::OnceCell::new(),
         }
     }
 
@@ -578,6 +630,15 @@ impl<'a> ClaimLog<'a> {
     /// declarations" and "you declared none" are different, and answering a
     /// witness from the second when the first is true is the defect this whole
     /// milestone is about.
+    /// Memoized, and read only when something asks — the same contract as
+    /// [`Self::block_schemas`], for the same reason: a project whose shapes
+    /// exclude no author never pays for the subprocess.
+    fn identity(&self) -> Option<&str> {
+        self.identity
+            .get_or_init(|| self.client.identity())
+            .as_deref()
+    }
+
     fn block_schemas(&self) -> Result<&crate::blocks::BlockSchemas, String> {
         self.schemas
             .get_or_init(|| {
@@ -666,6 +727,28 @@ pub fn instances(probe: &Probe, git: &Git) -> Option<Vec<String>> {
         Probe::Tag(pattern) => git.tags_matching(pattern).ok(),
         Probe::Path(pathspec) => git.tracked_files(pathspec).ok(),
         Probe::Command(_) | Probe::Claim(_) | Probe::Every(_) | Probe::Absent(_) => None,
+    }
+}
+
+/// Resolves a shape's authorship exclusion to a concrete DID.
+///
+/// `Ok(None)` means the shape excludes nobody. The error case is the one that
+/// matters: a shape excluding `"self"` in a workspace whose identity kan cannot
+/// establish must not quietly match everything, because an exclusion that stops
+/// excluding turns a witness its author cannot satisfy into one they can.
+fn exclusion(shape: &ClaimShape, log: &ClaimLog<'_>) -> Result<Option<String>, Verdict> {
+    match shape.not_authored_by.as_deref() {
+        None => Ok(None),
+        Some("self") => match log.identity() {
+            Some(did) => Ok(Some(did.to_string())),
+            None => Err(Verdict::Error(
+                "this witness excludes evidence authored by `self`, and kan could not \
+                 establish this workspace's identity -- so day cannot tell whose evidence \
+                 this is, and will not report the exclusion as having been applied"
+                    .to_string(),
+            )),
+        },
+        Some(did) => Ok(Some(did.to_string())),
     }
 }
 
@@ -775,9 +858,28 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
         Err(e) => return Verdict::Error(e.to_string()),
     };
 
+    // Resolved once, before anything is matched. Every shape in the universal
+    // gets the same treatment as one in a plain claim probe -- a rule that
+    // applied to `claims_matching` and not here would be the propagation
+    // failure this repo keeps recording.
+    let anchor_exclusion = match exclusion(&universal.subject_with, log) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+    let mut required_exclusions = Vec::new();
+    for required in &universal.also_carries {
+        match exclusion(required, log) {
+            Ok(e) => required_exclusions.push(e),
+            Err(v) => return v,
+        }
+    }
+
     let mut in_scope: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for (subject, claim) in claims {
-        if universal.subject_with.matches(subject, claim, None) {
+        if universal
+            .subject_with
+            .matches_with(subject, claim, None, anchor_exclusion.as_deref())
+        {
             in_scope.insert(subject.as_str());
         }
     }
@@ -795,12 +897,13 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
         let lacks: Vec<&str> = universal
             .also_carries
             .iter()
-            .filter(|required| {
-                !claims
-                    .iter()
-                    .any(|(s, c)| s == subject && required.matches(s, c, None))
+            .zip(&required_exclusions)
+            .filter(|(required, excluded)| {
+                !claims.iter().any(|(s, c)| {
+                    s == subject && required.matches_with(s, c, None, excluded.as_deref())
+                })
             })
-            .map(|required| required.kind.as_str())
+            .map(|(required, _)| required.kind.as_str())
             .collect();
         if !lacks.is_empty() {
             missing.push(format!("{subject} (no {})", lacks.join(", no ")));
@@ -872,6 +975,11 @@ pub fn claims_matching(
         None
     };
 
+    let exclude_author = match exclusion(shape, log) {
+        Ok(e) => e,
+        Err(v) => return v,
+    };
+
     let window = match since {
         Some(_) => " since the cycle boundary",
         None => "",
@@ -939,7 +1047,7 @@ pub fn claims_matching(
                 unchecked.get_or_insert(why);
             }
         }
-        if !shape.matches(subject, claim, block_check) {
+        if !shape.matches_with(subject, claim, block_check, exclude_author.as_deref()) {
             continue;
         }
         // Correspondence: the claim must name the material instance, not merely
@@ -1284,6 +1392,7 @@ mod tests {
             subject: None,
             block: None,
             mentions_material: false,
+            not_authored_by: None,
         }
     }
 
@@ -1355,6 +1464,7 @@ mod tests {
                 starts_with: Some("s".into()),
                 block: None,
                 mentions_material: false,
+                not_authored_by: None,
                 subject: Some("x/*".into()),
             })
         );
@@ -1534,6 +1644,7 @@ mod tests {
             subject: Some("atom/*".into()),
             block: None,
             mentions_material: false,
+            not_authored_by: None,
         };
         let matching = a_claim(
             "Decision",

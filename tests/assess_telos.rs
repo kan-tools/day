@@ -922,3 +922,94 @@ fn a_forbidden_command_is_not_run_without_authorization() {
         "a forbidden command executed without --run: {stdout}"
     );
 }
+
+/// REQ-6 — **a witness can require evidence its own author cannot supply.**
+///
+/// A telos about adoption, review, or anyone else's judgement is otherwise
+/// satisfiable by the person who declared it: day#86 holds that a witness which
+/// cannot fail is worse than none, and one its author can satisfy at will is
+/// that defect with a person in the loop. This is what makes an adoption witness
+/// for the v1.0 bar mean anything.
+#[test]
+fn a_witness_can_exclude_evidence_authored_by_the_declaring_identity() {
+    let probes = r#"{"adopted": {"claim": {"kind": "Result", "subject": "adoption",
+                                           "not_authored_by": "self"}}}"#;
+    // The stub signs as this DID and reports it for `kan identity did`, so
+    // "self" resolves to the same key the fixture's claims carry.
+    let mine = common::STUB_AUTHOR;
+
+    // Only the author's own claim: the exclusion must bite.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("adopted", "bafyreit", &["adopted"]),
+            witness_schema("bafyreiw", probes),
+            common::result_claim("adoption", "bafyreia", "I used it myself.", 10),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "adopted"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[MISSING]"),
+        "a telos about someone else must not be satisfiable by its own author \
+         (identity {mine}): {stdout}"
+    );
+
+    // A claim from someone else, same shape otherwise: now it counts.
+    let dir = tempfile::tempdir().unwrap();
+    let mut foreign = common::result_claim("adoption", "bafyreib", "We shipped with it.", 20);
+    foreign.author = "did:key:zSomeoneElseEntirely".to_string();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("adopted", "bafyreit", &["adopted"]),
+            witness_schema("bafyreiw", probes),
+            foreign,
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "adopted"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[MATERIAL]"),
+        "evidence from another identity is exactly what this witness is for: {stdout}"
+    );
+}
+
+/// An exclusion that cannot be resolved is an **error**, never a silent match.
+///
+/// If kan cannot establish the workspace identity -- a blocked keychain, a
+/// missing key -- then day cannot tell whose evidence it is looking at. Matching
+/// everything would turn a witness the author cannot satisfy into one they can,
+/// which is the quiet check this whole milestone is about.
+#[test]
+fn an_unresolvable_authorship_exclusion_is_reported_rather_than_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("adopted", "bafyreit", &["adopted"]),
+            witness_schema(
+                "bafyreiw",
+                r#"{"adopted": {"claim": {"kind": "Result", "not_authored_by": "self"}}}"#,
+            ),
+            common::result_claim("adoption", "bafyreia", "Something.", 10),
+        ],
+    );
+    // Premise: kan can no longer say who we are.
+    common::without_identity(dir.path());
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "adopted"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[ERROR]") && stdout.contains("could not establish"),
+        "an exclusion that stopped excluding must say so: {stdout}"
+    );
+    assert!(
+        !stdout.contains("[MATERIAL]"),
+        "and must not report the witness satisfied: {stdout}"
+    );
+}

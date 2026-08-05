@@ -429,6 +429,7 @@ impl WitnessSchema {
                 subject: None,
                 block: None,
                 mentions_material: false,
+                not_authored_by: None,
             }),
         );
         probes.insert(
@@ -444,6 +445,7 @@ impl WitnessSchema {
                 subject: Some(format!("{}*", atoms::ATOM_PREFIX)),
                 block: None,
                 mentions_material: false,
+                not_authored_by: None,
             }),
         );
         // NO PAIRED WITNESS IS SUGGESTED HERE, and the reason is the finding
@@ -1101,6 +1103,7 @@ mod tests {
                 subject: Some("release".to_string()),
                 block: None,
                 mentions_material: false,
+                not_authored_by: None,
             }),
         );
 

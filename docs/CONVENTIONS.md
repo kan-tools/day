@@ -703,11 +703,21 @@ constrains nothing.
 | `contains` | no | has text containing this substring **anywhere** |
 | `starts_with` | no | has text **beginning** with this prefix |
 | `subject` | no | lives on a subject this **glob-lite** pattern admits |
+| `not_authored_by` | no | was **not** signed by this `did:key:…` — or by `"self"`, whoever is running day |
+| `mentions_material` | no | names the instance the pair's material half resolved to (see above) |
 
 `kind` alone is almost always too broad — a `Decision` alone matches every
 decision in the log — so narrowing is the normal case, and picking *which*
 dimension to narrow on is the part worth thinking about:
 
+- **`not_authored_by` is what makes a witness about someone else mean
+  anything.** A telos about adoption, review, or another person's judgement is
+  otherwise satisfiable by the person who declared it — day#86's "a witness that
+  cannot fail", with a person in the loop. `"self"` resolves to the running
+  identity, so a claim you signed cannot witness that somebody else adopted your
+  tool. If kan cannot establish that identity, the witness reports an **error**
+  rather than matching everything: an exclusion that silently stops excluding is
+  worse than one that was never declared.
 - **`starts_with` is anchored; `contains` is not.** That is the whole reason
   both exist. `day review record` writes its marker at the *start* of a
   verdict's text, so `{"starts_with": "adversarial review of"}` matches real
