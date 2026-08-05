@@ -337,7 +337,11 @@ the rule being routed around by the person who wrote it, which is the failure
 mode the roadmap predicted for a rule with no tooling behind it, arriving even
 though the tooling exists.
 
-## Two tools, already written — use them rather than reinventing them
+## The tools in `scripts/`, already written — use them rather than reinventing them
+
+No count in that heading, deliberately. It said "Two tools" while heading four,
+which is the same stale-hand-written-number this milestone fixed in three other
+places before noticing it here.
 
 - **`scripts/mutate.py`** — one mutation, honestly reported. A green suite says
   nothing about whether a test *asserts* anything, so a claim of coverage wants a
@@ -355,6 +359,15 @@ though the tooling exists.
   test half of a change — a deleted test cannot fail — and both failure modes of
   that heuristic are loud: excluding too much reports `VACUOUS`, excluding too
   little reports `NO-SUCH-TEST`, and neither degrades to a pass.
+- **`scripts/demonstration-census.py`** — accounts for every commit on the branch
+  under the demonstration rule: `demonstrated`, `exempt` with a stated reason, or
+  **`unaccounted`**, which is the only verdict. Exit codes are the contract — 0
+  accounted, 1 unaccounted, 2 the range is unknowable, 3 the range is empty — and
+  they are four rather than two because a caller that cannot tell "git failed"
+  from "a commit is missing a trailer" accused a nonexistent commit and turned CI
+  red. It replaced a hand-written table that was wrong in three consecutive
+  review rounds; the table is what to reach for only if you want to be wrong a
+  fourth time.
 - **`scripts/capture-block-corpus.sh`** — regenerates the backward-compatibility
   corpus by building every released tag and driving that tag's own binary. Run it
   by hand after changing a block shape; `tests/block_corpus.rs` consumes the
