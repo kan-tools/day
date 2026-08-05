@@ -146,6 +146,47 @@ Two corollaries worth keeping:
   in the same breath. An assessment that pollutes the record it assesses is
   measuring its own footprint.
 
+## A justification that names a mechanism is a claim about the code
+
+Three decisions in the v0.12 witness work were made by reasoning, survived
+review, and died on contact with the code. None was caught by reading it; each
+was caught by running it. What they have in common is sharper than "dogfood it",
+because in all three the wrong belief was about a mechanism **whose own source
+says otherwise, in a comment**:
+
+- **`assess telos` is cumulative, never cycle-scoped**, and the comment at the
+  probe call says so at length — scoping to the current cycle "would make last
+  cycle's shipped telos start reporting as unmet". A design doc asserted
+  cycle-scoping anyway, to argue a witness was falsifiable. It was not, and
+  `telos/legible-process` shipped reporting met forever (day#138) — day#86's own
+  objection, inside the declaration written to close day#86.
+- **`effective_probe` ignores `--scope` for claim probes**, and says why: it
+  could *widen* what counts. A resolved question (RQ-10) proposed a witness that
+  needed exactly that narrowing.
+- **`cfg_test_module_line` documents the `#[cfg(test)]`-cut defect** where one
+  `#[cfg(test)] use` exempts a whole file. A new scan hand-rolled the cut and had
+  precisely that defect.
+
+This is the kan-conformance floor's lesson one level out. There, the measurement
+was real, the failure was real, the diagnosis was right, and the *inference* was
+wrong — and "the check that mattered was reading day's own source". Here the
+inference was wrong in the same way, three times, in a codebase whose comments
+already held the answer.
+
+**So: grep for the mechanism before citing it.** A sentence of the form "this
+works because day does X" is a testable claim, and checking it costs one search
+where defending it costs a milestone. The comments in this repo are unusually
+load-bearing — they were written by the people who hit the defect — and they are
+the cheapest oracle available.
+
+**The part that should not depend on discipline.** Falsifiability is mechanically
+checkable and was left to judgement. A witness over a *monotone* set — a
+cumulative claim probe against an append-only log, a path probe over committed
+files — can never stop matching, and detecting that needs no counterfactual. It
+is the vacuity guard from the other side: a negated probe that can never fire is
+vacuous, a positive probe that can never stop firing is equally uninformative.
+Both are "this witness cannot distinguish", and one mechanism reports both.
+
 ## Then verify the verifier
 
 Every rule above is about not trusting a test. These are about not trusting the
