@@ -9,14 +9,23 @@ it always said something else.
 
 ## Where we are
 
-**Shipped: `v0.9.0-beta.1`. Merged and unreleased: v0.10.** day declares, reads,
+**Shipped: `v0.11.0-beta.2`.** day declares, reads,
 assesses and records. Eleven
 verbs, two commands (`/design`, `/adversarial-review`), three hooks, a status
 line, and three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
 (`beta.3`); `v0.8.0-beta.1` is the bulk read (day#71); `v0.9.0-beta.1` is
 position reports that can represent their own failure (day#98/#97/#103/#105/#111)
-plus the material/record witness pair.
+plus the material/record witness pair. `v0.10.0-beta.2` made `next` a guaranteed
+DAG; `v0.11.0-beta.2` is verification that can fail.
+
+**`v0.11.0-beta.1` was tagged and never published**, and the reason belongs in
+this section rather than only in a commit: `release.yml` checked out the tag with
+no branch refs, so the commit census could not resolve a base and the suite
+correctly refused to call a could-not-check a pass. The check and the test were
+both right; the environment was wrong. Its tag is left in place rather than
+moved. It is the fifth instance in one milestone of a check meeting a mode this
+repo is never in, and the first to cost an artifact.
 
 **The version number and the milestone name below have come apart, and this is
 the honest record of it.** "v0.8 — transportable" in the table further down is a
@@ -36,9 +45,11 @@ adds the most model.**
 ### The next three, and why in that order
 
 Tracked as GitHub milestones; the issue numbers are the contract, this is the
-reasoning.
+reasoning. **Two of the three below have shipped**; they are kept rather than
+deleted, because what each turned out to be about is not what this section
+predicted, and that gap is the useful part of a roadmap kept honestly.
 
-**v0.10 — the graph tells the truth. *Merged (#122); not yet released.*** `next`
+**v0.10 — the graph tells the truth. *Shipped: `v0.10.0-beta.2`.*** `next`
 is forward-only and a **guaranteed DAG**; feedback lives in `revisits`. The
 constant false "a step was skipped" warning is gone, and reachability,
 topological ordering and partial-order reporting went from unavailable to
@@ -65,7 +76,7 @@ fixes-that-introduced-bugs, to tests, to **the scans that check the tests**.
 v0.11 was already the answer to that trajectory; it is now overdue rather than
 speculative.
 
-**v0.11 — verification that can fail. *Built; not yet released.*** day#101 (a
+**v0.11 — verification that can fail. *Shipped: `v0.11.0-beta.2`.*** day#101 (a
 guarantee wired at a call site) and day#116 (a guarantee asserted by a test that
 cannot observe it) are one defect from two sides; day#114 and day#118 are the
 tooling that would catch either. All six issues closed —
@@ -122,12 +133,28 @@ Scope was every harness in `scripts/` and `.github/workflows/`, not just
 measurement tools asserted more than they verified, and none of it was in day's
 shipped behaviour.
 
-**v0.12 — transportable.** Vocabulary packs (day#73), with day#109, day#86,
-day#50, day#107. This is the milestone the table below still calls "v0.8", and it
-has now been deferred twice for the same stated reason: a pack transports a
-vocabulary, and transporting one whose reporting is known-wrong exports the
-defect to exactly the population `telos/v1.0`'s bar names. v0.10 and v0.11 are
-what make it safe to ship.
+**v0.12 — transportable. *Next.*** Vocabulary packs (day#73), with day#109,
+day#86, day#50, day#107. This is the milestone the table below still calls
+"v0.8", and it has now been deferred twice for the same stated reason: a pack
+transports a vocabulary, and transporting one whose reporting is known-wrong
+exports the defect to exactly the population `telos/v1.0`'s bar names. v0.10 and
+v0.11 are what make it safe to ship, and both have.
+
+**What v0.11 changes about how v0.12 should be built**, stated before rather than
+after: a pack is a *transport*, so every failure mode this milestone found in its
+own tooling is a failure mode a pack can carry to a repo whose maintainer has
+none of the context. Four recurred here — a guarantee wired at a call site, a
+mode this repo is never in, a classifier keyed on the absence of a phrase, and a
+guess about which files are invertible. The first two are exactly what a pack
+meets on arrival: a fresh clone has no release tag, no `.day/` cache, and no
+declared vocabulary, which is `tests/fallbacks.rs`'s whole subject. **Pack
+adoption wants a fallbacks-style test per degraded mode before it wants
+features.**
+
+There is also a residue to clear first, or to decide deliberately not to:
+day#130, day#131, day#133 and day#134 are all v0.11's own follow-ups, and day#131
+in particular — `telos/v1.0` cited in five places with no claims in kan — is the
+telos the pack story is *for*.
 
 Bracketed, not scheduled: day#38, day#75, day#82, day#84, day#85, day#88,
 day#93, day#106.
