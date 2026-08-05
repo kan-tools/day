@@ -428,6 +428,7 @@ impl WitnessSchema {
                 starts_with: Some("adversarial review of".to_string()),
                 subject: None,
                 block: None,
+                mentions_material: false,
             }),
         );
         probes.insert(
@@ -442,6 +443,7 @@ impl WitnessSchema {
                 // whatever subject was reviewed.
                 subject: Some(format!("{}*", atoms::ATOM_PREFIX)),
                 block: None,
+                mentions_material: false,
             }),
         );
         // NO PAIRED WITNESS IS SUGGESTED HERE, and the reason is the finding
@@ -1077,6 +1079,7 @@ mod tests {
                 starts_with: None,
                 subject: Some("release".to_string()),
                 block: None,
+                mentions_material: false,
             }),
         );
 

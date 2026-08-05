@@ -143,6 +143,22 @@ pub struct ClaimShape {
     /// cheap predicates must filter first and short-circuit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub block: Option<String>,
+    /// **Correspondence** (day#107): the claim's text must name the instance the
+    /// material half of this pair resolved to.
+    ///
+    /// Every other predicate here is a *constant* — a kind, a prefix, a subject
+    /// glob — which is exactly why day#107 stayed open. "Does a record exist
+    /// that refers to *this* release" cannot be written as a constant, and it is
+    /// the question `day assess docs` answers with `text.contains(tag)` in a
+    /// mechanism parallel to this one. This is the predicate that makes that a
+    /// special case of the general rule.
+    ///
+    /// Only meaningful on the **record** half of a pair. Set it where nothing
+    /// supplies a material instance and the verdict is `Error` — the comparison
+    /// is unanswerable, and day#107 requires that be said rather than resolved
+    /// to "not recorded".
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mentions_material: bool,
 }
 
 impl ClaimShape {
@@ -396,7 +412,13 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
         },
         // Deliberately not gated on `auth`. There is nothing to authorize:
         // this reads the log through kan's read verbs and executes nothing.
-        Probe::Claim(shape) => claims_matching(shape, log, None, Failures::AlreadyReported),
+        Probe::Claim(shape) => claims_matching(
+            shape,
+            log,
+            None,
+            Correspondence::Unavailable,
+            Failures::AlreadyReported,
+        ),
     }
 }
 
@@ -501,10 +523,48 @@ impl<'a> ClaimLog<'a> {
 /// [`ClaimLog`], which runs `kan status` and `kan show` — the same reads
 /// `atoms::load` and `status::last_assessed_atom` already make — and nothing
 /// else.
+/// What the material half of a paired witness resolved to, for a record shape
+/// that must refer to **that instance** rather than merely exist.
+///
+/// An enum rather than an `Option` for the reason [`Authorization`] is one: the
+/// difference between "there is nothing to correspond to" and "here is what to
+/// correspond to" decides whether a comparison is unanswerable, and a caller
+/// should have to say which it means.
+#[derive(Debug, Clone, Copy)]
+pub enum Correspondence<'a> {
+    /// Nothing to correspond to — this is not a paired witness, or the material
+    /// half resolved to no nameable instance. A shape declaring
+    /// `mentions_material` is then **unanswerable**, never quietly unsatisfied:
+    /// day#107's constraint, and day#105's rule that a comparison day cannot
+    /// perform is reported rather than assumed.
+    Unavailable,
+    /// The concrete instances the material probe resolved to — tag names,
+    /// tracked paths.
+    Material(&'a [String]),
+}
+
+/// The concrete instances a probe resolved to, for [`Correspondence`].
+///
+/// `None` for `command` and `claim` probes, and the asymmetry is the point: a
+/// command's evidence is an exit code and a claim's is a CID, neither of which
+/// is a *name* a record would refer to. day#107's case is a tag name appearing
+/// in a release claim's text, and that is the shape this serves.
+pub fn instances(probe: &Probe, git: &Git) -> Option<Vec<String>> {
+    match probe {
+        Probe::Tag(pattern) => git.tags_matching(pattern).ok(),
+        Probe::Path(pathspec) => git.tracked_files(pathspec).ok(),
+        Probe::Command(_) | Probe::Claim(_) => None,
+    }
+}
+
 pub fn claims_matching(
     shape: &ClaimShape,
     log: &ClaimLog<'_>,
     since: Option<i64>,
+    // What the material half resolved to, when this shape is the record half of
+    // a pair. `Unavailable` everywhere else, which costs nothing because a
+    // shape that does not declare `mentions_material` never consults it.
+    correspondence: Correspondence<'_>,
     // Collects reads that could not happen. `None` where the caller renders the
     // `Verdict` itself and so already shows the reason — `day assess telos`
     // prints ERROR with the message. Position inference passes `Some`, because
@@ -514,6 +574,27 @@ pub fn claims_matching(
     let claims = match log.claims() {
         Ok(claims) => claims,
         Err(e) => return Verdict::Error(e.to_string()),
+    };
+
+    // Resolved before any claim is examined, because an unanswerable comparison
+    // must not depend on what the log happens to contain. day#107's constraint
+    // is explicit: "If a declared pair cannot be answered for structural
+    // reasons, day should say so — an unanswerable comparison is UNCHECKED, not
+    // silence." Returning Unsatisfied here would report a *finding* about the
+    // record from a question that was never asked.
+    let must_mention: Option<&[String]> = if shape.mentions_material {
+        match correspondence {
+            Correspondence::Material(instances) if !instances.is_empty() => Some(instances),
+            _ => {
+                return Verdict::Error(
+                    "this record witness must refer to the material instance, and the \
+                     material half named none — the comparison could not be made"
+                        .to_string(),
+                )
+            }
+        }
+    } else {
+        None
     };
 
     let window = match since {
@@ -585,6 +666,17 @@ pub fn claims_matching(
         }
         if !shape.matches(subject, claim, block_check) {
             continue;
+        }
+        // Correspondence: the claim must name the material instance, not merely
+        // be the right kind on the right subject. This is what makes
+        // `docs::reconcile_boundary`'s `text.contains(tag)` a special case of
+        // the general rule rather than a parallel mechanism — day#103's
+        // original goal, which day#107 recorded as still unmet.
+        if let Some(instances) = must_mention {
+            let text = claim.text.as_deref().unwrap_or("");
+            if !instances.iter().any(|i| text.contains(i.as_str())) {
+                continue;
+            }
         }
         if let Some(boundary) = since {
             // An undated claim cannot be placed in a cycle at all, so it does
@@ -886,6 +978,7 @@ mod tests {
             starts_with: None,
             subject: None,
             block: None,
+            mentions_material: false,
         }
     }
 
@@ -956,6 +1049,7 @@ mod tests {
                 contains: Some("c".into()),
                 starts_with: Some("s".into()),
                 block: None,
+                mentions_material: false,
                 subject: Some("x/*".into()),
             })
         );
@@ -1134,6 +1228,7 @@ mod tests {
             starts_with: Some("adversarial review of".into()),
             subject: Some("atom/*".into()),
             block: None,
+            mentions_material: false,
         };
         let matching = a_claim(
             "Decision",

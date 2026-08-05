@@ -559,7 +559,32 @@ against the cycle boundary, and the boundary *is* the newest tag, so
 the comparison can never fire. day therefore suggests no pair in its starter
 schema. Pair a witness whose material half is a `path` or `claim` probe; for the
 release case, `day assess docs` and `day status` reconcile the tag against the
-`release` subject directly (day#107 is about expressing that as a pair too).
+`release` subject directly.
+
+**A record half may require *correspondence*** — that the record refers to the
+material instance, rather than merely existing:
+
+```day-witness
+{
+  "code-change": {
+    "material": {"path": "src/*.rs"},
+    "record":   {"claim": {"kind": "Result", "subject": "atom/*", "mentions_material": true}}
+  }
+}
+```
+
+With `mentions_material`, a matching claim must also *name* what the material
+half resolved to — the changed path, the tag. Without it, any `Result` on an
+`atom/*` subject in the cycle counts as having recorded the work, including one
+about something else entirely. This is what makes `text.contains(tag)` in
+`day assess docs` a special case of the general rule rather than a parallel
+mechanism (day#103, day#107).
+
+It applies only to the **record** half, and only when the material half names an
+instance a record could refer to. A `command` probe's evidence is an exit code
+and a `claim` probe's is a CID, so neither can be corresponded to: day reports
+the comparison as one it **could not make** rather than resolving it to "not
+recorded". An unanswerable comparison is never silence.
 
 `path` uses `git ls-files`, so an untracked build output or a stray local
 file cannot witness a telos — being committed is the stronger claim, and it

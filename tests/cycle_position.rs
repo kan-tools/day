@@ -1220,3 +1220,139 @@ fn an_undated_claim_is_not_current_but_is_still_evidence() {
         "cumulatively, an undated claim is still evidence it happened: {stdout}"
     );
 }
+
+/// AC-10 — **correspondence: the record must name the material instance**, not
+/// merely be the right kind on the right subject.
+///
+/// day#107 is that `ClaimShape` carried only constants, so "does a record exist
+/// that refers to *this* artifact" was inexpressible and `day assess docs` had to
+/// answer it with `text.contains(tag)` in a parallel mechanism. Both directions
+/// are driven here, because a predicate that never rejects is indistinguishable
+/// from one that was never applied.
+#[test]
+fn ac10_a_corresponding_record_must_name_the_material_instance() {
+    let probes = r#"{
+        "design-doc": {"path": ".design/*.md"},
+        "code-change": {
+            "material": {"path": "src/*.rs"},
+            "record": {"claim": {"kind": "Result", "subject": "atom/*", "mentions_material": true}}
+        }
+    }"#;
+
+    let world = |dir: &Path, extra: &[StubClaim]| {
+        let mut all = vec![
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &[],
+                &[],
+            ),
+            witness_schema("bafyreiw", probes),
+        ];
+        all.extend_from_slice(extra);
+        let kan = write_kan_stub(dir, &all);
+        let git = write_git_stub(
+            dir,
+            &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+            &[".design/x.md", "src/lib.rs"],
+            &[".design/x.md", "src/lib.rs"],
+        );
+        (kan, git)
+    };
+
+    // A record that names the artifact: the correspondence holds, so nothing
+    // is unrecorded.
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, git) = world(
+        dir.path(),
+        &[result_claim(
+            "atom/build",
+            "bafyreir1",
+            "Assessed: src/lib.rs changed and the suite is green.",
+            AFTER_BOUNDARY_US,
+        )],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        !stdout.contains("Done but unrecorded"),
+        "a record naming the material instance satisfies the pair: {stdout}"
+    );
+
+    // A record of the right kind, on the right subject, in the right cycle --
+    // naming a DIFFERENT artifact. Under day#107 this was indistinguishable
+    // from the case above, which is the whole finding.
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, git) = world(
+        dir.path(),
+        &[result_claim(
+            "atom/build",
+            "bafyreir2",
+            "Assessed: docs/OTHER.md was revised.",
+            AFTER_BOUNDARY_US,
+        )],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        stdout.contains("Done but unrecorded"),
+        "a record that does not name the artifact must not count as recording it: {stdout}"
+    );
+}
+
+/// AC-11 — **an unanswerable correspondence is reported, never silent.**
+///
+/// A `claim` material half names no instance a record could refer to -- its
+/// evidence is a CID, not a name -- so the comparison cannot be made. day#107's
+/// stated constraint is that this is UNCHECKED rather than silence, and the
+/// branch that files "unrecorded" correctly refuses an `Error`, which would
+/// otherwise leave it reported nowhere at all.
+#[test]
+fn ac11_a_correspondence_that_cannot_be_answered_says_so() {
+    let probes = r#"{
+        "design-doc": {"path": ".design/*.md"},
+        "code-change": {
+            "material": {"claim": {"kind": "Decision"}},
+            "record": {"claim": {"kind": "Result", "subject": "atom/*", "mentions_material": true}}
+        }
+    }"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &[],
+                &[],
+            ),
+            witness_schema("bafyreiw", probes),
+            // Premise: the material half must actually resolve Present this
+            // cycle, or the pair loop skips before correspondence is ever
+            // attempted and the test passes for the wrong reason.
+            decision_claim("some/thing", "bafyreio", "A decision.", AFTER_BOUNDARY_US),
+        ],
+    );
+    let git = write_git_stub(
+        dir.path(),
+        &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+        &[".design/x.md", "src/lib.rs"],
+        &[".design/x.md", "src/lib.rs"],
+    );
+
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        stdout.contains("could not be made") || stdout.contains("material half named none"),
+        "an unanswerable comparison must be said out loud, not resolved to a \
+         verdict day did not establish: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Done but unrecorded"),
+        "and it must not be reported as a finding about the record: {stdout}"
+    );
+}
