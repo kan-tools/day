@@ -77,6 +77,43 @@ pub enum Probe {
     /// `verdict` or `assessment` actually is, and why neither was probeable
     /// before (day#60).
     Claim(ClaimShape),
+    /// **Every subject that started something finished it.** A universal over
+    /// the log: wherever the anchor shape holds, the required shapes must hold
+    /// on the same subject.
+    ///
+    /// This exists because every other probe here asks *does one exist*, and
+    /// over an append-only log that question can only ever start answering yes
+    /// and never stop — which is day#138, where `telos/legible-process` was
+    /// declared with three existence checks and reported met forever. day#86
+    /// had proposed "a design doc, a verdict, and an assessment all present for
+    /// the same milestone", and the co-location is what makes it falsifiable:
+    /// three independent existence checks are satisfied by three unrelated
+    /// subjects.
+    ///
+    /// The *universal* is what makes it non-monotone, which is the sharper half.
+    /// "Some subject carries all three" is still monotone. "Every subject that
+    /// carries a design also carries a verdict and an assessment" fails the
+    /// moment a new design is recorded, and passes again when it is reviewed —
+    /// so it tracks the property instead of accumulating toward it.
+    #[serde(rename = "every")]
+    Every(Universal),
+}
+
+/// The two halves of an [`Probe::Every`]: which subjects are in scope, and what
+/// they must then carry.
+///
+/// **The anchor selects, rather than a subject pattern.** day's design subjects
+/// are bare slugs with no shared prefix, so no glob picks them out; "subjects
+/// that carry a `Plan`" does, exactly. Self-selecting scope also means the set
+/// grows as the project works, which is what keeps the universal honest: a
+/// pattern maintained by hand would silently stop covering new work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Universal {
+    /// A subject is in scope when at least one of its claims matches this.
+    pub subject_with: ClaimShape,
+    /// And it must then carry a claim matching each of these.
+    pub also_carries: Vec<ClaimShape>,
 }
 
 /// Which claims count as evidence: a kan `ClaimKind`, optionally narrowed by
@@ -347,6 +384,17 @@ pub enum Verdict {
     TimedOut(String),
     /// Something prevented the probe from being evaluated at all.
     Error(String),
+    /// The probe was answerable and the answer establishes nothing — a
+    /// universal over an empty set, satisfied because there was nothing to
+    /// satisfy it.
+    ///
+    /// **Not a failure, and not evidence.** `VACUOUS` is the outcome
+    /// `scripts/revert-demo.py` already reports for "the fix was taken away and
+    /// the test passed anyway", and CLAUDE.md records that it is a finding
+    /// rather than a nuisance. Reusing the word means the repository has one
+    /// concept for "this check was performed and could not distinguish", rather
+    /// than two that have to be kept in agreement.
+    Vacuous(String),
 }
 
 impl Verdict {
@@ -362,6 +410,7 @@ impl Verdict {
             Verdict::NotRun(_) => "NOT RUN",
             Verdict::TimedOut(_) => "TIMEOUT",
             Verdict::Error(_) => "ERROR",
+            Verdict::Vacuous(_) => "VACUOUS",
         }
     }
 
@@ -371,7 +420,8 @@ impl Verdict {
             | Verdict::Unsatisfied(d)
             | Verdict::NotRun(d)
             | Verdict::TimedOut(d)
-            | Verdict::Error(d) => d,
+            | Verdict::Error(d)
+            | Verdict::Vacuous(d) => d,
         }
     }
 }
@@ -419,6 +469,12 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
             Correspondence::Unavailable,
             Failures::AlreadyReported,
         ),
+        // Cumulative always, boundary or not — `evaluate` has no boundary to
+        // pass anyway. A universal is a statement about the record AS A WHOLE
+        // ("every design was reviewed"), and scoping it to a cycle would weaken
+        // it to "every design recorded since the last release", which goes
+        // quiet exactly while a milestone is in progress.
+        Probe::Every(universal) => every_subject(universal, log),
     }
 }
 
@@ -553,7 +609,84 @@ pub fn instances(probe: &Probe, git: &Git) -> Option<Vec<String>> {
     match probe {
         Probe::Tag(pattern) => git.tags_matching(pattern).ok(),
         Probe::Path(pathspec) => git.tracked_files(pathspec).ok(),
-        Probe::Command(_) | Probe::Claim(_) => None,
+        Probe::Command(_) | Probe::Claim(_) | Probe::Every(_) => None,
+    }
+}
+
+/// Evaluates a [`Probe::Every`]: wherever the anchor holds, the requirements
+/// must hold on the same subject.
+///
+/// **An empty scope is `VACUOUS`, never satisfied.** A universal over nothing is
+/// true, and reporting that as evidence is the failure mode this probe was built
+/// to end — day#86's "a witness that cannot fail", arriving through the logic
+/// rather than through the data. A project with no design subjects yet has not
+/// demonstrated a reconstructable process; it has demonstrated nothing.
+///
+/// Block predicates are not resolved here. `subject_with` and `also_carries`
+/// are matched with [`ClaimShape::matches`] directly, so a shape naming a
+/// declared `block` is matched on its other predicates only — stated because
+/// silently ignoring a predicate is precisely what this milestone is about, and
+/// this is the one place a shape is matched outside [`claims_matching`].
+fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
+    let claims = match log.claims() {
+        Ok(claims) => claims,
+        Err(e) => return Verdict::Error(e.to_string()),
+    };
+
+    let mut in_scope: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for (subject, claim) in claims {
+        if universal.subject_with.matches(subject, claim, None) {
+            in_scope.insert(subject.as_str());
+        }
+    }
+
+    if in_scope.is_empty() {
+        return Verdict::Vacuous(format!(
+            "no subject carries a `{}` claim, so there is nothing for this to be true \
+             of -- it is satisfied only because the set is empty",
+            universal.subject_with.kind
+        ));
+    }
+
+    let mut missing: Vec<String> = Vec::new();
+    for subject in &in_scope {
+        let lacks: Vec<&str> = universal
+            .also_carries
+            .iter()
+            .filter(|required| {
+                !claims
+                    .iter()
+                    .any(|(s, c)| s == subject && required.matches(s, c, None))
+            })
+            .map(|required| required.kind.as_str())
+            .collect();
+        if !lacks.is_empty() {
+            missing.push(format!("{subject} (no {})", lacks.join(", no ")));
+        }
+    }
+
+    if missing.is_empty() {
+        Verdict::Satisfied(format!(
+            "all {} subject(s) carrying a `{}` also carry {}",
+            in_scope.len(),
+            universal.subject_with.kind,
+            universal
+                .also_carries
+                .iter()
+                .map(|r| format!("`{}`", r.kind))
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ))
+    } else {
+        // Named, not counted. The reader's next action is to go and finish one
+        // of them, and a bare "3 of 21" does not say which.
+        Verdict::Unsatisfied(format!(
+            "{} of {} subject(s) carrying a `{}` are incomplete: {}",
+            missing.len(),
+            in_scope.len(),
+            universal.subject_with.kind,
+            missing.join("; ")
+        ))
     }
 }
 

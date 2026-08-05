@@ -18,7 +18,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use common::{claim, decision_claim, result_claim, write_kan_stub, StubClaim};
+use common::{claim, decision_claim, plan_claim, result_claim, write_kan_stub, StubClaim};
 
 fn day(dir: &Path, kan: &Path, git: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_day"))
@@ -1355,4 +1355,128 @@ fn ac11_a_correspondence_that_cannot_be_answered_says_so() {
         !stdout.contains("Done but unrecorded"),
         "and it must not be reported as a finding about the record: {stdout}"
     );
+}
+
+/// day#138 / day#86 — **`every` is the witness that can actually fail.**
+///
+/// Every other probe asks *does one exist*, and over an append-only log that
+/// question can only start answering yes and never stop. day#86 proposed "a
+/// design doc, a verdict, and an assessment all present for the same milestone";
+/// declared as three independent witnesses it was satisfied by three unrelated
+/// subjects and reported met forever, which is day#138.
+///
+/// Three states, driven through the shipped binary. The middle one is the whole
+/// point: it is reachable, and no existence check can reach it.
+#[test]
+fn every_subject_with_a_plan_must_also_carry_a_verdict() {
+    let probes = r#"{
+        "reconstructable": {"every": {
+            "subject_with": {"kind": "Plan"},
+            "also_carries": [{"kind": "Decision", "starts_with": "adversarial review of"}]
+        }}
+    }"#;
+    let telos = |cid: &str| {
+        claim(
+            "telos/legible",
+            cid,
+            "Legible.\n\n```day-telos\n{\"witnesses\":[\"reconstructable\"]}\n```\n",
+        )
+    };
+    let assess = |dir: &Path, claims: &[StubClaim]| {
+        let mut all = vec![witness_schema("bafyreiw", probes), telos("bafyreit")];
+        all.extend_from_slice(claims);
+        let kan = write_kan_stub(dir, &all);
+        let git = write_git_stub(dir, &[], &[], &[]);
+        let out = day(dir, &kan, &git, &["assess", "telos", "legible"]);
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            out.status.code(),
+        )
+    };
+
+    // (1) VACUOUS — no subject carries a Plan at all. A universal over an empty
+    // set is true, and reporting that as evidence is exactly the failure this
+    // probe exists to end.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, _) = assess(dir.path(), &[]);
+    assert!(
+        stdout.contains("[VACUOUS]"),
+        "a universal with nothing to quantify over establishes nothing, and must \
+         not read as evidence: {stdout}"
+    );
+
+    // (2) UNSATISFIED — a design was recorded and never reviewed. THIS is the
+    // state no existence check can reach, and the reason for the whole probe.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = assess(
+        dir.path(),
+        &[plan_claim("some-design", "bafyreip", "A design.", 10)],
+    );
+    assert!(
+        stdout.contains("[MISSING]"),
+        "an unreviewed design must fail this witness: {stdout}"
+    );
+    assert!(
+        stdout.contains("some-design"),
+        "the incomplete subject is named, because the reader's next action is to \
+         go and finish that one: {stdout}"
+    );
+    assert_eq!(code, Some(1), "{stdout}");
+
+    // (3) SATISFIED — and it becomes satisfied by doing the work, not by
+    // accumulating unrelated claims.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = assess(
+        dir.path(),
+        &[
+            plan_claim("some-design", "bafyreip", "A design.", 10),
+            decision_claim(
+                "some-design",
+                "bafyreid",
+                "adversarial review of some-design: APPROVE",
+                20,
+            ),
+        ],
+    );
+    assert!(stdout.contains("[MATERIAL]"), "{stdout}");
+    assert_eq!(code, Some(0), "{stdout}");
+}
+
+/// The co-location is load-bearing: a verdict on a *different* subject must not
+/// satisfy a design's requirement.
+///
+/// Without this, `every` degrades to the three independent existence checks it
+/// replaced — which is day#138 exactly, and a predicate that never rejects is
+/// indistinguishable from one that was never applied.
+#[test]
+fn a_verdict_on_another_subject_does_not_complete_this_one() {
+    let probes = r#"{
+        "reconstructable": {"every": {
+            "subject_with": {"kind": "Plan"},
+            "also_carries": [{"kind": "Decision"}]
+        }}
+    }"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/legible",
+                "bafyreit",
+                "Legible.\n\n```day-telos\n{\"witnesses\":[\"reconstructable\"]}\n```\n",
+            ),
+            plan_claim("design-a", "bafyreip", "A design.", 10),
+            // A decision, in the log, on someone else's subject.
+            decision_claim("design-b", "bafyreid", "Reviewed b.", 20),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "legible"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("design-a"),
+        "the design with no verdict of its own is still incomplete: {stdout}"
+    );
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
 }

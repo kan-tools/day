@@ -590,6 +590,50 @@ recorded". An unanswerable comparison is never silence.
 file cannot witness a telos — being committed is the stronger claim, and it
 costs no new dependency.
 
+**An `every` probe is the one that can fail.** Every probe above asks *does one
+exist*, and over an append-only log that question can only start answering yes
+and never stop. A witness built from existence checks reports its telos met
+forever — which day did to its own `legible-process` (day#138).
+
+```day-witness
+{
+  "reconstructable-process": {"every": {
+    "subject_with": {"kind": "Plan"},
+    "also_carries": [{"kind": "Decision", "starts_with": "adversarial review of"}]
+  }}
+}
+```
+
+Read as: *wherever a design was recorded, a verdict was recorded on the same
+subject.* Two things make that falsifiable where three separate witnesses are
+not.
+
+**Co-location.** `design-doc`, `verdict` and `assessment` as independent
+witnesses are satisfied by three unrelated subjects — a design here, a verdict
+over there. day#86 asked for all three "for the same milestone", and
+`also_carries` is that requirement.
+
+**The universal.** "Some subject carries all three" is still monotone. "*Every*
+subject carrying a design also carries a verdict" goes red the moment a design
+is recorded and green again when it is reviewed, so it tracks the property
+instead of accumulating toward it.
+
+The anchor selects the scope rather than a subject glob, because day's design
+subjects are bare slugs with no shared prefix — and because a hand-maintained
+pattern silently stops covering new work, which is the failure the witness is
+for. An unsatisfied `every` **names the incomplete subjects**, since the reader's
+next action is to go and finish one.
+
+An `every` probe with no subject in scope reports **`VACUOUS`**, not satisfied. A
+universal over an empty set is true and establishes nothing, and reporting that
+as evidence is the same failure one level down. `VACUOUS` is not a failure and
+not evidence — it is the outcome `scripts/revert-demo.py` already uses for "the
+check was taken away and nothing noticed".
+
+A `scope` does not narrow an `every` probe: it has two shapes and no single
+pattern to replace, and day says so rather than letting a reader believe a
+narrowing took effect.
+
 **A `claim` probe is how a record-shaped witness becomes checkable.** Some
 artifacts are not files or tags: a `verdict` is what `day review record`
 appends, an `assessment` is what `kan result` records. Until v0.7 neither was

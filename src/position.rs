@@ -129,6 +129,11 @@ pub fn resolve_corresponding(
         // cycle is a question about *when* evidence appeared; it does not
         // make executing something any more acceptable at session start.
         (Probe::Command(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
+        // Cumulative, boundary or not. A universal states something about the
+        // record AS A WHOLE -- "every design was reviewed" -- and narrowing it
+        // to a cycle would weaken it to "every design recorded since the last
+        // release", which goes quiet exactly while a milestone is in progress.
+        (Probe::Every(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
         // No boundary — the cumulative reading. A claim probe is handled here
         // rather than falling into `evaluate` so it can still report a read it
         // could not make: `evaluate` has nowhere to put one.

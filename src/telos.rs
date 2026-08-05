@@ -540,6 +540,17 @@ fn effective_probe(probe: &Probe, scope: Option<&String>) -> (Probe, Option<Stri
     match probe {
         Probe::Path(_) => (Probe::Path(scope.clone()), None),
         Probe::Tag(_) => (Probe::Tag(scope.clone()), None),
+        // A universal has two shapes and no single pattern argument, so there
+        // is nothing for a scope to replace -- the same reason a claim probe
+        // refuses one, and reported for the same reason: a reader must never
+        // believe a narrowing took effect that did not.
+        Probe::Every(_) => (
+            probe.clone(),
+            Some(format!(
+                "scope `{scope}` ignored: an `every` probe is narrowed by its own \
+                 `subject_with` anchor, and there is no single pattern to replace"
+            )),
+        ),
         Probe::Command(_) => (
             probe.clone(),
             Some(format!(

@@ -71,6 +71,20 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
   whose evidence is "someone recorded that this was met" consumes a flattened
   assessment and makes the flattening durable, which is RQ-11's rule stated as a
   requirement on `schema/witness` rather than as a principle.
+- REQ-20: A witness can express a **universal over co-located claims** —
+  wherever one shape holds on a subject, others must hold on that same subject.
+  Every existing probe asks "does one exist", which over an append-only log can
+  only start answering yes and never stop, so a witness built from them reports
+  its telos met forever (day#138). Co-location is what day#86 asked for and three
+  independent witnesses discard; the universal is what stops the result being
+  monotone.
+- REQ-21: A universal with nothing in scope reports **`VACUOUS`**, never
+  satisfied. A universal over an empty set is true and establishes nothing, which
+  is REQ-9's quiet check arriving through the logic rather than through the data.
+- REQ-22: `day telos declare` reports a witness that cannot distinguish — one
+  already satisfied, or one whose probe can never stop matching. Falsifiability
+  was left to judgement and was got wrong twice in one session; it is mechanically
+  checkable and belongs in the tool.
 - REQ-13: The `verdict` witness's anchor is **declared, not compiled in**.
   `day review record` hardcodes the `adversarial review of` prefix, so a second
   review atom's verdict is unrecordable and is mislabelled into the first atom's
@@ -151,6 +165,20 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - [ ] AC-27: (REQ-19, RQ-11) `day assess telos` states that its exit code is a
   reading derived from the witness state rather than a stored verdict, so a
   reader cannot take a clean exit as a durable property of the telos.
+- [ ] AC-28: (REQ-20) An `every` probe reports unsatisfied when a subject
+  matching the anchor lacks a required shape, satisfied when all of them carry
+  it, and **names the incomplete subjects** rather than counting them.
+- [ ] AC-29: (REQ-20) A required claim on a *different* subject does not complete
+  an anchored one — the co-location is asserted directly, since a predicate that
+  never rejects is indistinguishable from one never applied.
+- [ ] AC-30: (REQ-21) An `every` probe whose anchor matches no subject reports
+  `VACUOUS`, and `VACUOUS` renders distinctly from both met and unmet.
+- [ ] AC-31: (REQ-22) `day telos declare` names a witness that is already
+  satisfied, one whose probe can never stop matching, and one with no probe at
+  all — and declares it anyway.
+- [ ] AC-32: (REQ-20, REQ-9) `telos/legible-process` is declared with a witness
+  that reports absent against day's own log at declaration time, closing day#138
+  by being falsifiable rather than by being re-argued.
 - [ ] AC-17: (REQ-13) The review anchor is read from a declaration; a second
   review atom declaring its own anchor records a verdict that resolves to that
   atom and not to the first.

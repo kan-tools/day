@@ -585,6 +585,11 @@ fn unmet_mark(verdict: &Verdict) -> &'static str {
         Verdict::NotRun(_) => "[not run]",
         Verdict::TimedOut(_) => "[timeout]",
         Verdict::Error(_) => "[error]",
+        // Answered, and the answer establishes nothing — a universal with
+        // nothing to quantify over. It must not read as `[unmet]`, which would
+        // be a finding day did not make, nor as `[met]`, which is the whole
+        // point of having the verdict at all.
+        Verdict::Vacuous(_) => "[vacuous]",
         Verdict::Satisfied(_) => "[met]",
     }
 }
