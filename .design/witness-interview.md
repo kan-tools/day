@@ -85,8 +85,10 @@ declaring no witnesses (day#86).
   the fixture telos really declares no witnesses — before asserting the
   interview remedy is what gets rendered.
 - [ ] AC-16: (REQ-11) `day assess telos` with no `--run` reports at least one
-  material verdict for each of the four foundational teloi, or names the flag
-  that would produce one at the point where it would otherwise be silent.
+  material verdict for each of the four foundational teloi. This is satisfied by
+  the disjunctive group the companion pass adds, so it is the one criterion here
+  that lands only once that pass does — stated as a dependency rather than left
+  to be discovered.
 
 ## Architecture
 
@@ -104,8 +106,8 @@ drives the call site they were thinking about. Three call sites that already
 disagree about wording is that condition, observed rather than predicted.
 
 `src/status.rs`'s case is *adjacent, not identical* — no probes declared for the
-project is a different fact from no witnesses declared on a telos — so it is
-resolved as an open question below rather than folded in by assumption.
+project is a different fact from no witnesses declared on a telos — so it was
+put as a question rather than folded in by assumption, and RQ-1 keeps it out.
 
 The atom is data, not a verb. `day atom declare` already takes `--in`, `--out`,
 `--next`, `--revisits`, `--done` and `--note`, so `witness-interview` is
@@ -122,25 +124,41 @@ needed. Declaring the atom first and then inventing an interview to fit it is
 the failure mode `.design/position-honesty.md` names — writing the expectation
 table from reasoning rather than from a measurement run.
 
-## Open Questions
-
-<!-- OPEN: Q4 -->
-### Q4: How does REQ-11 make a command-witnessed telos visible by default?
-
-Three candidates, none obviously right. **Run guard-shaped command probes at
-assessment time** — but `--run` is one of the four rules bounding `src/probe.rs`
-and CLAUDE.md says not to relax them, so this is the one to argue hardest
-against. **Declare a record-tier witness alongside each command probe**, so the
-default read shows the recorded assessment even when the material probe is
-unrun; cheap, and it risks the log agreeing with itself. **Say it at the point
-of silence** — render `NOT RUN` with the exact `--run` invocation rather than
-leaving the reader with an empty material section; smallest, and it fixes
-legibility without making anything more checkable.
-
-**To resolve**: Edit this section with your decision and remove the `<!-- OPEN -->` marker.
-<!-- /OPEN -->
-
 ## Resolved Questions
+
+Stated as `RQ-` bullets before the narrative, and that form is the point rather
+than a style choice. This document's first recording produced an observe, a plan
+and **zero decides**: `design::check_against_record` reads resolutions from
+*bullets* carrying `RQ-` ids, so the `### Qn:` headings below yielded nothing and
+`day design check` said nothing about it. `.design/verification-that-can-fail.md`
+has the same shape, so v0.11's design resolutions never reached the log as
+decisions either. The finding is recorded on this subject; the bullets are the
+fix applied to the document that found it.
+
+- RQ-1: `src/status.rs`'s no-probes-declared message **stays separate** from the
+  unwitnessed-telos renderer. It reports a project-level fact — no readable probe
+  in `schema/witness` — which is upstream of any telos, and day#108 already
+  rejected routing that reader to a remedy that does not remedy it. REQ-3's scan
+  is therefore keyed on the presence of the literal `--witness <type>`, a
+  positive signal that `status.rs` does not contain.
+- RQ-2: The four foundational teloi take the witnesses in the table below —
+  `legible-process` conjunctively from the three types already declared, and the
+  other three from `command` probes over day's own guard tests, confirming
+  day#86's prediction that day's foundational properties are evidenced by its own
+  tests rather than by artifacts.
+- RQ-3: The interview atom declares **both edges** — `--next` from `design` for
+  the prospective case and `--revisits` from `assess-telos` for the retrospective
+  one. Both are real occasions, and declaring only one leaves the other with no
+  route to the atom.
+- RQ-4: The unrun-command problem (REQ-11) is served by the **disjunction** the
+  companion pass adds, not by new machinery here: a group whose members are the
+  command probe and a recorded assessment is satisfied either by running the
+  check or by someone having recorded that they did. Running guard probes at
+  assessment time was rejected — `--run` is one of the four rules bounding
+  `src/probe.rs`.
+- RQ-5: A **disjunctive witness set is not expressible**, found by running this
+  interview, and it is a separate design pass rather than a decision to take
+  here. `.design/witness-model.md` carries it with eight further gaps.
 
 ### Q1: `src/status.rs`'s no-probes-declared message stays separate
 

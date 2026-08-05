@@ -28,11 +28,11 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
   artifact is expressible. Every probe kind in `src/probe.rs` is an existence
   check today, and day#125's guest-tree telos — "our tooling leaves no trace on
   repositories we are guests in" — is unprobeable in principle as a result.
-- REQ-5: A negated probe that forbids something which has never existed in this
-  repository reports **`VACUOUS`**, not satisfied. Vacuity is a could-not-
-  establish, and `src/probe.rs`'s existing precedence — only a probe that ran and
-  found nothing counts against the telos — must extend to it without letting a
-  vacuous pass read as evidence.
+- REQ-5: A negated probe reports **`VACUOUS`** unless a **companion positive
+  witness** resolves, establishing that the forbidden thing could have occurred.
+  Absence on its own establishes nothing, and `src/probe.rs`'s existing
+  precedence — only a probe that ran and found nothing counts against the telos —
+  must extend to vacuity without letting a vacuous pass read as evidence.
 - REQ-6: A claim probe can require evidence **not authored by a given identity**,
   so a telos cannot be satisfied by the person who declared it. This is the abuse
   case: without it, an adoption witness is satisfiable by its own author.
@@ -63,7 +63,10 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - REQ-12: A telos whose witnesses are all `command` probes is not silent by
   default. `src/probe.rs` correctly treats an unauthorized command as absence of
   evidence rather than failure, and the consequence is that three of day's four
-  foundational teloi show nothing material unless someone passes `--run`.
+  foundational teloi show nothing material unless someone passes `--run`. This is
+  served by REQ-1's disjunction rather than by new machinery: a group whose
+  members are the command probe and a recorded assessment is satisfied either by
+  running the check or by someone having recorded that they did.
 - REQ-13: The `verdict` witness's anchor is **declared, not compiled in**.
   `day review record` hardcodes the `adversarial review of` prefix, so a second
   review atom's verdict is unrecordable and is mislabelled into the first atom's
@@ -83,6 +86,13 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - REQ-17: A witness form that day can parse but not evaluate is reported as
   unreadable rather than skipped, extending `WitnessSchema::unreadable`'s
   existing behaviour to every form added here.
+- REQ-18: A negated `command` probe must declare which non-zero exit means "ran
+  and found nothing"; any other non-zero code is `Error`, never satisfied.
+  `run_command` collapses every non-zero exit into `Unsatisfied`, which is
+  conservative un-negated and a **false clean** negated — `grep -r SECRET srcc/`
+  exits 2 for a bad path and would report the secret absent. This is the one
+  place negation-as-a-uniform-modifier does not hold, and it lands in the feature
+  whose whole point is a vacuity guard.
 
 ## Acceptance Criteria
 
@@ -97,12 +107,19 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
   produces none of its members, and names the whole group rather than one entry.
 - [ ] AC-5: (REQ-4) A negated `path` probe reports satisfied when no tracked file
   matches, and unsatisfied when one does.
-- [ ] AC-6: (REQ-5) A negated probe whose pattern has never matched anything in
-  the repository's history reports `VACUOUS`, and `VACUOUS` does not make the
+- [ ] AC-6: (REQ-5) A negated probe with no companion positive witness, or whose
+  companion does not resolve, reports `VACUOUS`, and `VACUOUS` does not make the
   telos report clean.
 - [ ] AC-7: (REQ-5) `VACUOUS` is distinct from satisfied in both the render and
   the exit-code precedence, and a test asserts a vacuous witness is not counted
   as evidence.
+- [ ] AC-24: (REQ-5) All three states of day#125's guest-tree case are driven by
+  fixtures and report distinctly: no companion resolving is `VACUOUS`, companion
+  present with the forbidden path tracked is unsatisfied, and companion present
+  with it absent is satisfied.
+- [ ] AC-25: (REQ-18) A negated `command` probe declaring an expected exit code
+  reports satisfied on that code and `Error` on any other non-zero code; a
+  fixture drives the bad-path case that would otherwise read as a false clean.
 - [ ] AC-8: (REQ-6) A claim probe excluding an author DID reports unsatisfied
   when the only matching claims carry that DID, and satisfied when one does not.
 - [ ] AC-9: (REQ-6) The exclusion resolves the active identity without a second
@@ -121,9 +138,9 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - [ ] AC-15: (REQ-11) The missing-witness-schema failure prints a starter block
   that can be pasted into a `kan observe` without editing, and a test asserts the
   printed block parses as a `day-witness` map.
-- [ ] AC-16: (REQ-12) `day assess telos` with no `--run` names the exact
-  invocation that would resolve each unrun command witness, at the point where
-  the material section would otherwise be empty.
+- [ ] AC-16: (REQ-12) A foundational telos declaring a disjunctive group whose
+  members are a `command` probe and a recorded assessment reports clean with no
+  `--run`, when the assessment exists and the command has not been authorized.
 - [ ] AC-17: (REQ-13) The review anchor is read from a declaration; a second
   review atom declaring its own anchor records a verdict that resolves to that
   atom and not to the first.
@@ -160,13 +177,31 @@ becomes "no group with every member unsatisfied".
 **Negation** is a modifier on a probe rather than a new kind, per day#125, and
 the vacuity guard is what makes that safe. A negated probe is satisfied by
 everything that does not exist, which is the inverse of the cannot-fail problem
-day#86 names — so `VACUOUS` is the verdict when the forbidden thing has never
-existed in this repository at all. That is computable from the substrate day
-already has: `src/git.rs` is read-only history, and "has this pathspec ever been
-added" is a read subcommand. The precedent for the outcome name is deliberate —
-`scripts/revert-demo.py` already reports `VACUOUS` as one of seven outcomes, and
-CLAUDE.md records that it is a finding rather than a nuisance. Reusing the word
-means one concept rather than two.
+day#86 names — so it needs a companion positive witness before its satisfaction
+means anything, and reports `VACUOUS` without one.
+
+The rule this *replaces* is worth recording, because it was the intuitive one and
+it is wrong. Deciding vacuity from git history — has this pathspec ever been
+added — is computable from the read-only substrate in `src/git.rs`, and it fails
+the exact case that motivated negation: if day left no trace in a guest tree,
+there is no history of a trace either, so the probe reports vacuous forever,
+precisely when the telos is genuinely held. Absence of the artifact is also
+absence of the evidence that anything could have produced it. The companion rule
+has no such circularity and is not git-shaped, so it answers `claim` and
+`command` negation on the same terms.
+
+`command` is where negation stops being uniform, and REQ-18 is the exception
+stated rather than papered over. `run_command` maps every non-zero exit to
+`Unsatisfied` — correct and conservative for an existence check, and a false
+clean once inverted, since a mistyped pathspec exits non-zero exactly as
+"searched and found nothing" does. A spawn failure is already `Verdict::Error`,
+so the hazard is narrower than it first looks and lives entirely in the exit
+code, which is why declaring the expected one closes it.
+
+The precedent for the outcome name is deliberate — `scripts/revert-demo.py`
+already reports `VACUOUS` as one of seven outcomes, and CLAUDE.md records that it
+is a finding rather than a nuisance. Reusing the word means one concept rather
+than two.
 
 **Authorship** extends `ClaimShape`, which today carries `kind`, `contains`,
 `starts_with`, `subject` and `block` — all constants. An author exclusion is
@@ -216,47 +251,29 @@ polish — a witness nobody can see declared is not a witness.
   unwitnessed-telos renderer, carried over from the companion pass: it reports a
   project-level fact, and day#108 already rejected routing it to a remedy that
   does not remedy it.
-
-## Open Questions
-
-<!-- OPEN: Q1 -->
-### Q1: What counts as "has never existed" for the vacuity guard?
-
-The guard needs a definition of the capacity to violate. Reading the full git
-history for a pathspec is available and read-only, but it answers a question
-about the *repository*, not about the telos — a pattern that never matched
-because the project is young is not the same as one that cannot match. Candidates:
-history-wide match, a declared demonstration of a violating state, or reporting
-vacuity as a note rather than a verdict when it cannot be decided. Negated
-`claim` and `command` probes need an answer that is not git-shaped at all.
-
-**To resolve**: Edit this section with your decision and remove the `<!-- OPEN -->` marker.
-<!-- /OPEN -->
-
-<!-- OPEN: Q2 -->
-### Q2: Does correspondence stay in this pass, or split?
-
-It is the only requirement here that needs the material verdict in scope while a
-record probe evaluates, which is machinery the other eight do not need. Keeping
-it makes this the pass that finally closes day#103's own case; splitting it keeps
-the rest shippable on a shorter cycle. The deciding question is whether the
-milestone has room, which is not yet known.
-
-**To resolve**: Edit this section with your decision and remove the `<!-- OPEN -->` marker.
-<!-- /OPEN -->
-
-<!-- OPEN: Q3 -->
-### Q3: How does REQ-12 make an unrun command witness visible?
-
-Carried from the companion pass, where it was raised and not settled. Running
-guard-shaped command probes at assessment time is the option to argue hardest
-against, since `--run` is one of the four rules bounding command execution.
-Declaring a record-tier witness beside each command probe risks the log agreeing
-with itself. Naming the exact `--run` invocation at the point of silence is the
-smallest and fixes legibility without making anything more checkable.
-
-**To resolve**: Edit this section with your decision and remove the `<!-- OPEN -->` marker.
-<!-- /OPEN -->
+- RQ-7: **Vacuity is decided by a companion positive witness**, not by git
+  history. History-wide matching was the intuitive rule and is provably wrong for
+  the case that motivated negation: if day left no trace in a guest tree, there is
+  no history of a trace either, so the probe would report `VACUOUS` forever —
+  exactly when the telos is genuinely held. The companion rule is correct on all
+  three states, is uniform across probe kinds rather than git-shaped, and
+  generalizes `PairedWitness` instead of adding a parallel mechanism.
+- RQ-8: **A negated `command` probe declares its expected exit code.** Negation
+  was to be a uniform modifier, and `run_command` is where that does not hold:
+  every non-zero exit becomes `Unsatisfied`, which is conservative un-negated and
+  a false clean negated. Requiring the author to state which code means "found
+  nothing" makes the failure loud instead of silent, and keeps the expressiveness
+  that excluding `command` from negation would have cost.
+- RQ-9: **Correspondence stays in this pass, sequenced last.** It is the only
+  requirement with real machinery risk, so it is implemented after the other
+  eight and can be dropped without unpicking them. It closes day#103's own case,
+  open across two milestones and the reason the pair mechanism exists.
+- RQ-10: **The unrun-command problem is served by disjunction, not by new
+  machinery.** A group whose members are the command probe and a recorded
+  assessment is satisfied either by running the check or by someone having
+  recorded that they ran it. This makes the telos genuinely checkable by default
+  rather than merely better explained, and it is the first evidence that REQ-1
+  pays for itself beyond the case that prompted it.
 
 ## Out of Scope
 
