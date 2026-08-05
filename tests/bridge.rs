@@ -339,7 +339,11 @@ fn ac8_a_target_with_no_witnesses_says_so_and_does_not_fail() {
         "an undeclared witness list is a gap, not a failure: {stdout}"
     );
     assert!(stdout.contains("declares no witnesses"), "{stdout}");
-    assert!(stdout.contains("--witness"), "it should say how to fix it");
+    assert!(
+        stdout.contains("/witness-interview"),
+        "it should say how to fix it, and the fix is the interview rather than a \
+         guess at a witness: {stdout}"
+    );
 }
 
 /// `.design/bridging.md` AC-9. day checks whether an arrangement *could*

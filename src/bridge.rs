@@ -389,11 +389,10 @@ impl Report {
         }
 
         if !self.checkable {
-            out.push_str(&format!(
-                "  telos/{} declares no witnesses, so whether this plan reaches it\n  \
-                 cannot be checked mechanically — only that the steps compose.\n  \
-                 Declare what would evidence it: day telos declare {} \"...\" --witness <type>\n",
-                self.telos, self.telos
+            out.push_str(&crate::telos::unwitnessed_remedy(
+                &self.telos,
+                "whether this plan reaches it\n  cannot be checked mechanically -- only that \
+                 the steps compose.",
             ));
         } else if self.uncovered.is_empty() {
             out.push_str(&format!(

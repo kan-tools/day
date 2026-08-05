@@ -1532,3 +1532,133 @@ fn the_test_only_caller_scan_finds_the_instance_it_was_written_for() {
         "the one offender must be `Compat::is_notable`; got {offenders:?}"
     );
 }
+
+/// `.design/witness-interview.md` AC-4 — **the unwitnessed-telos remedy has
+/// exactly one renderer.**
+///
+/// day printed this advice from two places, `assess telos` and `bridge check`,
+/// each formatting its own prose. The wording had already drifted apart, which
+/// is the condition under which a third arrives and nobody notices — day#101's
+/// shape, and CLAUDE.md's standing rule that a guarantee about what day reports
+/// belongs in the mechanism rather than at a call site.
+///
+/// **Keyed on the presence of the phrase, never on its absence.** CLAUDE.md
+/// records a classifier that looked for `composition: ok` to mean "loaded it
+/// anyway" and mis-filed a reader when an unrelated finding suppressed the
+/// phrase. So this asserts where [`day::telos::UNWITNESSED`] *does* appear, not
+/// where it does not.
+///
+/// **`src/status.rs` is deliberately not in scope, and that is a decision
+/// rather than an oversight.** Its "no witness probes are declared" message
+/// reports a *project-level* fact — `schema/witness` declares no readable probe
+/// at all — which is upstream of any telos and independent of it, as
+/// `position::unordered`'s comment already states. day#108 proposed routing that
+/// reader to `day init` and it was rejected because that verb "records a
+/// `schema/design-doc` starter and no witnesses at all — a remedy that does not
+/// remedy this". Routing it to the interview would reintroduce exactly that,
+/// since no telos is in question. The two separate cleanly on text that already
+/// differs, which is why this scan can be precise.
+///
+/// **What this does not catch, stated so it does not overclaim:** prose that
+/// conveys the same advice in different words. A scan matches text, not
+/// meaning. It catches the concrete failure that occurred — a second site
+/// emitting this phrase — and not a paraphrase of it.
+///
+/// **The phrase is a literal here, not `day::telos::UNWITNESSED`.** The first
+/// version imported a constant the fix introduced, and `revert-demo.py`
+/// reported `DID-NOT-COMPILE` — reverting the fix took the constant with it, so
+/// the test could not run and the demonstration said nothing about coverage. A
+/// scan asserting a fact about source *text* has to own the text it matches, for
+/// the same reason: sharing a constant means a rename moves both sides together
+/// and the scan silently checks something else.
+#[test]
+fn the_unwitnessed_remedy_has_one_renderer() {
+    const MARKER: &str = "unwitnessed-remedy-elsewhere:";
+    const PHRASE: &str = "declares no witnesses";
+    // The one legitimate emitter, located by its own definition rather than by
+    // file. A second hand-rolled site inside `telos.rs` is caught the same way
+    // one in another module is — the failure was three sites across three
+    // files, and keying on the file would have exempted the worst case.
+    const RENDERER: &str = "pub fn unwitnessed_remedy";
+
+    let mut offenders = Vec::new();
+    let mut solo_guess = Vec::new();
+    let mut renderers = 0usize;
+    let mut stack = vec![repo_root().join("src")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let raw = std::fs::read_to_string(&path).unwrap();
+            // `production_half` rather than a hand-rolled `#[cfg(test)]` cut.
+            // The first version of this cut at the first line carrying the
+            // attribute, which is the exact defect `cfg_test_module_line`
+            // documents: a single `#[cfg(test)] use std::…;` near the top would
+            // exempt every line below it, silently and for the whole file. It
+            // also strips comments, so this repo's habit of describing past
+            // defects in prose does not read as a live one.
+            let code = production_half(&raw);
+            let raw_lines: Vec<&str> = raw.lines().collect();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+            // The renderer's own body is the one place the phrase belongs.
+            // Located by definition rather than by file, so a second site in
+            // `telos.rs` is caught exactly as one elsewhere is.
+            let span = code.find(RENDERER).map(|at| {
+                let from = code[..at].lines().count();
+                let rest = &code[at..];
+                let len = rest
+                    .find("\n}")
+                    .map(|e| rest[..e].lines().count())
+                    .unwrap_or_else(|| rest.lines().count());
+                (from, from + len)
+            });
+            if span.is_some() {
+                renderers += 1;
+            }
+
+            for (n, line) in code.lines().enumerate() {
+                // Markers are read from the RAW lines: the marker lives in a
+                // comment, and `production_half` has already stripped those.
+                if raw_lines.get(n).is_some_and(|l| l.contains(MARKER)) {
+                    continue;
+                }
+                if line.contains(PHRASE) && !span.is_some_and(|(a, b)| n >= a && n <= b) {
+                    offenders.push(format!("{name}:{}", n + 1));
+                }
+                // The remedy this replaced. It handed the reader a command
+                // inviting a solo guess at a witness, which day#86 records as
+                // worse than the state it purports to fix.
+                if line.contains("--witness <type>") {
+                    solo_guess.push(format!("{name}:{}", n + 1));
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        renderers, 1,
+        "expected exactly one `{RENDERER}` in src/, found {renderers}"
+    );
+    assert!(
+        offenders.is_empty(),
+        "the unwitnessed-telos remedy is rendered outside `telos::unwitnessed_remedy` at \
+         {offenders:?}.\n\n\
+         Two call sites rendered this independently and their wording had already drifted; \
+         collapse the new site into that function, or mark it `{MARKER} <why this one is \
+         genuinely a different fact>` — as `status.rs`'s project-level message would be."
+    );
+    assert!(
+        solo_guess.is_empty(),
+        "the solo-guess remedy `--witness <type>` is emitted at {solo_guess:?}.\n\n\
+         Telling a reading agent to declare a witness itself is what this replaced: a \
+         trivially satisfiable witness reports the telos met forever (day#86), and a bad \
+         witness is worse than none. Point at `/witness-interview <slug>` instead."
+    );
+}

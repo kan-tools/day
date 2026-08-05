@@ -37,6 +37,47 @@ pub const WITNESS_SLUG: &str = "witness";
 /// Fence info string marking a witness-probe map inside a claim's text.
 pub const FENCE_INFO: &str = "day-witness";
 
+/// **The one place day says what to do about a telos declaring no witnesses.**
+///
+/// Two call sites rendered this independently — `assess telos` and `bridge
+/// check` — with wording that had already drifted apart, which is how a third
+/// arrives unnoticed. `CLAUDE.md` records the rule this follows: a guarantee
+/// about what day reports belongs in the mechanism, never in a caller, because
+/// a check added at a call site looks complete when the author's test drives
+/// the call site they were thinking about.
+///
+/// **What changed with the collapse is the advice, not just its home.** Both
+/// sites used to print `day telos declare <slug> "..." --witness <type>`, which
+/// hands the reading agent a command that invites it to guess a witness alone.
+/// day#86 records why that is worse than the state it purports to fix: a
+/// trivially satisfiable witness reports the telos met forever, which is the
+/// failure `telos/v05-shipped` taught, and a bad witness is worse than none. So
+/// the remedy names the interview instead — a pass that asks a human what would
+/// evidence this, because that is not inferable from a slug.
+///
+/// It points at the slash command rather than at `atom/witness-interview`,
+/// deliberately. The command ships with the plugin and therefore exists
+/// wherever day is installed; the atom is a kan claim that a fresh repo has
+/// not declared. Pointing at the atom would be a remedy that does not remedy —
+/// day#108's finding, which `src/status.rs` already acted on once.
+///
+/// The phrase "declares no witnesses" is written literally here rather than
+/// pulled from a shared constant, and `tests/plugin.rs`'s scan writes it
+/// literally too. That looks like duplication and is the opposite: a scan
+/// asserting a fact about *source text* must own the text it matches, or a
+/// rename carries both sides along together and the scan quietly checks
+/// something else. It also keeps the scan compiling when this function does
+/// not, which is what lets a reversion demonstrate that it fires.
+pub fn unwitnessed_remedy(slug: &str, consequence: &str) -> String {
+    format!(
+        "  {}{slug} declares no witnesses, so {consequence}\n  \
+         What would evidence it is a question for a person, not a guess -- and a\n  \
+         witness that cannot fail is worse than none (day#86). Establish one:\n    \
+         /witness-interview {slug}\n",
+        atoms::TELOS_PREFIX,
+    )
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -435,13 +476,10 @@ impl Report {
         out.push('\n');
 
         if !self.checkable {
-            out.push_str(&format!(
-                "  {}{} declares no witnesses, so whether work landed inside its\n  \
-                 equivalence class cannot be checked mechanically. Declare what would\n  \
-                 evidence it:\n    day telos declare {} \"...\" --witness <type>\n",
-                atoms::TELOS_PREFIX,
-                self.telos,
-                self.telos
+            out.push_str(&unwitnessed_remedy(
+                &self.telos,
+                "whether work landed inside its\n  equivalence class cannot be checked \
+                 mechanically.",
             ));
         } else {
             out.push_str("Material evidence:\n");
@@ -1052,6 +1090,9 @@ mod tests {
         };
         let rendered = report.render();
         assert!(rendered.contains("declares no witnesses"), "{rendered}");
-        assert!(rendered.contains("--witness"), "{rendered}");
+        // The remedy is the interview, not `--witness <type>`. Asserted as the
+        // positive string rather than as "does not contain the old one": a
+        // negative assertion passes when the whole block is missing.
+        assert!(rendered.contains("/witness-interview t"), "{rendered}");
     }
 }

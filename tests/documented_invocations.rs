@@ -35,11 +35,12 @@ use std::process::Command;
 /// omitted three of seven block types, twice, because its check was a number.
 /// [`the_corpus_covers_every_page_that_carries_a_shell_block`] asserts this list
 /// is still complete.
-const PAGES: [&str; 4] = [
+const PAGES: [&str; 5] = [
     "README.md",
     "docs/CONVENTIONS.md",
     "commands/adversarial-review.md",
     "commands/design.md",
+    "commands/witness-interview.md",
 ];
 
 const FENCES: [&str; 4] = ["```bash", "```console", "```sh", "```shell"];
@@ -246,8 +247,13 @@ fn every_documented_day_invocation_parses_and_runs() {
     // twice: a generator whose failure mode is less output needs an exhaustive
     // expectation. Changing this number is a decision about coverage, and the
     // message says so.
+    // 12/5 since `commands/witness-interview.md` joined the corpus. It adds two
+    // skips and no runs, which is honest rather than disappointing: both of its
+    // `day` examples take the telos slug being interviewed, so both are
+    // genuinely templates. The page is in `PAGES` so that a *runnable* example
+    // added to it later is executed rather than silently uncovered.
     const EXPECTED_RUN: usize = 12;
-    const EXPECTED_SKIPPED: usize = 3;
+    const EXPECTED_SKIPPED: usize = 5;
     assert_eq!(
         (ran, skipped),
         (EXPECTED_RUN, EXPECTED_SKIPPED),

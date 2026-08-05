@@ -287,7 +287,10 @@ fn ac11_a_telos_without_witnesses_is_reported_as_not_checkable() {
     let out = day(dir.path(), &kan, &git, &["assess", "telos", "vague"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("declares no witnesses"), "{stdout}");
-    assert!(stdout.contains("--witness"), "{stdout}");
+    // It must route to the interview rather than hand the reader a command to
+    // declare a witness itself — day#86: a trivially satisfiable witness
+    // reports the telos met forever, which is worse than none.
+    assert!(stdout.contains("/witness-interview vague"), "{stdout}");
     assert_eq!(out.status.code(), Some(0), "unassessable is not failing");
 }
 
