@@ -564,3 +564,82 @@ fn ac8_a_scope_never_alters_what_a_command_probe_executes() {
     assert!(stdout.contains("ignored"), "{stdout}");
     assert!(stdout.contains("decide what runs"), "{stdout}");
 }
+
+/// AC-2, end to end — **a telos with an any-of group exits clean on one
+/// satisfied member**, through the shipped binary rather than through
+/// `is_clean` alone.
+///
+/// The premise is asserted first, day#91-style: the fixture must really be in
+/// the state where one member fails, or a green exit proves nothing. `git`
+/// reports no tags, so `published-artifact` is genuinely `[MISSING]`; the
+/// design doc exists, so `design-doc` is `[MATERIAL]`. Under the conjunction
+/// this replaces, that combination exited non-zero.
+#[test]
+fn an_any_of_group_exits_clean_when_one_member_is_satisfied() {
+    let dir = tempfile::tempdir().unwrap();
+    let claims = vec![
+        claim(
+            "telos/either",
+            "bafyreie",
+            "Either will do.\n\n```day-telos\n{\"witnesses\":[[\"published-artifact\",\"design-doc\"]]}\n```\n",
+        ),
+        witness_schema(
+            "bafyreiw",
+            r#"{"published-artifact": {"tag": "v*"}, "design-doc": {"path": ".design/*.md"}}"#,
+        ),
+    ];
+    let kan = write_kan_stub(dir.path(), &claims);
+    // No tags, one design doc: exactly one member can be satisfied.
+    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "either"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Premise: the group really does contain a failing member.
+    assert!(
+        stdout.contains("[MISSING] published-artifact"),
+        "premise: one member must genuinely fail, or a clean exit proves nothing: {stdout}"
+    );
+    assert!(
+        stdout.contains("[MATERIAL] design-doc"),
+        "premise: the other member must genuinely be satisfied: {stdout}"
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "one satisfied alternative is what the group declared to be enough: {stdout}"
+    );
+    // Without this line the report contradicts itself to a reader: a
+    // `[MISSING]` above a clean exit reads as a bug.
+    assert!(
+        stdout.contains("any of [published-artifact | design-doc]"),
+        "the report must say these are alternatives: {stdout}"
+    );
+}
+
+/// AC-2 — and it still fails when *every* member fails.
+#[test]
+fn an_any_of_group_fails_when_no_member_is_satisfied() {
+    let dir = tempfile::tempdir().unwrap();
+    let claims = vec![
+        claim(
+            "telos/either",
+            "bafyreie",
+            "Either will do.\n\n```day-telos\n{\"witnesses\":[[\"published-artifact\",\"design-doc\"]]}\n```\n",
+        ),
+        witness_schema(
+            "bafyreiw",
+            r#"{"published-artifact": {"tag": "v*"}, "design-doc": {"path": ".design/*.md"}}"#,
+        ),
+    ];
+    let kan = write_kan_stub(dir.path(), &claims);
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "either"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "a disjunction is not a way to never fail: {stdout}"
+    );
+}

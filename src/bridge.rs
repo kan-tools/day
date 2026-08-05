@@ -43,6 +43,55 @@ pub enum Error {
     UndeclaredAtoms(String),
 }
 
+/// One entry in a witness list: a single type, or a set of types **any one of
+/// which** suffices.
+///
+/// The list stays a conjunction of entries and an entry may now be a
+/// disjunction, so a declaration reads as "all of these, where this one may be
+/// satisfied any of these ways". That shape is not a preference: it makes the
+/// change **backward compatible by construction**. A bare string parses as
+/// [`Group::One`] and serializes back to a bare string, so every `day-telos`
+/// block written before this keeps both its meaning and its bytes — which a
+/// parallel `witnesses_any` key would not have, leaving two lists to hold in
+/// agreement.
+///
+/// The gap this closes was found by running the interview in
+/// `.design/witness-interview.md`: asked what would evidence day's own v1.0
+/// bar, the author named three independently valid answers, and day could only
+/// say "all of them". `is_clean` and [`check`]'s `uncovered` were both
+/// conjunctions, so the render listed witnesses independently while the verdict
+/// and-ed them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Group {
+    /// Exactly this type. What every witness was before groups existed.
+    One(String),
+    /// Any one of these types. An empty list is vacuous and is refused at
+    /// declare time rather than silently satisfying nothing.
+    Any(Vec<String>),
+}
+
+impl Group {
+    /// The types named in this entry, in declaration order.
+    pub fn members(&self) -> Vec<&str> {
+        match self {
+            Group::One(w) => vec![w.as_str()],
+            Group::Any(ws) => ws.iter().map(String::as_str).collect(),
+        }
+    }
+
+    /// How the entry is named in output. A disjunction renders with `|` so a
+    /// reader can tell at a glance which entries have alternatives — the
+    /// verdict depends on it, so hiding it would make the report unreadable
+    /// against its own conclusion.
+    pub fn label(&self) -> String {
+        match self {
+            Group::One(w) => w.clone(),
+            Group::Any(ws) => ws.join(" | "),
+        }
+    }
+}
+
 /// What a telos declares as evidence for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -50,8 +99,10 @@ pub struct Witnesses {
     /// Artifact types that would evidence this telos. Types, not instances:
     /// many concrete artifacts of a declared type satisfy the telos equally,
     /// which is the weak equivalence being preserved.
+    ///
+    /// Each entry is a [`Group`]: a type, or several any one of which counts.
     #[serde(default)]
-    pub witnesses: Vec<String>,
+    pub witnesses: Vec<Group>,
     /// Per-witness narrowing of *which instances count* (day#34). The
     /// project's `schema/witness` map still decides which kind of probe
     /// runs; this only tightens its pattern.
@@ -76,6 +127,26 @@ impl crate::atoms::Versioned for Witnesses {
 }
 
 impl Witnesses {
+    /// Every type named anywhere in the list, in declaration order, without
+    /// repeats.
+    ///
+    /// Probing is per *type* — a type resolves to one probe and one verdict no
+    /// matter how many entries name it — while the verdict is per *group*.
+    /// Keeping the two apart is what stops a type appearing twice in the
+    /// material section when two groups happen to offer the same alternative.
+    pub fn types(&self) -> Vec<String> {
+        let mut seen = BTreeSet::new();
+        let mut out = Vec::new();
+        for group in &self.witnesses {
+            for member in group.members() {
+                if seen.insert(member.to_string()) {
+                    out.push(member.to_string());
+                }
+            }
+        }
+        out
+    }
+
     pub fn to_claim_text(&self, statement: &str) -> String {
         let json = serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string());
         format!("{statement}\n\n```{TELOS_FENCE}\n{json}\n```\n")
@@ -368,11 +439,21 @@ pub struct Report {
     pub bridge: String,
     pub telos: String,
     pub findings: Vec<Finding>,
-    /// What the target telos declares as evidence for itself.
+    /// What the target telos declares as evidence for itself, one label per
+    /// declared group — so a disjunction reads as `a | b` rather than as two
+    /// independent requirements.
     pub witnesses: Vec<String>,
-    /// Declared witnesses the plan does not produce. Empty when the target
-    /// declares none, in which case `checkable` is false.
+    /// Declared witness groups the plan does not produce, labelled the same
+    /// way. A group counts as covered when **any** member is produced. Empty
+    /// when the target declares none, in which case `checkable` is false.
     pub uncovered: Vec<String>,
+    /// For each covered group offering alternatives, which member the plan
+    /// actually produced — `"a | b -> b"`.
+    ///
+    /// REQ-3: a disjunction that reports "reaches" without saying *how* leaves
+    /// the reader unable to tell a plan that satisfies the strong member from
+    /// one that scrapes by on the weak one, and those are different plans.
+    pub counted: Vec<String>,
     pub checkable: bool,
     pub available: BTreeSet<String>,
 }
@@ -400,6 +481,9 @@ impl Report {
                 self.telos,
                 self.witnesses.join(", ")
             ));
+            for counted in &self.counted {
+                out.push_str(&format!("    any-of satisfied by: {counted}\n"));
+            }
         } else {
             out.push_str(&format!(
                 "  does not reach telos/{}: witness(es) [{}] are never produced\n",
@@ -443,18 +527,30 @@ pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
         .map(|(_cid, w)| w.witnesses)
         .unwrap_or_default();
 
-    let uncovered: Vec<String> = witnesses
-        .iter()
-        .filter(|w| !available.contains(*w))
-        .cloned()
-        .collect();
+    // Per group, not per type. A group is covered when the plan produces
+    // **any** member; only a group with no member produced is uncovered.
+    let mut uncovered = Vec::new();
+    let mut counted = Vec::new();
+    for group in &witnesses {
+        match group.members().into_iter().find(|m| available.contains(*m)) {
+            None => uncovered.push(group.label()),
+            // Named only for a real alternative. Reporting "a satisfied by a"
+            // for every single-member group would bury the lines that carry
+            // information under lines that carry none.
+            Some(member) if group.members().len() > 1 => {
+                counted.push(format!("{} -> {member}", group.label()));
+            }
+            Some(_) => {}
+        }
+    }
 
     Ok(Report {
         bridge: slug.to_string(),
         telos: plan.telos,
         findings,
-        witnesses: witnesses.clone(),
+        witnesses: witnesses.iter().map(Group::label).collect(),
         uncovered,
+        counted,
         checkable: !witnesses.is_empty(),
         available,
     })
@@ -678,5 +774,57 @@ mod empty_nodes {
             plan: node,
         };
         assert!(p.validate().is_ok(), "{:?}", p.validate());
+    }
+
+    /// AC-1 — **an existing declaration keeps both its meaning and its bytes.**
+    ///
+    /// The nested form was chosen over a parallel `witnesses_any` key precisely
+    /// so this holds by construction rather than by care. Asserted on the
+    /// serialized text, not just on the parsed value: a round-trip that changed
+    /// `["a","b"]` into `[["a"],["b"]]` would still compare equal as a `Witnesses`
+    /// while rewriting every telos claim day has ever recorded the next time one
+    /// was revised.
+    #[test]
+    fn a_declaration_written_before_groups_existed_parses_and_reserializes_unchanged() {
+        let before = r#"{"witnesses":["published-artifact","assessment"]}"#;
+        let parsed: Witnesses = serde_json::from_str(before).expect("v1 block should parse");
+        assert_eq!(
+            parsed.witnesses,
+            vec![
+                Group::One("published-artifact".into()),
+                Group::One("assessment".into())
+            ],
+            "a bare string is a one-member group"
+        );
+        assert_eq!(
+            serde_json::to_string(&parsed).unwrap(),
+            before,
+            "reserializing a v1 block must be byte-identical"
+        );
+    }
+
+    /// AC-1 — the disjunctive form survives its own round trip.
+    #[test]
+    fn an_any_of_group_round_trips_as_a_nested_array() {
+        let text = r#"{"witnesses":["design-doc",["passing-tests","assessment"]]}"#;
+        let parsed: Witnesses = serde_json::from_str(text).expect("group block should parse");
+        assert_eq!(
+            parsed.witnesses[1],
+            Group::Any(vec!["passing-tests".into(), "assessment".into()])
+        );
+        assert_eq!(serde_json::to_string(&parsed).unwrap(), text);
+        // Probing is per type and de-duplicated; the verdict is per group.
+        assert_eq!(
+            parsed.types(),
+            vec!["design-doc", "passing-tests", "assessment"]
+        );
+    }
+
+    /// AC-1 — a type named in two groups is probed once.
+    #[test]
+    fn a_type_offered_by_two_groups_is_probed_once() {
+        let text = r#"{"witnesses":[["a","shared"],["b","shared"]]}"#;
+        let parsed: Witnesses = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed.types(), vec!["a", "shared", "b"]);
     }
 }

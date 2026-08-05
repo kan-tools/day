@@ -1564,6 +1564,14 @@ fn the_test_only_caller_scan_finds_the_instance_it_was_written_for() {
 /// meaning. It catches the concrete failure that occurred — a second site
 /// emitting this phrase — and not a paraphrase of it.
 ///
+/// **The exact string `--witness <type>` is reserved**, not merely discouraged.
+/// It is the signature of the remedy that was removed, and the scan cannot tell
+/// it apart from an innocent mention — it caught `parse_witness_any`'s arity
+/// error, which was legitimately naming the flag to use instead. That message
+/// now says `--witness` without the placeholder, which costs it nothing and
+/// keeps this check able to key on a string with exactly one meaning. Prefer
+/// rewording over the escape hatch when the site is not a remedy at all.
+///
 /// **The phrase is a literal here, not `day::telos::UNWITNESSED`.** The first
 /// version imported a constant the fix introduced, and `revert-demo.py`
 /// reported `DID-NOT-COMPILE` — reverting the fix took the constant with it, so

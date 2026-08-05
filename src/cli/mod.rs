@@ -34,6 +34,36 @@ fn parse_scope(raw: &str) -> Result<(String, String), String> {
     Ok((witness.trim().to_string(), pattern.trim().to_string()))
 }
 
+/// Parses `--witness-any a,b` into one alternative set.
+///
+/// **A single member is refused rather than accepted quietly.** `--witness-any
+/// a` is either a typo for `--witness a` or a half-written group, and both are
+/// better as an error than as a declaration that reads like a disjunction and
+/// behaves like a conjunct. An empty set is refused for the sharper reason that
+/// it can never be satisfied by anything, which would make the whole telos
+/// permanently unmet — the quiet-check failure this milestone exists to end,
+/// arriving through the declaration rather than through a probe.
+fn parse_witness_any(raw: &str) -> Result<Vec<String>, String> {
+    let members: Vec<String> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_string)
+        .collect();
+    if members.len() < 2 {
+        // Says `--witness` without its placeholder on purpose. The exact string
+        // `--witness` followed by a bracketed placeholder is the signature of
+        // the solo-guess remedy day removed, and `tests/plugin.rs` reserves it
+        // so that scan can stay precise. This message is about which flag to
+        // use, not about how to establish a witness, so it loses nothing.
+        return Err(format!(
+            "expected at least two comma-separated types, got `{raw}` — \
+             a one-member alternative is just `--witness`"
+        ));
+    }
+    Ok(members)
+}
+
 /// Exit code for "day ran fine, but the process state it inspected has
 /// findings" — distinct from a hard failure so scripts can tell the two
 /// apart.
@@ -159,6 +189,12 @@ pub enum TelosAction {
         /// satisfy the telos equally, which is the weak equivalence.
         #[arg(long = "witness")]
         witnesses: Vec<String>,
+        /// A set of artifact types, ANY ONE of which evidences this telos, as
+        /// `a,b` (repeatable — each occurrence is one alternative set). Use it
+        /// when several different artifacts would each independently show the
+        /// telos holds; `--witness` twice means both are required.
+        #[arg(long = "witness-any", value_parser = parse_witness_any)]
+        witness_any: Vec<Vec<String>>,
         /// Narrow which instances of a witness count, as `<witness>=<pattern>`
         /// (repeatable). The project's schema/witness map still decides which
         /// kind of probe runs; this only tightens its pattern, so `v0.5*`
@@ -382,16 +418,25 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             title,
             kind,
             witnesses,
+            witness_any,
             scopes,
         }) => {
+            // `--witness` first, then each `--witness-any` set, so the declared
+            // order matches the order given rather than depending on how clap
+            // happened to bucket the flags.
+            let groups: Vec<crate::bridge::Group> = witnesses
+                .into_iter()
+                .map(crate::bridge::Group::One)
+                .chain(witness_any.into_iter().map(crate::bridge::Group::Any))
+                .collect();
             // Witnesses are appended as a block only when given, so a telos
             // stays a plain statement unless it opts into being a
             // machine-checkable bridge target.
-            let text = if witnesses.is_empty() && scopes.is_empty() {
+            let text = if groups.is_empty() && scopes.is_empty() {
                 statement.clone()
             } else {
                 crate::bridge::Witnesses {
-                    witnesses,
+                    witnesses: groups,
                     scope: scopes.into_iter().collect(),
                 }
                 .to_claim_text(&statement)

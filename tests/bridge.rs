@@ -92,7 +92,11 @@ fn ac1_a_telos_records_its_declared_witnesses() {
     let witnesses = day::atoms::extract_fenced::<day::bridge::Witnesses>(&log[0])
         .expect("a day-telos block should be written")
         .expect("it should parse");
-    assert_eq!(witnesses.witnesses, vec!["published-artifact"]);
+    assert_eq!(
+        witnesses.witnesses,
+        vec![day::bridge::Group::One("published-artifact".into())],
+        "a `--witness` flag declares a one-member group"
+    );
 
     // A telos without witnesses still records, and carries no block.
     let kan = write_kan_stub(dir.path(), &[]);
@@ -402,5 +406,157 @@ fn checking_an_undeclared_bridge_says_so() {
         String::from_utf8_lossy(&out.stderr).contains("ghost"),
         "{}",
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// AC-3 — **a plan covers an any-of group by producing any one member**, and
+/// the report names which.
+///
+/// The `pipeline()` fixture produces `design-doc`, `code-change` and `verdict`
+/// and never produces `published-artifact`. So the group
+/// `published-artifact | verdict` is covered by its second member only — a
+/// fixture that would be uncovered under the conjunction this replaces, which
+/// is what makes it evidence rather than decoration.
+#[test]
+fn an_any_of_group_is_covered_by_one_member_and_the_report_names_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = pipeline();
+    claims.push(claim(
+        "telos/shipped",
+        "bafyreitg",
+        "Shipped.\n\n```day-telos\n{\"witnesses\":[[\"published-artifact\",\"verdict\"]]}\n```\n",
+    ));
+    claims.push(bridge_claim(
+        "b",
+        "bafyreibridge",
+        "shipped",
+        &["intent"],
+        r#"{"seq": [{"atom": "design"}, {"atom": "build"}, {"atom": "review"}]}"#,
+    ));
+    let kan = write_kan_stub(dir.path(), &claims);
+
+    let out = day(dir.path(), &kan, &["bridge", "check", "b"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "one produced member covers the group: {stdout}"
+    );
+    assert!(stdout.contains("reaches telos/shipped"), "{stdout}");
+    // REQ-3: naming the member is the point. "reaches" without saying how
+    // cannot distinguish a plan satisfying the strong alternative from one
+    // scraping by on the weak one.
+    assert!(
+        stdout.contains("published-artifact | verdict -> verdict"),
+        "the report must name the member it counted: {stdout}"
+    );
+}
+
+/// AC-4 — **a group with no member produced is uncovered, and is named whole.**
+///
+/// Naming the group rather than one arbitrary member matters: the reader's next
+/// action is to produce *any* of them, and a message naming one would send them
+/// to satisfy a requirement the telos never made.
+#[test]
+fn an_any_of_group_with_no_member_produced_is_uncovered_and_named_whole() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = pipeline();
+    claims.push(claim(
+        "telos/shipped",
+        "bafyreitg",
+        "Shipped.\n\n```day-telos\n{\"witnesses\":[[\"published-artifact\",\"assessment\"]]}\n```\n",
+    ));
+    claims.push(bridge_claim(
+        "b",
+        "bafyreibridge",
+        "shipped",
+        &["intent"],
+        r#"{"seq": [{"atom": "design"}, {"atom": "build"}]}"#,
+    ));
+    let kan = write_kan_stub(dir.path(), &claims);
+
+    let out = day(dir.path(), &kan, &["bridge", "check", "b"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !out.status.success(),
+        "no member produced means the group is not reached: {stdout}"
+    );
+    assert!(
+        stdout.contains("published-artifact | assessment"),
+        "the whole group is the thing that is missing, not one member: {stdout}"
+    );
+}
+
+/// AC-1 — **`--witness-any` declares a group; `--witness` twice still declares
+/// a conjunction.** The two flags have to stay visibly different, because the
+/// whole defect was that day had only one of them and read it as the other.
+#[test]
+fn witness_any_declares_a_group_and_witness_declares_a_conjunct() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "mixed",
+            "Statement.",
+            "--witness",
+            "design-doc",
+            "--witness-any",
+            "published-artifact,assessment",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let log = appends(dir.path());
+    let witnesses = day::atoms::extract_fenced::<day::bridge::Witnesses>(&log[0])
+        .expect("a day-telos block should be written")
+        .expect("it should parse");
+    assert_eq!(
+        witnesses.witnesses,
+        vec![
+            day::bridge::Group::One("design-doc".into()),
+            day::bridge::Group::Any(vec!["published-artifact".into(), "assessment".into()]),
+        ]
+    );
+}
+
+/// A one-member alternative is refused rather than accepted quietly.
+///
+/// It is either a typo for `--witness` or a half-written group, and both are
+/// better as an error than as a declaration that *reads* like a disjunction and
+/// behaves like a conjunct — which is the shape of misreading this whole change
+/// exists to end.
+#[test]
+fn a_one_member_witness_any_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "typo",
+            "Statement.",
+            "--witness-any",
+            "design-doc",
+        ],
+    );
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("at least two"),
+        "the error should say what is wrong: {stderr}"
+    );
+    assert!(
+        appends(dir.path()).is_empty(),
+        "nothing should be recorded for a refused declaration"
     );
 }

@@ -383,8 +383,39 @@ day telos declare v03-shipped "day v0.3 is published." --witness published-artif
 Witnesses do not collapse a telos to a type. They name the *kind* of evidence
 while leaving open which concrete instance provides it — many artifacts of a
 declared type satisfy the telos equally, which is the weak equivalence being
-preserved. A telos without witnesses is still valid; it simply cannot be
-machine-checked as a bridge target, which day says rather than guessing.
+preserved.
+
+Several `--witness` flags mean **all of them**. When instead any one of several
+artifacts would independently show the telos holds, declare an alternative set
+with `--witness-any`:
+
+```bash
+day telos declare adopted "Someone else ships with it." --witness-any foreign-claim,third-party-contribution
+```
+
+which records the group nested inside the same list:
+
+```day-telos
+{"witnesses":["design-doc",["foreign-claim","third-party-contribution"]]}
+```
+
+So the list is a conjunction of entries and an entry may be a disjunction: the
+block above requires a `design-doc` **and** either of the other two. A bare
+string is a one-member group, so every block written before alternatives
+existed keeps exactly its current meaning and its current bytes.
+
+`day assess telos` reports a verdict per *type* and folds the result per
+*group* — a group counts against the telos only when every member failed — and
+`day bridge check` counts a group as covered when the plan produces any member,
+naming which one it counted. A one-member `--witness-any` is refused: it is
+either a typo for `--witness` or a half-written group, and both read as a
+disjunction while behaving as a conjunct.
+
+A telos without witnesses is still valid; it simply cannot be machine-checked
+as a bridge target, which day says rather than guessing. It says so by pointing
+at `/witness-interview <slug>` rather than by telling you to declare a witness
+yourself — what would evidence a telos is a question for a person, and a
+witness that cannot fail is worse than none.
 
 ```bash
 day bridge declare v0.3 --telos v03-shipped --have intent   --plan "design > generative-build > adversarial-review > pull-request > release"

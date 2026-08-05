@@ -450,6 +450,10 @@ pub struct Report {
     /// Absent entirely — the telos declares no witnesses, so nothing about
     /// it is mechanically checkable.
     pub checkable: bool,
+    /// The declared witness structure. Findings are per *type*, because that
+    /// is what a probe answers; the verdict is per *group*, because that is
+    /// what the telos declared. [`Report::is_clean`] needs both.
+    pub groups: Vec<bridge::Group>,
     /// Record-tier observations. Prompts, never failures.
     pub prompts: Vec<String>,
     /// The command a reader can run to record this assessment.
@@ -461,11 +465,25 @@ impl Report {
     /// evidence rather than evidence of absence, and a timeout leaves the
     /// evidence unknown — treating either as failure would make the default
     /// invocation look broken and push people toward `--run` reflexively.
+    ///
+    /// **Folded per group, not per finding.** A group counts against the telos
+    /// only when *every* member failed: one satisfied alternative is precisely
+    /// what a disjunction declares to be enough. Before groups existed this was
+    /// "any finding failed", which is the same thing when every group has one
+    /// member — so the reading of an old declaration is unchanged.
+    ///
+    /// The member rule itself is untouched. Only `Unsatisfied` counts, so a
+    /// not-run or timed-out member cannot fail its group either.
     pub fn is_clean(&self) -> bool {
+        let failed = |witness: &str| {
+            self.findings.iter().any(|f| {
+                f.witness == witness && f.verdict.as_ref().is_some_and(Verdict::is_failure)
+            })
+        };
         !self
-            .findings
+            .groups
             .iter()
-            .any(|f| f.verdict.as_ref().is_some_and(Verdict::is_failure))
+            .any(|group| group.members().into_iter().all(failed))
     }
 
     pub fn render(&self) -> String {
@@ -506,6 +524,19 @@ impl Report {
                 if let Some(claim) = &finding.asserted_by {
                     out.push_str(&format!(
                         "             asserted in prose by {claim} — not material evidence\n"
+                    ));
+                }
+            }
+            // Any-of groups are stated after the per-type verdicts, because
+            // without them the verdicts do not add up: a reader seeing one
+            // `[MISSING]` above a clean exit would otherwise be looking at what
+            // reads as a contradiction.
+            for group in &self.groups {
+                if group.members().len() > 1 {
+                    out.push_str(&format!(
+                        "  any of [{}] satisfies this telos; they are alternatives, not \
+                         a checklist\n",
+                        group.label()
                     ));
                 }
             }
@@ -597,7 +628,12 @@ pub fn assess(
     let declared = newest_fenced::<Witnesses>(client, &subject)?
         .map(|(_cid, w)| w)
         .unwrap_or_default();
-    let witnesses = declared.witnesses.clone();
+    // Two different lists, deliberately. `groups` carries the declared
+    // structure and decides the verdict; `types` is the flattened, deduplicated
+    // set that actually gets probed, because a type resolves to one probe and
+    // one verdict however many groups offer it as an alternative.
+    let groups = declared.witnesses.clone();
+    let witnesses = declared.types();
 
     // The same fold `hooks::render_teloi` uses, and for the same reason.
     //
@@ -676,7 +712,8 @@ pub fn assess(
         telos: slug.to_string(),
         statement,
         findings,
-        checkable: !witnesses.is_empty(),
+        checkable: !groups.is_empty(),
+        groups,
         prompts,
         // `kan result` takes its subject POSITIONALLY, unlike observe/plan/
         // decide. Getting this wrong is what day#27 and kan#78 are about, and
@@ -1024,6 +1061,7 @@ mod tests {
                 scope_note: None,
             }],
             checkable: true,
+            groups: vec![crate::bridge::Group::One("w".into())],
             prompts: vec![],
             record_command: String::new(),
         };
@@ -1051,6 +1089,7 @@ mod tests {
                 scope_note: None,
             }],
             checkable: true,
+            groups: vec![crate::bridge::Group::One("published-artifact".into())],
             prompts: vec![],
             record_command: String::new(),
         };
@@ -1085,6 +1124,7 @@ mod tests {
             statement: None,
             findings: vec![],
             checkable: false,
+            groups: vec![],
             prompts: vec![],
             record_command: String::new(),
         };
@@ -1094,5 +1134,93 @@ mod tests {
         // positive string rather than as "does not contain the old one": a
         // negative assertion passes when the whole block is missing.
         assert!(rendered.contains("/witness-interview t"), "{rendered}");
+    }
+
+    /// AC-2 — **one satisfied alternative makes the group clean**, and that is
+    /// the whole point of declaring one.
+    ///
+    /// Driven through `is_clean` rather than through the render, because the
+    /// conjunction lived in the verdict and not in the output: the render
+    /// already listed witnesses independently while this and-ed them, which is
+    /// exactly why the gap was invisible until someone tried to declare a
+    /// disjunction.
+    #[test]
+    fn one_satisfied_member_clears_an_any_of_group() {
+        let finding = |witness: &str, verdict: Verdict| WitnessFinding {
+            witness: witness.into(),
+            verdict: Some(verdict),
+            asserted_by: None,
+            scope_note: None,
+        };
+        let report = |findings: Vec<WitnessFinding>| Report {
+            telos: "t".into(),
+            statement: None,
+            findings,
+            checkable: true,
+            groups: vec![crate::bridge::Group::Any(vec!["a".into(), "b".into()])],
+            prompts: vec![],
+            record_command: String::new(),
+        };
+
+        assert!(
+            report(vec![
+                finding("a", Verdict::Unsatisfied("no".into())),
+                finding("b", Verdict::Satisfied("yes".into())),
+            ])
+            .is_clean(),
+            "one satisfied member is what the group declared to be enough"
+        );
+        assert!(
+            !report(vec![
+                finding("a", Verdict::Unsatisfied("no".into())),
+                finding("b", Verdict::Unsatisfied("no".into())),
+            ])
+            .is_clean(),
+            "a group fails only when every member does -- and it must still fail then"
+        );
+        // The member rule is unchanged: not-run is absence of evidence, so it
+        // cannot fail its member and therefore cannot fail the group either.
+        assert!(
+            report(vec![
+                finding("a", Verdict::Unsatisfied("no".into())),
+                finding("b", Verdict::NotRun("needs --run".into())),
+            ])
+            .is_clean(),
+            "an unrun member leaves the group unknown, not failed"
+        );
+    }
+
+    /// AC-2 — a plain list still and-s, so an existing telos reads the same.
+    #[test]
+    fn separate_groups_remain_a_conjunction() {
+        let report = Report {
+            telos: "t".into(),
+            statement: None,
+            findings: vec![
+                WitnessFinding {
+                    witness: "a".into(),
+                    verdict: Some(Verdict::Satisfied("yes".into())),
+                    asserted_by: None,
+                    scope_note: None,
+                },
+                WitnessFinding {
+                    witness: "b".into(),
+                    verdict: Some(Verdict::Unsatisfied("no".into())),
+                    asserted_by: None,
+                    scope_note: None,
+                },
+            ],
+            checkable: true,
+            groups: vec![
+                crate::bridge::Group::One("a".into()),
+                crate::bridge::Group::One("b".into()),
+            ],
+            prompts: vec![],
+            record_command: String::new(),
+        };
+        assert!(
+            !report.is_clean(),
+            "two separate witnesses are both required, exactly as before groups existed"
+        );
     }
 }
