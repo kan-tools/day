@@ -114,19 +114,54 @@ def git(*args, cwd=None, check=True) -> str:
 
 
 def cfg_test_line(path: pathlib.Path) -> int | None:
-    """The 1-based line of a file's `#[cfg(test)]`, or None.
+    """The 1-based line where a file's trailing `#[cfg(test)] mod` begins, or None.
 
     Nineteen files in `src/` carry a trailing test module, which is why this
-    exists. A test module that is NOT at the end of its file is the heuristic's
-    blind spot; the consequence is over-reverting, which surfaces as
-    NO-SUCH-TEST rather than as a passing demonstration.
+    exists.
+
+    **`#[cfg(test)]` on anything other than a `mod` does not start the test
+    half**, and getting that wrong was a live defect rather than a hypothetical.
+    This returned the FIRST line carrying the attribute, so a single
+    `#[cfg(test)] fn helper(...)` inside an `impl` near the top of a file made
+    every hunk below it "test-side" -- the fix was left in place, its callers
+    were reverted, and the run reported DID-NOT-COMPILE. Which is honest, and
+    says nothing about coverage.
+
+    `tests/plugin.rs`'s `cfg_test_module_line` had already been fixed for
+    exactly this, for exactly this reason. A rule learned on one side of the
+    repo did not reach the harness that checks the other -- the propagation
+    failure CLAUDE.md records, one language over.
+
+    Note also that the old docstring named the wrong failure mode. It said the
+    blind spot surfaces as NO-SUCH-TEST (over-reverting); what actually
+    happened was under-reverting into a tree that would not build. A harness
+    that mis-describes its own failure modes is the thing this file exists to
+    prevent, so the claim is now narrower: the boundary is a `mod`, and the
+    remaining blind spot is a test `mod` that is not the last thing in a file.
     """
     try:
-        for n, line in enumerate(path.read_text().splitlines(), start=1):
-            if line.strip().startswith("#[cfg(test)]"):
-                return n
+        lines = path.read_text().splitlines()
     except OSError:
         return None
+
+    def declares_a_module(text: str) -> bool:
+        stripped = text.strip()
+        return stripped.startswith("mod ") or stripped.startswith("pub mod ")
+
+    for n, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped.startswith("#[cfg(test)]"):
+            continue
+        # `#[cfg(test)] mod tests {` on one line.
+        if declares_a_module(stripped[len("#[cfg(test)]") :]):
+            return n
+        # Otherwise the next non-attribute, non-blank line decides.
+        for following in lines[n:]:
+            if not following.strip() or following.strip().startswith("#"):
+                continue
+            if declares_a_module(following):
+                return n
+            break
     return None
 
 

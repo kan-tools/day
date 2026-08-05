@@ -639,3 +639,37 @@ fn a_filter_that_also_selects_a_passing_test_is_not_a_catcher() {
          {verified}"
     );
 }
+
+/// **`#[cfg(test)]` on anything but a `mod` does not start the test half.**
+///
+/// The boundary rule returned the *first* line carrying the attribute, so a
+/// single `#[cfg(test)] fn helper(...)` inside an `impl` near the top of a file
+/// made every hunk below it "test-side": the fix stayed in place, its callers
+/// were reverted, and the run reported DID-NOT-COMPILE. Honest, and it says
+/// nothing about coverage — which is the outcome this harness exists to avoid
+/// producing by accident.
+///
+/// Found by hitting it, on a commit that added exactly such a helper.
+/// `tests/plugin.rs`'s `cfg_test_module_line` had already been fixed for the
+/// same reason on the Rust side; the rule had not reached the Python harness
+/// that checks it, which is CLAUDE.md's propagation failure one language over.
+///
+/// The fixture puts the attribute where it actually appeared — on a function
+/// inside an `impl`, above the code that must still be reverted.
+#[test]
+fn a_cfg_test_attribute_on_a_function_does_not_end_the_production_half() {
+    let before = "pub struct T;\n\nimpl T {\n    #[cfg(test)]\n    fn helper() -> i32 { 0 }\n}\n\n                  pub fn answer() -> i32 { 1 }\n\n#[cfg(test)]\nmod tests {\n    // nothing yet\n}\n";
+    let after = "pub struct T;\n\nimpl T {\n    #[cfg(test)]\n    fn helper() -> i32 { 0 }\n}\n\n                 pub fn answer() -> i32 { 2 }\n\n#[cfg(test)]\nmod tests {\n\
+                 \x20   #[test]\n    fn unit_asserts_the_fix() { assert_eq!(super::answer(), 2); }\n}\n";
+    let s = Scratch::new(before, after, "");
+    let (text, ok) = s.run(&["--tests", "lib::unit_asserts_the_fix"]);
+
+    assert!(
+        !text.contains("DID-NOT-COMPILE"),
+        "the change below a `#[cfg(test)] fn` must still be reverted: {text}"
+    );
+    assert!(
+        text.contains("DEMONSTRATED") && ok,
+        "and the demonstration must go through: {text}"
+    );
+}
