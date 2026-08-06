@@ -119,12 +119,63 @@ fn hooks_are_only_registered_on_events_that_deliver_stdout_to_the_model() {
     }
 }
 
+/// Every command the plugin ships, read from the directory rather than listed.
+///
+/// **Derived, not hand-maintained**, and that is a fix rather than a style
+/// choice. A cold review found the third command absent from three separate
+/// enumerations in this file — its preambles unchecked, its frontmatter
+/// unasserted — while `tests/documented_invocations.rs`, which globs, picked it
+/// up immediately and made the build say so.
+///
+/// The pattern the review named across the whole milestone: every requirement
+/// whose artifact is Rust was met, and every requirement living in a
+/// hand-maintained list was skipped, because nothing fails when a list does not
+/// grow. A list that reads the directory cannot fail to grow.
+fn shipped_commands() -> Vec<String> {
+    let dir = repo_root().join("commands");
+    let mut out: Vec<String> = std::fs::read_dir(&dir)
+        .expect("commands/ should exist — it is what the plugin ships")
+        .flatten()
+        .filter_map(|e| {
+            let path = e.path();
+            if path.extension().is_some_and(|x| x == "md") {
+                path.file_name()
+                    .map(|n| format!("commands/{}", n.to_string_lossy()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    out.sort();
+    assert!(
+        out.len() >= 3,
+        "expected at least the three shipped commands, found {out:?}"
+    );
+    out
+}
+
 #[test]
 fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
-    for (file, must_contain) in [
+    // Markers are per-command and stay explicit; the FILE LIST is derived, so a
+    // new command cannot ship unasserted — it fails here until it is named.
+    let markers = [
         ("commands/design.md", "design document"),
         ("commands/adversarial-review.md", "APPROVE WITH FOLLOW-UPS"),
-    ] {
+        ("commands/witness-interview.md", "what would evidence"),
+    ];
+    for file in shipped_commands() {
+        let file = file.as_str();
+        let must_contain = markers
+            .iter()
+            .find(|(f, _)| *f == file)
+            .map(|(_, m)| *m)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{file} ships with the plugin and no marker asserts what it is. \
+                     Add one here — a command nothing checks is a command that can \
+                     rot silently, which is what this test exists to stop."
+                )
+            });
         let text = std::fs::read_to_string(repo_root().join(file))
             .unwrap_or_else(|e| panic!("{file} should ship with the plugin: {e}"));
         assert!(text.starts_with("---"), "{file} needs command frontmatter");
@@ -1023,7 +1074,8 @@ fn command_preambles_exit_zero_even_where_nothing_exists() {
     std::fs::create_dir_all(&empty).expect("temp dir for the nothing-exists case");
 
     let mut checked = 0usize;
-    for rel in ["commands/design.md", "commands/adversarial-review.md"] {
+    for rel in shipped_commands() {
+        let rel = rel.as_str();
         let text = std::fs::read_to_string(repo_root().join(rel)).unwrap();
 
         for (n, line) in text.lines().enumerate() {
@@ -1063,11 +1115,18 @@ fn command_preambles_exit_zero_even_where_nothing_exists() {
 
     // A generator whose failure mode is "less output" needs an exhaustive
     // expectation, not a trusting loop: if the `!` parse silently stopped
-    // matching, every assertion above would pass by checking nothing. This is
-    // the count the two files carry today.
+    // matching, every assertion above would pass by checking nothing.
+    //
+    // **The count stays hand-written; the FILE LIST does not.** Those are
+    // different failure modes and only one of them is caught by a number. This
+    // said 13 "across the two command files" while three shipped, because the
+    // list was a literal and a third command could be added without touching
+    // it — so the new file's four preambles went unchecked and the count still
+    // matched. Deriving the list from `commands/` turned that into a red build
+    // the moment it was wrong, which is how 17 got here.
     assert_eq!(
-        checked, 13,
-        "expected 13 `!` preamble commands across the two command files; found \
+        checked, 17,
+        "expected 17 `!` preamble commands across the shipped command files; found \
          {checked}. If a line was added or removed, update this number — if it \
          dropped to zero the parse broke and this test was asserting nothing."
     );
@@ -1668,5 +1727,70 @@ fn the_unwitnessed_remedy_has_one_renderer() {
          Telling a reading agent to declare a witness itself is what this replaced: a \
          trivially satisfiable witness reports the telos met forever (day#86), and a bad \
          witness is worse than none. Point at `/witness-interview <slug>` instead."
+    );
+}
+
+/// **A claim shape has exactly one evaluator.**
+///
+/// A cold review blocked this milestone on `every_subject` matching shapes with
+/// `ClaimShape::matches_with` directly, which skips everything
+/// `probe::claims_matching` adds around it — `block` resolution and
+/// `mentions_material`. Both predicates were silently inert inside an `every`
+/// probe, and inert toward *satisfied*: an identical shape reported
+/// `[ERROR] … day cannot check it` through a claim probe and `[MATERIAL]`
+/// through the universal.
+///
+/// **It had already been noticed and written down.** `src/probe.rs` carried a
+/// comment saying block predicates were not resolved there, "stated because
+/// silently ignoring a predicate is precisely what this milestone is about" —
+/// and the comment did not mention `mentions_material` at all, which is the
+/// second instance the first one predicted. CLAUDE.md's rule is exactly this:
+/// prose in the right place is not a constraint, and a rule that matters wants a
+/// source scan.
+///
+/// So the shape of the guarantee is the one that rule prescribes: not "call the
+/// other predicates too", but **one place where a shape is evaluated at all**.
+/// A second call site is a second evaluator, and it will drift.
+#[test]
+fn the_claim_shape_predicate_has_one_evaluator() {
+    const MARKER: &str = "second-shape-evaluator:";
+    let src = std::fs::read_to_string(repo_root().join("src/probe.rs")).unwrap();
+    let code = production_half(&src);
+    let raw: Vec<&str> = src.lines().collect();
+
+    let mut definitions = 0usize;
+    let mut callers = Vec::new();
+    for (n, line) in code.lines().enumerate() {
+        // A window, not the line itself. The marker lives in a comment and the
+        // call it exempts is usually a few lines below it — the same shape
+        // `a_pub_fn_with_only_test_callers_fails_the_build` uses, and getting it
+        // wrong makes the hatch unusable rather than making the scan stricter.
+        let hatched = raw[n.saturating_sub(8)..=n.min(raw.len() - 1)]
+            .iter()
+            .any(|l| l.contains(MARKER));
+        if hatched {
+            continue;
+        }
+        if line.contains("fn matches_with(") {
+            definitions += 1;
+        } else if line.contains(".matches_with(") {
+            callers.push(n + 1);
+        }
+    }
+
+    assert_eq!(
+        definitions, 1,
+        "expected exactly one `matches_with` definition, found {definitions}"
+    );
+    assert_eq!(
+        callers.len(),
+        1,
+        "a claim shape is evaluated at {} sites in production code (lines {callers:?}), and \
+         only `claims_matching` resolves `block` and `mentions_material`.\n\n\
+         A second evaluator silently drops whichever predicates it does not know about, \
+         toward satisfied — which is what a cold review blocked this milestone on. Route \
+         the new site through `claims_matching`, or mark it `{MARKER} <why this one cannot \
+         drop a predicate>`.",
+        callers.len()
     );
 }

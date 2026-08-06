@@ -128,9 +128,18 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - [ ] AC-6: (REQ-5) A negated probe with no companion positive witness, or whose
   companion does not resolve, reports `VACUOUS`, and `VACUOUS` does not make the
   telos report clean.
-- [ ] AC-7: (REQ-5) `VACUOUS` is distinct from satisfied in both the render and
-  the exit-code precedence, and a test asserts a vacuous witness is not counted
-  as evidence.
+- [ ] AC-7: (REQ-5) `VACUOUS` is distinct from satisfied **in the render**, and
+  in the exit code behaves like the other could-not-check verdicts — `ERROR`,
+  `NOT RUN`, `TIMEOUT` — rather than like a probe that ran and found nothing.
+
+  *Amended after a cold review read the original wording as requiring a non-zero
+  exit.* That would make `VACUOUS` stricter than `ERROR`, which is incoherent:
+  an error is the stronger could-not-check, and `Verdict::is_failure` counts only
+  `Unsatisfied` for all of them. The original text was wrong, and the test
+  written against it asserted a bare `Some(0)` — right answer, no stated reason,
+  so it read as pinning the side the AC forbade. Whether could-not-check should
+  affect the exit code at all is a real question about *every* such verdict and
+  is filed separately, not settled by giving one of them special treatment.
 - [ ] AC-24: (REQ-5) All three states of day#125's guest-tree case are driven by
   fixtures and report distinctly: no companion resolving is `VACUOUS`, companion
   present with the forbidden path tracked is unsatisfied, and companion present

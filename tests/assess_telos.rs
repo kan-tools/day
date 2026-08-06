@@ -771,7 +771,20 @@ fn an_absence_is_probeable_and_vacuous_without_its_precondition() {
         stdout.contains("[VACUOUS]"),
         "absence without a precondition establishes nothing: {stdout}"
     );
-    assert_eq!(code, Some(0), "vacuous is not a failure: {stdout}");
+    // **The class invariant, not a bare zero.** `Verdict::is_failure` counts
+    // only `Unsatisfied`, so every could-not-check verdict -- ERROR, NOT RUN,
+    // TIMEOUT, VACUOUS -- exits zero alike. A cold review read AC-7 as requiring
+    // VACUOUS to exit non-zero; that would make it *stricter than ERROR*, which
+    // is incoherent, since an error is the stronger could-not-check. The AC was
+    // wrong and is amended; whether could-not-check should affect the exit code
+    // AT ALL is a real question about every one of those verdicts, filed rather
+    // than settled here by giving one of them special treatment.
+    assert_eq!(
+        code,
+        Some(0),
+        "vacuous is a could-not-establish, and exits like ERROR and NOT RUN \
+         rather than like a probe that ran and found nothing: {stdout}"
+    );
 
     // (2) SATISFIED — work happened here and left nothing tracked.
     let dir = tempfile::tempdir().unwrap();

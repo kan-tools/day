@@ -3,14 +3,21 @@ allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(ls *), Re
 description: Establish, with a human, what would evidence a telos that declares no witnesses
 ---
 
-> **day's "witness interview" atom.** Its interface: it consumes a telos that
-> declares no witnesses plus a human who knows what the work is for, and
-> produces a revised telos declaration carrying witness types and, for each,
-> the condition under which it would report absent.
+> **day's "witness interview" atom.** Its interface: it consumes a telos plus a
+> human who knows what the work is for, and produces a revised telos declaration
+> carrying witness types and, for each, the condition under which it would
+> report absent.
 >
 > ```day-atom
-> {"in": ["unwitnessed-telos"], "out": ["witnessed-telos"]}
+> {"in": ["telos"], "out": ["witnessed-telos"], "next": ["generative-build"]}
 > ```
+>
+> Its input is a **telos**, not an "unwitnessed telos". Lacking witnesses is the
+> *trigger*, not an artifact type — declared as a type it made the vocabulary
+> stop composing, because nothing upstream produces one. That was the
+> composition check saying the model was wrong rather than the wiring, and it is
+> the reason this block is worth reading against `day doctor` rather than
+> trusting.
 >
 > This exists because the alternative is worse. day used to meet an unwitnessed
 > telos by printing `day telos declare <slug> "..." --witness <type>`, which
@@ -24,8 +31,8 @@ description: Establish, with a human, what would evidence a telos that declares 
 
 - Repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
 - Declared teloi: !`command -v kan >/dev/null 2>&1 && kan status 2>/dev/null | grep 'telos/' || echo "none, or kan unavailable"`
-- Witness probes declared: !`command -v kan >/dev/null 2>&1 && kan show schema/witness 2>/dev/null | tail -30 || echo "none"`
-- day process state: !`command -v day >/dev/null 2>&1 && day doctor 2>&1 || echo "day not on PATH"`
+- Witness probes declared: !`command -v kan >/dev/null 2>&1 && kan show schema/witness 2>/dev/null | tail -30 | grep . || echo "none declared, or kan unavailable"`
+- day process state: !`command -v day >/dev/null 2>&1 && { day doctor 2>&1 | grep . || echo "day produced no output"; } || echo "day not on PATH"`
 
 ## Your task
 

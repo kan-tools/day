@@ -285,6 +285,11 @@ impl ClaimShape {
     /// caller moved, which is day#101's corollary working as intended on a
     /// private fn. Leaving it un-gated would have left a wrapper that reads
     /// like production surface and is reachable only from tests.
+    /// The no-exclusion arity, for unit tests of the conjunction itself.
+    ///
+    /// `production_half` cuts at a file's trailing `#[cfg(test)] mod`, so a
+    /// `#[cfg(test)]` item inside an `impl` still sits in the half the scan
+    /// reads — which is why the delegating line below carries a marker.
     #[cfg(test)]
     fn matches(
         &self,
@@ -292,6 +297,9 @@ impl ClaimShape {
         claim: &crate::kan_client::Claim,
         block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome>,
     ) -> bool {
+        // second-shape-evaluator: delegates rather than evaluates. It adds no
+        // predicate handling of its own, so it cannot drop one — which is the
+        // property the scan protects.
         self.matches_with(subject, claim, block_check, None)
     }
 
@@ -853,34 +861,63 @@ fn evaluate_absence(
 /// silently ignoring a predicate is precisely what this milestone is about, and
 /// this is the one place a shape is matched outside [`claims_matching`].
 fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
+    // A shape inside `also_carries` may not narrow by subject: co-location IS
+    // what `every` means, so its own scope and the anchor's would silently
+    // conflict. Refused rather than intersected -- a declaration that cannot
+    // mean what it says is a finding, not something to reconcile.
+    if let Some(conflicting) = universal.also_carries.iter().find(|r| r.subject.is_some()) {
+        return Verdict::Error(format!(
+            "`{}` inside `also_carries` declares its own `subject`, which contradicts \
+             what `every` checks -- the requirement must hold on the SAME subject as the \
+             anchor, so a second scope could only narrow it to nothing or to itself",
+            conflicting.kind
+        ));
+    }
+
     let claims = match log.claims() {
         Ok(claims) => claims,
         Err(e) => return Verdict::Error(e.to_string()),
     };
+    let subjects: std::collections::BTreeSet<&str> =
+        claims.iter().map(|(s, _)| s.as_str()).collect();
 
-    // Resolved once, before anything is matched. Every shape in the universal
-    // gets the same treatment as one in a plain claim probe -- a rule that
-    // applied to `claims_matching` and not here would be the propagation
-    // failure this repo keeps recording.
-    let anchor_exclusion = match exclusion(&universal.subject_with, log) {
-        Ok(e) => e,
-        Err(v) => return v,
+    // Each subject is asked through `claims_matching`, the same way a plain
+    // `claim` probe is asked, by scoping a clone of the shape to that subject.
+    //
+    // **This is the fix for the defect a cold review blocked on.** The first
+    // version matched shapes with `ClaimShape::matches_with` directly, which
+    // skips everything `claims_matching` adds -- `block` resolution and
+    // `mentions_material` -- so both predicates were silently inert INSIDE an
+    // `every`, and inert in the satisfied direction. An identical shape reported
+    // `[ERROR] day cannot check it` through a claim probe and `[MATERIAL]`
+    // through this one.
+    //
+    // It had been noted in a comment here and left. CLAUDE.md's rule is that
+    // prose in the right place is not a constraint, so the guarantee is now the
+    // mechanism: there is exactly one place a claim shape is evaluated, and
+    // `the_claim_shape_predicate_has_one_evaluator` in `tests/plugin.rs` fails
+    // the build if a second appears.
+    let ask = |shape: &ClaimShape, subject: &str| -> Verdict {
+        let mut scoped = shape.clone();
+        scoped.subject = Some(subject.to_string());
+        claims_matching(
+            &scoped,
+            log,
+            None,
+            Correspondence::Unavailable,
+            Failures::AlreadyReported,
+        )
     };
-    let mut required_exclusions = Vec::new();
-    for required in &universal.also_carries {
-        match exclusion(required, log) {
-            Ok(e) => required_exclusions.push(e),
-            Err(v) => return v,
-        }
-    }
 
-    let mut in_scope: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-    for (subject, claim) in claims {
-        if universal
-            .subject_with
-            .matches_with(subject, claim, None, anchor_exclusion.as_deref())
-        {
-            in_scope.insert(subject.as_str());
+    let mut in_scope: Vec<&str> = Vec::new();
+    for subject in &subjects {
+        match ask(&universal.subject_with, subject) {
+            Verdict::Satisfied(_) => in_scope.push(subject),
+            Verdict::Unsatisfied(_) => {}
+            // A predicate this build cannot answer stops the whole universal.
+            // Answering it for the subjects that happened to resolve would be a
+            // verdict over a set day could not establish.
+            other => return other,
         }
     }
 
@@ -894,17 +931,14 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
 
     let mut missing: Vec<String> = Vec::new();
     for subject in &in_scope {
-        let lacks: Vec<&str> = universal
-            .also_carries
-            .iter()
-            .zip(&required_exclusions)
-            .filter(|(required, excluded)| {
-                !claims.iter().any(|(s, c)| {
-                    s == subject && required.matches_with(s, c, None, excluded.as_deref())
-                })
-            })
-            .map(|(required, _)| required.kind.as_str())
-            .collect();
+        let mut lacks: Vec<String> = Vec::new();
+        for required in &universal.also_carries {
+            match ask(required, subject) {
+                Verdict::Satisfied(_) => {}
+                Verdict::Unsatisfied(_) => lacks.push(describe(required)),
+                other => return other,
+            }
+        }
         if !lacks.is_empty() {
             missing.push(format!("{subject} (no {})", lacks.join(", no ")));
         }
@@ -918,7 +952,7 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
             universal
                 .also_carries
                 .iter()
-                .map(|r| format!("`{}`", r.kind))
+                .map(|r| format!("`{}`", describe(r)))
                 .collect::<Vec<_>>()
                 .join(" and ")
         ))
@@ -933,6 +967,31 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
             missing.join("; ")
         ))
     }
+}
+
+/// How a required shape is named when it is missing.
+///
+/// **The kind alone is a falsehood when the shape narrows.** day reported
+/// `witness-interview (no Decision)` for a subject carrying five `Decision`
+/// claims, because the requirement was `{kind: Decision, starts_with:
+/// "adversarial review of"}` and only the kind reached the message. The check
+/// was right and the sentence was wrong, in the witness for
+/// `telos/legible-process`, on the repo that defines it.
+fn describe(shape: &ClaimShape) -> String {
+    let mut out = shape.kind.clone();
+    if let Some(prefix) = &shape.starts_with {
+        out.push_str(&format!(" starting `{prefix}`"));
+    }
+    if let Some(substring) = &shape.contains {
+        out.push_str(&format!(" containing `{substring}`"));
+    }
+    if let Some(block) = &shape.block {
+        out.push_str(&format!(" carrying a `{block}` block"));
+    }
+    if shape.not_authored_by.is_some() {
+        out.push_str(" from another author");
+    }
+    out
 }
 
 pub fn claims_matching(
