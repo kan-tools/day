@@ -1604,7 +1604,7 @@ fn the_test_only_caller_scan_finds_the_instance_it_was_written_for() {
 /// **Keyed on the presence of the phrase, never on its absence.** CLAUDE.md
 /// records a classifier that looked for `composition: ok` to mean "loaded it
 /// anyway" and mis-filed a reader when an unrelated finding suppressed the
-/// phrase. So this asserts where [`day::telos::UNWITNESSED`] *does* appear, not
+/// phrase. So this asserts where the phrase *does* appear, not
 /// where it does not.
 ///
 /// **`src/status.rs` is deliberately not in scope, and that is a decision

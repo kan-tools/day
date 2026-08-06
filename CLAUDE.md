@@ -378,6 +378,50 @@ the rule being routed around by the person who wrote it, which is the failure
 mode the roadmap predicted for a rule with no tooling behind it, arriving even
 though the tooling exists.
 
+## The requirements that get skipped are the ones nothing fails over
+
+Two cold reviews of v0.12's witness work both returned BLOCK, and between them
+they named one pattern that held across the whole branch without exception:
+
+> **Every requirement whose artifact was Rust was met. Every requirement whose
+> artifact was a kan claim or a hand-maintained list was skipped.**
+
+The milestone shipped a design document promising a `witness-interview` atom, a
+slash command for it, and a renderer pointing at it — and never ran `day atom
+declare`. `day doctor` said 7. `day next witness-interview` errored. Ninety
+seconds of running day would have found it, and nobody ran day. `telos/v1.0`
+landed in neither of two passes, each pointing at the other. A citation count
+was hand-written as five while the tree held seven, on the branch that existed
+to fix that. `tests/plugin.rs` enumerated two command files while three shipped,
+so the third's preambles went unchecked and its exhaustive `checked == 13` still
+matched.
+
+The mechanism is not carelessness. **A Rust requirement fails the build when it
+is missing; a kan claim and a list entry fail nothing.** Compilation is a
+verifier that runs on every save, and the other two have no verifier at all, so
+attention flows to the one that pushes back. Naming it as a discipline problem
+is the wrong diagnosis and produces the wrong fix.
+
+So:
+
+- **Finish a milestone by running day, not by reading the diff.** `day doctor`,
+  `day status`, `day next <the atom you just wrote>`. Every one of the kan-side
+  misses above announces itself in one of those three commands.
+- **A list that can be derived must be derived.** `commands/` read from the
+  directory cannot fail to grow; a literal pair can. When the enumeration was
+  replaced by a directory read it went red immediately — four preambles
+  unchecked, and the count that was supposed to catch exactly that still said
+  13, because the count and the list fail differently and only one of them was
+  derived.
+- **A count and a list are different guarantees.** Keep the count exact — it
+  catches a parser that silently stopped matching — and derive the list, which
+  catches a member that was never added. Neither substitutes for the other.
+- **Recording a decision in a design document is not recording it.** RQ-4's
+  supersession lived in `.design/` while kan still carried only the superseded
+  claim, on a subject whose own milestone is about the record being
+  reconstructable. The document is not the record; the log is, and the next
+  session reads the log.
+
 ## The tools in `scripts/`, already written — use them rather than reinventing them
 
 No count in that heading, deliberately. It said "Two tools" while heading four,

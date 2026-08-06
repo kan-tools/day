@@ -600,10 +600,18 @@ vendored copies, no build outputs tracked, no `TODO` in mainline.
 {
   "leaves-no-trace": {"absent": {
     "forbidden": {"path": ".kan/*"},
-    "given":     {"claim": {"kind": "Decision"}}
+    "given":     {"command": "scripts/we-worked-here.sh"}
   }}
 }
 ```
+
+**Choose `given` so that it can stop holding.** A `claim` probe is the tempting
+shape and it is the wrong one here: kan is append-only, so once one matching
+claim exists the precondition is satisfied for good, and the guard never returns
+to `VACUOUS` however the world changes. `day telos declare` will say so — it
+reports a witness whose probe can never stop matching — but the declaration
+above is the example, and an example that neutralises the mechanism it
+demonstrates teaches the wrong thing.
 
 **`given` is required, and it is the whole design.** An absence is satisfied by
 everything that does not exist, which is "a witness that cannot fail" inverted.

@@ -336,6 +336,15 @@ fn ac8_a_target_with_no_witnesses_says_so_and_does_not_fail() {
     ));
     let kan = write_kan_stub(dir.path(), &claims);
 
+    // AC-15, the premise: the target must genuinely declare no witnesses, or
+    // this asserts the unwitnessed remedy against a witnessed telos.
+    assert!(
+        !claims
+            .iter()
+            .any(|c| c.subject == "telos/vague" && c.text.contains("day-telos")),
+        "premise: the fixture telos must declare no witnesses"
+    );
+
     let out = day(dir.path(), &kan, &["bridge", "check", "b"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(

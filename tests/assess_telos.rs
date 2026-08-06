@@ -284,6 +284,32 @@ fn ac11_a_telos_without_witnesses_is_reported_as_not_checkable() {
     let kan = write_kan_stub(dir.path(), &[claim("telos/vague", "bafyreit", "A telos.")]);
     let git = write_git_stub(dir.path(), &[], &[]);
 
+    // AC-15, the premise. `telos/vague` must genuinely carry no `day-telos`
+    // block, or this asserts the remedy against a telos that was witnessed all
+    // along and the whole test means nothing. `tests/fallbacks.rs` states the
+    // convention and ten tests there follow it; these two did not.
+    let declared = String::from_utf8_lossy(
+        &std::process::Command::new(&kan)
+            .args(["show", "telos/vague"])
+            .current_dir(dir.path())
+            .output()
+            .expect("the stub should answer")
+            .stdout,
+    )
+    .to_string();
+    // Two assertions, and the first is what keeps the second honest: an empty
+    // or failed read also "contains no day-telos", so absence alone would be a
+    // premise that cannot fail -- the shape this AC exists to stop.
+    assert!(
+        declared.contains("A telos."),
+        "premise check must actually read the telos, or its absence proves \
+         nothing: {declared}"
+    );
+    assert!(
+        !declared.contains("day-telos"),
+        "premise: the fixture telos must declare no witnesses: {declared}"
+    );
+
     let out = day(dir.path(), &kan, &git, &["assess", "telos", "vague"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("declares no witnesses"), "{stdout}");
