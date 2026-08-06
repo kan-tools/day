@@ -135,8 +135,9 @@ still listed as in play. All seven were invisible to a green suite, because
 tests assert day's *output* while the defects were in what that output means
 or whether anything receives it.
 
-So: before calling a feature done, use it on this repo or on kan against the
-real log. A passing suite is necessary and has never been sufficient here.
+A passing suite is necessary and has never been sufficient here. The rule that
+follows from it is a `practice` item, injected each session; the history is what
+this section is for.
 
 Two corollaries worth keeping:
 - A check that only inspects its own side of an interface will miss the
@@ -389,7 +390,11 @@ named a pattern that held across the design doc it audited:
 **Stated as holding "without exception" across the branch, it is false**, and a
 later review refuted it using the other BLOCK: `every_subject` bypassed
 `claims_matching`, which is REQ-9 — a Rust requirement, unmet. The sentence
-asserting the rule sat in the same commit as its counterexample. Recorded
+asserting the rule was written into this file in `0009e02`, one commit after
+`664188c` fixed the counterexample — near enough to be the same fix round, and
+not, as this paragraph used to say, the same commit. `0009e02` touches no
+`src/` at all, which is checkable in four seconds and was not checked, in a
+paragraph about a claim widened without re-checking. Recorded
 because the failure is instructive on its own: a pattern observed in one place
 was widened to a law without re-checking it where it would break, which is the
 same move as a hand-written count nobody re-derives. The scoped version is
@@ -413,9 +418,9 @@ is the wrong diagnosis and produces the wrong fix.
 
 So:
 
-- **Finish a milestone by running day, not by reading the diff.** `day doctor`,
-  `day status`, `day next <the atom you just wrote>`. Every one of the kan-side
-  misses above announces itself in one of those three commands.
+- Every one of the kan-side misses above announces itself in `day doctor`, `day
+  status`, or `day next <the atom you just wrote>`, and none of the three was
+  run. The imperative is a `practice` item; what it costs to skip is here.
 - **A list that can be derived must be derived.** `commands/` read from the
   directory cannot fail to grow; a literal pair can. When the enumeration was
   replaced by a directory read it went red immediately — four preambles
