@@ -18,11 +18,23 @@ Outcomes, never conflated, could-not-check outranking checked-and-clean:
   IDENTICAL           every fixture produced byte-identical output. Exit 0.
   CHANGED-AS-DECLARED every difference was named with --expect. Exit 0.
   CHANGED-UNEXPLAINED at least one difference nobody declared. THE finding.
-  BASE-DID-NOT-BUILD  the comparison could not be made. Says nothing about
-                      whether behaviour changed.
+  BASE-DID-NOT-BUILD  the comparison could not be made at the OLD end. Says
+                      nothing about whether behaviour changed.
+  HEAD-DID-NOT-BUILD  the same, at the NEW end. Separate because conflating
+                      them tells a reader to look at the wrong revision.
   CORPUS-EMPTY        no fixtures ran. A diff over nothing is IDENTICAL for the
                       wrong reason, which is the failure `capture-block-corpus`
                       had twice.
+
+**The head binary is rebuilt every run, never reused.** It was built only
+`if not head.exists()`, so an existing-but-stale `target/debug/day` was compared
+against the base and the *working tree's change was never in the picture*.
+Demonstrated: build `day` with `src/probe.rs` from `48a8660`, restore the tree
+to `HEAD` (which carries a change to three verdict strings the corpus covers),
+run the harness — `IDENTICAL`. The stale binary is the likeliest state there is,
+because the last thing anyone does before asking "did I change behaviour" is
+edit source, and cargo's own freshness check costs a second when there is
+nothing to do.
 
 **The corpus is read from the directory, never listed here.** A hand-maintained
 corpus is the defect class this repo spent v0.12 on: it does not fail when it
@@ -51,6 +63,7 @@ IDENTICAL = "IDENTICAL"
 CHANGED_AS_DECLARED = "CHANGED-AS-DECLARED"
 CHANGED_UNEXPLAINED = "CHANGED-UNEXPLAINED"
 BASE_DID_NOT_BUILD = "BASE-DID-NOT-BUILD"
+HEAD_DID_NOT_BUILD = "HEAD-DID-NOT-BUILD"
 CORPUS_EMPTY = "CORPUS-EMPTY"
 
 class Unrunnable(Exception):
@@ -177,14 +190,21 @@ def main() -> int:
     ap.add_argument("--since", default="HEAD~1")
     ap.add_argument("--expect", action="append", default=[],
                     help="FIXTURE:VERB whose output is expected to differ")
-    ap.add_argument("--expect-fixtures", type=int, default=None)
+    # Required, because the docstring above has always said it is and the code
+    # made it optional -- so the count guard, the half that catches a reader
+    # which stopped matching, simply did not run unless someone remembered a
+    # flag. A guarantee that has to be requested is not a guarantee; it is the
+    # `--expect` of a check nobody is failing.
+    ap.add_argument("--expect-fixtures", type=int, required=True,
+                    help="exact fixture count; the guard against a corpus reader "
+                         "that silently stopped matching")
     ap.add_argument("--corpus", default=None,
                     help="fixture directory (default fixtures/behaviour)")
     args = ap.parse_args()
 
     corpus = pathlib.Path(args.corpus) if args.corpus else CORPUS
     cases = fixtures(corpus)
-    if args.expect_fixtures is not None and len(cases) != args.expect_fixtures:
+    if len(cases) != args.expect_fixtures:
         print(f"{CORPUS_EMPTY}: expected {args.expect_fixtures} fixture(s), found "
               f"{len(cases)}. A corpus that silently shrinks reports IDENTICAL "
               f"for the wrong reason.")
@@ -193,12 +213,21 @@ def main() -> int:
         print(f"{CORPUS_EMPTY}: no fixtures under {corpus}")
         return 2
 
+    # UNCONDITIONALLY. `if not head.exists()` reused whatever was in
+    # `target/debug/` -- so the harness answered "did the WORKING TREE change
+    # behaviour" with a binary built from something else, and the answer was
+    # `IDENTICAL` whenever the two happened to agree, which is whenever nobody
+    # had run `cargo build` since editing. Reusing a build is the one thing this
+    # harness must not do, because a stale artifact is silent and always fails
+    # toward clean.
     head = ROOT / "target" / "debug" / "day"
-    if not head.exists():
-        r = run(["cargo", "build", "--bin", "day"], cwd=ROOT)
-        if r.returncode != 0:
-            print(f"{BASE_DID_NOT_BUILD}: the current tree does not build.")
-            return 2
+    r = run(["cargo", "build", "--bin", "day"], cwd=ROOT)
+    if r.returncode != 0 or not head.exists():
+        print(f"{HEAD_DID_NOT_BUILD}: the current tree does not build, so there "
+              f"is nothing to compare the base against. This says NOTHING about "
+              f"whether behaviour changed.")
+        print(r.stderr.strip()[-800:], file=sys.stderr)
+        return 2
 
     work = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "day-behaviour-work"
     shutil.rmtree(work, ignore_errors=True)

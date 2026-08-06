@@ -42,12 +42,23 @@ fn corpus_with(dir: &Path, log: &str) -> std::path::PathBuf {
 }
 
 fn diff(args: &[&str]) -> (String, Option<i32>) {
-    let out = Command::new("python3")
-        .arg(repo_root().join("scripts/behaviour-diff.py"))
+    diff_with_path(args, None)
+}
+
+/// `path_prefix` is prepended to `PATH`, which is how a test makes `cargo`
+/// fail without touching this repo's source. Editing `src/` from a test would
+/// race the other tests in this file — they all shell out to a script that now
+/// builds — and a panic would leave the tree broken for everything after.
+fn diff_with_path(args: &[&str], path_prefix: Option<&Path>) -> (String, Option<i32>) {
+    let mut cmd = Command::new("python3");
+    cmd.arg(repo_root().join("scripts/behaviour-diff.py"))
         .args(args)
-        .current_dir(repo_root())
-        .output()
-        .expect("behaviour-diff.py should be runnable");
+        .current_dir(repo_root());
+    if let Some(prefix) = path_prefix {
+        let existing = std::env::var("PATH").unwrap_or_default();
+        cmd.env("PATH", format!("{}:{existing}", prefix.display()));
+    }
+    let out = cmd.output().expect("behaviour-diff.py should be runnable");
     (
         String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
         out.status.code(),
@@ -122,6 +133,88 @@ fn a_corpus_whose_size_changed_is_refused_before_anything_is_compared() {
          it drifted: {text}"
     );
     assert_eq!(code, Some(2), "{text}");
+}
+
+/// **A stale `target/debug/day` made the harness compare the base against
+/// itself.**
+///
+/// The head binary was built only `if not head.exists()`. An existing one was
+/// reused, so the question "did the WORKING TREE change behaviour" was answered
+/// with a binary built from whatever was there last — and two builds of the
+/// same revision compare equal, so the verdict was `IDENTICAL`. Clean, for the
+/// reason this harness exists to reject, and reachable by the most ordinary
+/// state there is: edit source, do not build, ask the question.
+///
+/// Asserted through a `cargo` that cannot succeed, which is the one input that
+/// separates "rebuilt" from "reused" without measuring the machine. Under the
+/// old code `target/debug/day` exists during any test run, the build was
+/// skipped, a broken `cargo` was never consulted, and `--since HEAD` diffed the
+/// revision against itself: `IDENTICAL`. Under the new code the build is
+/// attempted first and its failure is the verdict. Two different outcomes from
+/// the same fixture, so the test observes the change rather than the feature
+/// around it.
+#[test]
+fn the_head_binary_is_rebuilt_rather_than_reused() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = corpus_with(dir.path(), r#"{"v":1,"subjects":[]}"#);
+
+    let bin = dir.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let cargo = bin.join("cargo");
+    std::fs::write(&cargo, "#!/bin/sh\necho 'stub cargo: refusing' >&2\nexit 1\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let (text, code) = diff_with_path(
+        &[
+            "--since",
+            "HEAD",
+            "--corpus",
+            corpus.to_str().unwrap(),
+            "--expect-fixtures",
+            "1",
+        ],
+        Some(&bin),
+    );
+
+    assert!(
+        text.contains("HEAD-DID-NOT-BUILD"),
+        "a head that cannot be built must be refused, and named as the HEAD end \
+         so a reader looks at the right revision: {text}"
+    );
+    assert!(
+        !text.lines().any(|l| l.trim() == "IDENTICAL"),
+        "reusing whatever was in target/debug is how this reported clean: {text}"
+    );
+    assert_eq!(code, Some(2), "could-not-check exits 2: {text}");
+}
+
+/// **`--expect-fixtures` was documented as required and defaulted to `None`.**
+///
+/// So the count guard — the half that catches a corpus reader which stopped
+/// matching, as against the derived list which catches a missing member — ran
+/// only when someone remembered the flag. Every invocation in this file passes
+/// it, which is precisely why nothing here noticed.
+#[test]
+fn the_fixture_count_cannot_be_omitted() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = corpus_with(dir.path(), r#"{"v":1,"subjects":[]}"#);
+
+    let (text, code) = diff(&["--since", "HEAD", "--corpus", corpus.to_str().unwrap()]);
+
+    assert!(
+        text.contains("expect-fixtures"),
+        "the refusal must name the missing flag: {text}"
+    );
+    assert!(
+        !text.lines().any(|l| l.trim() == "IDENTICAL"),
+        "and must never reach a verdict: {text}"
+    );
+    assert_eq!(
+        code,
+        Some(2),
+        "argparse's own usage exit, which is a could-not-check: {text}"
+    );
 }
 
 /// The corpus this repo actually ships is the size the harness is invoked with.
