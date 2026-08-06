@@ -161,7 +161,11 @@ fn the_head_binary_is_rebuilt_rather_than_reused() {
     let bin = dir.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let cargo = bin.join("cargo");
-    std::fs::write(&cargo, "#!/bin/sh\necho 'stub cargo: refusing' >&2\nexit 1\n").unwrap();
+    std::fs::write(
+        &cargo,
+        "#!/bin/sh\necho 'stub cargo: refusing' >&2\nexit 1\n",
+    )
+    .unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
 
