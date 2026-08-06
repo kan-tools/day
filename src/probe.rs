@@ -939,9 +939,9 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
 
     if in_scope.is_empty() {
         return Verdict::Vacuous(format!(
-            "no subject carries a `{}` claim, so there is nothing for this to be true \
+            "no subject carries {}, so there is nothing for this to be true \
              of -- it is satisfied only because the set is empty",
-            universal.subject_with.kind
+            universal.subject_with.describe()
         ));
     }
 
@@ -962,9 +962,9 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
 
     if missing.is_empty() {
         Verdict::Satisfied(format!(
-            "all {} subject(s) carrying a `{}` also carry {}",
+            "all {} subject(s) carrying {} also carry {}",
             in_scope.len(),
-            universal.subject_with.kind,
+            universal.subject_with.describe(),
             universal
                 .also_carries
                 .iter()
@@ -976,10 +976,10 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
         // Named, not counted. The reader's next action is to go and finish one
         // of them, and a bare "3 of 21" does not say which.
         Verdict::Unsatisfied(format!(
-            "{} of {} subject(s) carrying a `{}` are incomplete: {}",
+            "{} of {} subject(s) carrying {} are incomplete: {}",
             missing.len(),
             in_scope.len(),
-            universal.subject_with.kind,
+            universal.subject_with.describe(),
             missing.join("; ")
         ))
     }

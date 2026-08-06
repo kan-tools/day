@@ -1442,6 +1442,66 @@ fn every_subject_with_a_plan_must_also_carry_a_verdict() {
     assert_eq!(code, Some(0), "{stdout}");
 }
 
+/// **An `every` verdict must describe the anchor it actually used, not its
+/// `kind`.**
+///
+/// The three verdict messages rendered `subject_with.kind` bare, so a narrowed
+/// anchor reported a sentence about a *wider* set than the one it quantified
+/// over. `[VACUOUS] no subject carries a `Plan` claim` is simply false when
+/// subjects carrying `Plan` claims are sitting in the log and the anchor's
+/// `starts_with` excluded them — and it is false in the direction that hides
+/// the declaration's own defect, because the reader goes looking for missing
+/// data instead of at the predicate that emptied the set.
+///
+/// `ClaimShape::describe` already covers all seven predicates, and
+/// `also_carries` already used it; only the anchor side did not. Driven through
+/// the shipped binary, with the *same log* answering a narrowed and an
+/// unnarrowed anchor — which is what makes the old message's falsity visible
+/// rather than merely arguable.
+#[test]
+fn an_every_verdict_describes_the_anchor_it_narrowed_by() {
+    let probes = r#"{
+        "narrowed": {"every": {
+            "subject_with": {"kind": "Plan", "starts_with": "design:"},
+            "also_carries": [{"kind": "Decision"}]
+        }},
+        "wide": {"every": {
+            "subject_with": {"kind": "Plan"},
+            "also_carries": [{"kind": "Decision"}]
+        }}
+    }"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/legible",
+                "bafyreit",
+                "Legible.\n\n```day-telos\n{\"witnesses\":[\"narrowed\",\"wide\"]}\n```\n",
+            ),
+            // A Plan, in the log, that the narrowed anchor excludes.
+            plan_claim("some-design", "bafyreip", "A design.", 10),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "legible"]);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+
+    assert!(
+        stdout.contains("starting with `design:`"),
+        "an empty scope must name the predicate that emptied it, or the reader \
+         audits the log when the defect is in the declaration: {stdout}"
+    );
+    // The same log, one witness apart, reaches a subject — so the bare-`kind`
+    // sentence was not merely imprecise, it asserted something untrue.
+    assert!(
+        stdout.contains("[MISSING]") && stdout.contains("some-design"),
+        "the wide anchor over this same log finds a subject, which is what makes \
+         `no subject carries a Plan claim` a false statement: {stdout}"
+    );
+}
+
 /// The co-location is load-bearing: a verdict on a *different* subject must not
 /// satisfy a design's requirement.
 ///
