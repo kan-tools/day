@@ -35,7 +35,7 @@ fn day(dir: &Path, kan: &Path, args: &[&str]) -> std::process::Output {
 /// tagged path silently skips.
 fn init_repo(dir: &Path) {
     let git = |args: &[&str]| {
-        Command::new("git")
+        let out = Command::new("git")
             .args(args)
             .current_dir(dir)
             .env("GIT_AUTHOR_NAME", "t")
@@ -44,6 +44,11 @@ fn init_repo(dir: &Path) {
             .env("GIT_COMMITTER_EMAIL", "t@e")
             .output()
             .expect("git");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed, so this fixture never existed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     };
     git(&["init", "-q", "."]);
     std::fs::write(dir.join("Cargo.toml"), "version = \"1.0.0\"\n").unwrap();
@@ -59,7 +64,7 @@ fn repo_with_tags(dir: &Path, tags: &[&str]) {
     // that depends on wall-clock ordering is flaky by construction, and this one
     // was: it selected the OLDEST pass tag on the first run.
     let git = |args: &[&str], when: &str| {
-        Command::new("git")
+        let out = Command::new("git")
             .args(args)
             .current_dir(dir)
             .env("GIT_AUTHOR_NAME", "t")
@@ -70,6 +75,11 @@ fn repo_with_tags(dir: &Path, tags: &[&str]) {
             .env("GIT_COMMITTER_DATE", when)
             .output()
             .expect("git");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed, so this fixture never existed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     };
     let at = |n: i64| format!("{} +0000", 1_700_000_000 + n * 3600);
 

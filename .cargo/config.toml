@@ -1,0 +1,23 @@
+# The test suite drives a real `git` in temp repos — `init`, `commit`, `tag` —
+# because what several fixtures assert is which tag day *selects*, and a stub
+# that returned a fixed answer would assert nothing.
+#
+# A real `git` reads the developer's `~/.gitconfig`, and CI has none. So the
+# suite has always depended on a clean global config without saying so, and the
+# dependency was invisible for exactly as long as nobody's config differed:
+# `tag.gpgsign = true` turns a lightweight `git tag v9.9.9` into an annotated
+# one, which fails with `fatal: no tag message?`. Five tests across four files
+# went red locally while CI stayed green, and one of them reported the failure
+# as a *day* verdict — the setup had not asserted its own success, so a git that
+# could not run looked like a release day could not find.
+#
+# Pinning the two config paths to /dev/null makes local runs match CI's
+# environment rather than the author's. Repo-local config is untouched, which is
+# where the fixtures set `user.name` and friends.
+#
+# This lives here rather than in each spawn site on purpose: there are nine of
+# them across eight files, a new test adds a tenth, and a rule that has to be
+# remembered at a call site is the shape of defect this repo keeps recording.
+[env]
+GIT_CONFIG_GLOBAL = "/dev/null"
+GIT_CONFIG_SYSTEM = "/dev/null"
