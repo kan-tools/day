@@ -1571,3 +1571,124 @@ fn a_subject_named_like_a_glob_is_not_completed_by_its_prefix_siblings() {
     );
     assert_eq!(out.status.code(), Some(1), "{stdout}");
 }
+
+/// **Every predicate resolves inside `every`, including the ones that cannot be
+/// answered there.**
+///
+/// This is the test that should have existed when `every_subject` was first
+/// routed through `claims_matching`. It did not: that fix was verified by hand
+/// in a terminal and the result written into a commit message, where it is
+/// unrepeatable. Nothing pinned the behaviour, so the next edit to the function
+/// broke it in two new ways with the whole suite green — which is the mechanism
+/// behind three consecutive fix rounds each introducing the next finding.
+///
+/// Two shapes, because they fail in opposite directions and only one of them is
+/// obvious:
+///
+/// - `block` names a type this project has not declared, so day **cannot check
+///   it** and must say so. Before the routing fix this reported `[MATERIAL]`.
+/// - `mentions_material` asks for correspondence, and an `every` probe is not a
+///   material/record pair, so there is nothing to correspond to. Unanswerable,
+///   and unanswerable is `[ERROR]` — never a quiet pass.
+#[test]
+fn an_unanswerable_predicate_inside_every_is_reported_not_ignored() {
+    let telos = |cid: &str| {
+        claim(
+            "telos/t",
+            cid,
+            "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+        )
+    };
+    let assess = |dir: &Path, probes: &str| {
+        let kan = write_kan_stub(
+            dir,
+            &[
+                witness_schema("bafyreiw", probes),
+                telos("bafyreit"),
+                // Premise: a subject the anchor matches, WITH the required kind
+                // present — so the only thing that can make this not-MATERIAL is
+                // the predicate under test.
+                plan_claim("some-design", "bafyreip", "A design.", 10),
+                decision_claim("some-design", "bafyreid", "Reviewed.", 20),
+            ],
+        );
+        let git = write_git_stub(dir, &[], &[], &[]);
+        String::from_utf8_lossy(&day(dir, &kan, &git, &["assess", "telos", "t"]).stdout).to_string()
+    };
+
+    // Premise check: with no extra predicate this fixture is MATERIAL, so any
+    // other result below is caused by the predicate and not by the fixture.
+    let dir = tempfile::tempdir().unwrap();
+    let plain = assess(
+        dir.path(),
+        r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                            "also_carries": [{"kind": "Decision"}]}}}"#,
+    );
+    assert!(
+        plain.contains("[MATERIAL]"),
+        "premise: the bare fixture must be satisfied: {plain}"
+    );
+
+    // An undeclared block type: day cannot check it.
+    let dir = tempfile::tempdir().unwrap();
+    let blocked = assess(
+        dir.path(),
+        r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                            "also_carries": [{"kind": "Decision", "block": "nonexistent-type"}]}}}"#,
+    );
+    assert!(
+        blocked.contains("[ERROR]") && blocked.contains("nonexistent-type"),
+        "a block predicate must be resolved inside `every`, not skipped: {blocked}"
+    );
+    assert!(
+        !blocked.contains("[MATERIAL]"),
+        "and it must certainly not report satisfied: {blocked}"
+    );
+
+    // Correspondence has nothing to correspond to here.
+    let dir = tempfile::tempdir().unwrap();
+    let corr = assess(
+        dir.path(),
+        r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                            "also_carries": [{"kind": "Decision", "mentions_material": true}]}}}"#,
+    );
+    assert!(
+        corr.contains("[ERROR]"),
+        "an unanswerable correspondence inside `every` is UNCHECKED, not a pass: {corr}"
+    );
+    assert!(!corr.contains("[MATERIAL]"), "{corr}");
+}
+
+/// The `also_carries`-with-`subject` refusal fires, and names the offender.
+///
+/// Co-location is what `every` means, so a requirement carrying its own scope
+/// could only narrow to nothing or to itself. Refused rather than reconciled —
+/// and asserted, because a refusal nothing drives is a branch that rots.
+#[test]
+fn a_requirement_declaring_its_own_subject_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema(
+                "bafyreiw",
+                r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                                    "also_carries": [{"kind": "Decision", "subject": "other/*"}]}}}"#,
+            ),
+            claim(
+                "telos/t",
+                "bafyreit",
+                "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+            ),
+            plan_claim("some-design", "bafyreip", "A design.", 10),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["assess", "telos", "t"]).stdout)
+            .to_string();
+    assert!(
+        stdout.contains("[ERROR]") && stdout.contains("also_carries"),
+        "the refusal must fire and say what is wrong: {stdout}"
+    );
+}

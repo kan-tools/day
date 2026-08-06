@@ -434,6 +434,53 @@ So:
   fine from the writing side. Record the supersession on **the subject a reader
   will look at**, not only on the one you happen to be writing.
 
+## A fix round verifies itself worse than the work it corrects
+
+Four cold reviews across v0.12's witness work, three rounds, and **every round's
+fix introduced the next round's finding**. The reviews found real, demonstrated
+defects in four of four passes, so the loop works; what follows is why it
+converges so slowly. Recorded as a `kan result` on `process-model`.
+
+**The cause is one thing.** The original work gets tests. The fix gets a hand-run
+demonstration in a terminal, written into a commit message where it is
+unrepeatable. `every_subject`'s routing fix was verified by A/B in a shell and
+shipped with **no behavioural test**; the next edit to that function — one commit
+later, by its author — broke it in two new ways with the whole suite green. The
+effort is inverted exactly where the code is most fragile: immediately after
+being told you were wrong, under pull toward a minimal local edit whose blast
+radius nobody has re-derived.
+
+Three mechanisms under it:
+
+- **The demonstration rule has a blind spot.** Mutation asks "does any test
+  assert this line". Reversion asks "does the test written for this finding fail
+  when it returns". **Neither asks whether the fix changed behaviour it was not
+  meant to change** — which is the question both reviewers answered by building
+  the pre-fix binary and diffing it. `Demonstrated-by:` was entirely honest on
+  the commit that carried the regression.
+- **Guard the invariant, not the finding's mechanism.** The scan added for the
+  first BLOCK enforces "a claim shape has one evaluator". The regression moved
+  *inside* that evaluator, so the guard was orthogonal to what broke. The
+  invariant was AC-23 — no form may produce a witness satisfied without a probe
+  having found something — and a guard on that catches both.
+- **Nothing checks a sentence.** Four claims recorded in durable places were
+  false: a rule in this file refuted by its own commit, a page size recorded as a
+  total in three places, a supersession premise contradicted by a claim recorded
+  a day earlier, and a commit describing a test change that had not happened. A
+  measured number in a commit message is a claim — show the command that
+  produced it.
+
+**And the self-application gap that let it all through: not one of day's atoms
+declared `done` criteria.** `day status` reported "completion cannot be checked"
+for every atom, in every milestone, while day shipped and documented the
+mechanism for exactly that. Nothing said "this fix round is not finished" when
+the fix had no test. All eight declare them now, which is the cheapest of these
+by a wide margin and the one that closes the gap the others fell through.
+
+So, for a fix round specifically: **write the invariant's fixture before the fix,
+not the finding's fixture after it**, and finish by running day rather than by
+reading the diff.
+
 ## The tools in `scripts/`, already written — use them rather than reinventing them
 
 No count in that heading, deliberately. It said "Two tools" while heading four,
