@@ -1480,3 +1480,94 @@ fn a_verdict_on_another_subject_does_not_complete_this_one() {
     );
     assert_eq!(out.status.code(), Some(1), "{stdout}");
 }
+
+/// **A scoped anchor still scopes**, and a scope matching nothing is `VACUOUS`.
+///
+/// The first fix for the `every` bypass routed each shape through
+/// `claims_matching` by *mutating* a clone -- `scoped.subject = Some(subject)`
+/// -- which silently dropped whatever scope the declaration carried. An anchor
+/// scoped `design/*` began matching every subject in the log, so a universal
+/// quantified over an empty set reported MATERIAL where the correct answer is
+/// VACUOUS. A false clean, introduced by the fix for a false clean, inside the
+/// one evaluator the new scan was built to protect -- which is why the scan and
+/// a green suite were both blind to it.
+///
+/// Found by a cold review A/B'ing against the pre-fix binary. The restriction is
+/// a separate parameter now, so the shape's own `subject` survives as an
+/// independent conjunct.
+#[test]
+fn a_scoped_anchor_that_matches_nothing_is_vacuous_not_material() {
+    let probes = r#"{"u": {"every": {
+        "subject_with": {"kind": "Plan", "subject": "design/*"},
+        "also_carries": [{"kind": "Decision"}]
+    }}}"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/t",
+                "bafyreit",
+                "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+            ),
+            // Premise: a Plan exists, but on a subject the anchor's scope
+            // EXCLUDES. Without this the test would pass on an empty log.
+            plan_claim("other/b", "bafyreip", "A plan.", 10),
+            decision_claim("other/b", "bafyreid", "Reviewed.", 20),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[VACUOUS]"),
+        "no subject matches the anchor's own scope, so the universal quantifies \
+         over nothing and establishes nothing: {stdout}"
+    );
+    assert!(
+        !stdout.contains("[MATERIAL]"),
+        "and it must not report the telos met: {stdout}"
+    );
+}
+
+/// **A subject whose NAME contains `*` is not a pattern.**
+///
+/// `subject` is glob-lite, so the first fix's mutated clone put a concrete
+/// subject name back through the pattern matcher: a subject literally called
+/// `foo*` matched `foobar`, and the sibling's claim completed it. Co-location --
+/// the entire point of `every` -- defeated by a name.
+///
+/// `a_verdict_on_another_subject_does_not_complete_this_one` uses `design-a` and
+/// `design-b`, so it cannot see this. The restriction matches by equality now.
+#[test]
+fn a_subject_named_like_a_glob_is_not_completed_by_its_prefix_siblings() {
+    let probes = r#"{"u": {"every": {
+        "subject_with": {"kind": "Plan"},
+        "also_carries": [{"kind": "Decision"}]
+    }}}"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/t",
+                "bafyreit",
+                "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+            ),
+            plan_claim("foo*", "bafyreip1", "A plan.", 10),
+            plan_claim("foobar", "bafyreip2", "A plan.", 11),
+            // The sibling's Decision must not reach `foo*`.
+            decision_claim("foobar", "bafyreid", "Reviewed.", 20),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("foo*"),
+        "the subject with no Decision of its own is incomplete: {stdout}"
+    );
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+}

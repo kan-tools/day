@@ -277,15 +277,13 @@ impl ClaimShape {
     /// `kan show --json` renders a claim within a subject rather than on one;
     /// [`ClaimLog`] already carries the `(subject, claim)` pair, so scoping
     /// costs no extra read.
-    /// [`Self::matches_with`] with no authorship exclusion.
+    /// [`Self::matches_with`] with no authorship exclusion — the arity the unit
+    /// tests of the conjunction drive, and nothing else.
     ///
-    /// `#[cfg(test)]` because that is what it now is. Every production caller
-    /// passes a resolved exclusion, so this is the arity the unit tests drive
-    /// and nothing else — and clippy said so the moment the last production
-    /// caller moved, which is day#101's corollary working as intended on a
-    /// private fn. Leaving it un-gated would have left a wrapper that reads
-    /// like production surface and is reachable only from tests.
-    /// The no-exclusion arity, for unit tests of the conjunction itself.
+    /// `#[cfg(test)]` because that is what it is. Clippy said so the moment the
+    /// last production caller moved to `matches_with`, which is day#101's
+    /// corollary working as intended on a private fn: un-gated it would have
+    /// read like production surface while being reachable only from tests.
     ///
     /// `production_half` cuts at a file's trailing `#[cfg(test)] mod`, so a
     /// `#[cfg(test)]` item inside an `impl` still sits in the half the scan
@@ -374,6 +372,18 @@ impl ClaimShape {
         }
         if let Some(block) = &self.block {
             described.push_str(&format!(" carrying a valid `{block}` block"));
+        }
+        // The last two were missing while a second, divergent `describe` existed
+        // as a free function — each covering predicates the other did not. A
+        // description that silently omits a predicate is the same defect as a
+        // matcher that silently ignores one, one layer out: it is how
+        // `witness-interview (no Decision)` was reported for a subject carrying
+        // five Decisions.
+        if let Some(did) = &self.not_authored_by {
+            described.push_str(&format!(" not authored by `{did}`"));
+        }
+        if self.mentions_material {
+            described.push_str(" naming the material instance");
         }
         described
     }
@@ -577,6 +587,7 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
             log,
             None,
             Correspondence::Unavailable,
+            None,
             Failures::AlreadyReported,
         ),
         // Cumulative always, boundary or not — `evaluate` has no boundary to
@@ -855,11 +866,17 @@ fn evaluate_absence(
 /// rather than through the data. A project with no design subjects yet has not
 /// demonstrated a reconstructable process; it has demonstrated nothing.
 ///
-/// Block predicates are not resolved here. `subject_with` and `also_carries`
-/// are matched with [`ClaimShape::matches`] directly, so a shape naming a
-/// declared `block` is matched on its other predicates only — stated because
-/// silently ignoring a predicate is precisely what this milestone is about, and
-/// this is the one place a shape is matched outside [`claims_matching`].
+/// Every shape here goes through [`claims_matching`], so `block`,
+/// `mentions_material` and `not_authored_by` are resolved exactly as they are
+/// for a plain `claim` probe.
+///
+/// It did not always. This function matched shapes directly, and carried a
+/// comment saying block predicates were "not resolved here" — which a cold
+/// review correctly read as a defect written down instead of fixed. That
+/// comment then survived the fix that closed it, two lines above the
+/// correction, still asserting the opposite of the code. Both are recorded here
+/// because the second is the more instructive: prose does not just fail to
+/// constrain, it goes on contradicting the thing that replaced it.
 fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
     // A shape inside `also_carries` may not narrow by subject: co-location IS
     // what `every` means, so its own scope and the anchor's would silently
@@ -898,13 +915,12 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
     // `the_claim_shape_predicate_has_one_evaluator` in `tests/plugin.rs` fails
     // the build if a second appears.
     let ask = |shape: &ClaimShape, subject: &str| -> Verdict {
-        let mut scoped = shape.clone();
-        scoped.subject = Some(subject.to_string());
         claims_matching(
-            &scoped,
+            shape,
             log,
             None,
             Correspondence::Unavailable,
+            Some(subject),
             Failures::AlreadyReported,
         )
     };
@@ -935,7 +951,7 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
         for required in &universal.also_carries {
             match ask(required, subject) {
                 Verdict::Satisfied(_) => {}
-                Verdict::Unsatisfied(_) => lacks.push(describe(required)),
+                Verdict::Unsatisfied(_) => lacks.push(required.describe()),
                 other => return other,
             }
         }
@@ -952,7 +968,7 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
             universal
                 .also_carries
                 .iter()
-                .map(|r| format!("`{}`", describe(r)))
+                .map(|r| r.describe())
                 .collect::<Vec<_>>()
                 .join(" and ")
         ))
@@ -969,31 +985,6 @@ fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
     }
 }
 
-/// How a required shape is named when it is missing.
-///
-/// **The kind alone is a falsehood when the shape narrows.** day reported
-/// `witness-interview (no Decision)` for a subject carrying five `Decision`
-/// claims, because the requirement was `{kind: Decision, starts_with:
-/// "adversarial review of"}` and only the kind reached the message. The check
-/// was right and the sentence was wrong, in the witness for
-/// `telos/legible-process`, on the repo that defines it.
-fn describe(shape: &ClaimShape) -> String {
-    let mut out = shape.kind.clone();
-    if let Some(prefix) = &shape.starts_with {
-        out.push_str(&format!(" starting `{prefix}`"));
-    }
-    if let Some(substring) = &shape.contains {
-        out.push_str(&format!(" containing `{substring}`"));
-    }
-    if let Some(block) = &shape.block {
-        out.push_str(&format!(" carrying a `{block}` block"));
-    }
-    if shape.not_authored_by.is_some() {
-        out.push_str(" from another author");
-    }
-    out
-}
-
 pub fn claims_matching(
     shape: &ClaimShape,
     log: &ClaimLog<'_>,
@@ -1002,6 +993,24 @@ pub fn claims_matching(
     // a pair. `Unavailable` everywhere else, which costs nothing because a
     // shape that does not declare `mentions_material` never consults it.
     correspondence: Correspondence<'_>,
+    // Restrict the search to ONE subject, by exact name. Only `every` passes it,
+    // and it is a separate parameter rather than a mutated `ClaimShape` for two
+    // reasons a cold review demonstrated by A/B against the previous binary:
+    //
+    //   1. Overwriting `shape.subject` DROPS whatever scope the declaration
+    //      carried. An anchor scoped `design/*` began matching every subject in
+    //      the log — silently widening the very set the universal quantifies
+    //      over, so a scope that matched nothing reported MATERIAL instead of
+    //      VACUOUS.
+    //   2. `subject` is glob-lite (`subject_matches`), so a concrete name put
+    //      through it is re-read as a PATTERN. A subject literally called `foo*`
+    //      matched `foobar`, and a sibling's claim completed it — co-location,
+    //      the entire point of `every`, defeated by a name.
+    //
+    // Both failed toward satisfied, inside the one evaluator the new scan was
+    // built to protect, which is why the scan and a green suite were blind to
+    // them. An exact-equality restriction cannot do either.
+    restrict_to_subject: Option<&str>,
     // Collects reads that could not happen. `None` where the caller renders the
     // `Verdict` itself and so already shows the reason — `day assess telos`
     // prints ERROR with the message. Position inference passes `Some`, because
@@ -1105,6 +1114,11 @@ pub fn claims_matching(
                 });
                 unchecked.get_or_insert(why);
             }
+        }
+        // Equality, deliberately, and BEFORE the shape's own predicates so the
+        // shape's `subject` glob still applies as an independent conjunct.
+        if restrict_to_subject.is_some_and(|only| subject != only) {
+            continue;
         }
         if !shape.matches_with(subject, claim, block_check, exclude_author.as_deref()) {
             continue;

@@ -673,3 +673,50 @@ fn a_cfg_test_attribute_on_a_function_does_not_end_the_production_half() {
         "and the demonstration must go through: {text}"
     );
 }
+
+/// **A restored file comes back executable.**
+///
+/// `restore` wrote bytes with `write_bytes`, which creates a missing file at the
+/// process umask — so reverting a commit that ADDS an executable file and then
+/// putting it back left it `644`. The digest compared content only, saw nothing
+/// wrong, and the run reported its outcome and exited 0 rather than
+/// `NOT-RESTORED`.
+///
+/// Found when it silently disarmed a witness: `scripts/foreign-contribution.sh`
+/// came back non-executable and `day assess telos v1.0 --run` reported
+/// `[ERROR] … Permission denied`. day's own layer was honest about it; this
+/// harness was not, which is the one thing it exists not to do. `mutate.py`
+/// carries the sibling lesson about mtime, for the same reason.
+///
+/// `--rev` mode specifically: the file has to be *created* by the reverted
+/// change for the umask to decide its mode on the way back.
+#[test]
+fn a_reverted_executable_file_comes_back_executable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let s = Scratch::new(BUGGY, FIXED, ASSERTS_THE_FIX);
+    let script = s.root().join("run-me.sh");
+    std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", "fix the answer, and add an executable"]);
+
+    let executable = |label: &str| {
+        let mode = std::fs::metadata(&script).unwrap().permissions().mode();
+        assert!(
+            mode & 0o111 != 0,
+            "{label}: expected an executable file, mode was {mode:o}"
+        );
+    };
+    // Premise: it really is executable before the run, or what follows proves
+    // nothing.
+    executable("premise");
+
+    let (text, _) = s.run(&["--rev", "HEAD", "--tests", "t::demo_test"]);
+
+    assert!(
+        !text.contains("NOT-RESTORED"),
+        "the tree should come back cleanly: {text}"
+    );
+    executable("after the run");
+}

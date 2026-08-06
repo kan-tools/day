@@ -126,8 +126,16 @@ prefix). It is scoped to all nine deliberately, because the gaps interact —
 - [ ] AC-5: (REQ-4) A negated `path` probe reports satisfied when no tracked file
   matches, and unsatisfied when one does.
 - [ ] AC-6: (REQ-5) A negated probe with no companion positive witness, or whose
-  companion does not resolve, reports `VACUOUS`, and `VACUOUS` does not make the
-  telos report clean.
+  companion does not resolve, reports `VACUOUS` **in the render**, distinctly
+  from both met and unmet.
+
+  *Amended with AC-7, and for the same reason.* The original said `VACUOUS` "does
+  not make the telos report clean", which contradicts AC-7's amendment and is
+  false in the shipped code: `is_failure` counts only `Unsatisfied`, so a
+  VACUOUS-only telos exits 0 exactly as an ERROR-only one does. A cold review
+  found the two criteria saying opposite things in one document. Whether any
+  could-not-check verdict should affect the exit code is day#139, and it is
+  about the whole class.
 - [ ] AC-7: (REQ-5) `VACUOUS` is distinct from satisfied **in the render**, and
   in the exit code behaves like the other could-not-check verdicts — `ERROR`,
   `NOT RUN`, `TIMEOUT` — rather than like a probe that ran and found nothing.

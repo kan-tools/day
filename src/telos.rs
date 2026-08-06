@@ -1269,15 +1269,45 @@ mod tests {
             prompts: vec![],
             record_command: String::new(),
         };
-        assert!(report(Some(Verdict::Satisfied("x".into()))).is_clean());
-        assert!(report(Some(Verdict::NotRun("x".into()))).is_clean());
-        assert!(report(Some(Verdict::TimedOut("x".into()))).is_clean());
-        assert!(report(Some(Verdict::Error("x".into()))).is_clean());
+        // **Exhaustive by construction.** This was a hand-written list of four
+        // `is_clean` assertions, and when the milestone added `Verdict::Vacuous`
+        // the list did not grow -- so the one verdict most at risk of being
+        // treated as evidence was the one nothing here checked. A cold review
+        // found it in the round whose own CLAUDE.md section is about lists that
+        // do not grow.
+        //
+        // The `match` below is the fix rather than a sixth assertion: it has no
+        // wildcard arm, so adding a variant to `Verdict` FAILS TO COMPILE here
+        // and whoever adds it has to say which side of the line it falls on.
+        for verdict in [
+            Verdict::Satisfied("x".into()),
+            Verdict::Unsatisfied("x".into()),
+            Verdict::NotRun("x".into()),
+            Verdict::TimedOut("x".into()),
+            Verdict::Error("x".into()),
+            Verdict::Vacuous("x".into()),
+        ] {
+            let counts_against_the_telos = match verdict {
+                // A probe that ran and found nothing. The only one.
+                Verdict::Unsatisfied(_) => true,
+                // Evidence, or one of the four ways of not having established
+                // any. None of them is a finding about the work.
+                Verdict::Satisfied(_)
+                | Verdict::NotRun(_)
+                | Verdict::TimedOut(_)
+                | Verdict::Error(_)
+                | Verdict::Vacuous(_) => false,
+            };
+            assert_eq!(
+                report(Some(verdict.clone())).is_clean(),
+                !counts_against_the_telos,
+                "{verdict:?} is on the wrong side of the material-tier rule"
+            );
+        }
         assert!(
             report(None).is_clean(),
             "no probe means nothing was checked"
         );
-        assert!(!report(Some(Verdict::Unsatisfied("x".into()))).is_clean());
     }
 
     /// REQ-10: a claim mentioning a witness is reported, but never counted.

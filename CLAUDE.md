@@ -380,11 +380,20 @@ though the tooling exists.
 
 ## The requirements that get skipped are the ones nothing fails over
 
-Two cold reviews of v0.12's witness work both returned BLOCK, and between them
-they named one pattern that held across the whole branch without exception:
+Two cold reviews of v0.12's witness work both returned BLOCK, and one of them
+named a pattern that held across the design doc it audited:
 
 > **Every requirement whose artifact was Rust was met. Every requirement whose
 > artifact was a kan claim or a hand-maintained list was skipped.**
+
+**Stated as holding "without exception" across the branch, it is false**, and a
+later review refuted it using the other BLOCK: `every_subject` bypassed
+`claims_matching`, which is REQ-9 — a Rust requirement, unmet. The sentence
+asserting the rule sat in the same commit as its counterexample. Recorded
+because the failure is instructive on its own: a pattern observed in one place
+was widened to a law without re-checking it where it would break, which is the
+same move as a hand-written count nobody re-derives. The scoped version is
+true and is worth keeping; the universal one is not.
 
 The milestone shipped a design document promising a `witness-interview` atom, a
 slash command for it, and a renderer pointing at it — and never ran `day atom
@@ -416,11 +425,14 @@ So:
 - **A count and a list are different guarantees.** Keep the count exact — it
   catches a parser that silently stopped matching — and derive the list, which
   catches a member that was never added. Neither substitutes for the other.
-- **Recording a decision in a design document is not recording it.** RQ-4's
-  supersession lived in `.design/` while kan still carried only the superseded
-  claim, on a subject whose own milestone is about the record being
-  reconstructable. The document is not the record; the log is, and the next
-  session reads the log.
+- **A supersession is only as findable as the read that surfaces it.** RQ-4's
+  supersession *was* in kan — a claim on `witness-model` said so and cited RQ-4
+  directly — and a reader of `kan show witness-interview` still saw only the
+  superseded decision, because that view does not surface **inbound** citations.
+  So the claim "it was superseded only in the design document" was itself false,
+  and got recorded; the real defect is narrower and worse, because it looks
+  fine from the writing side. Record the supersession on **the subject a reader
+  will look at**, not only on the one you happen to be writing.
 
 ## The tools in `scripts/`, already written — use them rather than reinventing them
 

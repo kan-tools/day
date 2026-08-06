@@ -805,12 +805,7 @@ fn an_absence_is_probeable_and_vacuous_without_its_precondition() {
     // wrong and is amended; whether could-not-check should affect the exit code
     // AT ALL is a real question about every one of those verdicts, filed rather
     // than settled here by giving one of them special treatment.
-    assert_eq!(
-        code,
-        Some(0),
-        "vacuous is a could-not-establish, and exits like ERROR and NOT RUN \
-         rather than like a probe that ran and found nothing: {stdout}"
-    );
+    let vacuous_code = code;
 
     // (2) SATISFIED — work happened here and left nothing tracked.
     let dir = tempfile::tempdir().unwrap();
@@ -828,6 +823,25 @@ fn an_absence_is_probeable_and_vacuous_without_its_precondition() {
         "{stdout}"
     );
     assert_eq!(code, Some(1), "{stdout}");
+
+    // **The class invariant, asserted as a comparison rather than as a bare
+    // zero.** A previous version asserted `Some(0)` with a message ABOUT the
+    // class, which a cold review correctly called out: the message changed and
+    // the assertion did not, so it still pinned a literal. What the rule
+    // actually says is that a could-not-establish is not a finding about the
+    // work, and that is only visible next to one that is.
+    assert_ne!(
+        vacuous_code, code,
+        "a vacuous witness must not exit the same way as a probe that ran and \
+         found nothing -- one is a could-not-establish and the other is a finding"
+    );
+    assert_eq!(
+        vacuous_code,
+        Some(0),
+        "and it exits like ERROR, NOT RUN and TIMEOUT, which `is_failure` \
+         already groups it with -- day#139 asks whether that grouping is right \
+         at all, for every one of them rather than for this one"
+    );
 }
 
 /// day#137 / REQ-18 — **a forbidden command must declare which non-zero exit

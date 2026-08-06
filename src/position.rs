@@ -151,7 +151,7 @@ pub fn resolve_corresponding(
         // repeating the defect CLAUDE.md records about the position
         // fingerprint.
         (Probe::Claim(shape), None) => {
-            probe::claims_matching(shape, log, None, correspondence, failures)
+            probe::claims_matching(shape, log, None, correspondence, None, failures)
         }
         (_, None) => probe::evaluate(probe, git, log, Authorization::Report),
         (Probe::Path(pathspec), Some(boundary)) => {
@@ -188,6 +188,7 @@ pub fn resolve_corresponding(
             log,
             Some(boundary.at_micros()),
             correspondence,
+            None,
             failures,
         ),
     }

@@ -371,14 +371,27 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
     snapshot: dict[str, bytes | None] = {}
     for rel in touched:
         p = root / rel
-        snapshot[rel] = p.read_bytes() if p.exists() else None
+        snapshot[rel] = (p.read_bytes(), p.stat().st_mode) if p.exists() else None
 
     def digest() -> dict[str, str | None]:
-        return {
-            rel: (hashlib.sha256((root / rel).read_bytes()).hexdigest()
-                  if (root / rel).exists() else None)
-            for rel in touched
-        }
+        # **Mode is part of the digest, not just content.** Restore wrote bytes
+        # with `write_bytes`, which creates a missing file at the process umask,
+        # so reverting a NEW executable file and putting it back left it 644 --
+        # and a content-only digest saw nothing wrong, so the run reported its
+        # outcome and exited 0 rather than NOT-RESTORED.
+        #
+        # Found when it silently disarmed a witness: `scripts/foreign-contribution.sh`
+        # came back non-executable and `day assess telos v1.0 --run` reported
+        # `[ERROR] ... Permission denied`. day's own layer was honest about it;
+        # this harness was not, which is the one thing it exists not to do.
+        # `mutate.py` carries the sibling lesson about mtime for the same reason.
+        def stamp(rel: str) -> str | None:
+            f = root / rel
+            if not f.exists():
+                return None
+            return f"{hashlib.sha256(f.read_bytes()).hexdigest()}:{f.stat().st_mode:o}"
+
+        return {rel: stamp(rel) for rel in touched}
 
     before = digest()
     try:
@@ -436,20 +449,25 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
     return outcome, caught
 
 
-def restore(root: pathlib.Path, snapshot: dict[str, bytes | None]) -> None:
-    """Put every touched file back, with a fresh mtime.
+def restore(root: pathlib.Path, snapshot: dict) -> None:
+    """Put every touched file back, with its original mode and a fresh mtime.
 
     A fresh mtime, not a preserved one: `mutate.py` learned that preserving it
     hides the restore from cargo's change detection and corrupts the NEXT run
     rather than this one, which is much worse to diagnose.
     """
-    for rel, content in snapshot.items():
+    for rel, saved in snapshot.items():
         p = root / rel
-        if content is None:
+        if saved is None:
             p.unlink(missing_ok=True)
         else:
+            content, mode = saved
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(content)
+            # Mode after content: `write_bytes` creates a missing file at the
+            # umask, so a file that was executable before the revert comes back
+            # 644 without this. Silently, and it disarms any probe that runs it.
+            os.chmod(p, mode)
             p.touch()
 
 
