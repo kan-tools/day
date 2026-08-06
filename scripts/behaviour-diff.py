@@ -134,10 +134,10 @@ def build_base(rev: str) -> pathlib.Path | None:
     return binary
 
 
-def fixtures() -> list[pathlib.Path]:
-    if not CORPUS.is_dir():
+def fixtures(corpus: pathlib.Path) -> list[pathlib.Path]:
+    if not corpus.is_dir():
         return []
-    return sorted(p for p in CORPUS.iterdir() if (p / "case.json").is_file())
+    return sorted(p for p in corpus.iterdir() if (p / "case.json").is_file())
 
 
 def observe(binary: pathlib.Path, fixture: pathlib.Path, work: pathlib.Path) -> dict:
@@ -178,22 +178,19 @@ def main() -> int:
     ap.add_argument("--expect", action="append", default=[],
                     help="FIXTURE:VERB whose output is expected to differ")
     ap.add_argument("--expect-fixtures", type=int, default=None)
+    ap.add_argument("--corpus", default=None,
+                    help="fixture directory (default fixtures/behaviour)")
     args = ap.parse_args()
 
-    cases = fixtures()
+    corpus = pathlib.Path(args.corpus) if args.corpus else CORPUS
+    cases = fixtures(corpus)
     if args.expect_fixtures is not None and len(cases) != args.expect_fixtures:
         print(f"{CORPUS_EMPTY}: expected {args.expect_fixtures} fixture(s), found "
               f"{len(cases)}. A corpus that silently shrinks reports IDENTICAL "
               f"for the wrong reason.")
         return 2
     if not cases:
-        print(f"{CORPUS_EMPTY}: no fixtures under {CORPUS.relative_to(ROOT)}")
-        return 2
-
-    base = build_base(args.since)
-    if base is None:
-        print(f"{BASE_DID_NOT_BUILD}: could not build `day` at {args.since}. "
-              f"This says NOTHING about whether behaviour changed.")
+        print(f"{CORPUS_EMPTY}: no fixtures under {corpus}")
         return 2
 
     head = ROOT / "target" / "debug" / "day"
@@ -211,11 +208,30 @@ def main() -> int:
         p.write_text(body)
         p.chmod(0o755)
 
+    # **The corpus is validated against the CURRENT binary before the base is
+    # built.** Fail fast on a broken fixture rather than after paying for a
+    # worktree build -- and, more importantly, this is the check that has to run
+    # for the guard to mean anything, so it must not sit behind something that
+    # can itself fail first.
+    try:
+        head_out = {fx: observe(head, fx, work) for fx in cases}
+    except Unrunnable as e:
+        print(f"{CORPUS_EMPTY}: {e}\n\nA fixture that errors compares equal "
+              f"to itself, so this would otherwise have reported IDENTICAL "
+              f"while checking nothing.")
+        return 2
+
+    base = build_base(args.since)
+    if base is None:
+        print(f"{BASE_DID_NOT_BUILD}: could not build `day` at {args.since}. "
+              f"This says NOTHING about whether behaviour changed.")
+        return 2
+
     declared = set(args.expect)
     changed, unexplained = [], []
     for fx in cases:
         try:
-            before, after = observe(base, fx, work), observe(head, fx, work)
+            before, after = observe(base, fx, work), head_out[fx]
         except Unrunnable as e:
             print(f"{CORPUS_EMPTY}: {e}\n\nA fixture that errors compares equal "
                   f"to itself, so this would otherwise have reported IDENTICAL "
