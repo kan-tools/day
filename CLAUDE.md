@@ -450,25 +450,13 @@ effort is inverted exactly where the code is most fragile: immediately after
 being told you were wrong, under pull toward a minimal local edit whose blast
 radius nobody has re-derived.
 
-Three mechanisms under it:
-
-- **The demonstration rule has a blind spot.** Mutation asks "does any test
-  assert this line". Reversion asks "does the test written for this finding fail
-  when it returns". **Neither asks whether the fix changed behaviour it was not
-  meant to change** — which is the question both reviewers answered by building
-  the pre-fix binary and diffing it. `Demonstrated-by:` was entirely honest on
-  the commit that carried the regression.
-- **Guard the invariant, not the finding's mechanism.** The scan added for the
-  first BLOCK enforces "a claim shape has one evaluator". The regression moved
-  *inside* that evaluator, so the guard was orthogonal to what broke. The
-  invariant was AC-23 — no form may produce a witness satisfied without a probe
-  having found something — and a guard on that catches both.
-- **Nothing checks a sentence.** Four claims recorded in durable places were
-  false: a rule in this file refuted by its own commit, a page size recorded as a
-  total in three places, a supersession premise contradicted by a claim recorded
-  a day earlier, and a commit describing a test change that had not happened. A
-  measured number in a commit message is a claim — show the command that
-  produced it.
+One mechanism under it is worth stating here because it is about *this file's*
+tooling: **the demonstration rule has a blind spot.** Mutation asks "does any
+test assert this line". Reversion asks "does the test written for this finding
+fail when it returns". Neither asks whether the fix changed behaviour it was not
+meant to change — which is the question both reviewers answered by building the
+pre-fix binary and diffing it. `Demonstrated-by:` was entirely honest on the
+commit that carried the regression.
 
 **And the self-application gap that let it all through: not one of day's atoms
 declared `done` criteria.** `day status` reported "completion cannot be checked"
@@ -477,9 +465,18 @@ mechanism for exactly that. Nothing said "this fix round is not finished" when
 the fix had no test. All eight declare them now, which is the cheapest of these
 by a wide margin and the one that closes the gap the others fell through.
 
-So, for a fix round specifically: **write the invariant's fixture before the fix,
-not the finding's fixture after it**, and finish by running day rather than by
-reading the diff.
+**The rules this produced are NOT here.** They are claims on the `practice`
+subject, because that is the one day projects into injected context — so a
+session inherits them at session start instead of depending on someone having
+read this file. Putting process rules in `CLAUDE.md` was the same self-application
+gap one level up: day exists to inject process, and its own learnings were going
+somewhere day does not read. `src/practice.rs` is the mechanism, one claim per
+item, and `day hook session-start` is where to check they arrive.
+
+This section keeps the *narrative* — what happened and why — because a rule
+injected without its history reads as arbitrary. The imperative form lives in
+`practice`, and a rule that ends up in both will drift, which is a lesson this
+file already carries twice.
 
 ## The tools in `scripts/`, already written — use them rather than reinventing them
 
