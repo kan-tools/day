@@ -18,7 +18,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use common::{claim, decision_claim, result_claim, write_kan_stub, StubClaim};
+use common::{claim, decision_claim, plan_claim, result_claim, write_kan_stub, StubClaim};
 
 fn day(dir: &Path, kan: &Path, git: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_day"))
@@ -1218,5 +1218,537 @@ fn an_undated_claim_is_not_current_but_is_still_evidence() {
     assert!(
         stdout.contains("[MATERIAL] verdict"),
         "cumulatively, an undated claim is still evidence it happened: {stdout}"
+    );
+}
+
+/// AC-10 — **correspondence: the record must name the material instance**, not
+/// merely be the right kind on the right subject.
+///
+/// day#107 is that `ClaimShape` carried only constants, so "does a record exist
+/// that refers to *this* artifact" was inexpressible and `day assess docs` had to
+/// answer it with `text.contains(tag)` in a parallel mechanism. Both directions
+/// are driven here, because a predicate that never rejects is indistinguishable
+/// from one that was never applied.
+#[test]
+fn ac10_a_corresponding_record_must_name_the_material_instance() {
+    let probes = r#"{
+        "design-doc": {"path": ".design/*.md"},
+        "code-change": {
+            "material": {"path": "src/*.rs"},
+            "record": {"claim": {"kind": "Result", "subject": "atom/*", "mentions_material": true}}
+        }
+    }"#;
+
+    let world = |dir: &Path, extra: &[StubClaim]| {
+        let mut all = vec![
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &[],
+                &[],
+            ),
+            witness_schema("bafyreiw", probes),
+        ];
+        all.extend_from_slice(extra);
+        let kan = write_kan_stub(dir, &all);
+        let git = write_git_stub(
+            dir,
+            &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+            &[".design/x.md", "src/lib.rs"],
+            &[".design/x.md", "src/lib.rs"],
+        );
+        (kan, git)
+    };
+
+    // A record that names the artifact: the correspondence holds, so nothing
+    // is unrecorded.
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, git) = world(
+        dir.path(),
+        &[result_claim(
+            "atom/build",
+            "bafyreir1",
+            "Assessed: src/lib.rs changed and the suite is green.",
+            AFTER_BOUNDARY_US,
+        )],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        !stdout.contains("Done but unrecorded"),
+        "a record naming the material instance satisfies the pair: {stdout}"
+    );
+
+    // A record of the right kind, on the right subject, in the right cycle --
+    // naming a DIFFERENT artifact. Under day#107 this was indistinguishable
+    // from the case above, which is the whole finding.
+    let dir = tempfile::tempdir().unwrap();
+    let (kan, git) = world(
+        dir.path(),
+        &[result_claim(
+            "atom/build",
+            "bafyreir2",
+            "Assessed: docs/OTHER.md was revised.",
+            AFTER_BOUNDARY_US,
+        )],
+    );
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        stdout.contains("Done but unrecorded"),
+        "a record that does not name the artifact must not count as recording it: {stdout}"
+    );
+}
+
+/// AC-11 — **an unanswerable correspondence is reported, never silent.**
+///
+/// A `claim` material half names no instance a record could refer to -- its
+/// evidence is a CID, not a name -- so the comparison cannot be made. day#107's
+/// stated constraint is that this is UNCHECKED rather than silence, and the
+/// branch that files "unrecorded" correctly refuses an `Error`, which would
+/// otherwise leave it reported nowhere at all.
+#[test]
+fn ac11_a_correspondence_that_cannot_be_answered_says_so() {
+    let probes = r#"{
+        "design-doc": {"path": ".design/*.md"},
+        "code-change": {
+            "material": {"claim": {"kind": "Decision"}},
+            "record": {"claim": {"kind": "Result", "subject": "atom/*", "mentions_material": true}}
+        }
+    }"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            atom(
+                "build",
+                "bafyreib",
+                &["design-doc"],
+                &["code-change"],
+                &[],
+                &[],
+            ),
+            witness_schema("bafyreiw", probes),
+            // Premise: the material half must actually resolve Present this
+            // cycle, or the pair loop skips before correspondence is ever
+            // attempted and the test passes for the wrong reason.
+            decision_claim("some/thing", "bafyreio", "A decision.", AFTER_BOUNDARY_US),
+        ],
+    );
+    let git = write_git_stub(
+        dir.path(),
+        &[&format!("v0.6.0:{BOUNDARY_UNIX}")],
+        &[".design/x.md", "src/lib.rs"],
+        &[".design/x.md", "src/lib.rs"],
+    );
+
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["status"]).stdout).to_string();
+    assert!(
+        stdout.contains("could not be made") || stdout.contains("material half named none"),
+        "an unanswerable comparison must be said out loud, not resolved to a \
+         verdict day did not establish: {stdout}"
+    );
+    assert!(
+        !stdout.contains("Done but unrecorded"),
+        "and it must not be reported as a finding about the record: {stdout}"
+    );
+}
+
+/// day#138 / day#86 — **`every` is the witness that can actually fail.**
+///
+/// Every other probe asks *does one exist*, and over an append-only log that
+/// question can only start answering yes and never stop. day#86 proposed "a
+/// design doc, a verdict, and an assessment all present for the same milestone";
+/// declared as three independent witnesses it was satisfied by three unrelated
+/// subjects and reported met forever, which is day#138.
+///
+/// Three states, driven through the shipped binary. The middle one is the whole
+/// point: it is reachable, and no existence check can reach it.
+#[test]
+fn every_subject_with_a_plan_must_also_carry_a_verdict() {
+    let probes = r#"{
+        "reconstructable": {"every": {
+            "subject_with": {"kind": "Plan"},
+            "also_carries": [{"kind": "Decision", "starts_with": "adversarial review of"}]
+        }}
+    }"#;
+    let telos = |cid: &str| {
+        claim(
+            "telos/legible",
+            cid,
+            "Legible.\n\n```day-telos\n{\"witnesses\":[\"reconstructable\"]}\n```\n",
+        )
+    };
+    let assess = |dir: &Path, claims: &[StubClaim]| {
+        let mut all = vec![witness_schema("bafyreiw", probes), telos("bafyreit")];
+        all.extend_from_slice(claims);
+        let kan = write_kan_stub(dir, &all);
+        let git = write_git_stub(dir, &[], &[], &[]);
+        let out = day(dir, &kan, &git, &["assess", "telos", "legible"]);
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            out.status.code(),
+        )
+    };
+
+    // (1) VACUOUS — no subject carries a Plan at all. A universal over an empty
+    // set is true, and reporting that as evidence is exactly the failure this
+    // probe exists to end.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, _) = assess(dir.path(), &[]);
+    assert!(
+        stdout.contains("[VACUOUS]"),
+        "a universal with nothing to quantify over establishes nothing, and must \
+         not read as evidence: {stdout}"
+    );
+
+    // (2) UNSATISFIED — a design was recorded and never reviewed. THIS is the
+    // state no existence check can reach, and the reason for the whole probe.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = assess(
+        dir.path(),
+        &[plan_claim("some-design", "bafyreip", "A design.", 10)],
+    );
+    assert!(
+        stdout.contains("[MISSING]"),
+        "an unreviewed design must fail this witness: {stdout}"
+    );
+    assert!(
+        stdout.contains("some-design"),
+        "the incomplete subject is named, because the reader's next action is to \
+         go and finish that one: {stdout}"
+    );
+    assert_eq!(code, Some(1), "{stdout}");
+
+    // (3) SATISFIED — and it becomes satisfied by doing the work, not by
+    // accumulating unrelated claims.
+    let dir = tempfile::tempdir().unwrap();
+    let (stdout, code) = assess(
+        dir.path(),
+        &[
+            plan_claim("some-design", "bafyreip", "A design.", 10),
+            decision_claim(
+                "some-design",
+                "bafyreid",
+                "adversarial review of some-design: APPROVE",
+                20,
+            ),
+        ],
+    );
+    assert!(stdout.contains("[MATERIAL]"), "{stdout}");
+    assert_eq!(code, Some(0), "{stdout}");
+}
+
+/// **An `every` verdict must describe the anchor it actually used, not its
+/// `kind`.**
+///
+/// The three verdict messages rendered `subject_with.kind` bare, so a narrowed
+/// anchor reported a sentence about a *wider* set than the one it quantified
+/// over. `[VACUOUS] no subject carries a `Plan` claim` is simply false when
+/// subjects carrying `Plan` claims are sitting in the log and the anchor's
+/// `starts_with` excluded them — and it is false in the direction that hides
+/// the declaration's own defect, because the reader goes looking for missing
+/// data instead of at the predicate that emptied the set.
+///
+/// `ClaimShape::describe` already covers all seven predicates, and
+/// `also_carries` already used it; only the anchor side did not. Driven through
+/// the shipped binary, with the *same log* answering a narrowed and an
+/// unnarrowed anchor — which is what makes the old message's falsity visible
+/// rather than merely arguable.
+#[test]
+fn an_every_verdict_describes_the_anchor_it_narrowed_by() {
+    let probes = r#"{
+        "narrowed": {"every": {
+            "subject_with": {"kind": "Plan", "starts_with": "design:"},
+            "also_carries": [{"kind": "Decision"}]
+        }},
+        "wide": {"every": {
+            "subject_with": {"kind": "Plan"},
+            "also_carries": [{"kind": "Decision"}]
+        }}
+    }"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/legible",
+                "bafyreit",
+                "Legible.\n\n```day-telos\n{\"witnesses\":[\"narrowed\",\"wide\"]}\n```\n",
+            ),
+            // A Plan, in the log, that the narrowed anchor excludes.
+            plan_claim("some-design", "bafyreip", "A design.", 10),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "legible"]);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+
+    assert!(
+        stdout.contains("starting with `design:`"),
+        "an empty scope must name the predicate that emptied it, or the reader \
+         audits the log when the defect is in the declaration: {stdout}"
+    );
+    // The same log, one witness apart, reaches a subject — so the bare-`kind`
+    // sentence was not merely imprecise, it asserted something untrue.
+    assert!(
+        stdout.contains("[MISSING]") && stdout.contains("some-design"),
+        "the wide anchor over this same log finds a subject, which is what makes \
+         `no subject carries a Plan claim` a false statement: {stdout}"
+    );
+}
+
+/// The co-location is load-bearing: a verdict on a *different* subject must not
+/// satisfy a design's requirement.
+///
+/// Without this, `every` degrades to the three independent existence checks it
+/// replaced — which is day#138 exactly, and a predicate that never rejects is
+/// indistinguishable from one that was never applied.
+#[test]
+fn a_verdict_on_another_subject_does_not_complete_this_one() {
+    let probes = r#"{
+        "reconstructable": {"every": {
+            "subject_with": {"kind": "Plan"},
+            "also_carries": [{"kind": "Decision"}]
+        }}
+    }"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/legible",
+                "bafyreit",
+                "Legible.\n\n```day-telos\n{\"witnesses\":[\"reconstructable\"]}\n```\n",
+            ),
+            plan_claim("design-a", "bafyreip", "A design.", 10),
+            // A decision, in the log, on someone else's subject.
+            decision_claim("design-b", "bafyreid", "Reviewed b.", 20),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "legible"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("design-a"),
+        "the design with no verdict of its own is still incomplete: {stdout}"
+    );
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+}
+
+/// **A scoped anchor still scopes**, and a scope matching nothing is `VACUOUS`.
+///
+/// The first fix for the `every` bypass routed each shape through
+/// `claims_matching` by *mutating* a clone -- `scoped.subject = Some(subject)`
+/// -- which silently dropped whatever scope the declaration carried. An anchor
+/// scoped `design/*` began matching every subject in the log, so a universal
+/// quantified over an empty set reported MATERIAL where the correct answer is
+/// VACUOUS. A false clean, introduced by the fix for a false clean, inside the
+/// one evaluator the new scan was built to protect -- which is why the scan and
+/// a green suite were both blind to it.
+///
+/// Found by a cold review A/B'ing against the pre-fix binary. The restriction is
+/// a separate parameter now, so the shape's own `subject` survives as an
+/// independent conjunct.
+#[test]
+fn a_scoped_anchor_that_matches_nothing_is_vacuous_not_material() {
+    let probes = r#"{"u": {"every": {
+        "subject_with": {"kind": "Plan", "subject": "design/*"},
+        "also_carries": [{"kind": "Decision"}]
+    }}}"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/t",
+                "bafyreit",
+                "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+            ),
+            // Premise: a Plan exists, but on a subject the anchor's scope
+            // EXCLUDES. Without this the test would pass on an empty log.
+            plan_claim("other/b", "bafyreip", "A plan.", 10),
+            decision_claim("other/b", "bafyreid", "Reviewed.", 20),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[VACUOUS]"),
+        "no subject matches the anchor's own scope, so the universal quantifies \
+         over nothing and establishes nothing: {stdout}"
+    );
+    assert!(
+        !stdout.contains("[MATERIAL]"),
+        "and it must not report the telos met: {stdout}"
+    );
+}
+
+/// **A subject whose NAME contains `*` is not a pattern.**
+///
+/// `subject` is glob-lite, so the first fix's mutated clone put a concrete
+/// subject name back through the pattern matcher: a subject literally called
+/// `foo*` matched `foobar`, and the sibling's claim completed it. Co-location --
+/// the entire point of `every` -- defeated by a name.
+///
+/// `a_verdict_on_another_subject_does_not_complete_this_one` uses `design-a` and
+/// `design-b`, so it cannot see this. The restriction matches by equality now.
+#[test]
+fn a_subject_named_like_a_glob_is_not_completed_by_its_prefix_siblings() {
+    let probes = r#"{"u": {"every": {
+        "subject_with": {"kind": "Plan"},
+        "also_carries": [{"kind": "Decision"}]
+    }}}"#;
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema("bafyreiw", probes),
+            claim(
+                "telos/t",
+                "bafyreit",
+                "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+            ),
+            plan_claim("foo*", "bafyreip1", "A plan.", 10),
+            plan_claim("foobar", "bafyreip2", "A plan.", 11),
+            // The sibling's Decision must not reach `foo*`.
+            decision_claim("foobar", "bafyreid", "Reviewed.", 20),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("foo*"),
+        "the subject with no Decision of its own is incomplete: {stdout}"
+    );
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+}
+
+/// **Every predicate resolves inside `every`, including the ones that cannot be
+/// answered there.**
+///
+/// This is the test that should have existed when `every_subject` was first
+/// routed through `claims_matching`. It did not: that fix was verified by hand
+/// in a terminal and the result written into a commit message, where it is
+/// unrepeatable. Nothing pinned the behaviour, so the next edit to the function
+/// broke it in two new ways with the whole suite green — which is the mechanism
+/// behind three consecutive fix rounds each introducing the next finding.
+///
+/// Two shapes, because they fail in opposite directions and only one of them is
+/// obvious:
+///
+/// - `block` names a type this project has not declared, so day **cannot check
+///   it** and must say so. Before the routing fix this reported `[MATERIAL]`.
+/// - `mentions_material` asks for correspondence, and an `every` probe is not a
+///   material/record pair, so there is nothing to correspond to. Unanswerable,
+///   and unanswerable is `[ERROR]` — never a quiet pass.
+#[test]
+fn an_unanswerable_predicate_inside_every_is_reported_not_ignored() {
+    let telos = |cid: &str| {
+        claim(
+            "telos/t",
+            cid,
+            "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+        )
+    };
+    let assess = |dir: &Path, probes: &str| {
+        let kan = write_kan_stub(
+            dir,
+            &[
+                witness_schema("bafyreiw", probes),
+                telos("bafyreit"),
+                // Premise: a subject the anchor matches, WITH the required kind
+                // present — so the only thing that can make this not-MATERIAL is
+                // the predicate under test.
+                plan_claim("some-design", "bafyreip", "A design.", 10),
+                decision_claim("some-design", "bafyreid", "Reviewed.", 20),
+            ],
+        );
+        let git = write_git_stub(dir, &[], &[], &[]);
+        String::from_utf8_lossy(&day(dir, &kan, &git, &["assess", "telos", "t"]).stdout).to_string()
+    };
+
+    // Premise check: with no extra predicate this fixture is MATERIAL, so any
+    // other result below is caused by the predicate and not by the fixture.
+    let dir = tempfile::tempdir().unwrap();
+    let plain = assess(
+        dir.path(),
+        r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                            "also_carries": [{"kind": "Decision"}]}}}"#,
+    );
+    assert!(
+        plain.contains("[MATERIAL]"),
+        "premise: the bare fixture must be satisfied: {plain}"
+    );
+
+    // An undeclared block type: day cannot check it.
+    let dir = tempfile::tempdir().unwrap();
+    let blocked = assess(
+        dir.path(),
+        r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                            "also_carries": [{"kind": "Decision", "block": "nonexistent-type"}]}}}"#,
+    );
+    assert!(
+        blocked.contains("[ERROR]") && blocked.contains("nonexistent-type"),
+        "a block predicate must be resolved inside `every`, not skipped: {blocked}"
+    );
+    assert!(
+        !blocked.contains("[MATERIAL]"),
+        "and it must certainly not report satisfied: {blocked}"
+    );
+
+    // Correspondence has nothing to correspond to here.
+    let dir = tempfile::tempdir().unwrap();
+    let corr = assess(
+        dir.path(),
+        r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                            "also_carries": [{"kind": "Decision", "mentions_material": true}]}}}"#,
+    );
+    assert!(
+        corr.contains("[ERROR]"),
+        "an unanswerable correspondence inside `every` is UNCHECKED, not a pass: {corr}"
+    );
+    assert!(!corr.contains("[MATERIAL]"), "{corr}");
+}
+
+/// The `also_carries`-with-`subject` refusal fires, and names the offender.
+///
+/// Co-location is what `every` means, so a requirement carrying its own scope
+/// could only narrow to nothing or to itself. Refused rather than reconciled —
+/// and asserted, because a refusal nothing drives is a branch that rots.
+#[test]
+fn a_requirement_declaring_its_own_subject_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            witness_schema(
+                "bafyreiw",
+                r#"{"u": {"every": {"subject_with": {"kind": "Plan"},
+                                    "also_carries": [{"kind": "Decision", "subject": "other/*"}]}}}"#,
+            ),
+            claim(
+                "telos/t",
+                "bafyreit",
+                "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+            ),
+            plan_claim("some-design", "bafyreip", "A design.", 10),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[], &[]);
+    let stdout =
+        String::from_utf8_lossy(&day(dir.path(), &kan, &git, &["assess", "telos", "t"]).stdout)
+            .to_string();
+    assert!(
+        stdout.contains("[ERROR]") && stdout.contains("also_carries"),
+        "the refusal must fire and say what is wrong: {stdout}"
     );
 }

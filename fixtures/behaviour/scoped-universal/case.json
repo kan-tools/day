@@ -1,0 +1,8 @@
+{
+ "why": "An anchor scoped to subjects that do not exist. The universal quantifies over an empty set, so it establishes nothing.",
+ "tags": [],
+ "tracked": [],
+ "invocations": [
+  "assess telos t"
+ ]
+}

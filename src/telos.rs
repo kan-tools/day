@@ -37,6 +37,185 @@ pub const WITNESS_SLUG: &str = "witness";
 /// Fence info string marking a witness-probe map inside a claim's text.
 pub const FENCE_INFO: &str = "day-witness";
 
+/// **The one place day says what to do about a telos declaring no witnesses.**
+///
+/// Two call sites rendered this independently — `assess telos` and `bridge
+/// check` — with wording that had already drifted apart, which is how a third
+/// arrives unnoticed. `CLAUDE.md` records the rule this follows: a guarantee
+/// about what day reports belongs in the mechanism, never in a caller, because
+/// a check added at a call site looks complete when the author's test drives
+/// the call site they were thinking about.
+///
+/// **What changed with the collapse is the advice, not just its home.** Both
+/// sites used to print `day telos declare <slug> "..." --witness <type>`, which
+/// hands the reading agent a command that invites it to guess a witness alone.
+/// day#86 records why that is worse than the state it purports to fix: a
+/// trivially satisfiable witness reports the telos met forever, which is the
+/// failure `telos/v05-shipped` taught, and a bad witness is worse than none. So
+/// the remedy names the interview instead — a pass that asks a human what would
+/// evidence this, because that is not inferable from a slug.
+///
+/// It points at the slash command rather than at `atom/witness-interview`,
+/// deliberately. The command ships with the plugin and therefore exists
+/// wherever day is installed; the atom is a kan claim that a fresh repo has
+/// not declared. Pointing at the atom would be a remedy that does not remedy —
+/// day#108's finding, which `src/status.rs` already acted on once.
+///
+/// The phrase "declares no witnesses" is written literally here rather than
+/// pulled from a shared constant, and `tests/plugin.rs`'s scan writes it
+/// literally too. That looks like duplication and is the opposite: a scan
+/// asserting a fact about *source text* must own the text it matches, or a
+/// rename carries both sides along together and the scan quietly checks
+/// something else. It also keeps the scan compiling when this function does
+/// not, which is what lets a reversion demonstrate that it fires.
+pub fn unwitnessed_remedy(slug: &str, consequence: &str) -> String {
+    format!(
+        "  {}{slug} declares no witnesses, so {consequence}\n  \
+         What would evidence it is a question for a person, not a guess -- and a\n  \
+         witness that cannot fail is worse than none (day#86). Establish one:\n    \
+         /witness-interview {slug}\n",
+        atoms::TELOS_PREFIX,
+    )
+}
+
+/// Whether a probe's evidence, once found, can ever stop being found.
+///
+/// **Structural for `claim`, and only for `claim`.** kan is append-only and day
+/// never retracts, so a claim that matched once matches forever — the guarantee
+/// day is built on, read as a limitation. A `path` or `tag` probe *can* stop
+/// matching (files get deleted, tags get moved), so calling those monotone would
+/// be a heuristic dressed as a fact. A `command` probe is the opposite: going
+/// red is exactly what it is for.
+///
+/// This is the vacuity guard from the other side. A negated probe that can never
+/// fire is vacuous; a positive probe that can never stop firing is equally
+/// uninformative. Both are "this witness cannot distinguish".
+pub fn is_monotone(probe: &Probe) -> bool {
+    matches!(probe, Probe::Claim(_))
+}
+
+/// A reason a declared witness will not distinguish work done from here.
+///
+/// Reported, never refused: `telos/affordance-not-enforcement` governs day's own
+/// verbs, and a project may legitimately want a floor-style witness knowing it
+/// is already met.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Caution {
+    pub witness: String,
+    /// The probe resolves right now, so the telos is born green on this
+    /// witness and it cannot evidence anything done afterwards.
+    pub already_satisfied: bool,
+    /// And it can never stop resolving. Together with the above this is
+    /// day#86's "a witness that cannot fail", established rather than guessed.
+    pub monotone: bool,
+    /// No probe is declared for the type, so nothing could be checked. day#125
+    /// declared four teloi with witnesses and found out much later, at
+    /// `day status`, that none of them was checkable.
+    pub no_probe: bool,
+}
+
+/// Evaluates declared witness types at declare time and reports what will not
+/// distinguish.
+///
+/// **Command probes are never run here.** `--run` is opt-in per invocation and
+/// declaring is not that invocation, so a command witness is left unevaluated
+/// rather than executed — the same line `path`/`tag`/`claim` versus `command`
+/// is drawn at session start. The consequence is that a command-witnessed telos
+/// gets no already-satisfied reading, which is correct: whether a test passes
+/// today says nothing about whether it can fail.
+pub fn cautions(
+    client: &KanClient,
+    git: &Git,
+    witnesses: &[String],
+) -> Result<Vec<Caution>, Error> {
+    if witnesses.is_empty() {
+        return Ok(Vec::new());
+    }
+    let schema = match WitnessSchema::load(client) {
+        Ok(schema) => schema,
+        // A project with no witness schema yet is the fresh-repo state, and
+        // "you have no probes at all" is `day status`'s message to give, not
+        // this one's. Every witness reports `no_probe`, which is the honest
+        // reading and is what day#125 asked for.
+        // kan-read-may-degrade: an absent schema is a state, not a read failure
+        Err(Error::NotDeclared { .. }) => WitnessSchema::default(),
+        Err(e) => return Err(e),
+    };
+    let log = ClaimLog::new(client);
+    let mut out = Vec::new();
+    for witness in witnesses {
+        let Some(probe) = schema.probes.get(witness) else {
+            out.push(Caution {
+                witness: witness.clone(),
+                already_satisfied: false,
+                monotone: false,
+                no_probe: true,
+            });
+            continue;
+        };
+        let monotone = is_monotone(probe);
+        let already_satisfied = match probe {
+            Probe::Command(_) => false,
+            _ => matches!(
+                probe::evaluate(probe, git, &log, Authorization::Report),
+                Verdict::Satisfied(_)
+            ),
+        };
+        if already_satisfied || monotone {
+            out.push(Caution {
+                witness: witness.clone(),
+                already_satisfied,
+                monotone,
+                no_probe: false,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// How `day telos declare` reports [`cautions`]. Empty when there is nothing
+/// to say, so a clean declaration prints nothing extra.
+pub fn render_cautions(cautions: &[Caution]) -> String {
+    if cautions.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("\n  Declared, and worth knowing:\n");
+    for c in cautions {
+        if c.no_probe {
+            out.push_str(&format!(
+                "    {}: no probe is declared for this type in `schema/witness`, so it\n      \
+                 cannot be checked yet. The declaration is still valid.\n",
+                c.witness
+            ));
+        } else if c.already_satisfied && c.monotone {
+            out.push_str(&format!(
+                "    {}: already satisfied, and cannot stop being satisfied -- it reads\n      \
+                 the append-only log, so nothing can take this evidence away. This\n      \
+                 witness cannot fail, which day#86 holds is worse than none.\n",
+                c.witness
+            ));
+        } else if c.already_satisfied {
+            out.push_str(&format!(
+                "    {}: already satisfied, so the telos is met on this witness before any\n      \
+                 work is done. It cannot evidence anything from here.\n",
+                c.witness
+            ));
+        } else {
+            out.push_str(&format!(
+                "    {}: reads the append-only log, so once satisfied it cannot report\n      \
+                 absent again.\n",
+                c.witness
+            ));
+        }
+    }
+    out.push_str(
+        "  Nothing is refused -- a floor you know is already met is a legitimate\n  \
+         thing to declare. Said because a witness that cannot fail is the one\n  \
+         failure mode a telos cannot recover from on its own.\n",
+    );
+    out
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -249,6 +428,8 @@ impl WitnessSchema {
                 starts_with: Some("adversarial review of".to_string()),
                 subject: None,
                 block: None,
+                mentions_material: false,
+                not_authored_by: None,
             }),
         );
         probes.insert(
@@ -263,6 +444,8 @@ impl WitnessSchema {
                 // whatever subject was reviewed.
                 subject: Some(format!("{}*", atoms::ATOM_PREFIX)),
                 block: None,
+                mentions_material: false,
+                not_authored_by: None,
             }),
         );
         // NO PAIRED WITNESS IS SUGGESTED HERE, and the reason is the finding
@@ -359,6 +542,27 @@ fn effective_probe(probe: &Probe, scope: Option<&String>) -> (Probe, Option<Stri
     match probe {
         Probe::Path(_) => (Probe::Path(scope.clone()), None),
         Probe::Tag(_) => (Probe::Tag(scope.clone()), None),
+        // A universal has two shapes and no single pattern argument, so there
+        // is nothing for a scope to replace -- the same reason a claim probe
+        // refuses one, and reported for the same reason: a reader must never
+        // believe a narrowing took effect that did not.
+        Probe::Every(_) => (
+            probe.clone(),
+            Some(format!(
+                "scope `{scope}` ignored: an `every` probe is narrowed by its own \
+                 `subject_with` anchor, and there is no single pattern to replace"
+            )),
+        ),
+        // Same reason once more: an absence wraps two probes and has no single
+        // pattern argument. Narrowing the inner one from here would also let a
+        // telos redefine what is forbidden, which is a wider power than scope.
+        Probe::Absent(_) => (
+            probe.clone(),
+            Some(format!(
+                "scope `{scope}` ignored: an `absent` probe wraps its own probes, and \
+                 there is no single pattern to replace"
+            )),
+        ),
         Probe::Command(_) => (
             probe.clone(),
             Some(format!(
@@ -409,6 +613,10 @@ pub struct Report {
     /// Absent entirely — the telos declares no witnesses, so nothing about
     /// it is mechanically checkable.
     pub checkable: bool,
+    /// The declared witness structure. Findings are per *type*, because that
+    /// is what a probe answers; the verdict is per *group*, because that is
+    /// what the telos declared. [`Report::is_clean`] needs both.
+    pub groups: Vec<bridge::Group>,
     /// Record-tier observations. Prompts, never failures.
     pub prompts: Vec<String>,
     /// The command a reader can run to record this assessment.
@@ -420,11 +628,25 @@ impl Report {
     /// evidence rather than evidence of absence, and a timeout leaves the
     /// evidence unknown — treating either as failure would make the default
     /// invocation look broken and push people toward `--run` reflexively.
+    ///
+    /// **Folded per group, not per finding.** A group counts against the telos
+    /// only when *every* member failed: one satisfied alternative is precisely
+    /// what a disjunction declares to be enough. Before groups existed this was
+    /// "any finding failed", which is the same thing when every group has one
+    /// member — so the reading of an old declaration is unchanged.
+    ///
+    /// The member rule itself is untouched. Only `Unsatisfied` counts, so a
+    /// not-run or timed-out member cannot fail its group either.
     pub fn is_clean(&self) -> bool {
+        let failed = |witness: &str| {
+            self.findings.iter().any(|f| {
+                f.witness == witness && f.verdict.as_ref().is_some_and(Verdict::is_failure)
+            })
+        };
         !self
-            .findings
+            .groups
             .iter()
-            .any(|f| f.verdict.as_ref().is_some_and(Verdict::is_failure))
+            .any(|group| group.members().into_iter().all(failed))
     }
 
     pub fn render(&self) -> String {
@@ -435,13 +657,10 @@ impl Report {
         out.push('\n');
 
         if !self.checkable {
-            out.push_str(&format!(
-                "  {}{} declares no witnesses, so whether work landed inside its\n  \
-                 equivalence class cannot be checked mechanically. Declare what would\n  \
-                 evidence it:\n    day telos declare {} \"...\" --witness <type>\n",
-                atoms::TELOS_PREFIX,
-                self.telos,
-                self.telos
+            out.push_str(&unwitnessed_remedy(
+                &self.telos,
+                "whether work landed inside its\n  equivalence class cannot be checked \
+                 mechanically.",
             ));
         } else {
             out.push_str("Material evidence:\n");
@@ -471,6 +690,45 @@ impl Report {
                     ));
                 }
             }
+            // Any-of groups are stated after the per-type verdicts, because
+            // without them the verdicts do not add up: a reader seeing one
+            // `[MISSING]` above a clean exit would otherwise be looking at what
+            // reads as a contradiction.
+            for group in &self.groups {
+                if group.members().len() > 1 {
+                    out.push_str(&format!(
+                        "  any of [{}] satisfies this telos; they are alternatives, not \
+                         a checklist\n",
+                        group.label()
+                    ));
+                }
+            }
+            // REQ-12. Three of day's four foundational teloi are witnessed
+            // entirely by `command` probes, because day's structural properties
+            // are evidenced by its own tests rather than by artifacts (day#86).
+            // Unauthorized, every one reports NOT RUN — which is correct, and
+            // leaves a reader looking at a telos with nothing material and no
+            // stated way to get any.
+            //
+            // Naming the invocation is deliberately ALL this does. RQ-10
+            // proposed making such a telos satisfiable another way, by counting
+            // a recorded assessment; RQ-11 rejected that, because a witness
+            // whose evidence is "someone said so" consumes a flattened verdict
+            // and makes the flattening durable. So: legibility, not a second
+            // route to green.
+            let unrun = self
+                .findings
+                .iter()
+                .filter(|f| matches!(f.verdict, Some(Verdict::NotRun(_))))
+                .count();
+            if unrun > 0 {
+                out.push_str(&format!(
+                    "\n  {unrun} witness(es) name a command that was not run, so nothing \
+                     material\n  was checked for them. To resolve them:\n    \
+                     day assess telos {} --run\n",
+                    self.telos
+                ));
+            }
         }
 
         if !self.prompts.is_empty() {
@@ -485,6 +743,19 @@ impl Report {
              To record it:\n{}\n",
             self.record_command
         ));
+        // AC-27. The exit code is a **lens** over the witness state above, not
+        // a property of the telos: a filter applied to get an up/down readout
+        // for a script or a status bar, derived on each invocation and never
+        // stored. Said out loud because the whole surface reads like a pass/fail
+        // otherwise, and a telos that can be permanently green is one whose
+        // assessment has been replaced by a token — which is exactly what RQ-11
+        // forbids a witness from consuming. day already refuses to store it;
+        // this is the report refusing to imply it.
+        out.push_str(
+            "\n  The exit code is a reading taken from the evidence above, not a verdict\n  \
+             stored on the telos. A telos is never permanently met: assess it again and\n  \
+             the answer is recomputed from whatever is true then.\n",
+        );
         out.push_str(
             "\n  Assessed within a single frame. Cross-frame reconciliation\n  \
              (docs/TELOS.md) is not checked and is not implied.\n",
@@ -559,7 +830,12 @@ pub fn assess(
     let declared = newest_fenced::<Witnesses>(client, &subject)?
         .map(|(_cid, w)| w)
         .unwrap_or_default();
-    let witnesses = declared.witnesses.clone();
+    // Two different lists, deliberately. `groups` carries the declared
+    // structure and decides the verdict; `types` is the flattened, deduplicated
+    // set that actually gets probed, because a type resolves to one probe and
+    // one verdict however many groups offer it as an alternative.
+    let groups = declared.witnesses.clone();
+    let witnesses = declared.types();
 
     // The same fold `hooks::render_teloi` uses, and for the same reason.
     //
@@ -638,7 +914,8 @@ pub fn assess(
         telos: slug.to_string(),
         statement,
         findings,
-        checkable: !witnesses.is_empty(),
+        checkable: !groups.is_empty(),
+        groups,
         prompts,
         // `kan result` takes its subject POSITIONALLY, unlike observe/plan/
         // decide. Getting this wrong is what day#27 and kan#78 are about, and
@@ -825,6 +1102,8 @@ mod tests {
                 starts_with: None,
                 subject: Some("release".to_string()),
                 block: None,
+                mentions_material: false,
+                not_authored_by: None,
             }),
         );
 
@@ -986,18 +1265,49 @@ mod tests {
                 scope_note: None,
             }],
             checkable: true,
+            groups: vec![crate::bridge::Group::One("w".into())],
             prompts: vec![],
             record_command: String::new(),
         };
-        assert!(report(Some(Verdict::Satisfied("x".into()))).is_clean());
-        assert!(report(Some(Verdict::NotRun("x".into()))).is_clean());
-        assert!(report(Some(Verdict::TimedOut("x".into()))).is_clean());
-        assert!(report(Some(Verdict::Error("x".into()))).is_clean());
+        // **Exhaustive by construction.** This was a hand-written list of four
+        // `is_clean` assertions, and when the milestone added `Verdict::Vacuous`
+        // the list did not grow -- so the one verdict most at risk of being
+        // treated as evidence was the one nothing here checked. A cold review
+        // found it in the round whose own CLAUDE.md section is about lists that
+        // do not grow.
+        //
+        // The `match` below is the fix rather than a sixth assertion: it has no
+        // wildcard arm, so adding a variant to `Verdict` FAILS TO COMPILE here
+        // and whoever adds it has to say which side of the line it falls on.
+        for verdict in [
+            Verdict::Satisfied("x".into()),
+            Verdict::Unsatisfied("x".into()),
+            Verdict::NotRun("x".into()),
+            Verdict::TimedOut("x".into()),
+            Verdict::Error("x".into()),
+            Verdict::Vacuous("x".into()),
+        ] {
+            let counts_against_the_telos = match verdict {
+                // A probe that ran and found nothing. The only one.
+                Verdict::Unsatisfied(_) => true,
+                // Evidence, or one of the four ways of not having established
+                // any. None of them is a finding about the work.
+                Verdict::Satisfied(_)
+                | Verdict::NotRun(_)
+                | Verdict::TimedOut(_)
+                | Verdict::Error(_)
+                | Verdict::Vacuous(_) => false,
+            };
+            assert_eq!(
+                report(Some(verdict.clone())).is_clean(),
+                !counts_against_the_telos,
+                "{verdict:?} is on the wrong side of the material-tier rule"
+            );
+        }
         assert!(
             report(None).is_clean(),
             "no probe means nothing was checked"
         );
-        assert!(!report(Some(Verdict::Unsatisfied("x".into()))).is_clean());
     }
 
     /// REQ-10: a claim mentioning a witness is reported, but never counted.
@@ -1013,6 +1323,7 @@ mod tests {
                 scope_note: None,
             }],
             checkable: true,
+            groups: vec![crate::bridge::Group::One("published-artifact".into())],
             prompts: vec![],
             record_command: String::new(),
         };
@@ -1047,11 +1358,103 @@ mod tests {
             statement: None,
             findings: vec![],
             checkable: false,
+            groups: vec![],
             prompts: vec![],
             record_command: String::new(),
         };
         let rendered = report.render();
         assert!(rendered.contains("declares no witnesses"), "{rendered}");
-        assert!(rendered.contains("--witness"), "{rendered}");
+        // The remedy is the interview, not `--witness <type>`. Asserted as the
+        // positive string rather than as "does not contain the old one": a
+        // negative assertion passes when the whole block is missing.
+        assert!(rendered.contains("/witness-interview t"), "{rendered}");
+    }
+
+    /// AC-2 — **one satisfied alternative makes the group clean**, and that is
+    /// the whole point of declaring one.
+    ///
+    /// Driven through `is_clean` rather than through the render, because the
+    /// conjunction lived in the verdict and not in the output: the render
+    /// already listed witnesses independently while this and-ed them, which is
+    /// exactly why the gap was invisible until someone tried to declare a
+    /// disjunction.
+    #[test]
+    fn one_satisfied_member_clears_an_any_of_group() {
+        let finding = |witness: &str, verdict: Verdict| WitnessFinding {
+            witness: witness.into(),
+            verdict: Some(verdict),
+            asserted_by: None,
+            scope_note: None,
+        };
+        let report = |findings: Vec<WitnessFinding>| Report {
+            telos: "t".into(),
+            statement: None,
+            findings,
+            checkable: true,
+            groups: vec![crate::bridge::Group::Any(vec!["a".into(), "b".into()])],
+            prompts: vec![],
+            record_command: String::new(),
+        };
+
+        assert!(
+            report(vec![
+                finding("a", Verdict::Unsatisfied("no".into())),
+                finding("b", Verdict::Satisfied("yes".into())),
+            ])
+            .is_clean(),
+            "one satisfied member is what the group declared to be enough"
+        );
+        assert!(
+            !report(vec![
+                finding("a", Verdict::Unsatisfied("no".into())),
+                finding("b", Verdict::Unsatisfied("no".into())),
+            ])
+            .is_clean(),
+            "a group fails only when every member does -- and it must still fail then"
+        );
+        // The member rule is unchanged: not-run is absence of evidence, so it
+        // cannot fail its member and therefore cannot fail the group either.
+        assert!(
+            report(vec![
+                finding("a", Verdict::Unsatisfied("no".into())),
+                finding("b", Verdict::NotRun("needs --run".into())),
+            ])
+            .is_clean(),
+            "an unrun member leaves the group unknown, not failed"
+        );
+    }
+
+    /// AC-2 — a plain list still and-s, so an existing telos reads the same.
+    #[test]
+    fn separate_groups_remain_a_conjunction() {
+        let report = Report {
+            telos: "t".into(),
+            statement: None,
+            findings: vec![
+                WitnessFinding {
+                    witness: "a".into(),
+                    verdict: Some(Verdict::Satisfied("yes".into())),
+                    asserted_by: None,
+                    scope_note: None,
+                },
+                WitnessFinding {
+                    witness: "b".into(),
+                    verdict: Some(Verdict::Unsatisfied("no".into())),
+                    asserted_by: None,
+                    scope_note: None,
+                },
+            ],
+            checkable: true,
+            groups: vec![
+                crate::bridge::Group::One("a".into()),
+                crate::bridge::Group::One("b".into()),
+            ],
+            prompts: vec![],
+            record_command: String::new(),
+        };
+        assert!(
+            !report.is_clean(),
+            "two separate witnesses are both required, exactly as before groups existed"
+        );
     }
 }

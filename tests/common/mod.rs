@@ -87,6 +87,20 @@ pub fn decision_claim(subject: &str, cid: &str, text: &str, recorded_at: i64) ->
     }
 }
 
+/// A `Plan` claim recorded at a given time — what `day design record` appends
+/// for the design itself, and therefore what marks a subject as "a design was
+/// started here" for an `every` probe's anchor.
+pub fn plan_claim(subject: &str, cid: &str, text: &str, recorded_at: i64) -> StubClaim {
+    StubClaim {
+        subject: subject.to_string(),
+        cid: cid.to_string(),
+        kind: "Plan".to_string(),
+        text: text.to_string(),
+        author: STUB_AUTHOR.to_string(),
+        recorded_at: Some(recorded_at),
+    }
+}
+
 /// Removes the stub's identity, modelling kan being unable to establish it —
 /// a blocked keychain, a missing key. day must fail closed here.
 pub fn without_identity(dir: &Path) {

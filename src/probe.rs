@@ -77,6 +77,98 @@ pub enum Probe {
     /// `verdict` or `assessment` actually is, and why neither was probeable
     /// before (day#60).
     Claim(ClaimShape),
+    /// **Every subject that started something finished it.** A universal over
+    /// the log: wherever the anchor shape holds, the required shapes must hold
+    /// on the same subject.
+    ///
+    /// This exists because every other probe here asks *does one exist*, and
+    /// over an append-only log that question can only ever start answering yes
+    /// and never stop — which is day#138, where `telos/legible-process` was
+    /// declared with three existence checks and reported met forever. day#86
+    /// had proposed "a design doc, a verdict, and an assessment all present for
+    /// the same milestone", and the co-location is what makes it falsifiable:
+    /// three independent existence checks are satisfied by three unrelated
+    /// subjects.
+    ///
+    /// The *universal* is what makes it non-monotone, which is the sharper half.
+    /// "Some subject carries all three" is still monotone. "Every subject that
+    /// carries a design also carries a verdict and an assessment" fails the
+    /// moment a new design is recorded, and passes again when it is reviewed —
+    /// so it tracks the property instead of accumulating toward it.
+    #[serde(rename = "every")]
+    Every(Universal),
+    /// **The forbidden thing is not there.** Every probe above is an existence
+    /// check, so a telos satisfied by an *absence* — day#125's "our tooling
+    /// leaves no trace on repositories we are guests in" — was unprobeable in
+    /// principle.
+    ///
+    /// Absence invariants are a real class and a natural one for process
+    /// discipline: no secrets committed, no vendored copies, no build outputs
+    /// tracked, no `TODO` in mainline. None of them was expressible.
+    ///
+    /// A wrapper rather than a `"negate": true` flag beside a probe, which is
+    /// what day#125 sketched: [`Probe`] is an externally-tagged enum, so
+    /// `{"path": …, "negate": true}` is not a shape serde can read. The
+    /// substance of that proposal survives — the inner probe's evaluation is
+    /// reused rather than duplicated.
+    #[serde(rename = "absent")]
+    Absent(Absence),
+}
+
+/// An absence, and what makes claiming it meaningful.
+///
+/// **The `given` half is required, and it is the whole design.** A negated probe
+/// is satisfied by everything that does not exist, which is the cannot-fail
+/// problem day#86 names, inverted. Something has to establish that the forbidden
+/// thing *could* have happened, or "it is not there" is a fact about an empty
+/// world.
+///
+/// Deciding that from history was the intuitive rule and is wrong: if day left
+/// no trace in a guest tree, there is no history of a trace either, so the probe
+/// would report vacuous forever — precisely when the telos is genuinely held.
+/// Absence of the artifact is also absence of the evidence that anything could
+/// have produced it. A companion positive witness has no such circularity, and
+/// it is not git-shaped, so it answers `claim` and `command` negation on the
+/// same terms.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Absence {
+    /// What must NOT be found.
+    pub forbidden: Box<Probe>,
+    /// What establishes the forbidden thing could have occurred. Until this
+    /// resolves, the absence is [`Verdict::Vacuous`].
+    pub given: Box<Probe>,
+    /// Which non-zero exit of a *forbidden* command means "ran and found
+    /// nothing" — **required** when `forbidden` is a command probe.
+    ///
+    /// `run_command` maps every non-zero exit to `Unsatisfied`, which is
+    /// conservative for an existence check and a **false clean** once inverted:
+    /// `grep -r SECRET srcc/` exits 2 for a mistyped path exactly as it exits 1
+    /// for finding nothing, so the secret would report absent (day#137). Any
+    /// other non-zero code is [`Verdict::Error`], never satisfied.
+    ///
+    /// It lives here rather than on [`Probe::Command`] because it only means
+    /// anything under negation — a positive command probe is satisfied by exit
+    /// zero and has no use for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub found_nothing_exit: Option<i32>,
+}
+
+/// The two halves of an [`Probe::Every`]: which subjects are in scope, and what
+/// they must then carry.
+///
+/// **The anchor selects, rather than a subject pattern.** day's design subjects
+/// are bare slugs with no shared prefix, so no glob picks them out; "subjects
+/// that carry a `Plan`" does, exactly. Self-selecting scope also means the set
+/// grows as the project works, which is what keeps the universal honest: a
+/// pattern maintained by hand would silently stop covering new work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Universal {
+    /// A subject is in scope when at least one of its claims matches this.
+    pub subject_with: ClaimShape,
+    /// And it must then carry a claim matching each of these.
+    pub also_carries: Vec<ClaimShape>,
 }
 
 /// Which claims count as evidence: a kan `ClaimKind`, optionally narrowed by
@@ -143,6 +235,36 @@ pub struct ClaimShape {
     /// cheap predicates must filter first and short-circuit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub block: Option<String>,
+    /// **Correspondence** (day#107): the claim's text must name the instance the
+    /// material half of this pair resolved to.
+    ///
+    /// Every other predicate here is a *constant* — a kind, a prefix, a subject
+    /// glob — which is exactly why day#107 stayed open. "Does a record exist
+    /// that refers to *this* release" cannot be written as a constant, and it is
+    /// the question `day assess docs` answers with `text.contains(tag)` in a
+    /// mechanism parallel to this one. This is the predicate that makes that a
+    /// special case of the general rule.
+    ///
+    /// Only meaningful on the **record** half of a pair. Set it where nothing
+    /// supplies a material instance and the verdict is `Error` — the comparison
+    /// is unanswerable, and day#107 requires that be said rather than resolved
+    /// to "not recorded".
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mentions_material: bool,
+    /// Evidence **not authored by** this identity — a `did:key:…`, or the
+    /// sentinel `"self"` for whoever is running day.
+    ///
+    /// A telos about adoption, review, or anyone else's judgement is otherwise
+    /// satisfiable by the person who declared it. day#86 holds that a witness
+    /// which cannot fail is worse than none; a witness its own author can
+    /// satisfy at will is the same defect with a person in the loop.
+    ///
+    /// `"self"` is resolved before matching, not here, and a run that cannot
+    /// establish its own identity reports [`Verdict::Error`] rather than
+    /// matching everything — an exclusion that silently stops excluding is the
+    /// quiet check this milestone is about.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_authored_by: Option<String>,
 }
 
 impl ClaimShape {
@@ -155,14 +277,53 @@ impl ClaimShape {
     /// `kan show --json` renders a claim within a subject rather than on one;
     /// [`ClaimLog`] already carries the `(subject, claim)` pair, so scoping
     /// costs no extra read.
+    /// [`Self::matches_with`] with no authorship exclusion — the arity the unit
+    /// tests of the conjunction drive, and nothing else.
+    ///
+    /// `#[cfg(test)]` because that is what it is. Clippy said so the moment the
+    /// last production caller moved to `matches_with`, which is day#101's
+    /// corollary working as intended on a private fn: un-gated it would have
+    /// read like production surface while being reachable only from tests.
+    ///
+    /// `production_half` cuts at a file's trailing `#[cfg(test)] mod`, so a
+    /// `#[cfg(test)]` item inside an `impl` still sits in the half the scan
+    /// reads — which is why the delegating line below carries a marker.
+    #[cfg(test)]
     fn matches(
         &self,
         subject: &str,
         claim: &crate::kan_client::Claim,
         block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome>,
     ) -> bool {
+        // second-shape-evaluator: delegates rather than evaluates. It adds no
+        // predicate handling of its own, so it cannot drop one — which is the
+        // property the scan protects.
+        self.matches_with(subject, claim, block_check, None)
+    }
+
+    /// [`Self::matches`] with the authorship exclusion already resolved.
+    ///
+    /// Split rather than given a fourth positional argument everywhere, because
+    /// `"self"` cannot be resolved *here*: the answer depends on the running
+    /// identity, and a shape that cannot resolve it must report an error rather
+    /// than quietly match. The resolution happens once at each entry point;
+    /// this applies it. Production callers use this form so the conjunct cannot
+    /// be forgotten at a call site — the failure `CLAUDE.md` records three
+    /// times over.
+    fn matches_with(
+        &self,
+        subject: &str,
+        claim: &crate::kan_client::Claim,
+        block_check: Option<&dyn Fn(&crate::kan_client::Claim) -> BlockOutcome>,
+        exclude_author: Option<&str>,
+    ) -> bool {
         if claim.kind != self.kind {
             return false;
+        }
+        if let Some(excluded) = exclude_author {
+            if claim.author.as_deref() == Some(excluded) {
+                return false;
+            }
         }
         // A conjunction of independent predicates: every present one must
         // hold, an absent one is vacuously satisfied. Written as a chain of
@@ -211,6 +372,18 @@ impl ClaimShape {
         }
         if let Some(block) = &self.block {
             described.push_str(&format!(" carrying a valid `{block}` block"));
+        }
+        // The last two were missing while a second, divergent `describe` existed
+        // as a free function — each covering predicates the other did not. A
+        // description that silently omits a predicate is the same defect as a
+        // matcher that silently ignores one, one layer out: it is how
+        // `witness-interview (no Decision)` was reported for a subject carrying
+        // five Decisions.
+        if let Some(did) = &self.not_authored_by {
+            described.push_str(&format!(" not authored by `{did}`"));
+        }
+        if self.mentions_material {
+            described.push_str(" naming the material instance");
         }
         described
     }
@@ -331,6 +504,17 @@ pub enum Verdict {
     TimedOut(String),
     /// Something prevented the probe from being evaluated at all.
     Error(String),
+    /// The probe was answerable and the answer establishes nothing — a
+    /// universal over an empty set, satisfied because there was nothing to
+    /// satisfy it.
+    ///
+    /// **Not a failure, and not evidence.** `VACUOUS` is the outcome
+    /// `scripts/revert-demo.py` already reports for "the fix was taken away and
+    /// the test passed anyway", and CLAUDE.md records that it is a finding
+    /// rather than a nuisance. Reusing the word means the repository has one
+    /// concept for "this check was performed and could not distinguish", rather
+    /// than two that have to be kept in agreement.
+    Vacuous(String),
 }
 
 impl Verdict {
@@ -346,6 +530,7 @@ impl Verdict {
             Verdict::NotRun(_) => "NOT RUN",
             Verdict::TimedOut(_) => "TIMEOUT",
             Verdict::Error(_) => "ERROR",
+            Verdict::Vacuous(_) => "VACUOUS",
         }
     }
 
@@ -355,7 +540,8 @@ impl Verdict {
             | Verdict::Unsatisfied(d)
             | Verdict::NotRun(d)
             | Verdict::TimedOut(d)
-            | Verdict::Error(d) => d,
+            | Verdict::Error(d)
+            | Verdict::Vacuous(d) => d,
         }
     }
 }
@@ -396,7 +582,21 @@ pub fn evaluate(probe: &Probe, git: &Git, log: &ClaimLog<'_>, auth: Authorizatio
         },
         // Deliberately not gated on `auth`. There is nothing to authorize:
         // this reads the log through kan's read verbs and executes nothing.
-        Probe::Claim(shape) => claims_matching(shape, log, None, Failures::AlreadyReported),
+        Probe::Claim(shape) => claims_matching(
+            shape,
+            log,
+            None,
+            Correspondence::Unavailable,
+            None,
+            Failures::AlreadyReported,
+        ),
+        // Cumulative always, boundary or not — `evaluate` has no boundary to
+        // pass anyway. A universal is a statement about the record AS A WHOLE
+        // ("every design was reviewed"), and scoping it to a cycle would weaken
+        // it to "every design recorded since the last release", which goes
+        // quiet exactly while a milestone is in progress.
+        Probe::Every(universal) => every_subject(universal, log),
+        Probe::Absent(absence) => evaluate_absence(absence, git, log, auth),
     }
 }
 
@@ -427,6 +627,10 @@ pub struct ClaimLog<'a> {
     /// project that declares no block predicate pays nothing, which is why the
     /// declaration is not simply threaded through `claims_matching`'s signature.
     schemas: std::cell::OnceCell<Result<crate::blocks::BlockSchemas, String>>,
+    /// This workspace's identity, read once and only when a shape excludes an
+    /// author. `None` means kan could not establish one — a blocked keychain, a
+    /// missing key — which is a could-not-check rather than "no author".
+    identity: std::cell::OnceCell<Option<String>>,
 }
 
 impl<'a> ClaimLog<'a> {
@@ -435,6 +639,7 @@ impl<'a> ClaimLog<'a> {
             client,
             loaded: std::cell::OnceCell::new(),
             schemas: std::cell::OnceCell::new(),
+            identity: std::cell::OnceCell::new(),
         }
     }
 
@@ -444,6 +649,15 @@ impl<'a> ClaimLog<'a> {
     /// declarations" and "you declared none" are different, and answering a
     /// witness from the second when the first is true is the defect this whole
     /// milestone is about.
+    /// Memoized, and read only when something asks — the same contract as
+    /// [`Self::block_schemas`], for the same reason: a project whose shapes
+    /// exclude no author never pays for the subprocess.
+    fn identity(&self) -> Option<&str> {
+        self.identity
+            .get_or_init(|| self.client.identity())
+            .as_deref()
+    }
+
     fn block_schemas(&self) -> Result<&crate::blocks::BlockSchemas, String> {
         self.schemas
             .get_or_init(|| {
@@ -501,10 +715,302 @@ impl<'a> ClaimLog<'a> {
 /// [`ClaimLog`], which runs `kan status` and `kan show` — the same reads
 /// `atoms::load` and `status::last_assessed_atom` already make — and nothing
 /// else.
+/// What the material half of a paired witness resolved to, for a record shape
+/// that must refer to **that instance** rather than merely exist.
+///
+/// An enum rather than an `Option` for the reason [`Authorization`] is one: the
+/// difference between "there is nothing to correspond to" and "here is what to
+/// correspond to" decides whether a comparison is unanswerable, and a caller
+/// should have to say which it means.
+#[derive(Debug, Clone, Copy)]
+pub enum Correspondence<'a> {
+    /// Nothing to correspond to — this is not a paired witness, or the material
+    /// half resolved to no nameable instance. A shape declaring
+    /// `mentions_material` is then **unanswerable**, never quietly unsatisfied:
+    /// day#107's constraint, and day#105's rule that a comparison day cannot
+    /// perform is reported rather than assumed.
+    Unavailable,
+    /// The concrete instances the material probe resolved to — tag names,
+    /// tracked paths.
+    Material(&'a [String]),
+}
+
+/// The concrete instances a probe resolved to, for [`Correspondence`].
+///
+/// `None` for `command` and `claim` probes, and the asymmetry is the point: a
+/// command's evidence is an exit code and a claim's is a CID, neither of which
+/// is a *name* a record would refer to. day#107's case is a tag name appearing
+/// in a release claim's text, and that is the shape this serves.
+pub fn instances(probe: &Probe, git: &Git) -> Option<Vec<String>> {
+    match probe {
+        Probe::Tag(pattern) => git.tags_matching(pattern).ok(),
+        Probe::Path(pathspec) => git.tracked_files(pathspec).ok(),
+        Probe::Command(_) | Probe::Claim(_) | Probe::Every(_) | Probe::Absent(_) => None,
+    }
+}
+
+/// Resolves a shape's authorship exclusion to a concrete DID.
+///
+/// `Ok(None)` means the shape excludes nobody. The error case is the one that
+/// matters: a shape excluding `"self"` in a workspace whose identity kan cannot
+/// establish must not quietly match everything, because an exclusion that stops
+/// excluding turns a witness its author cannot satisfy into one they can.
+fn exclusion(shape: &ClaimShape, log: &ClaimLog<'_>) -> Result<Option<String>, Verdict> {
+    match shape.not_authored_by.as_deref() {
+        None => Ok(None),
+        Some("self") => match log.identity() {
+            Some(did) => Ok(Some(did.to_string())),
+            None => Err(Verdict::Error(
+                "this witness excludes evidence authored by `self`, and kan could not \
+                 establish this workspace's identity -- so day cannot tell whose evidence \
+                 this is, and will not report the exclusion as having been applied"
+                    .to_string(),
+            )),
+        },
+        Some(did) => Ok(Some(did.to_string())),
+    }
+}
+
+/// Evaluates a [`Probe::Absent`]: the forbidden thing is not there, and
+/// something establishes it could have been.
+///
+/// Order matters. The `given` half is checked **first**, so a project that has
+/// not yet done the thing the telos is about reports `VACUOUS` rather than a
+/// satisfaction it did not earn. Checking `forbidden` first and then qualifying
+/// it would leave the satisfied-by-an-empty-world reading on screen.
+fn evaluate_absence(
+    absence: &Absence,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    auth: Authorization,
+) -> Verdict {
+    match evaluate(&absence.given, git, log, auth) {
+        Verdict::Satisfied(_) => {}
+        // Not "unsatisfied": nothing about the telos was established either
+        // way. Distinguishing them is the point of having the verdict.
+        Verdict::Unsatisfied(detail) => {
+            return Verdict::Vacuous(format!(
+                "nothing establishes this could have happened ({detail}), so its absence \
+                 shows only that the situation never arose"
+            ))
+        }
+        // A `given` that could not be read leaves the absence unanswerable, and
+        // that outranks reporting it clean.
+        other => {
+            return Verdict::Error(format!(
+                "the precondition for this absence could not be established: {}",
+                other.detail()
+            ))
+        }
+    }
+
+    // A forbidden command needs its exit code declared, or a mistyped pathspec
+    // reads as "found nothing" (day#137). Refused before running, so the error
+    // does not depend on what the command happened to do.
+    if let Probe::Command(argv) = absence.forbidden.as_ref() {
+        let Some(expected) = absence.found_nothing_exit else {
+            return Verdict::Error(format!(
+                "`{argv}` is forbidden but declares no `found_nothing_exit`, so day cannot \
+                 tell \"ran and found nothing\" from \"failed for another reason\" -- and \
+                 reading the second as the first would report the forbidden thing absent"
+            ));
+        };
+        let Authorization::Run { timeout } = auth else {
+            return Verdict::NotRun(format!(
+                "would run `{argv}` to check it finds nothing -- re-run with --run"
+            ));
+        };
+        return match run_command_status(argv, git.root(), timeout) {
+            CommandOutcome::Exited(0) => {
+                Verdict::Unsatisfied(format!("`{argv}` exited 0 -- it found what is forbidden"))
+            }
+            CommandOutcome::Exited(code) if code == expected => {
+                Verdict::Satisfied(format!("`{argv}` exited {code}: nothing forbidden found"))
+            }
+            CommandOutcome::Exited(code) => Verdict::Error(format!(
+                "`{argv}` exited {code}, which is neither 0 nor the declared \
+                 `found_nothing_exit` of {expected} -- it failed for some other reason, and \
+                 treating that as \"found nothing\" is exactly the false clean this guards"
+            )),
+            CommandOutcome::NoStatus => {
+                Verdict::Error(format!("`{argv}` was killed before it exited"))
+            }
+            CommandOutcome::TimedOut => {
+                Verdict::TimedOut(format!("`{argv}` exceeded {}s", timeout.as_secs()))
+            }
+            CommandOutcome::Failed(why) => Verdict::Error(why),
+        };
+    }
+
+    match evaluate(&absence.forbidden, git, log, auth) {
+        Verdict::Satisfied(detail) => {
+            Verdict::Unsatisfied(format!("the forbidden thing is present: {detail}"))
+        }
+        Verdict::Unsatisfied(detail) => {
+            Verdict::Satisfied(format!("absent, as required ({detail})"))
+        }
+        // Everything else is a read that did not happen. Inverting one would
+        // turn "day could not look" into "day looked and it was clean", which
+        // is the inversion `telos/honest-reads` exists to forbid — and the
+        // direction negation makes dangerous.
+        other => other,
+    }
+}
+
+/// Evaluates a [`Probe::Every`]: wherever the anchor holds, the requirements
+/// must hold on the same subject.
+///
+/// **An empty scope is `VACUOUS`, never satisfied.** A universal over nothing is
+/// true, and reporting that as evidence is the failure mode this probe was built
+/// to end — day#86's "a witness that cannot fail", arriving through the logic
+/// rather than through the data. A project with no design subjects yet has not
+/// demonstrated a reconstructable process; it has demonstrated nothing.
+///
+/// Every shape here goes through [`claims_matching`], so `block`,
+/// `mentions_material` and `not_authored_by` are resolved exactly as they are
+/// for a plain `claim` probe.
+///
+/// It did not always. This function matched shapes directly, and carried a
+/// comment saying block predicates were "not resolved here" — which a cold
+/// review correctly read as a defect written down instead of fixed. That
+/// comment then survived the fix that closed it, two lines above the
+/// correction, still asserting the opposite of the code. Both are recorded here
+/// because the second is the more instructive: prose does not just fail to
+/// constrain, it goes on contradicting the thing that replaced it.
+fn every_subject(universal: &Universal, log: &ClaimLog<'_>) -> Verdict {
+    // A shape inside `also_carries` may not narrow by subject: co-location IS
+    // what `every` means, so its own scope and the anchor's would silently
+    // conflict. Refused rather than intersected -- a declaration that cannot
+    // mean what it says is a finding, not something to reconcile.
+    if let Some(conflicting) = universal.also_carries.iter().find(|r| r.subject.is_some()) {
+        return Verdict::Error(format!(
+            "`{}` inside `also_carries` declares its own `subject`, which contradicts \
+             what `every` checks -- the requirement must hold on the SAME subject as the \
+             anchor, so a second scope could only narrow it to nothing or to itself",
+            conflicting.kind
+        ));
+    }
+
+    let claims = match log.claims() {
+        Ok(claims) => claims,
+        Err(e) => return Verdict::Error(e.to_string()),
+    };
+    let subjects: std::collections::BTreeSet<&str> =
+        claims.iter().map(|(s, _)| s.as_str()).collect();
+
+    // Each subject is asked through `claims_matching`, the same way a plain
+    // `claim` probe is asked, by scoping a clone of the shape to that subject.
+    //
+    // **This is the fix for the defect a cold review blocked on.** The first
+    // version matched shapes with `ClaimShape::matches_with` directly, which
+    // skips everything `claims_matching` adds -- `block` resolution and
+    // `mentions_material` -- so both predicates were silently inert INSIDE an
+    // `every`, and inert in the satisfied direction. An identical shape reported
+    // `[ERROR] day cannot check it` through a claim probe and `[MATERIAL]`
+    // through this one.
+    //
+    // It had been noted in a comment here and left. CLAUDE.md's rule is that
+    // prose in the right place is not a constraint, so the guarantee is now the
+    // mechanism: there is exactly one place a claim shape is evaluated, and
+    // `the_claim_shape_predicate_has_one_evaluator` in `tests/plugin.rs` fails
+    // the build if a second appears.
+    let ask = |shape: &ClaimShape, subject: &str| -> Verdict {
+        claims_matching(
+            shape,
+            log,
+            None,
+            Correspondence::Unavailable,
+            Some(subject),
+            Failures::AlreadyReported,
+        )
+    };
+
+    let mut in_scope: Vec<&str> = Vec::new();
+    for subject in &subjects {
+        match ask(&universal.subject_with, subject) {
+            Verdict::Satisfied(_) => in_scope.push(subject),
+            Verdict::Unsatisfied(_) => {}
+            // A predicate this build cannot answer stops the whole universal.
+            // Answering it for the subjects that happened to resolve would be a
+            // verdict over a set day could not establish.
+            other => return other,
+        }
+    }
+
+    if in_scope.is_empty() {
+        return Verdict::Vacuous(format!(
+            "no subject carries {}, so there is nothing for this to be true \
+             of -- it is satisfied only because the set is empty",
+            universal.subject_with.describe()
+        ));
+    }
+
+    let mut missing: Vec<String> = Vec::new();
+    for subject in &in_scope {
+        let mut lacks: Vec<String> = Vec::new();
+        for required in &universal.also_carries {
+            match ask(required, subject) {
+                Verdict::Satisfied(_) => {}
+                Verdict::Unsatisfied(_) => lacks.push(required.describe()),
+                other => return other,
+            }
+        }
+        if !lacks.is_empty() {
+            missing.push(format!("{subject} (no {})", lacks.join(", no ")));
+        }
+    }
+
+    if missing.is_empty() {
+        Verdict::Satisfied(format!(
+            "all {} subject(s) carrying {} also carry {}",
+            in_scope.len(),
+            universal.subject_with.describe(),
+            universal
+                .also_carries
+                .iter()
+                .map(|r| r.describe())
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ))
+    } else {
+        // Named, not counted. The reader's next action is to go and finish one
+        // of them, and a bare "3 of 21" does not say which.
+        Verdict::Unsatisfied(format!(
+            "{} of {} subject(s) carrying {} are incomplete: {}",
+            missing.len(),
+            in_scope.len(),
+            universal.subject_with.describe(),
+            missing.join("; ")
+        ))
+    }
+}
+
 pub fn claims_matching(
     shape: &ClaimShape,
     log: &ClaimLog<'_>,
     since: Option<i64>,
+    // What the material half resolved to, when this shape is the record half of
+    // a pair. `Unavailable` everywhere else, which costs nothing because a
+    // shape that does not declare `mentions_material` never consults it.
+    correspondence: Correspondence<'_>,
+    // Restrict the search to ONE subject, by exact name. Only `every` passes it,
+    // and it is a separate parameter rather than a mutated `ClaimShape` for two
+    // reasons a cold review demonstrated by A/B against the previous binary:
+    //
+    //   1. Overwriting `shape.subject` DROPS whatever scope the declaration
+    //      carried. An anchor scoped `design/*` began matching every subject in
+    //      the log — silently widening the very set the universal quantifies
+    //      over, so a scope that matched nothing reported MATERIAL instead of
+    //      VACUOUS.
+    //   2. `subject` is glob-lite (`subject_matches`), so a concrete name put
+    //      through it is re-read as a PATTERN. A subject literally called `foo*`
+    //      matched `foobar`, and a sibling's claim completed it — co-location,
+    //      the entire point of `every`, defeated by a name.
+    //
+    // Both failed toward satisfied, inside the one evaluator the new scan was
+    // built to protect, which is why the scan and a green suite were blind to
+    // them. An exact-equality restriction cannot do either.
+    restrict_to_subject: Option<&str>,
     // Collects reads that could not happen. `None` where the caller renders the
     // `Verdict` itself and so already shows the reason — `day assess telos`
     // prints ERROR with the message. Position inference passes `Some`, because
@@ -514,6 +1020,32 @@ pub fn claims_matching(
     let claims = match log.claims() {
         Ok(claims) => claims,
         Err(e) => return Verdict::Error(e.to_string()),
+    };
+
+    // Resolved before any claim is examined, because an unanswerable comparison
+    // must not depend on what the log happens to contain. day#107's constraint
+    // is explicit: "If a declared pair cannot be answered for structural
+    // reasons, day should say so — an unanswerable comparison is UNCHECKED, not
+    // silence." Returning Unsatisfied here would report a *finding* about the
+    // record from a question that was never asked.
+    let must_mention: Option<&[String]> = if shape.mentions_material {
+        match correspondence {
+            Correspondence::Material(instances) if !instances.is_empty() => Some(instances),
+            _ => {
+                return Verdict::Error(
+                    "this record witness must refer to the material instance, and the \
+                     material half named none — the comparison could not be made"
+                        .to_string(),
+                )
+            }
+        }
+    } else {
+        None
+    };
+
+    let exclude_author = match exclusion(shape, log) {
+        Ok(e) => e,
+        Err(v) => return v,
     };
 
     let window = match since {
@@ -583,8 +1115,24 @@ pub fn claims_matching(
                 unchecked.get_or_insert(why);
             }
         }
-        if !shape.matches(subject, claim, block_check) {
+        // Equality, deliberately, and BEFORE the shape's own predicates so the
+        // shape's `subject` glob still applies as an independent conjunct.
+        if restrict_to_subject.is_some_and(|only| subject != only) {
             continue;
+        }
+        if !shape.matches_with(subject, claim, block_check, exclude_author.as_deref()) {
+            continue;
+        }
+        // Correspondence: the claim must name the material instance, not merely
+        // be the right kind on the right subject. This is what makes
+        // `docs::reconcile_boundary`'s `text.contains(tag)` a special case of
+        // the general rule rather than a parallel mechanism — day#103's
+        // original goal, which day#107 recorded as still unmet.
+        if let Some(instances) = must_mention {
+            let text = claim.text.as_deref().unwrap_or("");
+            if !instances.iter().any(|i| text.contains(i.as_str())) {
+                continue;
+            }
         }
         if let Some(boundary) = since {
             // An undated claim cannot be placed in a cycle at all, so it does
@@ -657,10 +1205,41 @@ fn summarize(files: &[String], pathspec: &str) -> String {
 /// `echo` with the literal arguments `hi;`, `rm`, `-rf`, `/`. That costs
 /// pipelines and redirection in probe definitions, which is the right trade
 /// for a check whose entire value is being hard to game.
+/// What a command probe's process actually did, before it is read as evidence.
+///
+/// Separated from [`run_command`]'s `Verdict` because negation needs the exit
+/// code itself. `Verdict::Unsatisfied` carries prose for a human — "`grep …`
+/// exited 1" — and recovering a number from a sentence is the mistake this
+/// milestone already refused for correspondence.
+#[derive(Debug, PartialEq, Eq)]
+enum CommandOutcome {
+    Exited(i32),
+    /// Killed by a signal, so there is no code to compare against.
+    NoStatus,
+    TimedOut,
+    Failed(String),
+}
+
 fn run_command(argv: &str, cwd: &Path, timeout: Duration) -> Verdict {
+    match run_command_status(argv, cwd, timeout) {
+        CommandOutcome::Exited(0) => Verdict::Satisfied(format!("`{argv}` exited 0")),
+        CommandOutcome::Exited(code) => {
+            Verdict::Unsatisfied(format!("`{argv}` exited with status {code}"))
+        }
+        CommandOutcome::NoStatus => {
+            Verdict::Unsatisfied(format!("`{argv}` was killed before it exited"))
+        }
+        CommandOutcome::TimedOut => {
+            Verdict::TimedOut(format!("`{argv}` exceeded {}s", timeout.as_secs()))
+        }
+        CommandOutcome::Failed(why) => Verdict::Error(why),
+    }
+}
+
+fn run_command_status(argv: &str, cwd: &Path, timeout: Duration) -> CommandOutcome {
     let mut parts = argv.split_whitespace();
     let Some(program) = parts.next() else {
-        return Verdict::Error("probe command is empty".to_string());
+        return CommandOutcome::Failed("probe command is empty".to_string());
     };
     let args: Vec<&str> = parts.collect();
 
@@ -677,28 +1256,27 @@ fn run_command(argv: &str, cwd: &Path, timeout: Duration) -> Verdict {
 
     let mut child = match child {
         Ok(c) => c,
-        Err(e) => return Verdict::Error(format!("could not run `{argv}`: {e}")),
+        Err(e) => return CommandOutcome::Failed(format!("could not run `{argv}`: {e}")),
     };
 
     let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                return if status.success() {
-                    Verdict::Satisfied(format!("`{argv}` exited 0"))
-                } else {
-                    Verdict::Unsatisfied(format!("`{argv}` exited {status}"))
+                return match status.code() {
+                    Some(code) => CommandOutcome::Exited(code),
+                    None => CommandOutcome::NoStatus,
                 };
             }
             Ok(None) => {}
-            Err(e) => return Verdict::Error(format!("could not wait on `{argv}`: {e}")),
+            Err(e) => return CommandOutcome::Failed(format!("could not wait on `{argv}`: {e}")),
         }
         if Instant::now() >= deadline {
             // Kill and reap, so the probe cannot outlive the assessment as
             // an orphan holding the terminal.
             let _ = child.kill();
             let _ = child.wait();
-            return Verdict::TimedOut(format!("`{argv}` exceeded {}s", timeout.as_secs()));
+            return CommandOutcome::TimedOut;
         }
         std::thread::sleep(POLL);
     }
@@ -886,6 +1464,8 @@ mod tests {
             starts_with: None,
             subject: None,
             block: None,
+            mentions_material: false,
+            not_authored_by: None,
         }
     }
 
@@ -956,6 +1536,8 @@ mod tests {
                 contains: Some("c".into()),
                 starts_with: Some("s".into()),
                 block: None,
+                mentions_material: false,
+                not_authored_by: None,
                 subject: Some("x/*".into()),
             })
         );
@@ -1134,6 +1716,8 @@ mod tests {
             starts_with: Some("adversarial review of".into()),
             subject: Some("atom/*".into()),
             block: None,
+            mentions_material: false,
+            not_authored_by: None,
         };
         let matching = a_claim(
             "Decision",

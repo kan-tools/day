@@ -456,6 +456,26 @@ impl Status {
             out.push('\n');
         }
 
+        // **Could-not-read, in the channel a human actually runs.**
+        //
+        // This section renders `off_sequence` findings and `unordered`
+        // could-not-checks, and rendered `unrecorded` above — but `unreadable`
+        // reached only `render_notice`. So `day status` showed everything day
+        // *found* and nothing day *could not look at*, which is the inversion
+        // `telos/honest-reads` forbids, at the rendering layer rather than in a
+        // computation. Found by an unanswerable correspondence having nowhere
+        // to appear.
+        //
+        // `?` rather than `!`, matching `unordered` directly above: a check day
+        // could not run is not a finding it made.
+        if !self.unreadable.is_empty() {
+            out.push_str("Could not be read, so this report is partial:\n");
+            for u in &self.unreadable {
+                out.push_str(&format!("  ? {}\n", u.message));
+            }
+            out.push('\n');
+        }
+
         out.push_str(
             "Position is inferred from artifacts, not tracked — it is recomputed each\n\
              time and nothing is recorded. To gate an atom's completion in CI:\n  \
@@ -565,6 +585,11 @@ fn unmet_mark(verdict: &Verdict) -> &'static str {
         Verdict::NotRun(_) => "[not run]",
         Verdict::TimedOut(_) => "[timeout]",
         Verdict::Error(_) => "[error]",
+        // Answered, and the answer establishes nothing — a universal with
+        // nothing to quantify over. It must not read as `[unmet]`, which would
+        // be a finding day did not make, nor as `[met]`, which is the whole
+        // point of having the verdict at all.
+        Verdict::Vacuous(_) => "[vacuous]",
         Verdict::Satisfied(_) => "[met]",
     }
 }

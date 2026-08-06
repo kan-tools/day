@@ -92,7 +92,11 @@ fn ac1_a_telos_records_its_declared_witnesses() {
     let witnesses = day::atoms::extract_fenced::<day::bridge::Witnesses>(&log[0])
         .expect("a day-telos block should be written")
         .expect("it should parse");
-    assert_eq!(witnesses.witnesses, vec!["published-artifact"]);
+    assert_eq!(
+        witnesses.witnesses,
+        vec![day::bridge::Group::One("published-artifact".into())],
+        "a `--witness` flag declares a one-member group"
+    );
 
     // A telos without witnesses still records, and carries no block.
     let kan = write_kan_stub(dir.path(), &[]);
@@ -332,6 +336,15 @@ fn ac8_a_target_with_no_witnesses_says_so_and_does_not_fail() {
     ));
     let kan = write_kan_stub(dir.path(), &claims);
 
+    // AC-15, the premise: the target must genuinely declare no witnesses, or
+    // this asserts the unwitnessed remedy against a witnessed telos.
+    assert!(
+        !claims
+            .iter()
+            .any(|c| c.subject == "telos/vague" && c.text.contains("day-telos")),
+        "premise: the fixture telos must declare no witnesses"
+    );
+
     let out = day(dir.path(), &kan, &["bridge", "check", "b"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
@@ -339,7 +352,11 @@ fn ac8_a_target_with_no_witnesses_says_so_and_does_not_fail() {
         "an undeclared witness list is a gap, not a failure: {stdout}"
     );
     assert!(stdout.contains("declares no witnesses"), "{stdout}");
-    assert!(stdout.contains("--witness"), "it should say how to fix it");
+    assert!(
+        stdout.contains("/witness-interview"),
+        "it should say how to fix it, and the fix is the interview rather than a \
+         guess at a witness: {stdout}"
+    );
 }
 
 /// `.design/bridging.md` AC-9. day checks whether an arrangement *could*
@@ -398,5 +415,241 @@ fn checking_an_undeclared_bridge_says_so() {
         String::from_utf8_lossy(&out.stderr).contains("ghost"),
         "{}",
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// AC-3 — **a plan covers an any-of group by producing any one member**, and
+/// the report names which.
+///
+/// The `pipeline()` fixture produces `design-doc`, `code-change` and `verdict`
+/// and never produces `published-artifact`. So the group
+/// `published-artifact | verdict` is covered by its second member only — a
+/// fixture that would be uncovered under the conjunction this replaces, which
+/// is what makes it evidence rather than decoration.
+#[test]
+fn an_any_of_group_is_covered_by_one_member_and_the_report_names_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = pipeline();
+    claims.push(claim(
+        "telos/shipped",
+        "bafyreitg",
+        "Shipped.\n\n```day-telos\n{\"witnesses\":[[\"published-artifact\",\"verdict\"]]}\n```\n",
+    ));
+    claims.push(bridge_claim(
+        "b",
+        "bafyreibridge",
+        "shipped",
+        &["intent"],
+        r#"{"seq": [{"atom": "design"}, {"atom": "build"}, {"atom": "review"}]}"#,
+    ));
+    let kan = write_kan_stub(dir.path(), &claims);
+
+    let out = day(dir.path(), &kan, &["bridge", "check", "b"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "one produced member covers the group: {stdout}"
+    );
+    assert!(stdout.contains("reaches telos/shipped"), "{stdout}");
+    // REQ-3: naming the member is the point. "reaches" without saying how
+    // cannot distinguish a plan satisfying the strong alternative from one
+    // scraping by on the weak one.
+    assert!(
+        stdout.contains("published-artifact | verdict -> verdict"),
+        "the report must name the member it counted: {stdout}"
+    );
+}
+
+/// AC-4 — **a group with no member produced is uncovered, and is named whole.**
+///
+/// Naming the group rather than one arbitrary member matters: the reader's next
+/// action is to produce *any* of them, and a message naming one would send them
+/// to satisfy a requirement the telos never made.
+#[test]
+fn an_any_of_group_with_no_member_produced_is_uncovered_and_named_whole() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = pipeline();
+    claims.push(claim(
+        "telos/shipped",
+        "bafyreitg",
+        "Shipped.\n\n```day-telos\n{\"witnesses\":[[\"published-artifact\",\"assessment\"]]}\n```\n",
+    ));
+    claims.push(bridge_claim(
+        "b",
+        "bafyreibridge",
+        "shipped",
+        &["intent"],
+        r#"{"seq": [{"atom": "design"}, {"atom": "build"}]}"#,
+    ));
+    let kan = write_kan_stub(dir.path(), &claims);
+
+    let out = day(dir.path(), &kan, &["bridge", "check", "b"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !out.status.success(),
+        "no member produced means the group is not reached: {stdout}"
+    );
+    assert!(
+        stdout.contains("published-artifact | assessment"),
+        "the whole group is the thing that is missing, not one member: {stdout}"
+    );
+}
+
+/// AC-1 — **`--witness-any` declares a group; `--witness` twice still declares
+/// a conjunction.** The two flags have to stay visibly different, because the
+/// whole defect was that day had only one of them and read it as the other.
+#[test]
+fn witness_any_declares_a_group_and_witness_declares_a_conjunct() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "mixed",
+            "Statement.",
+            "--witness",
+            "design-doc",
+            "--witness-any",
+            "published-artifact,assessment",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let log = appends(dir.path());
+    let witnesses = day::atoms::extract_fenced::<day::bridge::Witnesses>(&log[0])
+        .expect("a day-telos block should be written")
+        .expect("it should parse");
+    assert_eq!(
+        witnesses.witnesses,
+        vec![
+            day::bridge::Group::One("design-doc".into()),
+            day::bridge::Group::Any(vec!["published-artifact".into(), "assessment".into()]),
+        ]
+    );
+}
+
+/// A one-member alternative is refused rather than accepted quietly.
+///
+/// It is either a typo for `--witness` or a half-written group, and both are
+/// better as an error than as a declaration that *reads* like a disjunction and
+/// behaves like a conjunct — which is the shape of misreading this whole change
+/// exists to end.
+#[test]
+fn a_one_member_witness_any_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "typo",
+            "Statement.",
+            "--witness-any",
+            "design-doc",
+        ],
+    );
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("at least two"),
+        "the error should say what is wrong: {stderr}"
+    );
+    assert!(
+        appends(dir.path()).is_empty(),
+        "nothing should be recorded for a refused declaration"
+    );
+}
+
+/// day#138 — **a witness that cannot fail is reported at declare time.**
+///
+/// `telos/legible-process` was declared with three witnesses that were all
+/// already satisfied on this repo, so it reported met forever — day#86's own
+/// objection, inside the declaration written to close day#86. Nothing said so
+/// until someone assessed the telos and read the numbers.
+///
+/// A `claim` probe is the structural case: kan is append-only and day never
+/// retracts, so a claim that matched once matches forever. That is the
+/// guarantee day is built on, read as a limitation.
+#[test]
+fn a_witness_that_cannot_fail_is_reported_when_it_is_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyreiw",
+                "Probes.\n\n```day-witness\n{\"verdict\":{\"claim\":{\"kind\":\"Decision\"}}}\n```\n",
+            ),
+            // Premise: a matching claim must already exist, or "already
+            // satisfied" is not the state under test.
+            claim("some/subject", "bafyreid", "A decision."),
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "t",
+            "Statement.",
+            "--witness",
+            "verdict",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "reported, never refused -- affordance, not enforcement: {stdout}"
+    );
+    assert!(
+        stdout.contains("declared `telos/t`"),
+        "the declaration still happens: {stdout}"
+    );
+    assert!(
+        stdout.contains("cannot stop being satisfied"),
+        "an append-only probe cannot report absent once satisfied: {stdout}"
+    );
+    assert!(stdout.contains("day#86"), "{stdout}");
+}
+
+/// The other half: a witness with no probe is named, which is day#125's
+/// friction 2 — four teloi were declared with witnesses and the fact that none
+/// was checkable surfaced much later, at `day status`.
+#[test]
+fn a_witness_with_no_declared_probe_is_named_at_declare_time() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[]);
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "telos",
+            "declare",
+            "t",
+            "Statement.",
+            "--witness",
+            "certificate",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{stdout}");
+    assert!(
+        stdout.contains("certificate") && stdout.contains("no probe is declared"),
+        "a witness with nothing behind it must be named when it is written, not \
+         discovered at `day status` later: {stdout}"
     );
 }

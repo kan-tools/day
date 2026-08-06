@@ -419,7 +419,7 @@ fn a_direct_show_of_an_unaccounted_subject_is_an_error() {
         vec!["commit", "-q", "-m", "one"],
         vec!["tag", "v9.9.9"],
     ] {
-        Command::new("git")
+        let out = Command::new("git")
             .args(&args)
             .current_dir(dir.path())
             .env("GIT_AUTHOR_NAME", "t")
@@ -428,6 +428,17 @@ fn a_direct_show_of_an_unaccounted_subject_is_an_error() {
             .env("GIT_COMMITTER_EMAIL", "t@e")
             .output()
             .expect("git");
+        // Asserted, because the status was dropped and a setup that could not
+        // run then arrived as a verdict about day: `git tag` failed under a
+        // global `tag.gpgsign`, and this test reported "a complete log must
+        // still assess the release" — a finding about the wrong program. A
+        // fixture that cannot build itself is a could-not-check, and it says so
+        // here rather than downstream.
+        assert!(
+            out.status.success(),
+            "git {args:?} failed, so this fixture never existed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
     let claims = vec![
         claim(

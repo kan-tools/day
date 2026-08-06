@@ -1,0 +1,33 @@
+{
+ "v": 1,
+ "subjects": [
+  {
+   "subject": "foo*",
+   "subjects": [
+    "foo*"
+   ],
+   "state": "Unclassified"
+  },
+  {
+   "subject": "foobar",
+   "subjects": [
+    "foobar"
+   ],
+   "state": "Unclassified"
+  },
+  {
+   "subject": "schema/witness",
+   "subjects": [
+    "schema/witness"
+   ],
+   "state": "Unclassified"
+  },
+  {
+   "subject": "telos/t",
+   "subjects": [
+    "telos/t"
+   ],
+   "state": "Unclassified"
+  }
+ ]
+}

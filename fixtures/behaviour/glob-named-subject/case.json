@@ -1,0 +1,8 @@
+{
+ "why": "`subject` is glob-lite. A subject whose NAME contains `*` must not be completed by its prefix siblings -- co-location is what `every` means.",
+ "tags": [],
+ "tracked": [],
+ "invocations": [
+  "assess telos t"
+ ]
+}

@@ -639,3 +639,84 @@ fn a_filter_that_also_selects_a_passing_test_is_not_a_catcher() {
          {verified}"
     );
 }
+
+/// **`#[cfg(test)]` on anything but a `mod` does not start the test half.**
+///
+/// The boundary rule returned the *first* line carrying the attribute, so a
+/// single `#[cfg(test)] fn helper(...)` inside an `impl` near the top of a file
+/// made every hunk below it "test-side": the fix stayed in place, its callers
+/// were reverted, and the run reported DID-NOT-COMPILE. Honest, and it says
+/// nothing about coverage — which is the outcome this harness exists to avoid
+/// producing by accident.
+///
+/// Found by hitting it, on a commit that added exactly such a helper.
+/// `tests/plugin.rs`'s `cfg_test_module_line` had already been fixed for the
+/// same reason on the Rust side; the rule had not reached the Python harness
+/// that checks it, which is CLAUDE.md's propagation failure one language over.
+///
+/// The fixture puts the attribute where it actually appeared — on a function
+/// inside an `impl`, above the code that must still be reverted.
+#[test]
+fn a_cfg_test_attribute_on_a_function_does_not_end_the_production_half() {
+    let before = "pub struct T;\n\nimpl T {\n    #[cfg(test)]\n    fn helper() -> i32 { 0 }\n}\n\n                  pub fn answer() -> i32 { 1 }\n\n#[cfg(test)]\nmod tests {\n    // nothing yet\n}\n";
+    let after = "pub struct T;\n\nimpl T {\n    #[cfg(test)]\n    fn helper() -> i32 { 0 }\n}\n\n                 pub fn answer() -> i32 { 2 }\n\n#[cfg(test)]\nmod tests {\n\
+                 \x20   #[test]\n    fn unit_asserts_the_fix() { assert_eq!(super::answer(), 2); }\n}\n";
+    let s = Scratch::new(before, after, "");
+    let (text, ok) = s.run(&["--tests", "lib::unit_asserts_the_fix"]);
+
+    assert!(
+        !text.contains("DID-NOT-COMPILE"),
+        "the change below a `#[cfg(test)] fn` must still be reverted: {text}"
+    );
+    assert!(
+        text.contains("DEMONSTRATED") && ok,
+        "and the demonstration must go through: {text}"
+    );
+}
+
+/// **A restored file comes back executable.**
+///
+/// `restore` wrote bytes with `write_bytes`, which creates a missing file at the
+/// process umask — so reverting a commit that ADDS an executable file and then
+/// putting it back left it `644`. The digest compared content only, saw nothing
+/// wrong, and the run reported its outcome and exited 0 rather than
+/// `NOT-RESTORED`.
+///
+/// Found when it silently disarmed a witness: `scripts/foreign-contribution.sh`
+/// came back non-executable and `day assess telos v1.0 --run` reported
+/// `[ERROR] … Permission denied`. day's own layer was honest about it; this
+/// harness was not, which is the one thing it exists not to do. `mutate.py`
+/// carries the sibling lesson about mtime, for the same reason.
+///
+/// `--rev` mode specifically: the file has to be *created* by the reverted
+/// change for the umask to decide its mode on the way back.
+#[test]
+fn a_reverted_executable_file_comes_back_executable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let s = Scratch::new(BUGGY, FIXED, ASSERTS_THE_FIX);
+    let script = s.root().join("run-me.sh");
+    std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", "fix the answer, and add an executable"]);
+
+    let executable = |label: &str| {
+        let mode = std::fs::metadata(&script).unwrap().permissions().mode();
+        assert!(
+            mode & 0o111 != 0,
+            "{label}: expected an executable file, mode was {mode:o}"
+        );
+    };
+    // Premise: it really is executable before the run, or what follows proves
+    // nothing.
+    executable("premise");
+
+    let (text, _) = s.run(&["--rev", "HEAD", "--tests", "t::demo_test"]);
+
+    assert!(
+        !text.contains("NOT-RESTORED"),
+        "the tree should come back cleanly: {text}"
+    );
+    executable("after the run");
+}

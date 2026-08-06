@@ -210,12 +210,21 @@ verb to a step that already happens — this one. (Recorded on `process-model`;
 
    Declare it with **witnesses**, the artifact *types* that would evidence it.
    Without witnesses a telos cannot be a checkable bridge target, and day will
-   say so rather than guess:
+   say so rather than guess.
 
-   ```bash
-   day telos declare <slug> "<the state of the world this reaches>" \
-     --witness <artifact-type>
+   **Do not pick the witnesses yourself.** What would evidence a telos is a
+   claim about what counts as evidence, and day#86 records why guessing is worse
+   than leaving it unwitnessed: a trivially satisfiable witness reports the telos
+   met forever. Run the interview, which asks the human the five questions a
+   probe cannot infer:
+
    ```
+   /witness-interview <slug>
+   ```
+
+   It declares the telos at the end. If you are declaring one by hand anyway —
+   because the operator declined the interview — say in your output that the
+   witnesses were inferred rather than established.
 
 2. **Declare the bridge** — the arrangement of atoms that gets from here to
    there. Ask the vocabulary what exists (`day doctor`) rather than assuming a

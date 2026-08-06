@@ -119,12 +119,63 @@ fn hooks_are_only_registered_on_events_that_deliver_stdout_to_the_model() {
     }
 }
 
+/// Every command the plugin ships, read from the directory rather than listed.
+///
+/// **Derived, not hand-maintained**, and that is a fix rather than a style
+/// choice. A cold review found the third command absent from three separate
+/// enumerations in this file — its preambles unchecked, its frontmatter
+/// unasserted — while `tests/documented_invocations.rs`, which globs, picked it
+/// up immediately and made the build say so.
+///
+/// The pattern the review named across the whole milestone: every requirement
+/// whose artifact is Rust was met, and every requirement living in a
+/// hand-maintained list was skipped, because nothing fails when a list does not
+/// grow. A list that reads the directory cannot fail to grow.
+fn shipped_commands() -> Vec<String> {
+    let dir = repo_root().join("commands");
+    let mut out: Vec<String> = std::fs::read_dir(&dir)
+        .expect("commands/ should exist — it is what the plugin ships")
+        .flatten()
+        .filter_map(|e| {
+            let path = e.path();
+            if path.extension().is_some_and(|x| x == "md") {
+                path.file_name()
+                    .map(|n| format!("commands/{}", n.to_string_lossy()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    out.sort();
+    assert!(
+        out.len() >= 3,
+        "expected at least the three shipped commands, found {out:?}"
+    );
+    out
+}
+
 #[test]
 fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
-    for (file, must_contain) in [
+    // Markers are per-command and stay explicit; the FILE LIST is derived, so a
+    // new command cannot ship unasserted — it fails here until it is named.
+    let markers = [
         ("commands/design.md", "design document"),
         ("commands/adversarial-review.md", "APPROVE WITH FOLLOW-UPS"),
-    ] {
+        ("commands/witness-interview.md", "what would evidence"),
+    ];
+    for file in shipped_commands() {
+        let file = file.as_str();
+        let must_contain = markers
+            .iter()
+            .find(|(f, _)| *f == file)
+            .map(|(_, m)| *m)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{file} ships with the plugin and no marker asserts what it is. \
+                     Add one here — a command nothing checks is a command that can \
+                     rot silently, which is what this test exists to stop."
+                )
+            });
         let text = std::fs::read_to_string(repo_root().join(file))
             .unwrap_or_else(|e| panic!("{file} should ship with the plugin: {e}"));
         assert!(text.starts_with("---"), "{file} needs command frontmatter");
@@ -1023,7 +1074,8 @@ fn command_preambles_exit_zero_even_where_nothing_exists() {
     std::fs::create_dir_all(&empty).expect("temp dir for the nothing-exists case");
 
     let mut checked = 0usize;
-    for rel in ["commands/design.md", "commands/adversarial-review.md"] {
+    for rel in shipped_commands() {
+        let rel = rel.as_str();
         let text = std::fs::read_to_string(repo_root().join(rel)).unwrap();
 
         for (n, line) in text.lines().enumerate() {
@@ -1063,11 +1115,18 @@ fn command_preambles_exit_zero_even_where_nothing_exists() {
 
     // A generator whose failure mode is "less output" needs an exhaustive
     // expectation, not a trusting loop: if the `!` parse silently stopped
-    // matching, every assertion above would pass by checking nothing. This is
-    // the count the two files carry today.
+    // matching, every assertion above would pass by checking nothing.
+    //
+    // **The count stays hand-written; the FILE LIST does not.** Those are
+    // different failure modes and only one of them is caught by a number. This
+    // said 13 "across the two command files" while three shipped, because the
+    // list was a literal and a third command could be added without touching
+    // it — so the new file's four preambles went unchecked and the count still
+    // matched. Deriving the list from `commands/` turned that into a red build
+    // the moment it was wrong, which is how 17 got here.
     assert_eq!(
-        checked, 13,
-        "expected 13 `!` preamble commands across the two command files; found \
+        checked, 17,
+        "expected 17 `!` preamble commands across the shipped command files; found \
          {checked}. If a line was added or removed, update this number — if it \
          dropped to zero the parse broke and this test was asserting nothing."
     );
@@ -1530,5 +1589,208 @@ fn the_test_only_caller_scan_finds_the_instance_it_was_written_for() {
     assert!(
         offenders[0].contains("compat.rs") && offenders[0].ends_with("is_notable"),
         "the one offender must be `Compat::is_notable`; got {offenders:?}"
+    );
+}
+
+/// `.design/witness-interview.md` AC-4 — **the unwitnessed-telos remedy has
+/// exactly one renderer.**
+///
+/// day printed this advice from two places, `assess telos` and `bridge check`,
+/// each formatting its own prose. The wording had already drifted apart, which
+/// is the condition under which a third arrives and nobody notices — day#101's
+/// shape, and CLAUDE.md's standing rule that a guarantee about what day reports
+/// belongs in the mechanism rather than at a call site.
+///
+/// **Keyed on the presence of the phrase, never on its absence.** CLAUDE.md
+/// records a classifier that looked for `composition: ok` to mean "loaded it
+/// anyway" and mis-filed a reader when an unrelated finding suppressed the
+/// phrase. So this asserts where the phrase *does* appear, not
+/// where it does not.
+///
+/// **`src/status.rs` is deliberately not in scope, and that is a decision
+/// rather than an oversight.** Its "no witness probes are declared" message
+/// reports a *project-level* fact — `schema/witness` declares no readable probe
+/// at all — which is upstream of any telos and independent of it, as
+/// `position::unordered`'s comment already states. day#108 proposed routing that
+/// reader to `day init` and it was rejected because that verb "records a
+/// `schema/design-doc` starter and no witnesses at all — a remedy that does not
+/// remedy this". Routing it to the interview would reintroduce exactly that,
+/// since no telos is in question. The two separate cleanly on text that already
+/// differs, which is why this scan can be precise.
+///
+/// **What this does not catch, stated so it does not overclaim:** prose that
+/// conveys the same advice in different words. A scan matches text, not
+/// meaning. It catches the concrete failure that occurred — a second site
+/// emitting this phrase — and not a paraphrase of it.
+///
+/// **The exact string `--witness <type>` is reserved**, not merely discouraged.
+/// It is the signature of the remedy that was removed, and the scan cannot tell
+/// it apart from an innocent mention — it caught `parse_witness_any`'s arity
+/// error, which was legitimately naming the flag to use instead. That message
+/// now says `--witness` without the placeholder, which costs it nothing and
+/// keeps this check able to key on a string with exactly one meaning. Prefer
+/// rewording over the escape hatch when the site is not a remedy at all.
+///
+/// **The phrase is a literal here, not `day::telos::UNWITNESSED`.** The first
+/// version imported a constant the fix introduced, and `revert-demo.py`
+/// reported `DID-NOT-COMPILE` — reverting the fix took the constant with it, so
+/// the test could not run and the demonstration said nothing about coverage. A
+/// scan asserting a fact about source *text* has to own the text it matches, for
+/// the same reason: sharing a constant means a rename moves both sides together
+/// and the scan silently checks something else.
+#[test]
+fn the_unwitnessed_remedy_has_one_renderer() {
+    const MARKER: &str = "unwitnessed-remedy-elsewhere:";
+    const PHRASE: &str = "declares no witnesses";
+    // The one legitimate emitter, located by its own definition rather than by
+    // file. A second hand-rolled site inside `telos.rs` is caught the same way
+    // one in another module is — the failure was three sites across three
+    // files, and keying on the file would have exempted the worst case.
+    const RENDERER: &str = "pub fn unwitnessed_remedy";
+
+    let mut offenders = Vec::new();
+    let mut solo_guess = Vec::new();
+    let mut renderers = 0usize;
+    let mut stack = vec![repo_root().join("src")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let raw = std::fs::read_to_string(&path).unwrap();
+            // `production_half` rather than a hand-rolled `#[cfg(test)]` cut.
+            // The first version of this cut at the first line carrying the
+            // attribute, which is the exact defect `cfg_test_module_line`
+            // documents: a single `#[cfg(test)] use std::…;` near the top would
+            // exempt every line below it, silently and for the whole file. It
+            // also strips comments, so this repo's habit of describing past
+            // defects in prose does not read as a live one.
+            let code = production_half(&raw);
+            let raw_lines: Vec<&str> = raw.lines().collect();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+            // The renderer's own body is the one place the phrase belongs.
+            // Located by definition rather than by file, so a second site in
+            // `telos.rs` is caught exactly as one elsewhere is.
+            let span = code.find(RENDERER).map(|at| {
+                let from = code[..at].lines().count();
+                let rest = &code[at..];
+                let len = rest
+                    .find("\n}")
+                    .map(|e| rest[..e].lines().count())
+                    .unwrap_or_else(|| rest.lines().count());
+                (from, from + len)
+            });
+            if span.is_some() {
+                renderers += 1;
+            }
+
+            for (n, line) in code.lines().enumerate() {
+                // Markers are read from the RAW lines: the marker lives in a
+                // comment, and `production_half` has already stripped those.
+                if raw_lines.get(n).is_some_and(|l| l.contains(MARKER)) {
+                    continue;
+                }
+                if line.contains(PHRASE) && !span.is_some_and(|(a, b)| n >= a && n <= b) {
+                    offenders.push(format!("{name}:{}", n + 1));
+                }
+                // The remedy this replaced. It handed the reader a command
+                // inviting a solo guess at a witness, which day#86 records as
+                // worse than the state it purports to fix.
+                if line.contains("--witness <type>") {
+                    solo_guess.push(format!("{name}:{}", n + 1));
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        renderers, 1,
+        "expected exactly one `{RENDERER}` in src/, found {renderers}"
+    );
+    assert!(
+        offenders.is_empty(),
+        "the unwitnessed-telos remedy is rendered outside `telos::unwitnessed_remedy` at \
+         {offenders:?}.\n\n\
+         Two call sites rendered this independently and their wording had already drifted; \
+         collapse the new site into that function, or mark it `{MARKER} <why this one is \
+         genuinely a different fact>` — as `status.rs`'s project-level message would be."
+    );
+    assert!(
+        solo_guess.is_empty(),
+        "the solo-guess remedy `--witness <type>` is emitted at {solo_guess:?}.\n\n\
+         Telling a reading agent to declare a witness itself is what this replaced: a \
+         trivially satisfiable witness reports the telos met forever (day#86), and a bad \
+         witness is worse than none. Point at `/witness-interview <slug>` instead."
+    );
+}
+
+/// **A claim shape has exactly one evaluator.**
+///
+/// A cold review blocked this milestone on `every_subject` matching shapes with
+/// `ClaimShape::matches_with` directly, which skips everything
+/// `probe::claims_matching` adds around it — `block` resolution and
+/// `mentions_material`. Both predicates were silently inert inside an `every`
+/// probe, and inert toward *satisfied*: an identical shape reported
+/// `[ERROR] … day cannot check it` through a claim probe and `[MATERIAL]`
+/// through the universal.
+///
+/// **It had already been noticed and written down.** `src/probe.rs` carried a
+/// comment saying block predicates were not resolved there, "stated because
+/// silently ignoring a predicate is precisely what this milestone is about" —
+/// and the comment did not mention `mentions_material` at all, which is the
+/// second instance the first one predicted. CLAUDE.md's rule is exactly this:
+/// prose in the right place is not a constraint, and a rule that matters wants a
+/// source scan.
+///
+/// So the shape of the guarantee is the one that rule prescribes: not "call the
+/// other predicates too", but **one place where a shape is evaluated at all**.
+/// A second call site is a second evaluator, and it will drift.
+#[test]
+fn the_claim_shape_predicate_has_one_evaluator() {
+    const MARKER: &str = "second-shape-evaluator:";
+    let src = std::fs::read_to_string(repo_root().join("src/probe.rs")).unwrap();
+    let code = production_half(&src);
+    let raw: Vec<&str> = src.lines().collect();
+
+    let mut definitions = 0usize;
+    let mut callers = Vec::new();
+    for (n, line) in code.lines().enumerate() {
+        // A window, not the line itself. The marker lives in a comment and the
+        // call it exempts is usually a few lines below it — the same shape
+        // `a_pub_fn_with_only_test_callers_fails_the_build` uses, and getting it
+        // wrong makes the hatch unusable rather than making the scan stricter.
+        let hatched = raw[n.saturating_sub(8)..=n.min(raw.len() - 1)]
+            .iter()
+            .any(|l| l.contains(MARKER));
+        if hatched {
+            continue;
+        }
+        if line.contains("fn matches_with(") {
+            definitions += 1;
+        } else if line.contains(".matches_with(") {
+            callers.push(n + 1);
+        }
+    }
+
+    assert_eq!(
+        definitions, 1,
+        "expected exactly one `matches_with` definition, found {definitions}"
+    );
+    assert_eq!(
+        callers.len(),
+        1,
+        "a claim shape is evaluated at {} sites in production code (lines {callers:?}), and \
+         only `claims_matching` resolves `block` and `mentions_material`.\n\n\
+         A second evaluator silently drops whichever predicates it does not know about, \
+         toward satisfied — which is what a cold review blocked this milestone on. Route \
+         the new site through `claims_matching`, or mark it `{MARKER} <why this one cannot \
+         drop a predicate>`.",
+        callers.len()
     );
 }

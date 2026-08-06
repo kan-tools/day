@@ -383,8 +383,39 @@ day telos declare v03-shipped "day v0.3 is published." --witness published-artif
 Witnesses do not collapse a telos to a type. They name the *kind* of evidence
 while leaving open which concrete instance provides it — many artifacts of a
 declared type satisfy the telos equally, which is the weak equivalence being
-preserved. A telos without witnesses is still valid; it simply cannot be
-machine-checked as a bridge target, which day says rather than guessing.
+preserved.
+
+Several `--witness` flags mean **all of them**. When instead any one of several
+artifacts would independently show the telos holds, declare an alternative set
+with `--witness-any`:
+
+```bash
+day telos declare adopted "Someone else ships with it." --witness-any foreign-claim,third-party-contribution
+```
+
+which records the group nested inside the same list:
+
+```day-telos
+{"witnesses":["design-doc",["foreign-claim","third-party-contribution"]]}
+```
+
+So the list is a conjunction of entries and an entry may be a disjunction: the
+block above requires a `design-doc` **and** either of the other two. A bare
+string is a one-member group, so every block written before alternatives
+existed keeps exactly its current meaning and its current bytes.
+
+`day assess telos` reports a verdict per *type* and folds the result per
+*group* — a group counts against the telos only when every member failed — and
+`day bridge check` counts a group as covered when the plan produces any member,
+naming which one it counted. A one-member `--witness-any` is refused: it is
+either a typo for `--witness` or a half-written group, and both read as a
+disjunction while behaving as a conjunct.
+
+A telos without witnesses is still valid; it simply cannot be machine-checked
+as a bridge target, which day says rather than guessing. It says so by pointing
+at `/witness-interview <slug>` rather than by telling you to declare a witness
+yourself — what would evidence a telos is a question for a person, and a
+witness that cannot fail is worse than none.
 
 ```bash
 day bridge declare v0.3 --telos v03-shipped --have intent   --plan "design > generative-build > adversarial-review > pull-request > release"
@@ -528,11 +559,141 @@ against the cycle boundary, and the boundary *is* the newest tag, so
 the comparison can never fire. day therefore suggests no pair in its starter
 schema. Pair a witness whose material half is a `path` or `claim` probe; for the
 release case, `day assess docs` and `day status` reconcile the tag against the
-`release` subject directly (day#107 is about expressing that as a pair too).
+`release` subject directly.
+
+**A record half may require *correspondence*** — that the record refers to the
+material instance, rather than merely existing:
+
+```day-witness
+{
+  "code-change": {
+    "material": {"path": "src/*.rs"},
+    "record":   {"claim": {"kind": "Result", "subject": "atom/*", "mentions_material": true}}
+  }
+}
+```
+
+With `mentions_material`, a matching claim must also *name* what the material
+half resolved to — the changed path, the tag. Without it, any `Result` on an
+`atom/*` subject in the cycle counts as having recorded the work, including one
+about something else entirely. This is what makes `text.contains(tag)` in
+`day assess docs` a special case of the general rule rather than a parallel
+mechanism (day#103, day#107).
+
+It applies only to the **record** half, and only when the material half names an
+instance a record could refer to. A `command` probe's evidence is an exit code
+and a `claim` probe's is a CID, so neither can be corresponded to: day reports
+the comparison as one it **could not make** rather than resolving it to "not
+recorded". An unanswerable comparison is never silence.
 
 `path` uses `git ls-files`, so an untracked build output or a stray local
 file cannot witness a telos — being committed is the stronger claim, and it
 costs no new dependency.
+
+**An `absent` probe witnesses something that is *not* there.** Every other probe
+is an existence check, so a telos satisfied by an absence — *"our tooling leaves
+no trace on repositories we are guests in"* — was unprobeable in principle
+(day#125). Absence invariants are a real class: no secrets committed, no
+vendored copies, no build outputs tracked, no `TODO` in mainline.
+
+```day-witness
+{
+  "leaves-no-trace": {"absent": {
+    "forbidden": {"path": ".kan/*"},
+    "given":     {"command": "scripts/we-worked-here.sh"}
+  }}
+}
+```
+
+**Choose `given` so that it can stop holding.** A `claim` probe is the tempting
+shape and it is the wrong one here: kan is append-only, so once one matching
+claim exists the precondition is satisfied for good, and the guard never returns
+to `VACUOUS` however the world changes. `day telos declare` will say so — it
+reports a witness whose probe can never stop matching — but the declaration
+above is the example, and an example that neutralises the mechanism it
+demonstrates teaches the wrong thing.
+
+**`given` is required, and it is the whole design.** An absence is satisfied by
+everything that does not exist, which is "a witness that cannot fail" inverted.
+Something has to establish the forbidden thing *could* have happened, or "it is
+not there" is a fact about an empty world. Until `given` resolves, the witness
+reports **`VACUOUS`**.
+
+Deciding that from git history is the intuitive rule and is wrong: if the tooling
+left no trace, there is no history of a trace either, so the probe would report
+vacuous forever — exactly when the telos is genuinely held. A companion positive
+probe has no such circularity and is not git-shaped, so it works for `claim` and
+`command` alike.
+
+A **forbidden `command`** must declare `found_nothing_exit`:
+
+```day-witness
+{
+  "no-secrets": {"absent": {
+    "forbidden": {"command": "scripts/scan-secrets.sh"},
+    "given":     {"claim": {"kind": "Decision"}},
+    "found_nothing_exit": 1
+  }}
+}
+```
+
+A command probe normally reads exit zero as satisfied and *any* non-zero as not,
+which is conservative when it is an existence check and a **false clean** once
+inverted — a mistyped pathspec exits non-zero exactly as "searched and found
+nothing" does. So a forbidden command says which code means it ran and found
+nothing; exit 0 means the forbidden thing is present, and any other code is an
+error rather than a pass. Without the declaration the witness is refused before
+running.
+
+Negation widens what can be *expressed*, never what runs: a forbidden command
+reports `NOT RUN` without `--run`, exactly as a positive one does. Everything
+day cannot read — an error, a timeout, an unrun command — passes through
+uninverted, because turning "day could not look" into "day looked and it was
+clean" is the one direction negation makes dangerous.
+
+**An `every` probe is the one that can fail.** Every probe above asks *does one
+exist*, and over an append-only log that question can only start answering yes
+and never stop. A witness built from existence checks reports its telos met
+forever — which day did to its own `legible-process` (day#138).
+
+```day-witness
+{
+  "reconstructable-process": {"every": {
+    "subject_with": {"kind": "Plan"},
+    "also_carries": [{"kind": "Decision", "starts_with": "adversarial review of"}]
+  }}
+}
+```
+
+Read as: *wherever a design was recorded, a verdict was recorded on the same
+subject.* Two things make that falsifiable where three separate witnesses are
+not.
+
+**Co-location.** `design-doc`, `verdict` and `assessment` as independent
+witnesses are satisfied by three unrelated subjects — a design here, a verdict
+over there. day#86 asked for all three "for the same milestone", and
+`also_carries` is that requirement.
+
+**The universal.** "Some subject carries all three" is still monotone. "*Every*
+subject carrying a design also carries a verdict" goes red the moment a design
+is recorded and green again when it is reviewed, so it tracks the property
+instead of accumulating toward it.
+
+The anchor selects the scope rather than a subject glob, because day's design
+subjects are bare slugs with no shared prefix — and because a hand-maintained
+pattern silently stops covering new work, which is the failure the witness is
+for. An unsatisfied `every` **names the incomplete subjects**, since the reader's
+next action is to go and finish one.
+
+An `every` probe with no subject in scope reports **`VACUOUS`**, not satisfied. A
+universal over an empty set is true and establishes nothing, and reporting that
+as evidence is the same failure one level down. `VACUOUS` is not a failure and
+not evidence — it is the outcome `scripts/revert-demo.py` already uses for "the
+check was taken away and nothing noticed".
+
+A `scope` does not narrow an `every` probe: it has two shapes and no single
+pattern to replace, and day says so rather than letting a reader believe a
+narrowing took effect.
 
 **A `claim` probe is how a record-shaped witness becomes checkable.** Some
 artifacts are not files or tags: a `verdict` is what `day review record`
@@ -550,11 +711,21 @@ constrains nothing.
 | `contains` | no | has text containing this substring **anywhere** |
 | `starts_with` | no | has text **beginning** with this prefix |
 | `subject` | no | lives on a subject this **glob-lite** pattern admits |
+| `not_authored_by` | no | was **not** signed by this `did:key:…` — or by `"self"`, whoever is running day |
+| `mentions_material` | no | names the instance the pair's material half resolved to (see above) |
 
 `kind` alone is almost always too broad — a `Decision` alone matches every
 decision in the log — so narrowing is the normal case, and picking *which*
 dimension to narrow on is the part worth thinking about:
 
+- **`not_authored_by` is what makes a witness about someone else mean
+  anything.** A telos about adoption, review, or another person's judgement is
+  otherwise satisfiable by the person who declared it — day#86's "a witness that
+  cannot fail", with a person in the loop. `"self"` resolves to the running
+  identity, so a claim you signed cannot witness that somebody else adopted your
+  tool. If kan cannot establish that identity, the witness reports an **error**
+  rather than matching everything: an exclusion that silently stops excluding is
+  worse than one that was never declared.
 - **`starts_with` is anchored; `contains` is not.** That is the whole reason
   both exist. `day review record` writes its marker at the *start* of a
   verdict's text, so `{"starts_with": "adversarial review of"}` matches real

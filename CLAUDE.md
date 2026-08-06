@@ -135,8 +135,9 @@ still listed as in play. All seven were invisible to a green suite, because
 tests assert day's *output* while the defects were in what that output means
 or whether anything receives it.
 
-So: before calling a feature done, use it on this repo or on kan against the
-real log. A passing suite is necessary and has never been sufficient here.
+A passing suite is necessary and has never been sufficient here. The rule that
+follows from it is a `practice` item, injected each session; the history is what
+this section is for.
 
 Two corollaries worth keeping:
 - A check that only inspects its own side of an interface will miss the
@@ -145,6 +146,47 @@ Two corollaries worth keeping:
 - Probes against a real log leave real claims. Use a scratch repo, or retract
   in the same breath. An assessment that pollutes the record it assesses is
   measuring its own footprint.
+
+## A justification that names a mechanism is a claim about the code
+
+Three decisions in the v0.12 witness work were made by reasoning, survived
+review, and died on contact with the code. None was caught by reading it; each
+was caught by running it. What they have in common is sharper than "dogfood it",
+because in all three the wrong belief was about a mechanism **whose own source
+says otherwise, in a comment**:
+
+- **`assess telos` is cumulative, never cycle-scoped**, and the comment at the
+  probe call says so at length — scoping to the current cycle "would make last
+  cycle's shipped telos start reporting as unmet". A design doc asserted
+  cycle-scoping anyway, to argue a witness was falsifiable. It was not, and
+  `telos/legible-process` shipped reporting met forever (day#138) — day#86's own
+  objection, inside the declaration written to close day#86.
+- **`effective_probe` ignores `--scope` for claim probes**, and says why: it
+  could *widen* what counts. A resolved question (RQ-10) proposed a witness that
+  needed exactly that narrowing.
+- **`cfg_test_module_line` documents the `#[cfg(test)]`-cut defect** where one
+  `#[cfg(test)] use` exempts a whole file. A new scan hand-rolled the cut and had
+  precisely that defect.
+
+This is the kan-conformance floor's lesson one level out. There, the measurement
+was real, the failure was real, the diagnosis was right, and the *inference* was
+wrong — and "the check that mattered was reading day's own source". Here the
+inference was wrong in the same way, three times, in a codebase whose comments
+already held the answer.
+
+**So: grep for the mechanism before citing it.** A sentence of the form "this
+works because day does X" is a testable claim, and checking it costs one search
+where defending it costs a milestone. The comments in this repo are unusually
+load-bearing — they were written by the people who hit the defect — and they are
+the cheapest oracle available.
+
+**The part that should not depend on discipline.** Falsifiability is mechanically
+checkable and was left to judgement. A witness over a *monotone* set — a
+cumulative claim probe against an append-only log, a path probe over committed
+files — can never stop matching, and detecting that needs no counterfactual. It
+is the vacuity guard from the other side: a negated probe that can never fire is
+vacuous, a positive probe that can never stop firing is equally uninformative.
+Both are "this witness cannot distinguish", and one mechanism reports both.
 
 ## Then verify the verifier
 
@@ -336,6 +378,110 @@ had a trailer in ninety seconds. An exemption reached for rather than checked is
 the rule being routed around by the person who wrote it, which is the failure
 mode the roadmap predicted for a rule with no tooling behind it, arriving even
 though the tooling exists.
+
+## The requirements that get skipped are the ones nothing fails over
+
+Two cold reviews of v0.12's witness work both returned BLOCK, and one of them
+named a pattern that held across the design doc it audited:
+
+> **Every requirement whose artifact was Rust was met. Every requirement whose
+> artifact was a kan claim or a hand-maintained list was skipped.**
+
+**Stated as holding "without exception" across the branch, it is false**, and a
+later review refuted it using the other BLOCK: `every_subject` bypassed
+`claims_matching`, which is REQ-9 — a Rust requirement, unmet. The sentence
+asserting the rule was written into this file in `0009e02`, one commit after
+`664188c` fixed the counterexample — near enough to be the same fix round, and
+not, as this paragraph used to say, the same commit. `0009e02` touches no
+`src/` at all, which is checkable in four seconds and was not checked, in a
+paragraph about a claim widened without re-checking. Recorded
+because the failure is instructive on its own: a pattern observed in one place
+was widened to a law without re-checking it where it would break, which is the
+same move as a hand-written count nobody re-derives. The scoped version is
+true and is worth keeping; the universal one is not.
+
+The milestone shipped a design document promising a `witness-interview` atom, a
+slash command for it, and a renderer pointing at it — and never ran `day atom
+declare`. `day doctor` said 7. `day next witness-interview` errored. Ninety
+seconds of running day would have found it, and nobody ran day. `telos/v1.0`
+landed in neither of two passes, each pointing at the other. A citation count
+was hand-written as five while the tree held seven, on the branch that existed
+to fix that. `tests/plugin.rs` enumerated two command files while three shipped,
+so the third's preambles went unchecked and its exhaustive `checked == 13` still
+matched.
+
+The mechanism is not carelessness. **A Rust requirement fails the build when it
+is missing; a kan claim and a list entry fail nothing.** Compilation is a
+verifier that runs on every save, and the other two have no verifier at all, so
+attention flows to the one that pushes back. Naming it as a discipline problem
+is the wrong diagnosis and produces the wrong fix.
+
+So:
+
+- Every one of the kan-side misses above announces itself in `day doctor`, `day
+  status`, or `day next <the atom you just wrote>`, and none of the three was
+  run. The imperative is a `practice` item; what it costs to skip is here.
+- **A list that can be derived must be derived.** `commands/` read from the
+  directory cannot fail to grow; a literal pair can. When the enumeration was
+  replaced by a directory read it went red immediately — four preambles
+  unchecked, and the count that was supposed to catch exactly that still said
+  13, because the count and the list fail differently and only one of them was
+  derived.
+- **A count and a list are different guarantees.** Keep the count exact — it
+  catches a parser that silently stopped matching — and derive the list, which
+  catches a member that was never added. Neither substitutes for the other.
+- **A supersession is only as findable as the read that surfaces it.** RQ-4's
+  supersession *was* in kan — a claim on `witness-model` said so and cited RQ-4
+  directly — and a reader of `kan show witness-interview` still saw only the
+  superseded decision, because that view does not surface **inbound** citations.
+  So the claim "it was superseded only in the design document" was itself false,
+  and got recorded; the real defect is narrower and worse, because it looks
+  fine from the writing side. Record the supersession on **the subject a reader
+  will look at**, not only on the one you happen to be writing.
+
+## A fix round verifies itself worse than the work it corrects
+
+Four cold reviews across v0.12's witness work, three rounds, and **every round's
+fix introduced the next round's finding**. The reviews found real, demonstrated
+defects in four of four passes, so the loop works; what follows is why it
+converges so slowly. Recorded as a `kan result` on `process-model`.
+
+**The cause is one thing.** The original work gets tests. The fix gets a hand-run
+demonstration in a terminal, written into a commit message where it is
+unrepeatable. `every_subject`'s routing fix was verified by A/B in a shell and
+shipped with **no behavioural test**; the next edit to that function — one commit
+later, by its author — broke it in two new ways with the whole suite green. The
+effort is inverted exactly where the code is most fragile: immediately after
+being told you were wrong, under pull toward a minimal local edit whose blast
+radius nobody has re-derived.
+
+One mechanism under it is worth stating here because it is about *this file's*
+tooling: **the demonstration rule has a blind spot.** Mutation asks "does any
+test assert this line". Reversion asks "does the test written for this finding
+fail when it returns". Neither asks whether the fix changed behaviour it was not
+meant to change — which is the question both reviewers answered by building the
+pre-fix binary and diffing it. `Demonstrated-by:` was entirely honest on the
+commit that carried the regression.
+
+**And the self-application gap that let it all through: not one of day's atoms
+declared `done` criteria.** `day status` reported "completion cannot be checked"
+for every atom, in every milestone, while day shipped and documented the
+mechanism for exactly that. Nothing said "this fix round is not finished" when
+the fix had no test. All eight declare them now, which is the cheapest of these
+by a wide margin and the one that closes the gap the others fell through.
+
+**The rules this produced are NOT here.** They are claims on the `practice`
+subject, because that is the one day projects into injected context — so a
+session inherits them at session start instead of depending on someone having
+read this file. Putting process rules in `CLAUDE.md` was the same self-application
+gap one level up: day exists to inject process, and its own learnings were going
+somewhere day does not read. `src/practice.rs` is the mechanism, one claim per
+item, and `day hook session-start` is where to check they arrive.
+
+This section keeps the *narrative* — what happened and why — because a rule
+injected without its history reads as arbitrary. The imperative form lives in
+`practice`, and a rule that ends up in both will drift, which is a lesson this
+file already carries twice.
 
 ## The tools in `scripts/`, already written — use them rather than reinventing them
 

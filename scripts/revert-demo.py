@@ -114,19 +114,54 @@ def git(*args, cwd=None, check=True) -> str:
 
 
 def cfg_test_line(path: pathlib.Path) -> int | None:
-    """The 1-based line of a file's `#[cfg(test)]`, or None.
+    """The 1-based line where a file's trailing `#[cfg(test)] mod` begins, or None.
 
     Nineteen files in `src/` carry a trailing test module, which is why this
-    exists. A test module that is NOT at the end of its file is the heuristic's
-    blind spot; the consequence is over-reverting, which surfaces as
-    NO-SUCH-TEST rather than as a passing demonstration.
+    exists.
+
+    **`#[cfg(test)]` on anything other than a `mod` does not start the test
+    half**, and getting that wrong was a live defect rather than a hypothetical.
+    This returned the FIRST line carrying the attribute, so a single
+    `#[cfg(test)] fn helper(...)` inside an `impl` near the top of a file made
+    every hunk below it "test-side" -- the fix was left in place, its callers
+    were reverted, and the run reported DID-NOT-COMPILE. Which is honest, and
+    says nothing about coverage.
+
+    `tests/plugin.rs`'s `cfg_test_module_line` had already been fixed for
+    exactly this, for exactly this reason. A rule learned on one side of the
+    repo did not reach the harness that checks the other -- the propagation
+    failure CLAUDE.md records, one language over.
+
+    Note also that the old docstring named the wrong failure mode. It said the
+    blind spot surfaces as NO-SUCH-TEST (over-reverting); what actually
+    happened was under-reverting into a tree that would not build. A harness
+    that mis-describes its own failure modes is the thing this file exists to
+    prevent, so the claim is now narrower: the boundary is a `mod`, and the
+    remaining blind spot is a test `mod` that is not the last thing in a file.
     """
     try:
-        for n, line in enumerate(path.read_text().splitlines(), start=1):
-            if line.strip().startswith("#[cfg(test)]"):
-                return n
+        lines = path.read_text().splitlines()
     except OSError:
         return None
+
+    def declares_a_module(text: str) -> bool:
+        stripped = text.strip()
+        return stripped.startswith("mod ") or stripped.startswith("pub mod ")
+
+    for n, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped.startswith("#[cfg(test)]"):
+            continue
+        # `#[cfg(test)] mod tests {` on one line.
+        if declares_a_module(stripped[len("#[cfg(test)]") :]):
+            return n
+        # Otherwise the next non-attribute, non-blank line decides.
+        for following in lines[n:]:
+            if not following.strip() or following.strip().startswith("#"):
+                continue
+            if declares_a_module(following):
+                return n
+            break
     return None
 
 
@@ -336,14 +371,27 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
     snapshot: dict[str, bytes | None] = {}
     for rel in touched:
         p = root / rel
-        snapshot[rel] = p.read_bytes() if p.exists() else None
+        snapshot[rel] = (p.read_bytes(), p.stat().st_mode) if p.exists() else None
 
     def digest() -> dict[str, str | None]:
-        return {
-            rel: (hashlib.sha256((root / rel).read_bytes()).hexdigest()
-                  if (root / rel).exists() else None)
-            for rel in touched
-        }
+        # **Mode is part of the digest, not just content.** Restore wrote bytes
+        # with `write_bytes`, which creates a missing file at the process umask,
+        # so reverting a NEW executable file and putting it back left it 644 --
+        # and a content-only digest saw nothing wrong, so the run reported its
+        # outcome and exited 0 rather than NOT-RESTORED.
+        #
+        # Found when it silently disarmed a witness: `scripts/foreign-contribution.sh`
+        # came back non-executable and `day assess telos v1.0 --run` reported
+        # `[ERROR] ... Permission denied`. day's own layer was honest about it;
+        # this harness was not, which is the one thing it exists not to do.
+        # `mutate.py` carries the sibling lesson about mtime for the same reason.
+        def stamp(rel: str) -> str | None:
+            f = root / rel
+            if not f.exists():
+                return None
+            return f"{hashlib.sha256(f.read_bytes()).hexdigest()}:{f.stat().st_mode:o}"
+
+        return {rel: stamp(rel) for rel in touched}
 
     before = digest()
     try:
@@ -401,20 +449,25 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
     return outcome, caught
 
 
-def restore(root: pathlib.Path, snapshot: dict[str, bytes | None]) -> None:
-    """Put every touched file back, with a fresh mtime.
+def restore(root: pathlib.Path, snapshot: dict) -> None:
+    """Put every touched file back, with its original mode and a fresh mtime.
 
     A fresh mtime, not a preserved one: `mutate.py` learned that preserving it
     hides the restore from cargo's change detection and corrupts the NEXT run
     rather than this one, which is much worse to diagnose.
     """
-    for rel, content in snapshot.items():
+    for rel, saved in snapshot.items():
         p = root / rel
-        if content is None:
+        if saved is None:
             p.unlink(missing_ok=True)
         else:
+            content, mode = saved
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(content)
+            # Mode after content: `write_bytes` creates a missing file at the
+            # umask, so a file that was executable before the revert comes back
+            # 644 without this. Silently, and it disarms any probe that runs it.
+            os.chmod(p, mode)
             p.touch()
 
 

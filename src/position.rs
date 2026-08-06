@@ -99,11 +99,47 @@ pub fn resolve_collecting(
     boundary: Option<&Boundary>,
     failures: Failures<'_>,
 ) -> Verdict {
+    resolve_corresponding(
+        probe,
+        git,
+        log,
+        boundary,
+        probe::Correspondence::Unavailable,
+        failures,
+    )
+}
+
+/// [`resolve_collecting`] with the material half of a pair in scope, for a
+/// record shape that must refer to *that instance* rather than merely exist.
+///
+/// A separate entry point rather than a sixth parameter on the common one:
+/// exactly one caller has a material instance to supply — the pair comparison
+/// in [`infer`] — and widening the signature everyone else uses would invite
+/// passing `Unavailable` by habit at a site where it is wrong.
+pub fn resolve_corresponding(
+    probe: &Probe,
+    git: &Git,
+    log: &ClaimLog<'_>,
+    boundary: Option<&Boundary>,
+    correspondence: probe::Correspondence<'_>,
+    failures: Failures<'_>,
+) -> Verdict {
     match (probe, boundary) {
         // Reported as not-run, never executed, boundary or no boundary. A
         // cycle is a question about *when* evidence appeared; it does not
         // make executing something any more acceptable at session start.
         (Probe::Command(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
+        // Cumulative, boundary or not. A universal states something about the
+        // record AS A WHOLE -- "every design was reviewed" -- and narrowing it
+        // to a cycle would weaken it to "every design recorded since the last
+        // release", which goes quiet exactly while a milestone is in progress.
+        (Probe::Every(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
+        // Cumulative, and never executing: `evaluate` carries the same
+        // `Authorization::Report` every other inference read does, so a
+        // forbidden *command* reports NOT RUN here exactly as a positive one
+        // would. Absence is a standing property rather than a cycle's work, so
+        // narrowing it to a boundary would answer a different question.
+        (Probe::Absent(_), _) => probe::evaluate(probe, git, log, Authorization::Report),
         // No boundary — the cumulative reading. A claim probe is handled here
         // rather than falling into `evaluate` so it can still report a read it
         // could not make: `evaluate` has nowhere to put one.
@@ -114,7 +150,9 @@ pub fn resolve_collecting(
         // path left the collector dead on exactly the population it was for,
         // repeating the defect CLAUDE.md records about the position
         // fingerprint.
-        (Probe::Claim(shape), None) => probe::claims_matching(shape, log, None, failures),
+        (Probe::Claim(shape), None) => {
+            probe::claims_matching(shape, log, None, correspondence, None, failures)
+        }
         (_, None) => probe::evaluate(probe, git, log, Authorization::Report),
         (Probe::Path(pathspec), Some(boundary)) => {
             match git.changed_files_matching(&boundary.tag, pathspec) {
@@ -145,9 +183,14 @@ pub fn resolve_collecting(
             },
             Err(e) => Verdict::Error(format!("could not list tags: {e}")),
         },
-        (Probe::Claim(shape), Some(boundary)) => {
-            probe::claims_matching(shape, log, Some(boundary.at_micros()), failures)
-        }
+        (Probe::Claim(shape), Some(boundary)) => probe::claims_matching(
+            shape,
+            log,
+            Some(boundary.at_micros()),
+            correspondence,
+            None,
+            failures,
+        ),
     }
 }
 
@@ -415,12 +458,33 @@ pub fn infer(
         if resolve_presence(kind) != Presence::Present {
             continue;
         }
+        // The material instances this record must refer to, when it says it
+        // must. Resolved from the material half rather than from the verdict
+        // summary: `Verdict::Satisfied` carries prose for a human ("git tag
+        // v0.6.0-beta.1"), and parsing a name back out of a sentence is how a
+        // correspondence check would quietly start matching the wrong thing.
+        //
+        // Unscoped by the boundary on purpose. The question is "which artifact
+        // is this", not "when did it appear" — and for `published-artifact` the
+        // boundary *is* the newest tag, which is precisely day#107's
+        // observation that cycle-scoping makes the material half absent by
+        // construction.
+        let material = schema
+            .probes
+            .get(kind)
+            .and_then(|probe| probe::instances(probe, git));
+        let correspondence = match &material {
+            Some(instances) => probe::Correspondence::Material(instances),
+            None => probe::Correspondence::Unavailable,
+        };
+
         let mut collected = Vec::new();
-        let seen = resolve_collecting(
+        let seen = resolve_corresponding(
             record,
             git,
             log,
             boundary,
+            correspondence,
             Failures::Collect(&mut collected),
         );
         failures.borrow_mut().extend(collected);
@@ -431,6 +495,21 @@ pub fn infer(
         // to look, which is the exact inversion `telos/honest-reads` forbids.
         if matches!(seen, Verdict::Unsatisfied(_)) {
             report.unrecorded.push(kind.clone());
+        }
+        // **An unanswerable correspondence is reported, never silent.** A
+        // record shape declaring `mentions_material` against a material half
+        // that names no instance produces `Error`, and the branch above
+        // correctly refuses to call that "unrecorded" — which would leave it
+        // reported nowhere at all. day#107 states the constraint directly: an
+        // unanswerable comparison is UNCHECKED, not silence, and it is the same
+        // rule `design check` got in day#105. `resolve_corresponding`'s own read
+        // failures are already collected above; this is the one an Error verdict
+        // carries instead.
+        if let Verdict::Error(why) = &seen {
+            failures.borrow_mut().push(ReadFailure {
+                message: format!("`{kind}`: {why}"),
+                version_skew: false,
+            });
         }
     }
 

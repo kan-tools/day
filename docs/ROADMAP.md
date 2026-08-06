@@ -153,8 +153,14 @@ features.**
 
 There is also a residue to clear first, or to decide deliberately not to:
 day#130, day#131, day#133 and day#134 are all v0.11's own follow-ups, and day#131
-in particular — `telos/v1.0` cited in five places with no claims in kan — is the
-telos the pack story is *for*.
+in particular — `telos/v1.0` argued from across this repo with no claims in kan —
+is the telos the pack story is *for*.
+
+**No count is given, deliberately**, and the reason is day#133's: the number was
+hand-written as "five" while the tree held seven, and the branch that was meant
+to close day#131 added two of them. The enumeration was never the useful part.
+`telos/v1.0` is declared now, so a citation resolves to something a reader can
+`kan show` — which is what the count was a proxy for.
 
 Bracketed, not scheduled: day#38, day#75, day#82, day#84, day#85, day#88,
 day#93, day#106.
