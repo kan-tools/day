@@ -1,0 +1,65 @@
+{
+ "v": 1,
+ "subjects": [
+  {
+   "subject": "foo*",
+   "claims": [
+    {
+     "subject": "foo*",
+     "cid": "bafyp1",
+     "kind": "Plan",
+     "text": "A plan.",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  },
+  {
+   "subject": "foobar",
+   "claims": [
+    {
+     "subject": "foobar",
+     "cid": "bafyp2",
+     "kind": "Plan",
+     "text": "A plan.",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    },
+    {
+     "subject": "foobar",
+     "cid": "bafyd",
+     "kind": "Decision",
+     "text": "Reviewed.",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  },
+  {
+   "subject": "schema/witness",
+   "claims": [
+    {
+     "subject": "schema/witness",
+     "cid": "bafyw",
+     "kind": "Observation",
+     "text": "Probes.\n\n```day-witness\n{\"u\": {\"every\": {\"subject_with\": {\"kind\":\"Plan\"}, \"also_carries\": [{\"kind\":\"Decision\"}]}}}\n```\n",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  },
+  {
+   "subject": "telos/t",
+   "claims": [
+    {
+     "subject": "telos/t",
+     "cid": "bafyt",
+     "kind": "Decision",
+     "text": "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,52 @@
+{
+ "v": 1,
+ "subjects": [
+  {
+   "subject": "other/b",
+   "claims": [
+    {
+     "subject": "other/b",
+     "cid": "bafyp",
+     "kind": "Plan",
+     "text": "A plan.",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    },
+    {
+     "subject": "other/b",
+     "cid": "bafyd",
+     "kind": "Decision",
+     "text": "Reviewed.",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  },
+  {
+   "subject": "schema/witness",
+   "claims": [
+    {
+     "subject": "schema/witness",
+     "cid": "bafyw",
+     "kind": "Observation",
+     "text": "Probes.\n\n```day-witness\n{\"u\": {\"every\": {\"subject_with\": {\"kind\":\"Plan\",\"subject\":\"design/*\"}, \"also_carries\": [{\"kind\":\"Decision\"}]}}}\n```\n",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  },
+  {
+   "subject": "telos/t",
+   "claims": [
+    {
+     "subject": "telos/t",
+     "cid": "bafyt",
+     "kind": "Decision",
+     "text": "T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```\n",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ]
+  }
+ ]
+}
