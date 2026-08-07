@@ -52,6 +52,26 @@ rather than resolved in prose (see Architecture).
   claim carries a whole block today, so a single witness probe cannot be
   retired without rewriting the set. day writes no retraction — it reads live
   claims (`src/kan_client.rs:75`) and a human runs the verb.
+- REQ-18: A tension the pack work makes concrete is recorded by citing the
+  existing claim on its subject, never by re-declaring it. `Tension::new` sorts
+  its pair, so a second declaration silently supersedes the first in injected
+  context.
+- REQ-19: **Every file a pack writes is bounded by a source-scanned invariant.**
+  Writing outside kan is the genuinely new capability, and today
+  `ac9_the_render_cache_is_touched_in_exactly_one_module` matches the `.day/`
+  literal only — so after packs land, a `src/pack.rs` writing an arbitrary path
+  passes every scan in the repo. REQ-6 bounds the set in prose; prose in the
+  right place is not a constraint.
+- REQ-20: Granular retraction (REQ-16) is **not available for a key inherited
+  from the legacy whole-block layer**, because retracting that claim removes
+  every key it carried. day says so when it reports such a key, rather than
+  letting the capability appear uniform. Every adopting project passes through
+  this hybrid state.
+- REQ-21: A per-key claim's shape is declared, not implied: which fence carries
+  the value, and how the assembler enumerates the per-key subjects that exist.
+  After `kan retract` the subject **remains**, carrying only a `Retraction`, so
+  "subject exists, no block" must read as *key absent* rather than as a read
+  failure.
 - REQ-17: The three layers are assembled by exactly one function, which every
   `schema/*` loader calls. Seven loaders reimplementing an overlay is the shape
   day#101 records three instances of.
@@ -75,9 +95,12 @@ rather than resolved in prose (see Architecture).
 - REQ-7: Applying a pack ends by running the `doctor` composition check and
   reporting its result, so a pack that leaves the vocabulary non-composing says
   so rather than exiting clean (day#73 item 2).
-- REQ-8: Every atom a pack declares is checked with `telos::cautions`
-  (`src/telos.rs:126`) and any already-satisfied or structurally monotone `done`
-  criterion is reported. Reported, never refused — `telos/affordance-not-enforcement`
+- REQ-8: Every atom a pack declares is checked through `telos::cautions_for`,
+  **not** `telos::cautions` — `every_declaration_reports_its_cautions` in
+  `tests/plugin.rs` fails the build on a direct call, so a `src/pack.rs` written
+  to the first version of this requirement would not compile. Any
+  already-satisfied, structurally monotone, or unreadable `done` criterion is
+  reported. Reported, never refused — `telos/affordance-not-enforcement`
   governs day's own verbs.
 - REQ-9: A pack manifest is refused whole if any part of it fails to parse.
   Partial application would leave a vocabulary neither the author nor the
@@ -162,6 +185,22 @@ rather than resolved in prose (see Architecture).
   per-subject report the walkthrough shows. (REQ-15)
 - [ ] AC-25: `pack` is absent from the MCP tool list, asserted the way
   `tests/assess.rs` asserts it for `--run`. (REQ-15)
+- [ ] AC-26: A source scan asserts every `fs::write`/`File::create`/`OpenOptions`
+  in `src/` is in `src/cache.rs` or `src/pack.rs`, and that `src/pack.rs`'s
+  writes resolve under a declared allowlist. Verified by adding a write to an
+  arbitrary path and watching it fail. (REQ-19)
+- [ ] AC-27: A pack declaring a path outside the allowlist is refused whole,
+  with the path named, and makes zero writes. (REQ-19, REQ-9)
+- [ ] AC-28: Recording the pack tension leaves the existing claim on
+  `tension/composable-process--no-store-of-its-own` live and cited, and
+  `day hook session-start` still renders the original rationale. (REQ-18)
+- [ ] AC-29: A key set only by a legacy whole-block claim reports that it cannot
+  be retracted alone, naming the other keys that claim carries. (REQ-20)
+- [ ] AC-30: A subject carrying only a `Retraction` resolves as *key absent* and
+  not as a read failure — driven through a stubbed kan whose folded view is that
+  shape, which is what `kan retract` actually leaves behind. (REQ-21)
+- [ ] AC-31: A per-key claim whose fence is unrecognised is refused with the
+  fence named, matching every other declared vocabulary. (REQ-21)
 
 ## Architecture
 
@@ -267,13 +306,19 @@ honest. But it is adjacent enough that arguing it away in prose is the failure
 mode day exists to surface. It is recorded as a tension against
 `telos/composable-process` instead:
 
-```
-day telos tension no-store-of-its-own composable-process \
-  "Transporting a process requires writing the config that makes it run, and
-   config is the one durable thing that is not a claim."
-```
+**The tension is already declared, and the obvious command would erase it.**
+`tension/composable-process--no-store-of-its-own` carries a live Decision today
+("Richer process structure pulls toward day-owned schema and state; the fenced
+`day-atom` JSON block is already a schema smuggled inside claim text…"), and
+`day hook session-start` renders it. `Tension::new` sorts its pair
+(`src/tension.rs:68`), so `day telos tension no-store-of-its-own
+composable-process "…"` lands on **that same subject**, and `src/hooks.rs` takes
+the newest — so running it as written replaces the existing rationale in
+injected context rather than adding to it.
 
-Held rather than resolved, and queryable, per day's own model.
+So REQ-18: the pack work extends that claim by citing it, and does not mint a
+second statement of the same tension. Held rather than resolved, and queryable,
+per day's own model.
 
 ### Why day#146 comes first
 
@@ -349,6 +394,22 @@ depend on the trust model landing.
   subjects cost no extra kan invocation. Compatibility is a third overlay
   layer, not a migration. The cost is subject count (64 → roughly 100 in day's
   own log), filed as kan#186 rather than designed around.
+
+- RQ-8: **Five design findings from the cold review, fixed rather than argued
+  with.** REQ-8 named `telos::cautions`, which this branch's own guard forbids
+  calling directly — a `src/pack.rs` written to it would not compile, and the
+  requirement was written *after* the guard landed. The `no-store` tension is
+  already declared on a subject `Tension::new` sorts into, so the command this
+  document prescribed would have replaced its rationale in injected context
+  rather than extending it (REQ-18). Nothing bounded the file writes that are
+  the pack's genuinely new capability, so a `src/pack.rs` writing an arbitrary
+  path would pass every scan in the repo (REQ-19, AC-26). Granular retraction —
+  RQ-7's stated "real argument" — is unavailable for a key inherited from the
+  legacy layer, which is the state every adopting project passes through, and
+  the design claimed the capability uniformly (REQ-20). And the per-key claim
+  shape, the mechanism RQ-7 turns on, was never specified: which fence, how
+  subjects are enumerated, and that a retracted subject *remains* carrying only
+  a `Retraction` and must read as key-absent (REQ-21).
 
 ## Out of Scope
 
