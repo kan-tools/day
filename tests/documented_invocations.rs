@@ -35,12 +35,13 @@ use std::process::Command;
 /// omitted three of seven block types, twice, because its check was a number.
 /// [`the_corpus_covers_every_page_that_carries_a_shell_block`] asserts this list
 /// is still complete.
-const PAGES: [&str; 6] = [
+const PAGES: [&str; 7] = [
     "README.md",
     "docs/CONVENTIONS.md",
     "commands/adversarial-review.md",
     "commands/design.md",
     "commands/handoff.md",
+    "commands/wakeup.md",
     "commands/witness-interview.md",
 ];
 
@@ -248,11 +249,12 @@ fn every_documented_day_invocation_parses_and_runs() {
     // twice: a generator whose failure mode is less output needs an exhaustive
     // expectation. Changing this number is a decision about coverage, and the
     // message says so.
-    // 15/5. `commands/handoff.md` added two runnable examples — `kan show --all
-    // --json` and `day status` — and its `kan observe agents/handoff/<thread>`
-    // is a template, so it is neither run nor counted. That the two ARE run is
-    // the point: a command telling a session to read the record through the
-    // bulk verb is a command whose bulk verb had better work.
+    // 17/5. The `/wakeup` + `/handoff` pair contributes four: `/wakeup`'s
+    // `kan show --all --json` and `day status`, and `/handoff`'s `git status
+    // --porcelain` and `day doctor`. Both pages' `kan observe
+    // agents/handoff/<thread>` lines are templates, so neither is run nor
+    // counted. That the four ARE run is the point: commands telling a session
+    // to read the record are commands whose read verbs had better work.
     //
     // The five skips include `commands/witness-interview.md`'s two, which
     // is honest rather than disappointing: both of its `day` examples take the
@@ -264,7 +266,7 @@ fn every_documented_day_invocation_parses_and_runs() {
     // added with the flag. That it counts as a *run* rather than a skip is the
     // point of this check: the documented form of a brand-new flag is executed
     // against a stub rather than trusted to be right.
-    const EXPECTED_RUN: usize = 15;
+    const EXPECTED_RUN: usize = 17;
     const EXPECTED_SKIPPED: usize = 5;
     assert_eq!(
         (ran, skipped),
