@@ -35,11 +35,13 @@ use std::process::Command;
 /// omitted three of seven block types, twice, because its check was a number.
 /// [`the_corpus_covers_every_page_that_carries_a_shell_block`] asserts this list
 /// is still complete.
-const PAGES: [&str; 5] = [
+const PAGES: [&str; 7] = [
     "README.md",
     "docs/CONVENTIONS.md",
     "commands/adversarial-review.md",
     "commands/design.md",
+    "commands/handoff.md",
+    "commands/wakeup.md",
     "commands/witness-interview.md",
 ];
 
@@ -247,7 +249,14 @@ fn every_documented_day_invocation_parses_and_runs() {
     // twice: a generator whose failure mode is less output needs an exhaustive
     // expectation. Changing this number is a decision about coverage, and the
     // message says so.
-    // 13/5. The five skips include `commands/witness-interview.md`'s two, which
+    // 17/5. The `/wakeup` + `/handoff` pair contributes four: `/wakeup`'s
+    // `kan show --all --json` and `day status`, and `/handoff`'s `git status
+    // --porcelain` and `day doctor`. Both pages' `kan observe
+    // agents/handoff/<thread>` lines are templates, so neither is run nor
+    // counted. That the four ARE run is the point: commands telling a session
+    // to read the record are commands whose read verbs had better work.
+    //
+    // The five skips include `commands/witness-interview.md`'s two, which
     // is honest rather than disappointing: both of its `day` examples take the
     // telos slug being interviewed, so both are genuinely templates. The page
     // is in `PAGES` so a *runnable* example added to it later is executed
@@ -257,7 +266,7 @@ fn every_documented_day_invocation_parses_and_runs() {
     // added with the flag. That it counts as a *run* rather than a skip is the
     // point of this check: the documented form of a brand-new flag is executed
     // against a stub rather than trusted to be right.
-    const EXPECTED_RUN: usize = 13;
+    const EXPECTED_RUN: usize = 17;
     const EXPECTED_SKIPPED: usize = 5;
     assert_eq!(
         (ran, skipped),

@@ -162,6 +162,20 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
         ("commands/design.md", "design document"),
         ("commands/adversarial-review.md", "APPROVE WITH FOLLOW-UPS"),
         ("commands/witness-interview.md", "what would evidence"),
+        // The read half. Its premise: a handoff is a claim about state at the
+        // moment it was written, and state moves. A command that reports a
+        // handoff as current is copy-paste with extra steps, failing in the
+        // direction that matters — a stale handoff read as fresh carries the
+        // authority of the record.
+        ("commands/wakeup.md", "rather than believing it"),
+        // The write half, and the property that makes the pair a round trip
+        // rather than two commands about the same subject: prose immune to
+        // verification survives `/wakeup`'s check by being unfalsifiable, which
+        // is the defect day#86 names one level out.
+        (
+            "commands/handoff.md",
+            "the claims the next `/wakeup` will check",
+        ),
     ];
     for file in shipped_commands() {
         let file = file.as_str();
@@ -1125,8 +1139,8 @@ fn command_preambles_exit_zero_even_where_nothing_exists() {
     // matched. Deriving the list from `commands/` turned that into a red build
     // the moment it was wrong, which is how 17 got here.
     assert_eq!(
-        checked, 17,
-        "expected 17 `!` preamble commands across the shipped command files; found \
+        checked, 28,
+        "expected 28 `!` preamble commands across the shipped command files; found \
          {checked}. If a line was added or removed, update this number — if it \
          dropped to zero the parse broke and this test was asserting nothing."
     );
