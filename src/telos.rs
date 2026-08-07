@@ -189,7 +189,7 @@ impl Declared {
     fn met_forever(self) -> &'static str {
         match self {
             Self::Telos => "the telos is met on this witness before any\n      work is done",
-            Self::Atom => "this criterion is met before any work is\n      done",
+            Self::Atom => "it is met before any work is done",
         }
     }
 
@@ -249,7 +249,7 @@ fn render_cautions(cautions: &[Caution], declared: Declared) -> String {
             ));
         } else if c.already_satisfied {
             out.push_str(&format!(
-                "    {}: already satisfied, so {}. It cannot evidence\n      anything from here.\n",
+                "    {}: already satisfied, so {}. It cannot\n      evidence anything from here.\n",
                 c.witness,
                 declared.met_forever()
             ));
