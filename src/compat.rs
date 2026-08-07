@@ -102,7 +102,7 @@ pub const OLDEST_SUPPORTED: Version = Version {
 /// see that they are past the tested edge.
 pub const NEWEST_MEASURED: Version = Version {
     major: 0,
-    minor: 10,
+    minor: 11,
     patch: 0,
     pre: None,
 };
