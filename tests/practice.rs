@@ -370,6 +370,15 @@ fn the_truncation_note_still_fires_for_a_delivered_item() {
         text.contains("2 projected item(s) were cut"),
         "two delivered items were cut, and only those two count: {text}"
     );
+    // **The character figure, not just the item count.** A third cold review
+    // mutated `drops.iter().sum()` to `sum() + 7` and it SURVIVED: nothing in
+    // the repo asserted this number, so it was correct and unpinned. 200 words
+    // of "word " join to 999 characters, cut at 300 leaves 699 dropped, twice.
+    assert!(
+        text.contains("(1398 character(s) not shown)"),
+        "the character count must be asserted too, or it is correct today and \
+         free tomorrow: {text}"
+    );
     assert!(
         text.contains("3 further item(s) not shown"),
         "the count cap is reported separately: {text}"
