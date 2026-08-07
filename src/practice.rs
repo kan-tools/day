@@ -37,13 +37,31 @@ pub const PRACTICE_SUBJECT: &str = "practice";
 /// about itself.
 pub const REPLACE_TOKEN: &str = "day-replace:";
 
-/// Longest single projected item before truncation. A project controls this
-/// list, and session-start competes with the user's actual request for
-/// attention.
-const ITEM_EXCERPT: usize = 300;
+/// Longest single projected item before truncation, when a project declares no
+/// preference. A project controls this list, and session-start competes with
+/// the user's actual request for attention.
+///
+/// The default, not the rule: the effective length is
+/// [`InjectionSchema::max_practice_item_length`].
+///
+/// **This was a `const` while the count cap beside it was made declarable, and
+/// the omission mattered more.** At 300, sixteen of day's own twenty-three
+/// items arrived cut mid-sentence — including the rule telling a session which
+/// review findings re-open the work, severed before its fourth kind, which is
+/// therefore never injected at all. Nine of the eleven rules migrated out of
+/// `CLAUDE.md` were among them, so the migration read as done and was
+/// two-thirds real.
+///
+/// [`InjectionSchema::max_practice_item_length`]: crate::blocks::InjectionSchema::max_practice_item_length
+pub const DEFAULT_ITEM_EXCERPT: usize = 300;
 
-/// Most items day will project, however many are recorded.
-const MAX_ITEMS: usize = 12;
+/// Most items day will project when a project declares no preference.
+///
+/// The default, not the rule: the effective cap is
+/// [`InjectionSchema::max_practice_items`], read from `schema/injection`.
+///
+/// [`InjectionSchema::max_practice_items`]: crate::blocks::InjectionSchema::max_practice_items
+pub const DEFAULT_MAX_ITEMS: usize = 12;
 
 /// Which of day's own blocks a project asked to replace.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -121,6 +139,32 @@ pub fn project(client: &KanClient) -> Projection {
     // assessment is no longer counted as "not projected: not locally signed".
     // That count exists to explain an identity skip; an assessment was never
     // skipped for that reason, and saying so was the less accurate of the two.
+    // Both caps, from one read. A read that fails must not silently become the
+    // default — `src/probe.rs`'s rule, and the one this file's own
+    // `InjectionSchema::load(…).unwrap_or(DEFAULT_CADENCE)` was cited for in
+    // CLAUDE.md — so the failure is carried as a note and the projection says
+    // it is working from settings it could not confirm.
+    let (cap, excerpt_limit) = match crate::blocks::InjectionSchema::load(client) {
+        Ok(schema) => (schema.max_practice_items, schema.max_practice_item_length),
+        Err(e) => {
+            projection.notes.push(format!(
+                "`schema/injection` could not be read ({e}), so the item cap falls back \
+                 to day's default of {DEFAULT_MAX_ITEMS} and the item length to \
+                 {DEFAULT_ITEM_EXCERPT}. Declared values may be in effect that this \
+                 projection did not apply."
+            ));
+            (DEFAULT_MAX_ITEMS, DEFAULT_ITEM_EXCERPT)
+        }
+    };
+    // How much each item lost to the length cap, carried ALONGSIDE the item so
+    // the count cap can discard both together. Summing during the loop counted
+    // items the reader never received: with three short items delivered and
+    // five long ones withheld by the count cap, the note said "5 projected
+    // item(s) were cut" when none of the three delivered was, and pointed at a
+    // setting that would reveal nothing. The comment below used to claim the
+    // property this vector is what actually provides.
+    let mut drops: Vec<usize> = Vec::new();
+
     for (claim, text) in crate::fold::items(&claims) {
         if !accepts(&local, claim) {
             foreign += 1;
@@ -138,7 +182,9 @@ pub fn project(client: &KanClient) -> Projection {
             }
             continue;
         }
-        projection.items.push(excerpt(&text));
+        let (item, dropped) = excerpt(&text, excerpt_limit);
+        projection.items.push(item);
+        drops.push(dropped);
     }
 
     if foreign > 0 {
@@ -149,25 +195,51 @@ pub fn project(client: &KanClient) -> Projection {
         ));
     }
 
-    if projection.items.len() > MAX_ITEMS {
-        let dropped = projection.items.len() - MAX_ITEMS;
-        projection.items.truncate(MAX_ITEMS);
+    if projection.items.len() > cap {
+        let dropped = projection.items.len() - cap;
+        projection.items.truncate(cap);
+        drops.truncate(cap);
         projection.notes.push(format!(
-            "{dropped} further item(s) not shown: a projection is capped at {MAX_ITEMS} \
+            "{dropped} further item(s) not shown: a projection is capped at {cap} \
              so it cannot crowd out the request it is meant to inform."
+        ));
+    }
+
+    // **Counted over the survivors, which is the whole point.** The two caps are
+    // independent and both can fire, and an item the count cap withheld was not
+    // "cut at N characters" — it was not delivered at all, and raising the
+    // length would not reveal it. Reporting the pre-cap population told a
+    // reader to change the setting that could not help them, which is a report
+    // asserting something day had not established.
+    let truncated_items = drops.iter().filter(|d| **d > 0).count();
+    let truncated_chars: usize = drops.iter().sum();
+    if truncated_items > 0 {
+        projection.notes.push(format!(
+            "{truncated_items} projected item(s) were cut at {excerpt_limit} characters \
+             ({truncated_chars} character(s) not shown). Raise \
+             `max_practice_item_length` on `schema/injection` to see them whole."
         ));
     }
 
     projection
 }
 
-fn excerpt(text: &str) -> String {
+/// Returns the excerpt and, when it truncated, how many characters it dropped.
+///
+/// **The count is returned rather than discarded**, because `Projection::notes`
+/// says a projection that drops silently "is indistinguishable from one that
+/// found nothing — the failure shape this repo has met three times", and this
+/// function was the one path in the module that dropped without saying so. The
+/// count cap reported what it withheld; the length cap did not, so
+/// "23 items, nothing withheld" was true of one and false of the other.
+fn excerpt(text: &str, limit: usize) -> (String, usize) {
     let single_line = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if single_line.chars().count() <= ITEM_EXCERPT {
-        return single_line;
+    let total = single_line.chars().count();
+    if total <= limit {
+        return (single_line, 0);
     }
-    let truncated: String = single_line.chars().take(ITEM_EXCERPT).collect();
-    format!("{truncated}…")
+    let truncated: String = single_line.chars().take(limit).collect();
+    (format!("{truncated}…"), total - limit)
 }
 
 impl Projection {
@@ -245,9 +317,27 @@ mod tests {
     #[test]
     fn an_item_longer_than_the_excerpt_is_truncated() {
         let long = "word ".repeat(200);
-        let out = excerpt(&long);
-        assert!(out.chars().count() <= ITEM_EXCERPT + 1, "{}", out.len());
+        let (out, dropped) = excerpt(&long, DEFAULT_ITEM_EXCERPT);
+        assert!(
+            out.chars().count() <= DEFAULT_ITEM_EXCERPT + 1,
+            "{}",
+            out.len()
+        );
         assert!(out.ends_with('…'));
+        // **The count, not just the ellipsis.** The ellipsis was already there
+        // and told nobody how much was gone; a projection that drops silently
+        // is indistinguishable from one that found nothing.
+        assert_eq!(
+            dropped,
+            long.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .count()
+                - DEFAULT_ITEM_EXCERPT
+        );
+        // A short item drops nothing and says so.
+        assert_eq!(excerpt("short", DEFAULT_ITEM_EXCERPT).1, 0);
     }
 
     /// A projection that finds nothing must leave the injected block exactly

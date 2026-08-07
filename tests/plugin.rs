@@ -1794,3 +1794,115 @@ fn the_claim_shape_predicate_has_one_evaluator() {
         callers.len()
     );
 }
+
+/// **day#146 — a declaration's witness types are checked in exactly one place.**
+///
+/// `day telos declare` ran `telos::cautions` and `day atom declare` did not, so
+/// five of day's own nine atoms carry a `done` criterion that is structurally
+/// unable to report unmet, and nothing said so at declare time. Both verbs draw
+/// from `schema/witness` and resolve it with the same probes; only one was
+/// asking.
+///
+/// The fix is not "call it from the other place too". CLAUDE.md's day#101 rule
+/// is that a guarantee belongs in the mechanism, and the evidence for it is that
+/// a check added at a call site looks complete because the author's test drives
+/// the call site they were thinking about — three milestones, three instances.
+/// So `telos::cautions_for` is the only caller of `telos::cautions`, and this
+/// fails the build when a third declare path calls the raw function instead.
+///
+/// The escape hatch is named rather than absent, because a scan with no way out
+/// gets deleted the first time it is wrong.
+#[test]
+fn every_declaration_reports_its_cautions() {
+    const MARKER: &str = "cautions-checked-elsewhere:";
+    let mut offenders: Vec<String> = Vec::new();
+    let mut wrappers = 0usize;
+
+    for (rel, src) in rust_sources("src") {
+        let code = production_half(&src);
+        let raw: Vec<&str> = src.lines().collect();
+
+        for (n, line) in code.lines().enumerate() {
+            if line.contains("fn cautions_for(") {
+                wrappers += 1;
+                continue;
+            }
+            // The definition of `cautions` itself, and the one call inside the
+            // wrapper, are what this scan is about — not violations of it.
+            if line.contains("fn cautions(") {
+                continue;
+            }
+            let calls_raw = line.contains("cautions(") && !line.contains("cautions_for(");
+            if !calls_raw {
+                continue;
+            }
+            let hatched = raw[n.saturating_sub(8)..=n.min(raw.len().saturating_sub(1))]
+                .iter()
+                .any(|l| l.contains(MARKER));
+            let inside_wrapper = wrappers == 1 && rel.ends_with("telos.rs");
+            if !hatched && !inside_wrapper {
+                offenders.push(format!("{rel}:{}", n + 1));
+            }
+        }
+    }
+
+    assert_eq!(
+        wrappers, 1,
+        "expected exactly one `cautions_for` wrapper; if it moved or was renamed \
+         this scan is checking nothing"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these call `telos::cautions` directly instead of going through \
+         `cautions_for`, which is how `day atom declare` came to skip the \
+         falsifiability check entirely (day#146): {offenders:?}. Add a \
+         `{MARKER} <why>` comment within 8 lines above if the call is deliberate."
+    );
+}
+
+/// **The other half of day#146, and the half the scan above does not cover.**
+///
+/// A one-evaluator scan catches *divergence* — a second implementation drifting
+/// from the first. It cannot catch *omission*, which is what day#146 actually
+/// was: `day atom declare` did not call the check at all, so there was nothing
+/// for a scan to find. Stating that plainly rather than letting the scan look
+/// like it covers both, because a guard that appears to check more than it does
+/// is this repo's most-recorded defect.
+///
+/// So this counts. Every verb that declares vocabulary carrying witness types
+/// must report cautions, and the two numbers must agree: `telos` and `atom` do,
+/// `bridge` does not, because a bridge's plan names atoms rather than witness
+/// types and has nothing to check.
+///
+/// A count, not a list — `CLAUDE.md`'s distinction — and the count is the right
+/// instrument here precisely because the failure mode is a *missing* call.
+#[test]
+fn every_witness_carrying_declaration_is_followed_by_a_caution() {
+    let src = std::fs::read_to_string(repo_root().join("src/cli/mod.rs")).unwrap();
+    let code = production_half(&src);
+
+    let declares = code.matches("Act::Declare").count();
+    let cautions = code.matches("cautions_for(").count();
+
+    // TWO exemptions, named rather than subtracted silently — and the count is
+    // two because the first draft of this test guessed one and the assertion
+    // said so on its first run, which is the argument for a count over a
+    // reasoned list:
+    //
+    //   `bridge declare`  — its `plan` composes atoms, and an atom slug is not
+    //                       a witness type, so there is nothing to resolve.
+    //   `telos tension`   — declares a relationship between two teloi. It
+    //                       carries no witnesses of its own; the teloi it cites
+    //                       were checked when they were declared.
+    const WITHOUT_WITNESSES: usize = 2;
+
+    assert_eq!(
+        cautions,
+        declares - WITHOUT_WITNESSES,
+        "{declares} declaration site(s) and {cautions} caution call(s). Every verb \
+         declaring witness types must report what cannot fail — `day atom declare` \
+         skipped it for five of day's own nine atoms (day#146) and nothing said so. \
+         If a new declare verb genuinely carries no witness types, raise \
+         WITHOUT_WITNESSES and say which it is."
+    );
+}

@@ -112,6 +112,16 @@ pub struct Caution {
     /// declared four teloi with witnesses and found out much later, at
     /// `day status`, that none of them was checkable.
     pub no_probe: bool,
+    /// A probe IS declared and this day could not read it, with the reason.
+    ///
+    /// Distinct from [`no_probe`] on purpose, and the distinction is the whole
+    /// finding: the two are opposite instructions to a reader. `no_probe` says
+    /// *declare one*; this says *upgrade day, or accept that this witness goes
+    /// unchecked here*. Collapsing them told an adopter their pack declared
+    /// nothing.
+    ///
+    /// [`no_probe`]: Caution::no_probe
+    pub unreadable: Option<String>,
 }
 
 /// Evaluates declared witness types at declare time and reports what will not
@@ -144,12 +154,37 @@ pub fn cautions(
     let log = ClaimLog::new(client);
     let mut out = Vec::new();
     for witness in witnesses {
+        // **Unreadable is not absent.** `probes` holds what this day could
+        // parse; `unsupported` holds what it could not, with the reason, and
+        // its own doc comment states the invariant: "a reader must not think a
+        // witness is unprobed when it is merely unreadable *here*". This asked
+        // only the first map, so a probe declaring a kind day cannot read was
+        // reported as no probe at all — while `day assess telos` printed
+        // `[ERROR] … upgrade day` from the identical log. Two readers of one
+        // schema disagreeing, which is what `telos/honest-reads` forbids.
+        //
+        // It matters most for the thing this check was made a prerequisite of:
+        // a pack's vocabulary comes from outside the repo applying it, so "the
+        // adopter's day is older than the pack" is the expected case, not an
+        // exotic one, and "no probe is declared" is the least actionable thing
+        // day could say about it.
+        if let Some(why) = schema.unsupported.get(witness) {
+            out.push(Caution {
+                witness: witness.clone(),
+                already_satisfied: false,
+                monotone: false,
+                no_probe: false,
+                unreadable: Some(why.clone()),
+            });
+            continue;
+        }
         let Some(probe) = schema.probes.get(witness) else {
             out.push(Caution {
                 witness: witness.clone(),
                 already_satisfied: false,
                 monotone: false,
                 no_probe: true,
+                unreadable: None,
             });
             continue;
         };
@@ -167,21 +202,83 @@ pub fn cautions(
                 already_satisfied,
                 monotone,
                 no_probe: false,
+                unreadable: None,
             });
         }
     }
     Ok(out)
 }
 
-/// How `day telos declare` reports [`cautions`]. Empty when there is nothing
+/// What is being declared, for the two sentences whose wording depends on it.
+///
+/// A telos's witness that cannot fail means the telos is met forever; an atom's
+/// `done` criterion that cannot fail means the atom reports complete forever.
+/// Same defect, and a reader acts on it in a different place, so the message
+/// says which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Declared {
+    Telos,
+    Atom,
+}
+
+impl Declared {
+    fn met_forever(self) -> &'static str {
+        match self {
+            Self::Telos => "the telos is met on this witness before any\n      work is done",
+            Self::Atom => "it is met before any work is done",
+        }
+    }
+
+    fn cannot_fail(self) -> &'static str {
+        match self {
+            Self::Telos => "This\n      witness cannot fail, which day#86 holds is worse than none.",
+            Self::Atom => "This criterion cannot\n      report unmet, so `day assess atom` will pass on it forever.",
+        }
+    }
+}
+
+/// **The one place a declaration's witness types are checked.**
+///
+/// day#146: `day telos declare` ran [`cautions`] and `day atom declare` did
+/// not, so five of day's own nine atoms were declared with `done` criteria that
+/// are structurally unable to report unmet — and nothing said so. The two verbs
+/// draw from the same witness vocabulary and resolve it with the same probes;
+/// only one of them was asking.
+///
+/// This exists rather than a second call site because CLAUDE.md's day#101 rule
+/// is that a guarantee belongs in the mechanism: "not 'call the check from more
+/// places' — make it impossible to declare without it".
+/// `every_declaration_reports_its_cautions` in `tests/plugin.rs` fails the build
+/// if [`cautions`] is called anywhere but here.
+pub fn cautions_for(
+    client: &KanClient,
+    git: &Git,
+    witnesses: &[String],
+    declared: Declared,
+) -> Result<String, Error> {
+    Ok(render_cautions(
+        &cautions(client, git, witnesses)?,
+        declared,
+    ))
+}
+
+/// How a declaration reports [`cautions`]. Empty when there is nothing
 /// to say, so a clean declaration prints nothing extra.
-pub fn render_cautions(cautions: &[Caution]) -> String {
+fn render_cautions(cautions: &[Caution], declared: Declared) -> String {
     if cautions.is_empty() {
         return String::new();
     }
     let mut out = String::from("\n  Declared, and worth knowing:\n");
     for c in cautions {
-        if c.no_probe {
+        if let Some(why) = &c.unreadable {
+            // First, because this is a could-not-check and the arms below are
+            // all checked-and-found. The repo's exit-code precedence rule, in
+            // a renderer.
+            out.push_str(&format!(
+                "    {}: a probe IS declared for this type and this day cannot read it\n                       ({why}). Upgrade day, or this criterion goes unchecked here --\n                       it is not the same as having declared no probe.\n",
+                c.witness
+            ));
+        } else if c.no_probe {
             out.push_str(&format!(
                 "    {}: no probe is declared for this type in `schema/witness`, so it\n      \
                  cannot be checked yet. The declaration is still valid.\n",
@@ -190,15 +287,15 @@ pub fn render_cautions(cautions: &[Caution]) -> String {
         } else if c.already_satisfied && c.monotone {
             out.push_str(&format!(
                 "    {}: already satisfied, and cannot stop being satisfied -- it reads\n      \
-                 the append-only log, so nothing can take this evidence away. This\n      \
-                 witness cannot fail, which day#86 holds is worse than none.\n",
-                c.witness
+                 the append-only log, so nothing can take this evidence away. {}\n",
+                c.witness,
+                declared.cannot_fail()
             ));
         } else if c.already_satisfied {
             out.push_str(&format!(
-                "    {}: already satisfied, so the telos is met on this witness before any\n      \
-                 work is done. It cannot evidence anything from here.\n",
-                c.witness
+                "    {}: already satisfied, so {}. It cannot\n      evidence anything from here.\n",
+                c.witness,
+                declared.met_forever()
             ));
         } else {
             out.push_str(&format!(
@@ -210,8 +307,8 @@ pub fn render_cautions(cautions: &[Caution]) -> String {
     }
     out.push_str(
         "  Nothing is refused -- a floor you know is already met is a legitimate\n  \
-         thing to declare. Said because a witness that cannot fail is the one\n  \
-         failure mode a telos cannot recover from on its own.\n",
+         thing to declare. Said because something that cannot fail is the one\n  \
+         failure mode a declaration cannot recover from on its own.\n",
     );
     out
 }

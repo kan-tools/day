@@ -4,6 +4,34 @@ You are building `day`: the structured **process** layer that sits next to
 `kan`'s structured **knowledge** layer. This file orients you; `docs/` is
 authoritative.
 
+## Where the rules are, and why they are not here
+
+**The imperative form of every process rule lives on the `practice` subject in
+kan, not in this file.** `day hook session-start` projects them, so a session
+inherits them at session start rather than depending on someone having read
+this. `src/practice.rs` is the mechanism; one claim per item; the cap is
+declared on `schema/injection` and is 30 here because there are more than twelve
+of them.
+
+That is not organisation. day exists to inject process, and for most of its life
+its own process learnings were written into a Markdown file day does not read —
+the self-application gap, one level up from every instance recorded below. A
+rule nobody is injected with is a rule that depends on attention.
+
+**So what is this file for.** Three things a claim cannot carry:
+
+1. **Orientation** — what day is, what to read, where the boundary with kan sits.
+2. **Architectural invariants** — properties of the *code*, enforced by tests
+   that fail the build: the two non-negotiables, the three substrates, the three
+   spawn sites. These are not process; they constrain what may be written.
+3. **The narrative** — what happened, and why each rule says what it says. A
+   rule injected without its history reads as arbitrary, and the histories are
+   long. They stay here.
+
+A rule that ends up in both will drift, which this file records as a defect
+class twice. If you are about to write an imperative sentence below, it belongs
+on `practice`; write the story here and record the rule there.
+
 ## Read first, in order
 1. `README.md` — what day is and what it does today.
 2. `docs/TELOS.md` — the model: teloi as weak-equivalence invariants, frames
@@ -111,7 +139,11 @@ here.
     never seen creates an empty log there.)
 - Correctness before features. The atom composition check should be boring
   and obviously right.
-- Keep the CLI small. Four verbs today. A new verb needs a design doc.
+- Keep the CLI small, and **a new verb needs a design doc**. This said "Four
+  verbs today" while `day --help` listed twelve, which is the hand-written count
+  this repo has now been wrong about in four separate places. The count is not
+  the rule and was never load-bearing; the design doc is. Run `day --help` if
+  you want the number.
 - `DAY_KAN_BIN` exists so tests can stub kan. Every integration test uses it;
   none require a real kan install.
   - **One deliberate exception: `tests/kan_conformance.rs`.** A stub accepts
@@ -174,9 +206,9 @@ wrong — and "the check that mattered was reading day's own source". Here the
 inference was wrong in the same way, three times, in a codebase whose comments
 already held the answer.
 
-**So: grep for the mechanism before citing it.** A sentence of the form "this
-works because day does X" is a testable claim, and checking it costs one search
-where defending it costs a milestone. The comments in this repo are unusually
+The rule this produced is on `practice`. What belongs here is why it is worth a
+rule at all: in all three cases the wrong belief was about a mechanism whose own
+source says otherwise, in a comment. The comments in this repo are unusually
 load-bearing — they were written by the people who hit the defect — and they are
 the cheapest oracle available.
 
@@ -194,8 +226,8 @@ Every rule above is about not trusting a test. These are about not trusting the
 thing that checks the test. All of them are from one milestone
 (`v0.7.0-beta.2`), which makes the pattern hard to dismiss as bad luck.
 
-- **A verification tool must distinguish "could not check" from "checked and
-  found nothing."** The mutation harness here reported `SURVIVED` for a mutation
+- **Could-not-check reported as checked-and-clean.** The mutation harness here
+  reported `SURVIVED` for a mutation
   that *did not compile* — it grepped for `FAILED`, which a build error never
   prints — and on an earlier run a timeout left a mutation in the tree, caught
   only because a separate check noticed a red suite. Both fail toward false
@@ -204,23 +236,22 @@ thing that checks the test. All of them are from one milestone
   outranks checked-and-clean, applied to day and not to day's own scripts. A
   mutation harness needs a per-mutation restore, a distinct compile-error
   outcome, and an assertion that the file actually changed.
-- **A property claimed in a comment needs a test named after it, and the test
-  must assert the property rather than a proxy.** `user_prompt`'s doc comment,
+- **A property claimed in a comment, asserted by nothing.** `user_prompt`'s doc comment,
   `hooks/hooks.json`, and the design all said it did not recompute; it
   recomputed on every prompt, 3.03s, for as long as nobody measured. The fix
   pins it as *zero kan invocations*, not as a duration — a timing assertion
   measures the machine and flakes; an invocation count measures the design.
-- **Never key a classifier on the absence of a phrase.** The migration cell
+- **A classifier keyed on the absence of a phrase.** The migration cell
   looked for `composition: ok` to mean "loaded it anyway", so an unrelated
   finding — a dangling `next` edge in the fixture — suppressed the phrase and
   filed a reader that silently widened as `errored`. Key on the positive signal:
   did the thing get rendered.
-- **Generate expectation tables from a measurement run, then review them.** The
-  migration expectations were written from reasoning: eight rows, five wrong. The
+- **An expectation table written from reasoning.** The
+  migration expectations were eight rows, five wrong. The
   matrix said so the first time it ran, which is the argument for building it,
   and also the argument for never hand-writing what it produces.
-- **A generator whose failure mode is "less output" needs an exhaustive
-  expectation.** The block corpus silently omitted three of seven block types,
+- **A generator whose failure mode is "less output", checked by a count.** The
+  block corpus silently omitted three of seven block types,
   twice — a verb was refused, nothing was appended, and the coverage was quietly
   smaller with no error. It is now a list of seven fences, not a count.
 
@@ -289,11 +320,11 @@ session will look.
   the subject list *after* the bulk read, so a concurrent append by another
   agent looked like a missing subject.
 
-**The rule: a guarantee about reads belongs in `KanClient`, never in a caller.**
-Not "call the check from more places" — make it impossible to read without it.
-Both times the real fix was to push the guarantee down to the mechanism, and
+Both times the real fix was to push the guarantee down into `KanClient`, and
 both times a check added at a call site looked complete because the author's
-test drove the call site they were thinking about.
+test drove the call site they were thinking about. The rule is on `practice`;
+what is worth keeping here is that it took three milestones to see, because a
+call-site check passes its author's test every time.
 
 Two corollaries with teeth:
 - **`pub` suppresses dead-code detection.** `BlockSchemas::extract` and
@@ -320,11 +351,11 @@ and looks like the second. The rule above — "mutate the exact line the finding
 was about" — is not specific enough, because the exact line is usually ambiguous
 after a restructure. Reverting the change is not.
 
-So: **a commit that closes a finding carries a `Demonstrated-by:` trailer**,
-produced verbatim by `scripts/revert-demo.py` and re-derived in CI by
-`.github/workflows/revert-demo.yml`. Not a passing suite — a demonstrated
-before/after, which is a property of the commit rather than of a reviewer's
-attention.
+Hence the `Demonstrated-by:` trailer, produced by `scripts/revert-demo.py` and
+re-derived in CI by `.github/workflows/revert-demo.yml` — a property of the
+commit rather than of a reviewer's attention. The rule and its exemption
+discipline are on `practice`; the outcomes and their meanings are below, because
+that is reference material rather than instruction.
 
 ```
 python3 scripts/revert-demo.py --tests harness_honesty::the_matrix_does_not_exclude_the_tag
@@ -519,27 +550,31 @@ places before noticing it here.
   by hand after changing a block shape; `tests/block_corpus.rs` consumes the
   committed output on every push.
 
-## Working practice
+## Working practice — why the injected version says what it says
 
-- Design goes through `/design` and lands in `.design/<slug>.md` before
-  implementation, recorded into kan.
-- Post-implementation, run `/adversarial-review` against the design doc.
-  Both commands are day's own atoms — dogfood them.
-- One PR per milestone: branch off `main`, commit, push, `gh pr create`,
-  wait for CI, then `gh pr merge --merge --delete-branch` (regular merge, so
-  the milestone's internal commits stay visible).
-- **Cut releases with `scripts/cut-release.sh <tag>`, never by hand.** It
-  verifies, records the `release` claim, and *then* tags — one step, in that
-  order. Two consecutive releases shipped with no claim because recording was a
-  separate step beside the tag, and a separate step is one that gets dropped
-  when the cadence compresses. Recording *before* tagging also inverts the
-  failure mode: a claim with no tag is loud (`assess docs` reports "a boundary
-  nobody cut") where a tag with no claim was silent until somebody looked.
+The sequence itself is a `practice` item: `/design` into `.design/<slug>.md`,
+recorded with `day design record`; `/adversarial-review` against that document
+afterwards; one PR per milestone off `main`; `scripts/cut-release.sh` for
+releases; `--cites` takes CIDs. Both commands are day's own atoms — dogfooding
+them is the point, and it is how most of this file's findings were found.
 
-  This is not enforceable in CI and the script says why at length: `.kan/` is
-  gitignored and this repo publishes no `.claims/`, so a workflow cannot see the
-  log. A CI step asserting the claim exists would be green forever for the wrong
-  reason — better no gate than a gate that cannot fail.
-- Record durable findings and decisions into kan as you go, citing the claims
-  they build on. `--cites` takes **CIDs of prior claims, never file paths** —
-  capture the CID a write verb prints and chain it.
+Two pieces of it have histories that do not fit in an injected item.
+
+**Why releases go through the script.** It verifies, records the `release`
+claim, and *then* tags — one step, in that order. Two consecutive releases
+shipped with no claim because recording was a separate step beside the tag, and
+a separate step is the one that gets dropped when the cadence compresses.
+Recording *before* tagging also inverts the failure mode: a claim with no tag is
+loud (`assess docs` reports "a boundary nobody cut") where a tag with no claim
+was silent until somebody looked.
+
+**Why that is not enforced in CI**, which is the more interesting half. `.kan/`
+is gitignored and this repo publishes no `.claims/`, so a workflow cannot see
+the log. A CI step asserting the claim exists would be green forever for the
+wrong reason — better no gate than a gate that cannot fail, which is the same
+judgement `.github/workflows/revert-demo.yml` records for why it runs on
+`pull_request` only.
+
+**A merge is a regular merge** (`--merge`, not squash) so a milestone's internal
+commits stay visible. The demonstration census walks that history; squashing it
+would leave `scripts/demonstration-census.py` nothing to account for.

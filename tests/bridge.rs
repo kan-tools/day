@@ -625,6 +625,212 @@ fn a_witness_that_cannot_fail_is_reported_when_it_is_declared() {
     assert!(stdout.contains("day#86"), "{stdout}");
 }
 
+/// **day#146 — the same check, on the verb that never ran it.**
+///
+/// `day atom declare` takes `done` criteria that are witness types resolved by
+/// the same probes a telos's witnesses are, and it did not call the check
+/// above. Five of day's own nine atoms were declared with a `claim` probe as
+/// their sole criterion, so `day assess atom` — which `day status` names as the
+/// gate to wire into CI — reports `[MATERIAL]` for them and always will.
+///
+/// The message differs from the telos wording deliberately: a reader acts on
+/// this in a different place, so it names `day assess atom` rather than day#86.
+#[test]
+fn an_atom_criterion_that_cannot_fail_is_reported_when_it_is_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyreiw",
+                "Probes.\n\n```day-witness\n{\"assessment\":{\"claim\":{\"kind\":\"Observation\"}}}\n```\n",
+            ),
+            // The premise, and it has to MATCH: `common::claim` records kind
+            // `Observation`, so a `Result` probe here left the criterion
+            // monotone-but-unsatisfied — a different branch with different
+            // wording, which the first run of this test said out loud.
+            claim("some/subject", "bafyreir", "An observation."),
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "assessment",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "reported, never refused -- the same rule as the telos side: {stdout}"
+    );
+    assert!(
+        stdout.contains("cannot stop being satisfied"),
+        "an append-only probe cannot report absent once satisfied: {stdout}"
+    );
+    assert!(
+        stdout.contains("day assess atom"),
+        "the message must name the verb this actually breaks, not day#86 -- a \
+         reader acts on an atom criterion somewhere else: {stdout}"
+    );
+}
+
+/// **F1 — an unreadable probe is not an absent one.**
+///
+/// `cautions` keyed `no_probe` on `probes.get()` returning `None` and never
+/// consulted `WitnessSchema::unsupported`, whose own doc comment states the
+/// invariant: "a reader must not think a witness is unprobed when it is merely
+/// unreadable *here*". So a probe declaring a kind this day cannot parse was
+/// reported as **no probe at all** — while `day assess telos` printed
+/// `[ERROR] … upgrade day` from the identical log. Two readers of one schema
+/// disagreeing, which is what `telos/honest-reads` forbids.
+///
+/// The two messages are opposite instructions: `no_probe` says *declare one*,
+/// this says *upgrade day*. Collapsing them is worst exactly where day#146 made
+/// this check a prerequisite — a pack's vocabulary comes from outside the repo
+/// applying it, so an adopter running an older day is the expected case, and
+/// they would be told the pack declared nothing.
+///
+/// Found by a cold adversarial review; asserted here through the shipped binary.
+#[test]
+fn a_probe_this_day_cannot_read_is_not_reported_as_no_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyreiw",
+            "Probes.\n\n```day-witness\n{\"design-doc\":{\"nosuchprobe\":\"x\"}}\n```\n",
+        )],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "design-doc",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        !stdout.contains("no probe is declared"),
+        "a probe IS declared; saying otherwise sends the reader to write one \
+         that already exists: {stdout}"
+    );
+    assert!(
+        stdout.contains("cannot read it"),
+        "the reader must be told day could not read it: {stdout}"
+    );
+    assert!(
+        stdout.contains("nosuchprobe"),
+        "and given the reason, which is what makes `upgrade day` actionable \
+         rather than a guess: {stdout}"
+    );
+    assert!(
+        out.status.success(),
+        "still reported, never refused: {stdout}"
+    );
+}
+
+/// The other side of the same distinction, without which the test above passes
+/// on a build that prints "cannot read it" for a genuinely absent probe too.
+#[test]
+fn a_witness_type_with_no_probe_still_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyreiw",
+            "Probes.\n\n```day-witness\n{\"other\":{\"path\":\"src/*.rs\"}}\n```\n",
+        )],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "design-doc",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("no probe is declared"),
+        "an absent probe is still an absent probe: {stdout}"
+    );
+    assert!(
+        !stdout.contains("cannot read it"),
+        "and must not be reported as unreadable: {stdout}"
+    );
+}
+
+/// And the negative control, without which the test above passes on a build
+/// that prints the caution unconditionally.
+///
+/// A `path` probe is not monotone — files get deleted — and is unsatisfied
+/// here, so there is nothing to say and nothing should be said.
+#[test]
+fn an_atom_criterion_that_can_fail_draws_no_caution() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyreiw",
+            "Probes.\n\n```day-witness\n{\"code-change\":{\"path\":\"nowhere/*.rs\"}}\n```\n",
+        )],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "code-change",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("Declared, and worth knowing"),
+        "a criterion that can fail is the normal case and must print nothing \
+         extra: {stdout}"
+    );
+}
+
 /// The other half: a witness with no probe is named, which is day#125's
 /// friction 2 — four teloi were declared with witnesses and the fact that none
 /// was checkable surfaced much later, at `day status`.
