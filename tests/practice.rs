@@ -186,6 +186,75 @@ fn ac6_the_projection_is_bounded() {
     );
 }
 
+/// **The cap is a declared value, not a constant** — `.design/vocabulary-packs.md`
+/// REQ-4, AC-5.
+///
+/// It was `const MAX_ITEMS: usize = 12`, and day's own `practice` reached
+/// exactly 12. So the next rule day learned about itself would have evicted one
+/// already there, chosen by fold order rather than by importance — and the
+/// eviction is silent apart from a count. The number is a judgement about this
+/// project's attention budget, which is `telos/vocabulary-substrate`'s
+/// definition of a thing that must be declarable.
+///
+/// Driven through the shipped binary against the same 21 claims as
+/// [`ac6_the_projection_is_bounded`], so the only difference between the two is
+/// the declaration.
+#[test]
+fn the_item_cap_is_whatever_the_project_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = vec![claim(
+        "schema/injection",
+        "bafyreisch",
+        "Injection settings.\n\n```day-injection\n{\"cadence\":25,\"max_practice_items\":20}\n```\n",
+    )];
+    claims.extend((0..15).map(|i| practice(&format!("bafyreia{i}"), &format!("Item number {i}."))));
+
+    let kan = write_kan_stub(dir.path(), &claims);
+    let text = context(dir.path(), &kan);
+
+    assert!(
+        text.contains("Item number 14."),
+        "15 items under a declared cap of 20 must all project; the 13th onward \
+         would be dropped by day's default of 12: {text}"
+    );
+    assert!(
+        !text.contains("not shown"),
+        "and nothing should be reported as withheld: {text}"
+    );
+}
+
+/// The declared cap **binds downward too**, and the notice quotes it rather
+/// than day's default.
+///
+/// Asserting only the raise would pass on a change that ignored the field and
+/// removed the cap altogether.
+#[test]
+fn a_declared_cap_below_the_default_is_honoured_and_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut claims = vec![claim(
+        "schema/injection",
+        "bafyreisch",
+        "Injection settings.\n\n```day-injection\n{\"max_practice_items\":3}\n```\n",
+    )];
+    claims.extend((0..10).map(|i| practice(&format!("bafyreia{i}"), &format!("Item number {i}."))));
+
+    let kan = write_kan_stub(dir.path(), &claims);
+    let text = context(dir.path(), &kan);
+
+    assert!(
+        text.contains("capped at 3"),
+        "the notice must quote the cap in force, not the default: {text}"
+    );
+    assert!(
+        text.contains("7 further item(s) not shown"),
+        "and the count must be derived from it: {text}"
+    );
+    assert!(
+        !text.contains("Item number 5."),
+        "items past the declared cap must not project: {text}"
+    );
+}
+
 /// AC-7. A project that does not use this must see byte-identical context.
 #[test]
 fn ac7_no_practice_subject_changes_nothing() {

@@ -42,8 +42,13 @@ pub const REPLACE_TOKEN: &str = "day-replace:";
 /// attention.
 const ITEM_EXCERPT: usize = 300;
 
-/// Most items day will project, however many are recorded.
-const MAX_ITEMS: usize = 12;
+/// Most items day will project when a project declares no preference.
+///
+/// The default, not the rule: the effective cap is
+/// [`InjectionSchema::max_practice_items`], read from `schema/injection`.
+///
+/// [`InjectionSchema::max_practice_items`]: crate::blocks::InjectionSchema::max_practice_items
+pub const DEFAULT_MAX_ITEMS: usize = 12;
 
 /// Which of day's own blocks a project asked to replace.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -149,11 +154,28 @@ pub fn project(client: &KanClient) -> Projection {
         ));
     }
 
-    if projection.items.len() > MAX_ITEMS {
-        let dropped = projection.items.len() - MAX_ITEMS;
-        projection.items.truncate(MAX_ITEMS);
+    // The cap a project declared, or day's default. A read that fails must not
+    // silently become the default — `src/probe.rs`'s rule, and the one this
+    // file's own `InjectionSchema::load(…).unwrap_or(DEFAULT_CADENCE)` was
+    // cited for in CLAUDE.md — so the failure is carried as a note and the
+    // projection says it is working from a cap it could not confirm.
+    let cap = match crate::blocks::InjectionSchema::load(client) {
+        Ok(schema) => schema.max_practice_items,
+        Err(e) => {
+            projection.notes.push(format!(
+                "`schema/injection` could not be read ({e}), so the item cap falls back \
+                 to day's default of {DEFAULT_MAX_ITEMS}. A declared cap may be in \
+                 effect that this projection did not apply."
+            ));
+            DEFAULT_MAX_ITEMS
+        }
+    };
+
+    if projection.items.len() > cap {
+        let dropped = projection.items.len() - cap;
+        projection.items.truncate(cap);
         projection.notes.push(format!(
-            "{dropped} further item(s) not shown: a projection is capped at {MAX_ITEMS} \
+            "{dropped} further item(s) not shown: a projection is capped at {cap} \
              so it cannot crowd out the request it is meant to inform."
         ));
     }

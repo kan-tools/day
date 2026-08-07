@@ -331,16 +331,34 @@ pub struct InjectionSchema {
     /// may reasonably decide the risk is not worth the reminder.
     #[serde(default = "default_cadence")]
     pub cadence: u32,
+    /// Most `practice` items `session-start` will project, however many are
+    /// recorded (`src/practice.rs`).
+    ///
+    /// Declarable because the number is a judgement about *this* project's
+    /// attention budget, and `telos/vocabulary-substrate` says everything day
+    /// hardcodes that a project may reasonably differ on is declarable as a
+    /// kan claim. It was a `const` at 12, and day's own `practice` reached
+    /// exactly 12 — so the next rule day learned about itself would have
+    /// silently evicted one, chosen by fold order rather than by importance.
+    /// That is what made this a field: not a pack needing it, but day hitting
+    /// its own ceiling.
+    #[serde(default = "default_max_practice_items")]
+    pub max_practice_items: usize,
 }
 
 fn default_cadence() -> u32 {
     crate::cache::DEFAULT_CADENCE
 }
 
+fn default_max_practice_items() -> usize {
+    crate::practice::DEFAULT_MAX_ITEMS
+}
+
 impl Default for InjectionSchema {
     fn default() -> Self {
         Self {
             cadence: default_cadence(),
+            max_practice_items: default_max_practice_items(),
         }
     }
 }
@@ -761,6 +779,36 @@ mod tests {
         );
         // And an undeclared field is refused, like every other struct-shaped block.
         assert!(parse_block::<InjectionSchema>(r#"{"cadance":10}"#).is_err());
+    }
+
+    /// `.design/vocabulary-packs.md` AC-4 — the practice cap is a second field
+    /// on the same block, and every property the first one has.
+    ///
+    /// **Note what this does NOT assert, because it is the design's REQ-11 and
+    /// is not fixed yet**: `{"max_practice_items":30}` alone resolves `cadence`
+    /// to its default, because `newest_fenced` takes the newest CLAIM whole.
+    /// Two claims, one per field, do not compose. The last assertion here pins
+    /// that as the current behaviour so the per-key fold has something to
+    /// change, rather than leaving the gap undocumented.
+    #[test]
+    fn the_practice_cap_is_declarable_on_the_same_block() {
+        let both =
+            parse_block::<InjectionSchema>(r#"{"cadence":25,"max_practice_items":30}"#).unwrap();
+        assert_eq!((both.cadence, both.max_practice_items), (25, 30));
+
+        // Absent means day's default, not zero — the same rule as `cadence`.
+        assert_eq!(
+            parse_block::<InjectionSchema>(r#"{}"#)
+                .unwrap()
+                .max_practice_items,
+            crate::practice::DEFAULT_MAX_ITEMS
+        );
+        assert!(parse_block::<InjectionSchema>(r#"{"max_practice_item":30}"#).is_err());
+
+        // The whole-block overlay, stated as a fact about today: declaring one
+        // field resets the other. This is REQ-11's target.
+        let one_field = parse_block::<InjectionSchema>(r#"{"max_practice_items":30}"#).unwrap();
+        assert_eq!(one_field.cadence, crate::cache::DEFAULT_CADENCE);
     }
 }
 
