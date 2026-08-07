@@ -173,9 +173,62 @@ pub fn cautions(
     Ok(out)
 }
 
-/// How `day telos declare` reports [`cautions`]. Empty when there is nothing
+/// What is being declared, for the two sentences whose wording depends on it.
+///
+/// A telos's witness that cannot fail means the telos is met forever; an atom's
+/// `done` criterion that cannot fail means the atom reports complete forever.
+/// Same defect, and a reader acts on it in a different place, so the message
+/// says which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Declared {
+    Telos,
+    Atom,
+}
+
+impl Declared {
+    fn met_forever(self) -> &'static str {
+        match self {
+            Self::Telos => "the telos is met on this witness before any\n      work is done",
+            Self::Atom => "this criterion is met before any work is\n      done",
+        }
+    }
+
+    fn cannot_fail(self) -> &'static str {
+        match self {
+            Self::Telos => "This\n      witness cannot fail, which day#86 holds is worse than none.",
+            Self::Atom => "This criterion cannot\n      report unmet, so `day assess atom` will pass on it forever.",
+        }
+    }
+}
+
+/// **The one place a declaration's witness types are checked.**
+///
+/// day#146: `day telos declare` ran [`cautions`] and `day atom declare` did
+/// not, so five of day's own nine atoms were declared with `done` criteria that
+/// are structurally unable to report unmet — and nothing said so. The two verbs
+/// draw from the same witness vocabulary and resolve it with the same probes;
+/// only one of them was asking.
+///
+/// This exists rather than a second call site because CLAUDE.md's day#101 rule
+/// is that a guarantee belongs in the mechanism: "not 'call the check from more
+/// places' — make it impossible to declare without it".
+/// `every_declaration_reports_its_cautions` in `tests/plugin.rs` fails the build
+/// if [`cautions`] is called anywhere but here.
+pub fn cautions_for(
+    client: &KanClient,
+    git: &Git,
+    witnesses: &[String],
+    declared: Declared,
+) -> Result<String, Error> {
+    Ok(render_cautions(
+        &cautions(client, git, witnesses)?,
+        declared,
+    ))
+}
+
+/// How a declaration reports [`cautions`]. Empty when there is nothing
 /// to say, so a clean declaration prints nothing extra.
-pub fn render_cautions(cautions: &[Caution]) -> String {
+fn render_cautions(cautions: &[Caution], declared: Declared) -> String {
     if cautions.is_empty() {
         return String::new();
     }
@@ -190,15 +243,15 @@ pub fn render_cautions(cautions: &[Caution]) -> String {
         } else if c.already_satisfied && c.monotone {
             out.push_str(&format!(
                 "    {}: already satisfied, and cannot stop being satisfied -- it reads\n      \
-                 the append-only log, so nothing can take this evidence away. This\n      \
-                 witness cannot fail, which day#86 holds is worse than none.\n",
-                c.witness
+                 the append-only log, so nothing can take this evidence away. {}\n",
+                c.witness,
+                declared.cannot_fail()
             ));
         } else if c.already_satisfied {
             out.push_str(&format!(
-                "    {}: already satisfied, so the telos is met on this witness before any\n      \
-                 work is done. It cannot evidence anything from here.\n",
-                c.witness
+                "    {}: already satisfied, so {}. It cannot evidence\n      anything from here.\n",
+                c.witness,
+                declared.met_forever()
             ));
         } else {
             out.push_str(&format!(
@@ -210,8 +263,8 @@ pub fn render_cautions(cautions: &[Caution]) -> String {
     }
     out.push_str(
         "  Nothing is refused -- a floor you know is already met is a legitimate\n  \
-         thing to declare. Said because a witness that cannot fail is the one\n  \
-         failure mode a telos cannot recover from on its own.\n",
+         thing to declare. Said because something that cannot fail is the one\n  \
+         failure mode a declaration cannot recover from on its own.\n",
     );
     out
 }

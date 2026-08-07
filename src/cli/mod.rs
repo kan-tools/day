@@ -470,7 +470,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             let git = crate::git::Git::new(cwd.clone());
             print!(
                 "{}",
-                crate::telos::render_cautions(&crate::telos::cautions(&client, &git, &types)?)
+                crate::telos::cautions_for(&client, &git, &types, crate::telos::Declared::Telos)?
             );
             Ok(ExitCode::SUCCESS)
         }
@@ -541,6 +541,9 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             done,
             note,
         }) => {
+            // Kept before the move into `Interface`, because the caution runs
+            // after the declaration and needs the same list day just recorded.
+            let done_for_caution = done.clone();
             let interface = crate::atoms::Interface {
                 inputs,
                 outputs,
@@ -561,6 +564,26 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                 },
             )?;
             print!("{}", outcome.render());
+
+            // day#146. `done` criteria are witness types resolved by the same
+            // probes a telos's witnesses are, and this verb never asked. Five
+            // of day's own nine atoms were declared with a `claim` probe as
+            // their sole criterion — structurally unable to report unmet — and
+            // `day assess atom`, which `day status` names as the gate, has
+            // passed on them ever since.
+            //
+            // After the declaration, never instead of it: same rule as the
+            // telos side. Reported, never refused.
+            let git = crate::git::Git::new(cwd.clone());
+            print!(
+                "{}",
+                crate::telos::cautions_for(
+                    &client,
+                    &git,
+                    &done_for_caution,
+                    crate::telos::Declared::Atom
+                )?
+            );
 
             let report = doctor::run(&client)?;
             if !report.is_healthy() {

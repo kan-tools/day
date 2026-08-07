@@ -625,6 +625,106 @@ fn a_witness_that_cannot_fail_is_reported_when_it_is_declared() {
     assert!(stdout.contains("day#86"), "{stdout}");
 }
 
+/// **day#146 — the same check, on the verb that never ran it.**
+///
+/// `day atom declare` takes `done` criteria that are witness types resolved by
+/// the same probes a telos's witnesses are, and it did not call the check
+/// above. Five of day's own nine atoms were declared with a `claim` probe as
+/// their sole criterion, so `day assess atom` — which `day status` names as the
+/// gate to wire into CI — reports `[MATERIAL]` for them and always will.
+///
+/// The message differs from the telos wording deliberately: a reader acts on
+/// this in a different place, so it names `day assess atom` rather than day#86.
+#[test]
+fn an_atom_criterion_that_cannot_fail_is_reported_when_it_is_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/witness",
+                "bafyreiw",
+                "Probes.\n\n```day-witness\n{\"assessment\":{\"claim\":{\"kind\":\"Observation\"}}}\n```\n",
+            ),
+            // The premise, and it has to MATCH: `common::claim` records kind
+            // `Observation`, so a `Result` probe here left the criterion
+            // monotone-but-unsatisfied — a different branch with different
+            // wording, which the first run of this test said out loud.
+            claim("some/subject", "bafyreir", "An observation."),
+        ],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "assessment",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "reported, never refused -- the same rule as the telos side: {stdout}"
+    );
+    assert!(
+        stdout.contains("cannot stop being satisfied"),
+        "an append-only probe cannot report absent once satisfied: {stdout}"
+    );
+    assert!(
+        stdout.contains("day assess atom"),
+        "the message must name the verb this actually breaks, not day#86 -- a \
+         reader acts on an atom criterion somewhere else: {stdout}"
+    );
+}
+
+/// And the negative control, without which the test above passes on a build
+/// that prints the caution unconditionally.
+///
+/// A `path` probe is not monotone — files get deleted — and is unsatisfied
+/// here, so there is nothing to say and nothing should be said.
+#[test]
+fn an_atom_criterion_that_can_fail_draws_no_caution() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyreiw",
+            "Probes.\n\n```day-witness\n{\"code-change\":{\"path\":\"nowhere/*.rs\"}}\n```\n",
+        )],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "code-change",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("Declared, and worth knowing"),
+        "a criterion that can fail is the normal case and must print nothing \
+         extra: {stdout}"
+    );
+}
+
 /// The other half: a witness with no probe is named, which is day#125's
 /// friction 2 — four teloi were declared with witnesses and the fact that none
 /// was checkable surfaced much later, at `day status`.
