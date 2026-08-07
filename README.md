@@ -111,16 +111,30 @@ day exists to avoid repeating.
 ## Install
 
 ```bash
-cargo install kan --version 0.9.1-beta.1   # the memory layer day reads
+cargo install kan --version 0.11.0-beta.1   # the memory layer day reads
 cargo install day --version 0.11.0-beta.2
 ```
 
 **The versions are not decoration.** Everything day has published is a
 pre-release, and cargo will not select one without `--version` — a plain
 `cargo install day` errors. kan does have one stable version, `0.1.0`, so a
-plain `cargo install kan` "succeeds" and hands you a kan many minor versions
+plain `cargo install kan` "succeeds" and hands you a kan ten minor versions
 old that day cannot talk to, which is the worse failure because it looks like
-it worked. Tracked as day#50.
+it worked. day#50.
+
+Both pins are checked rather than remembered (`tests/install_docs.rs`): the
+day pin must be this crate's version, and the kan pin must be the newest kan
+`tests/fixtures/kan-compat.tsv` records as `ok` — so the line above cannot
+quietly name a kan nobody measured. `day assess docs` covers the first and has
+no opinion about the second, which is how the kan pin could have gone stale
+with every check green.
+
+**Between releases, `day doctor` may say the kan you just installed is "newer
+than this day was measured against".** That is this file being ahead of the
+crate, not a problem with the pair: the kan row is added on `main` as soon as
+it is measured, and the `NEWEST_MEASURED` constant that knows about it ships
+with the next day release. The warning is advisory, exit 0, and it clears when
+that release lands.
 
 **day requires kan >= 0.9.1**, and the requirement is measured rather than
 asserted: `tests/fixtures/kan-compat.tsv` records what every released kan
@@ -144,7 +158,25 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.7.0-beta.2** makes day honest about the declarations it cannot
+Early. **v0.11.0-beta.2** is where verification stopped being something day
+asserted about itself. A green suite says nothing about whether a test asserts
+anything, so a claim of coverage now carries a mutation; a fix that closes a
+review finding carries a `Demonstrated-by:` trailer produced by reverting the
+fix and watching the finding's own test fail; and a script accounts for every
+commit on a branch as demonstrated, exempt-with-a-reason, or **unaccounted**,
+which is the only verdict. Each replaced a check that could not fail — a
+mutation harness that reported `SURVIVED` for a mutation that did not compile,
+a `pub fn` whose only callers were its own tests, a hand-written table that was
+wrong in three consecutive review rounds.
+
+The unreleased work on `main` extends that to teloi. A witness could only ask
+*does one exist*, and over an append-only log that question starts answering
+yes and never stops — so `every` (wherever the anchor holds, the requirements
+hold on the same subject), `absent` with a vacuity guard, correspondence,
+authorship scoping, and a declare-time check that reports a witness already
+satisfied or structurally unable to stop matching.
+
+**v0.7.0-beta.2** made day honest about the declarations it cannot
 read — which sounds small and was not: day was certifying conformance to
 declarations it had silently truncated.
 
