@@ -1,0 +1,158 @@
+---
+allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(ls *), Bash(cargo *), Read, Grep, Glob
+description: Resume a working thread from its recorded handoff, verifying what the handoff claims before trusting it
+---
+
+> **day's "orientation" atom.** Its interface: it consumes a recorded handoff
+> and produces the *intent* a session can act on — which is what `/design`
+> takes as its own input, so the two compose.
+>
+> ```day-atom
+> {"in": ["handoff"], "out": ["intent"], "next": ["design"]}
+> ```
+>
+> **No `done` criteria, deliberately.** "The session is oriented" is not
+> mechanically checkable, and day#86 holds that a witness which cannot fail is
+> worse than none — so inventing a probe to clear the caution would be the
+> failure this repo has recorded twice. `day status` will say completion cannot
+> be checked for this atom, which is the honest reading.
+
+## Context
+
+- Repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
+- Branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached or not a git repo"`
+- HEAD: !`git log --oneline -1 2>/dev/null || echo "no commits"`
+- Working tree: !`git status --porcelain 2>/dev/null | head -20 | grep . || echo "clean"`
+- kan available: !`command -v kan >/dev/null 2>&1 && echo yes || echo "no — a handoff lives in kan, so without it this command has nothing to read"`
+- day available: !`command -v day >/dev/null 2>&1 && day doctor 2>&1 | tail -3 || echo "day not on PATH"`
+
+## Your task
+
+Take a session from zero to working by reading the thread's recorded handoff —
+**and by checking what it says, rather than believing it.**
+
+### The premise, which is the whole design
+
+A handoff is a *claim about state at the moment it was written*. State moves:
+commits land, CI runs, someone else pushes, an issue gets closed. A command that
+reads a handoff and reports it as current is copy-paste with extra steps, and it
+fails in the direction that matters — a stale handoff read as fresh is worse
+than no handoff, because it carries the authority of the record.
+
+So every phase below separates **what the handoff asserts** from **what is true
+now**, and the output says which is which.
+
+### Arguments
+
+- `/handoff` — resume `agents/handoff/main`, the thread that interfaces with the
+  human.
+- `/handoff <thread>` — resume `agents/handoff/<thread>`.
+- `/handoff --list` — show which handoff threads exist and when each was last
+  written.
+
+### Phase 1: Read the handoff
+
+1. **Read it through the bulk verb, not `kan show`.**
+
+   ```bash
+   kan show --all --json
+   ```
+
+   Filter to the subject in the tool of your choice. `kan show <subject>` is the
+   obvious command and is the wrong one: it is O(n²) in commit-anchored claims
+   with a subprocess per pair, measured at 141 s on a repo where `--all --json`
+   takes 72 ms (kan#181). If a friction log exists at `workflows/kan-reads`, the
+   current status is there.
+
+2. **Take the newest live claim on the subject.** Earlier ones are history, and
+   a handoff that supersedes another usually says so. If the newest claim says
+   it supersedes an earlier one, do not also act on the earlier one.
+
+3. **If there is no such subject**, say so plainly and stop trying to resume.
+   Offer to orient from scratch instead — `day status`, `day doctor`, the
+   README, recent commits — and to write the first handoff at the end of the
+   session. A repo with no handoff is the normal first-time state, not an error.
+
+### Phase 2: Verify what it asserts
+
+**This is the phase that earns the command.** Go through the handoff's factual
+claims and check each one. Typical claims and their checks:
+
+| the handoff says | check it with |
+|---|---|
+| HEAD is at `<sha>` | `git log --oneline -1`, and `git log --oneline <sha>..HEAD` for what landed since |
+| branch `<name>` | `git branch --show-current` |
+| CI green | `gh run list --branch <name> --limit 3` |
+| the suite passes | run it, or say you did not |
+| tree clean | `git status --porcelain` |
+| issue #N is open/closed | `gh issue view N --json state` |
+| a design is recorded | the claim is in the `--all --json` you already read |
+| N atoms, composition ok | `day doctor` |
+
+Classify each as **CONFIRMED**, **DRIFTED** (with what it is now), or
+**UNCHECKABLE** (with why). Do not silently drop one you could not check —
+could-not-check outranks checked-and-clean, and a verification report that omits
+what it skipped asserts a completeness it did not establish.
+
+**Anything that drifted is the most valuable thing in the output.** It is the
+work someone else did, or the thing that broke, since the handoff was written.
+
+### Phase 3: Orient from day, not from the handoff
+
+The handoff says where the work *was*. day computes where it *is*, from
+artifacts:
+
+```bash
+day status
+day doctor
+```
+
+If `day status` names an atom the handoff does not mention, or the handoff's
+"next" step is already done, say so. These two disagreeing is information: the
+handoff is a person's account and `day status` is inferred from the record, and
+the gap between them is usually where something was finished and not written
+down.
+
+### Phase 4: Report, and stop
+
+Produce, in this order:
+
+1. **One paragraph: where this thread is.** Not a restatement of the handoff —
+   the handoff as corrected by what you just checked.
+2. **What drifted**, if anything, with what it is now.
+3. **What the handoff says to do next**, and whether that is still the right
+   next thing given the drift.
+4. **What is open elsewhere** — issues, other repos, blocked items the handoff
+   names.
+5. **Anything you could not verify**, named.
+
+**Then stop.** Do not start the work. The point of this command is that the
+human reads five lines and says "yes, that" or "no, actually" — and both are
+cheap only if nothing has been done yet.
+
+### Phase 5: When the session ends
+
+The counterpart to reading a handoff is writing one. A thread whose handoff is
+never updated decays into a lie, and the next `/handoff` will faithfully report
+stale state.
+
+```bash
+kan observe agents/handoff/<thread> "<the new state>"
+```
+
+A good handoff carries: the state and how it was verified, the decision a reader
+needs to understand the work, what is next *in order*, what is open elsewhere,
+and what is deliberately not being done. It does not carry anything derivable —
+`day status` computes position, `git log` carries history, and restating them is
+a second copy with no fold behind it.
+
+## Why this is a command and not a hook
+
+`day hook session-start` already injects teloi, atoms, position and practice
+into every session, and it should not also inject a handoff: the hook is
+advisory context for *any* session, and resuming a thread is a deliberate act
+with a subject to choose. Making it automatic would put one thread's state into
+every session in the repo, including sessions working on something else.
+
+It is also a *read* of the record that ends in a proposal, which is what makes
+stopping at Phase 4 safe. A hook that resumed work would be a hook that decides.
