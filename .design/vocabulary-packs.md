@@ -208,7 +208,7 @@ is no config store, because the config is a claim.
 `atoms::newest_fenced::<T>()` returns the newest claim carrying the fence and
 nothing else; `unwrap_or_default()` supplies a whole `T` when there is none. The
 first draft of this design called for folding those subjects **per key** — walk
-the claims, take the newest that mentions each field. Reviewing the eleven call
+the claims, take the newest that mentions each field. Reviewing the twelve call
 sites before implementing showed why that is wrong, and the review is worth
 recording because the sentence read fine.
 
@@ -247,7 +247,7 @@ Compatibility is a third layer rather than a migration: `Default`, overlaid by a
 legacy whole-block claim on the parent subject, overlaid by per-key claims. A
 project that adopts nothing sees today's behaviour byte-for-byte.
 
-The cost is subject count — day's own log goes 62 → ~97, and roughly a third
+The cost is subject count — day's own log goes 64 → roughly 100, and roughly a third
 becomes configuration, which `kan status` and `kan issues` then list alongside
 work. That is not fixable from day, and papering over it by avoiding the design
 would trade granular retraction for presentation. Filed as kan#186: kan grew a
@@ -300,7 +300,7 @@ depend on the trust model landing.
   application is infrequent and high-ceremony, like `init`, so the answer is to
   lean into the interaction instead of choosing between silent revision and a
   `--force` flag. Each declaration is presented with its before/after and is
-  individually refusable (REQ-14, AC-20). `declare`'s revision semantics are
+  individually refusable (REQ-14, AC-22). `declare`'s revision semantics are
   unchanged underneath; what changes is that nothing is applied unseen.
 - RQ-2: **The walkthrough is a full TUI, and `ratatui` is day's first TUI
   dependency.** Neither day nor kan carries one today, so this departs from
@@ -309,7 +309,7 @@ depend on the trust model landing.
   artifact than the vocabulary it installs. The cost is a second code path for
   the non-TTY case, which is day#91's exact failure shape — a mode this repo is
   never in and therefore never tests — so REQ-15 makes that path a refusal
-  rather than a fallback, and AC-21 drives it with piped stdin.
+  rather than a fallback, and AC-23 drives it with piped stdin.
 - RQ-3: **`day config` already exists; it is seven subjects and has no name.**
   `schema/witness`, `schema/docs`, `schema/cycle`, `schema/injection`,
   `schema/verdicts`, `schema/blocks` and `schema/design-doc` are each read by
@@ -318,8 +318,7 @@ depend on the trust model landing.
   day's config". It is not a store and does not become one: the config *is* a
   claim, which is `telos/vocabulary-substrate` as written.
 - RQ-4: **SUPERSEDED BY RQ-7 — the defect is real, the remedy was wrong.** The overlay is per claim, not per key, and that is a defect for packs.
-  A pack setting one field resets the rest of its block (`src/blocks.rs:275`,
-  `:357`). REQ-11 and REQ-12 make the fold per-key; REQ-13 adds a read-only
+  A pack setting one field resets the rest of its block (`src/blocks.rs:275`, `:375`). REQ-11 and REQ-12 make the fold per-key; REQ-13 adds a read-only
   `day config` so an effective value can be traced to the claim that set it.
   This is the substantive change the practice-cap question turned out to be
   about — the cap itself (REQ-4) is one field of it.
@@ -335,7 +334,7 @@ depend on the trust model landing.
   half.
 - RQ-7: **Per-key merge is rejected; a configuration key becomes its own
   subject.** RQ-4 named a real defect and prescribed the wrong fix, found by
-  reading all eleven `newest_fenced` call sites before implementing rather than
+  reading all twelve `newest_fenced` call sites before implementing rather than
   after. Three reasons, in increasing order of importance. (a) "Per key" is
   under-specified for a `BTreeMap` and **undefined for a `Vec`** —
   `schema/verdicts` is a list and a list has no keys. (b) The shape that
@@ -348,26 +347,10 @@ depend on the trust model landing.
   which is the capability the whole-block shape structurally cannot offer.
   Cheap because `KanClient::show` is served from one memoised bulk read, so N
   subjects cost no extra kan invocation. Compatibility is a third overlay
-  layer, not a migration. The cost is subject count (62 → ~97 in day's own
-  log), filed as kan#186 rather than designed around.
+  layer, not a migration. The cost is subject count (64 → roughly 100 in day's
+  own log), filed as kan#186 rather than designed around.
 
 ## Out of Scope
-
-- **Remote pack sources.** day#109 sketches `day pack kan-tools/day`. Fetching
-  a pack introduces a network substrate, a trust evaluation, and a caching
-  question, none of which the local-file case needs. `day pack apply <file>`
-  first; a fetcher is a separate design.
-- **Uninstalling a pack.** day never retracts, and unwinding a vocabulary is a
-  question about kan's model rather than a calling convention over it.
-- **Packs that carry probe commands day would run.** A `command` probe declared
-  by a pack is a command from a stranger; `--run` already gates execution, and
-  whether a pack may supply one at all is a separate decision.
-- **Migrating day's own vocabulary into a pack.** Dogfooding this by exporting
-  day's own teloi and atoms is the obvious next step and is not this design.
-- **`day pack export`.** Producing a manifest from a live log is the inverse
-  operation and is not needed to transport a process someone has already
-  written down.
-
 
 - **Remote pack sources.** day#109 sketches `day pack kan-tools/day`. Fetching
   a pack introduces a network substrate, a trust evaluation, and a caching
