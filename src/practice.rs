@@ -156,8 +156,14 @@ pub fn project(client: &KanClient) -> Projection {
             (DEFAULT_MAX_ITEMS, DEFAULT_ITEM_EXCERPT)
         }
     };
-    let mut truncated_items = 0usize;
-    let mut truncated_chars = 0usize;
+    // How much each item lost to the length cap, carried ALONGSIDE the item so
+    // the count cap can discard both together. Summing during the loop counted
+    // items the reader never received: with three short items delivered and
+    // five long ones withheld by the count cap, the note said "5 projected
+    // item(s) were cut" when none of the three delivered was, and pointed at a
+    // setting that would reveal nothing. The comment below used to claim the
+    // property this vector is what actually provides.
+    let mut drops: Vec<usize> = Vec::new();
 
     for (claim, text) in crate::fold::items(&claims) {
         if !accepts(&local, claim) {
@@ -177,11 +183,8 @@ pub fn project(client: &KanClient) -> Projection {
             continue;
         }
         let (item, dropped) = excerpt(&text, excerpt_limit);
-        if dropped > 0 {
-            truncated_items += 1;
-            truncated_chars += dropped;
-        }
         projection.items.push(item);
+        drops.push(dropped);
     }
 
     if foreign > 0 {
@@ -195,14 +198,21 @@ pub fn project(client: &KanClient) -> Projection {
     if projection.items.len() > cap {
         let dropped = projection.items.len() - cap;
         projection.items.truncate(cap);
+        drops.truncate(cap);
         projection.notes.push(format!(
             "{dropped} further item(s) not shown: a projection is capped at {cap} \
              so it cannot crowd out the request it is meant to inform."
         ));
     }
 
-    // Said, not silently done. Placed after the count cap so it describes what
-    // actually reached the reader rather than what was considered.
+    // **Counted over the survivors, which is the whole point.** The two caps are
+    // independent and both can fire, and an item the count cap withheld was not
+    // "cut at N characters" — it was not delivered at all, and raising the
+    // length would not reveal it. Reporting the pre-cap population told a
+    // reader to change the setting that could not help them, which is a report
+    // asserting something day had not established.
+    let truncated_items = drops.iter().filter(|d| **d > 0).count();
+    let truncated_chars: usize = drops.iter().sum();
     if truncated_items > 0 {
         projection.notes.push(format!(
             "{truncated_items} projected item(s) were cut at {excerpt_limit} characters \

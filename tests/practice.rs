@@ -303,6 +303,79 @@ fn the_item_length_is_declarable_and_truncation_is_reported() {
     assert!(!text.contains('…'), "and must not truncate: {text}");
 }
 
+/// **Both caps at once — the configuration neither previous test reached.**
+///
+/// The count cap and the length cap are independent, and the truncation note
+/// summed its counts during the loop while the count cap truncated afterwards.
+/// So with short items delivered and long ones withheld, the note reported
+/// items the reader never received as "cut at N characters" and told them to
+/// raise a length that would reveal nothing — the withheld items were gone to
+/// the *other* cap.
+///
+/// Neither existing test could see it: `the_item_length_is_declarable…` drives
+/// one item, and day's own repo runs 23 items under a cap of 30, so the count
+/// cap never fires here. `CLAUDE.md`'s "a mechanism with two modes gets tested
+/// in whichever mode this repo is in", found by a cold review after a mutation
+/// of the arithmetic SURVIVED.
+#[test]
+fn the_truncation_note_counts_only_items_the_reader_received() {
+    let dir = tempfile::tempdir().unwrap();
+    let long = "word ".repeat(200);
+    let mut claims = vec![claim(
+        "schema/injection",
+        "bafyreisch",
+        "Injection.\n\n```day-injection\n{\"max_practice_items\":3}\n```\n",
+    )];
+    // Three short ones first, so the cap delivers exactly these and withholds
+    // every long one. Order is load-bearing: reversed, the long items are the
+    // survivors and the bug is invisible.
+    claims.extend((0..3).map(|i| practice(&format!("bafyreis{i}"), &format!("Short {i}."))));
+    claims.extend((0..5).map(|i| practice(&format!("bafyreil{i}"), &long)));
+
+    let kan = write_kan_stub(dir.path(), &claims);
+    let text = context(dir.path(), &kan);
+
+    assert!(
+        text.contains("5 further item(s) not shown"),
+        "the count cap withheld five: {text}"
+    );
+    assert!(
+        !text.contains("were cut at"),
+        "and NONE of the three delivered items was cut, so the length note must \
+         not appear at all — reporting it points the reader at a setting that \
+         cannot reveal what they are missing: {text}"
+    );
+}
+
+/// The other side: when a delivered item IS cut, the note appears and counts
+/// only the survivors.
+///
+/// Without this, the test above passes on a build that never reports truncation.
+#[test]
+fn the_truncation_note_still_fires_for_a_delivered_item() {
+    let dir = tempfile::tempdir().unwrap();
+    let long = "word ".repeat(200);
+    let mut claims = vec![claim(
+        "schema/injection",
+        "bafyreisch",
+        "Injection.\n\n```day-injection\n{\"max_practice_items\":2}\n```\n",
+    )];
+    // Two long ones survive the cap; three more are withheld.
+    claims.extend((0..5).map(|i| practice(&format!("bafyreil{i}"), &long)));
+
+    let kan = write_kan_stub(dir.path(), &claims);
+    let text = context(dir.path(), &kan);
+
+    assert!(
+        text.contains("2 projected item(s) were cut"),
+        "two delivered items were cut, and only those two count: {text}"
+    );
+    assert!(
+        text.contains("3 further item(s) not shown"),
+        "the count cap is reported separately: {text}"
+    );
+}
+
 /// AC-7. A project that does not use this must see byte-identical context.
 #[test]
 fn ac7_no_practice_subject_changes_nothing() {
