@@ -35,15 +35,26 @@ rather than resolved in prose (see Architecture).
   `InjectionSchema` (`src/blocks.rs:327`, fence `day-injection`) alongside
   `cadence`, with the current value 12 as its serde default. A pack sets it by
   declaring `schema/injection` like any other block.
-- REQ-11: The `schema/*` subjects are folded **per key, not per claim**. Today
-  `atoms::newest_fenced` (`src/blocks.rs:275`, `:357`) takes the newest claim
-  wholesale and `unwrap_or_default()` fills the rest, so a claim setting one
-  field silently resets every other field in that block to its default. A pack
-  touching one setting must not clobber the others.
-- REQ-12: A field never mentioned by any live claim resolves to its `Default`,
-  and a field mentioned by several resolves to the newest claim that mentions
-  it. Retracted claims are excluded, which they already are — the fold reads
-  kan's live view through `kan show --all --json`.
+- REQ-11: A configuration key is **its own subject** — `schema/injection/cadence`,
+  `schema/witness/verdict` — read with the newest-claim-wins fold day already
+  has. Today a whole block lives in one claim, so a claim setting one field
+  resets the others (`src/blocks.rs:275`, `:375`) and a sixteen-entry map must
+  be restated to add one. Verified: kan accepts three-segment rkeys, and
+  `KanClient::show` is served from the memoised bulk read, so N subjects cost
+  no extra kan invocation.
+- REQ-12: The effective value of a key is `Default`, overlaid by a legacy
+  whole-block claim on the parent subject if one exists, overlaid by the newest
+  live claim on the key's own subject. One rule, three layers, and **no
+  migration**: a project that never adopts per-key subjects keeps exactly
+  today's behaviour.
+- REQ-16: A key is removed by **retracting the claim that set it**. This is the
+  requirement per-key subjects exist for: `kan retract` operates on a claim, one
+  claim carries a whole block today, so a single witness probe cannot be
+  retired without rewriting the set. day writes no retraction — it reads live
+  claims (`src/kan_client.rs:75`) and a human runs the verb.
+- REQ-17: The three layers are assembled by exactly one function, which every
+  `schema/*` loader calls. Seven loaders reimplementing an overlay is the shape
+  day#101 records three instances of.
 - REQ-13: `day config` prints the effective configuration and, per key, the CID
   of the claim that set it or `(default)`. Read-only: it writes nothing and
   declares nothing, so the one way to change a setting stays `kan observe` on
@@ -112,35 +123,44 @@ rather than resolved in prose (see Architecture).
   applies identically to the same fence alone. (REQ-10)
 - [ ] AC-13: `tests/documented_invocations.rs` covers the pack invocation in
   `README.md`, so the documented form is known to parse and run. (REQ-10)
-- [ ] AC-14: Two claims on `schema/injection`, the first `{"cadence":25}` and
-  the second `{"max_practice_items":30}`, resolve to `cadence == 25` **and**
-  `max_practice_items == 30`. Under today's fold the first is lost; this is the
-  test that fails before the change and passes after. (REQ-11)
-- [ ] AC-15: With no claim on `schema/injection`, every field equals its
-  `Default`; with one claim mentioning one field, the others still equal their
-  `Default`. (REQ-12)
-- [ ] AC-16: A retracted claim setting a key does not contribute it — driven
-  through a stubbed kan whose folded view omits the retracted claim, since that
-  is what day actually reads. (REQ-12)
-- [ ] AC-17: The per-key fold is applied by exactly one function, and a source
-  scan asserts no `schema/*` loader calls `newest_fenced` directly — the same
-  shape as `the_claim_shape_predicate_has_one_evaluator`, and for the same
-  reason: a second folder would diverge silently. (REQ-11, REQ-12)
-- [ ] AC-18: `day config` on a log with one `schema/injection` claim prints
+- [ ] AC-14: A claim on `schema/injection/cadence` setting 25 and a claim on
+  `schema/injection/max_practice_items` setting 30 resolve to `cadence == 25`
+  **and** `max_practice_items == 30`. Under today's fold, two claims on the
+  parent subject lose the first; this is the test that fails before the change.
+  (REQ-11)
+- [ ] AC-15: With no claim anywhere, every field equals its `Default`. With a
+  legacy whole-block claim on `schema/injection` and no per-key claims, every
+  field equals what that block declared — byte-identical to today's behaviour,
+  which is what "no migration" has to mean. (REQ-12)
+- [ ] AC-16: A per-key claim overrides the legacy block for its own key and
+  leaves the block's other fields intact. (REQ-12)
+- [ ] AC-17: Retracting the claim on `schema/witness/verdict` removes exactly
+  that probe and leaves the other fifteen — driven through a stubbed kan whose
+  folded view omits the retracted claim, since that is what day reads. Under
+  today's shape this is not expressible at all. (REQ-16)
+- [ ] AC-18: A source scan asserts no `schema/*` loader calls `newest_fenced`
+  directly; all of them go through the one assembler. Same shape as
+  `the_claim_shape_predicate_has_one_evaluator`, and for the same reason.
+  (REQ-17)
+- [ ] AC-19: `schema/verdicts` — a `Vec<String>`, which per-key *merging* could
+  not express — resolves as one subject per permitted verdict, and retracting
+  one removes it while `VerdictVocabulary::validate`'s non-empty rule still
+  fires when the last goes. (REQ-11, REQ-16)
+- [ ] AC-20: `day config` on a log with one `schema/injection` claim prints
   that claim's CID beside the key it set and `(default)` beside a key it did
   not. (REQ-13)
-- [ ] AC-19: `day config` makes zero `kan` write-verb invocations, asserted
+- [ ] AC-21: `day config` makes zero `kan` write-verb invocations, asserted
   against a counting stub. (REQ-13)
-- [ ] AC-20: Refusing one declaration in the walkthrough applies the others and
+- [ ] AC-22: Refusing one declaration in the walkthrough applies the others and
   writes nothing for the refused one, asserted as write-verb invocation counts
   per subject. (REQ-14)
-- [ ] AC-21: `day pack apply` with stdin not a TTY and no `--yes` exits
+- [ ] AC-23: `day pack apply` with stdin not a TTY and no `--yes` exits
   non-zero, writes nothing, and says which flag would proceed. Driven by
   running the binary with piped stdin, which is the mode this repo is never
   interactively in — day#91's failure shape. (REQ-15)
-- [ ] AC-22: `--yes` with piped stdin applies the pack and prints the same
+- [ ] AC-24: `--yes` with piped stdin applies the pack and prints the same
   per-subject report the walkthrough shows. (REQ-15)
-- [ ] AC-23: `pack` is absent from the MCP tool list, asserted the way
+- [ ] AC-25: `pack` is absent from the MCP tool list, asserted the way
   `tests/assess.rs` asserts it for `--run`. (REQ-15)
 
 ## Architecture
@@ -183,28 +203,56 @@ hardcodes that a project may reasonably differ on is declarable as a kan claim"
 — and it means "day config" exists in exactly the form the telos permits. There
 is no config store, because the config is a claim.
 
-### The fold that has to change, and the compatibility question under it
+### One subject per key, and why it is not the merge this design first proposed
 
 `atoms::newest_fenced::<T>()` returns the newest claim carrying the fence and
-nothing else; `unwrap_or_default()` then supplies a whole `T` when there is no
-claim at all. The consequence nobody had needed until now is that
-`{"max_practice_items": 30}` appended to `schema/injection` resets `cadence`,
-because serde fills it from `default_cadence()` and the older claim that set it
-is never consulted.
+nothing else; `unwrap_or_default()` supplies a whole `T` when there is none. The
+first draft of this design called for folding those subjects **per key** — walk
+the claims, take the newest that mentions each field. Reviewing the eleven call
+sites before implementing showed why that is wrong, and the review is worth
+recording because the sentence read fine.
 
-Per-key folding replaces that for the seven `schema/*` subjects: walk the live
-claims oldest to newest, and for each key take the newest claim that *mentions*
-it — which requires parsing to `serde_json::Value` before deserialising to `T`,
-since "mentions" is a property of the JSON, not of the struct.
+**They are not one kind of thing.** Four shapes go through `newest_fenced`:
 
-**This changes behaviour for logs that already exist**, in one direction: a
-project whose newest claim deliberately omitted a field to reset it now inherits
-the older value instead. That is a real regression for anyone who used omission
-as a reset, and the honest mitigation is that it be visible — `day config` (REQ-13)
-names the claim behind every key, so an inherited value has a CID next to it
-rather than looking like a default. `tests/block_corpus.rs` and the migration
-matrix are where the shipped-block shapes are pinned, and the corpus gains a
-two-claim case.
+| subject | shape | what "per key" would mean |
+|---|---|---|
+| `schema/injection`, `schema/cycle`, `schema/docs`, `schema/design-doc` | config struct | field-wise |
+| `schema/witness`, `schema/blocks` | `BTreeMap<String, _>` | entry-wise |
+| `schema/verdicts` | `Vec<String>` | **undefined — a list has no keys** |
+| `telos/*` `Witnesses`, `bridge/*` `Plan` | a subject's own declaration | *wrong* — redeclaring must replace |
+
+The last row is correctly out of scope by the `schema/*` prefix, and by
+accident rather than by design. The third row is not expressible at all. And the
+shape that actually hurt — restating sixteen probes to add one — is the map,
+while the requirement had been written from the mild field-wise case.
+
+**Worse, merging costs removability exactly where it matters.** Today, restating
+a map without an entry deletes it; that is the only way to retire a bad probe,
+and day never retracts. Under entry-wise merge a mis-declared probe is immortal.
+
+**One subject per key gets all of it for less.** `schema/injection/cadence` is
+its own subject, so newest-wins per subject *is* per-key resolution with no fold
+change. Three facts make it cheap, each checked rather than assumed:
+
+- kan already accepts three-segment rkeys — written to a scratch log and read
+  back.
+- `KanClient::show` is served from the memoised `kan show --all --json`
+  (`src/kan_client.rs:464`), so sixteen subjects cost **no extra invocation**.
+- `kan retract` exists and day reads *live* claims, so retracting one key's
+  claim removes that key. Granular retraction is the capability the whole-block
+  shape structurally cannot offer, and it is the real argument here — not
+  ergonomics.
+
+Compatibility is a third layer rather than a migration: `Default`, overlaid by a
+legacy whole-block claim on the parent subject, overlaid by per-key claims. A
+project that adopts nothing sees today's behaviour byte-for-byte.
+
+The cost is subject count — day's own log goes 62 → ~97, and roughly a third
+becomes configuration, which `kan status` and `kan issues` then list alongside
+work. That is not fixable from day, and papering over it by avoiding the design
+would trade granular retraction for presentation. Filed as kan#186: kan grew a
+config system without noticing, and subject visibility is the design question it
+raises.
 
 ### The tension that is real
 
@@ -269,7 +317,7 @@ depend on the trust model landing.
   latest claim, excluding retractions, which is the shipped answer to "where is
   day's config". It is not a store and does not become one: the config *is* a
   claim, which is `telos/vocabulary-substrate` as written.
-- RQ-4: **But the overlay is per claim, not per key, and that is a defect for packs.**
+- RQ-4: **SUPERSEDED BY RQ-7 — the defect is real, the remedy was wrong.** The overlay is per claim, not per key, and that is a defect for packs.
   A pack setting one field resets the rest of its block (`src/blocks.rs:275`,
   `:357`). REQ-11 and REQ-12 make the fold per-key; REQ-13 adds a read-only
   `day config` so an effective value can be traced to the claim that set it.
@@ -285,8 +333,41 @@ depend on the trust model landing.
   atoms carry `done` criteria that can never report unmet. Shipping packs before
   that is fixed gives the defect a distribution channel. REQ-8 is the pack-time
   half.
+- RQ-7: **Per-key merge is rejected; a configuration key becomes its own
+  subject.** RQ-4 named a real defect and prescribed the wrong fix, found by
+  reading all eleven `newest_fenced` call sites before implementing rather than
+  after. Three reasons, in increasing order of importance. (a) "Per key" is
+  under-specified for a `BTreeMap` and **undefined for a `Vec`** —
+  `schema/verdicts` is a list and a list has no keys. (b) The shape that
+  actually hurt is the map, not the config struct RQ-4 was written from:
+  restating sixteen probes to add one. (c) Merging makes a mis-declared probe
+  **immortal**, because restating a map without an entry is currently the only
+  way to remove one and day never retracts. One subject per key resolves all
+  three and needs no fold change — newest-wins per subject *is* per-key
+  resolution — and it makes `kan retract` granular enough to remove a key,
+  which is the capability the whole-block shape structurally cannot offer.
+  Cheap because `KanClient::show` is served from one memoised bulk read, so N
+  subjects cost no extra kan invocation. Compatibility is a third overlay
+  layer, not a migration. The cost is subject count (62 → ~97 in day's own
+  log), filed as kan#186 rather than designed around.
 
 ## Out of Scope
+
+- **Remote pack sources.** day#109 sketches `day pack kan-tools/day`. Fetching
+  a pack introduces a network substrate, a trust evaluation, and a caching
+  question, none of which the local-file case needs. `day pack apply <file>`
+  first; a fetcher is a separate design.
+- **Uninstalling a pack.** day never retracts, and unwinding a vocabulary is a
+  question about kan's model rather than a calling convention over it.
+- **Packs that carry probe commands day would run.** A `command` probe declared
+  by a pack is a command from a stranger; `--run` already gates execution, and
+  whether a pack may supply one at all is a separate decision.
+- **Migrating day's own vocabulary into a pack.** Dogfooding this by exporting
+  day's own teloi and atoms is the obvious next step and is not this design.
+- **`day pack export`.** Producing a manifest from a live log is the inverse
+  operation and is not needed to transport a process someone has already
+  written down.
+
 
 - **Remote pack sources.** day#109 sketches `day pack kan-tools/day`. Fetching
   a pack introduces a network substrate, a trust evaluation, and a caching
