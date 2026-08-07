@@ -344,6 +344,17 @@ pub struct InjectionSchema {
     /// its own ceiling.
     #[serde(default = "default_max_practice_items")]
     pub max_practice_items: usize,
+    /// Longest single projected `practice` item before it is cut.
+    ///
+    /// Declarable for the same reason as the count beside it, and the omission
+    /// was the sharper one: at the default of 300, sixteen of day's own
+    /// twenty-three items arrived cut mid-sentence, including nine of the
+    /// eleven rules a migration had just moved into `practice` — so the
+    /// migration read as done and two-thirds of it never reached a session.
+    /// The count cap said what it withheld; this one did not, which is how it
+    /// stayed invisible.
+    #[serde(default = "default_max_practice_item_length")]
+    pub max_practice_item_length: usize,
 }
 
 fn default_cadence() -> u32 {
@@ -354,11 +365,16 @@ fn default_max_practice_items() -> usize {
     crate::practice::DEFAULT_MAX_ITEMS
 }
 
+fn default_max_practice_item_length() -> usize {
+    crate::practice::DEFAULT_ITEM_EXCERPT
+}
+
 impl Default for InjectionSchema {
     fn default() -> Self {
         Self {
             cadence: default_cadence(),
             max_practice_items: default_max_practice_items(),
+            max_practice_item_length: default_max_practice_item_length(),
         }
     }
 }

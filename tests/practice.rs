@@ -255,6 +255,54 @@ fn a_declared_cap_below_the_default_is_honoured_and_named() {
     );
 }
 
+/// **F1's sibling: the length cap was a `const` while the count cap beside it
+/// was made declarable, and truncation was silent.**
+///
+/// At 300, sixteen of day's twenty-three items arrived cut mid-sentence,
+/// including nine of eleven rules a migration had just moved into `practice`.
+/// The count cap reported what it withheld; this one did not, so
+/// "23 items, nothing withheld" was true of one cap and false of the other.
+#[test]
+fn the_item_length_is_declarable_and_truncation_is_reported() {
+    let long = "word ".repeat(200);
+
+    // Default: cut, and SAID to be cut.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &[practice("bafyreia", &long)]);
+    let text = context(dir.path(), &kan);
+    assert!(text.contains('…'), "a long item is cut: {text}");
+    assert!(
+        text.contains("cut at 300 characters"),
+        "and the cut must be reported, naming the limit in force -- a projection \
+         that drops silently is indistinguishable from one that found nothing: \
+         {text}"
+    );
+    assert!(
+        text.contains("max_practice_item_length"),
+        "and must name the setting that would show it whole: {text}"
+    );
+
+    // Declared: not cut, and nothing reported.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim(
+                "schema/injection",
+                "bafyreisch",
+                "Injection.\n\n```day-injection\n{\"max_practice_item_length\":2000}\n```\n",
+            ),
+            practice("bafyreia", &long),
+        ],
+    );
+    let text = context(dir.path(), &kan);
+    assert!(
+        !text.contains("cut at"),
+        "a declared length that fits must report nothing: {text}"
+    );
+    assert!(!text.contains('…'), "and must not truncate: {text}");
+}
+
 /// AC-7. A project that does not use this must see byte-identical context.
 #[test]
 fn ac7_no_practice_subject_changes_nothing() {

@@ -112,6 +112,16 @@ pub struct Caution {
     /// declared four teloi with witnesses and found out much later, at
     /// `day status`, that none of them was checkable.
     pub no_probe: bool,
+    /// A probe IS declared and this day could not read it, with the reason.
+    ///
+    /// Distinct from [`no_probe`] on purpose, and the distinction is the whole
+    /// finding: the two are opposite instructions to a reader. `no_probe` says
+    /// *declare one*; this says *upgrade day, or accept that this witness goes
+    /// unchecked here*. Collapsing them told an adopter their pack declared
+    /// nothing.
+    ///
+    /// [`no_probe`]: Caution::no_probe
+    pub unreadable: Option<String>,
 }
 
 /// Evaluates declared witness types at declare time and reports what will not
@@ -144,12 +154,37 @@ pub fn cautions(
     let log = ClaimLog::new(client);
     let mut out = Vec::new();
     for witness in witnesses {
+        // **Unreadable is not absent.** `probes` holds what this day could
+        // parse; `unsupported` holds what it could not, with the reason, and
+        // its own doc comment states the invariant: "a reader must not think a
+        // witness is unprobed when it is merely unreadable *here*". This asked
+        // only the first map, so a probe declaring a kind day cannot read was
+        // reported as no probe at all — while `day assess telos` printed
+        // `[ERROR] … upgrade day` from the identical log. Two readers of one
+        // schema disagreeing, which is what `telos/honest-reads` forbids.
+        //
+        // It matters most for the thing this check was made a prerequisite of:
+        // a pack's vocabulary comes from outside the repo applying it, so "the
+        // adopter's day is older than the pack" is the expected case, not an
+        // exotic one, and "no probe is declared" is the least actionable thing
+        // day could say about it.
+        if let Some(why) = schema.unsupported.get(witness) {
+            out.push(Caution {
+                witness: witness.clone(),
+                already_satisfied: false,
+                monotone: false,
+                no_probe: false,
+                unreadable: Some(why.clone()),
+            });
+            continue;
+        }
         let Some(probe) = schema.probes.get(witness) else {
             out.push(Caution {
                 witness: witness.clone(),
                 already_satisfied: false,
                 monotone: false,
                 no_probe: true,
+                unreadable: None,
             });
             continue;
         };
@@ -167,6 +202,7 @@ pub fn cautions(
                 already_satisfied,
                 monotone,
                 no_probe: false,
+                unreadable: None,
             });
         }
     }
@@ -234,7 +270,15 @@ fn render_cautions(cautions: &[Caution], declared: Declared) -> String {
     }
     let mut out = String::from("\n  Declared, and worth knowing:\n");
     for c in cautions {
-        if c.no_probe {
+        if let Some(why) = &c.unreadable {
+            // First, because this is a could-not-check and the arms below are
+            // all checked-and-found. The repo's exit-code precedence rule, in
+            // a renderer.
+            out.push_str(&format!(
+                "    {}: a probe IS declared for this type and this day cannot read it\n                       ({why}). Upgrade day, or this criterion goes unchecked here --\n                       it is not the same as having declared no probe.\n",
+                c.witness
+            ));
+        } else if c.no_probe {
             out.push_str(&format!(
                 "    {}: no probe is declared for this type in `schema/witness`, so it\n      \
                  cannot be checked yet. The declaration is still valid.\n",

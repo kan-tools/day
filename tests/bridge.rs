@@ -685,6 +685,112 @@ fn an_atom_criterion_that_cannot_fail_is_reported_when_it_is_declared() {
     );
 }
 
+/// **F1 — an unreadable probe is not an absent one.**
+///
+/// `cautions` keyed `no_probe` on `probes.get()` returning `None` and never
+/// consulted `WitnessSchema::unsupported`, whose own doc comment states the
+/// invariant: "a reader must not think a witness is unprobed when it is merely
+/// unreadable *here*". So a probe declaring a kind this day cannot parse was
+/// reported as **no probe at all** — while `day assess telos` printed
+/// `[ERROR] … upgrade day` from the identical log. Two readers of one schema
+/// disagreeing, which is what `telos/honest-reads` forbids.
+///
+/// The two messages are opposite instructions: `no_probe` says *declare one*,
+/// this says *upgrade day*. Collapsing them is worst exactly where day#146 made
+/// this check a prerequisite — a pack's vocabulary comes from outside the repo
+/// applying it, so an adopter running an older day is the expected case, and
+/// they would be told the pack declared nothing.
+///
+/// Found by a cold adversarial review; asserted here through the shipped binary.
+#[test]
+fn a_probe_this_day_cannot_read_is_not_reported_as_no_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyreiw",
+            "Probes.\n\n```day-witness\n{\"design-doc\":{\"nosuchprobe\":\"x\"}}\n```\n",
+        )],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "design-doc",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        !stdout.contains("no probe is declared"),
+        "a probe IS declared; saying otherwise sends the reader to write one \
+         that already exists: {stdout}"
+    );
+    assert!(
+        stdout.contains("cannot read it"),
+        "the reader must be told day could not read it: {stdout}"
+    );
+    assert!(
+        stdout.contains("nosuchprobe"),
+        "and given the reason, which is what makes `upgrade day` actionable \
+         rather than a guess: {stdout}"
+    );
+    assert!(
+        out.status.success(),
+        "still reported, never refused: {stdout}"
+    );
+}
+
+/// The other side of the same distinction, without which the test above passes
+/// on a build that prints "cannot read it" for a genuinely absent probe too.
+#[test]
+fn a_witness_type_with_no_probe_still_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/witness",
+            "bafyreiw",
+            "Probes.\n\n```day-witness\n{\"other\":{\"path\":\"src/*.rs\"}}\n```\n",
+        )],
+    );
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &[
+            "atom",
+            "declare",
+            "a",
+            "--in",
+            "x",
+            "--out",
+            "y",
+            "--done",
+            "design-doc",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("no probe is declared"),
+        "an absent probe is still an absent probe: {stdout}"
+    );
+    assert!(
+        !stdout.contains("cannot read it"),
+        "and must not be reported as unreadable: {stdout}"
+    );
+}
+
 /// And the negative control, without which the test above passes on a build
 /// that prints the caution unconditionally.
 ///
