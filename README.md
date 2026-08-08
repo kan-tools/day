@@ -112,7 +112,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.11.0-beta.1   # the memory layer day reads
-cargo install day --version 0.11.0-beta.2
+cargo install day --version 0.12.0-beta.1
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -158,7 +158,17 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.11.0-beta.2** is where verification stopped being something day
+Early. **v0.12.0-beta.1** extends verification to teloi. A witness could only
+ask *does one exist*, and over an append-only log that question starts
+answering yes and never stops — so `every` (wherever the anchor holds, the
+requirements hold on the same subject), `absent` with a vacuity guard,
+correspondence, authorship scoping, and a declare-time check that reports a
+witness already satisfied or structurally unable to stop matching. `day atom
+declare` runs that check too, which it never did. Alongside it: `/handoff` and
+`/wakeup`, a pair of commands that carry a working thread across a session
+boundary by writing claims the other side verifies rather than believes.
+
+**v0.11.0-beta.2** is where verification stopped being something day
 asserted about itself. A green suite says nothing about whether a test asserts
 anything, so a claim of coverage now carries a mutation; a fix that closes a
 review finding carries a `Demonstrated-by:` trailer produced by reverting the
@@ -168,13 +178,6 @@ which is the only verdict. Each replaced a check that could not fail — a
 mutation harness that reported `SURVIVED` for a mutation that did not compile,
 a `pub fn` whose only callers were its own tests, a hand-written table that was
 wrong in three consecutive review rounds.
-
-The unreleased work on `main` extends that to teloi. A witness could only ask
-*does one exist*, and over an append-only log that question starts answering
-yes and never stops — so `every` (wherever the anchor holds, the requirements
-hold on the same subject), `absent` with a vacuity guard, correspondence,
-authorship scoping, and a declare-time check that reports a witness already
-satisfied or structurally unable to stop matching.
 
 **v0.7.0-beta.2** made day honest about the declarations it cannot
 read — which sounds small and was not: day was certifying conformance to
