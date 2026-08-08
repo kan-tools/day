@@ -9,15 +9,30 @@ it always said something else.
 
 ## Where we are
 
-**Shipped: `v0.11.0-beta.2`.** day declares, reads,
-assesses and records. Eleven
-verbs, two commands (`/design`, `/adversarial-review`), three hooks, a status
-line, and three substrates (kan; git read-only; project-declared commands). The
+**Shipped: `v0.12.0-beta.1`.** day declares, reads,
+assesses and records: verbs, slash commands, three hooks, a status line, and
+three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
 (`beta.3`); `v0.8.0-beta.1` is the bulk read (day#71); `v0.9.0-beta.1` is
 position reports that can represent their own failure (day#98/#97/#103/#105/#111)
 plus the material/record witness pair. `v0.10.0-beta.2` made `next` a guaranteed
-DAG; `v0.11.0-beta.2` is verification that can fail.
+DAG; `v0.11.0-beta.2` is verification that can fail; `v0.12.0-beta.1` extends
+that to teloi and adds the `/handoff`-`/wakeup` pair.
+
+**The verb and command counts are gone rather than corrected**, for the reason
+this file already gives about a different count below — see *"No count is given,
+deliberately"* in the v0.12 section (day#133). They read "Eleven verbs, two
+commands (`/design`, `/adversarial-review`)" against a tree holding twelve and
+**five**.
+
+That the correct numbers had to be derived twice while writing this paragraph
+is the argument. The first draft said "four" — counting the commands recalled
+from a session's context rather than running `ls commands/`, which lists
+`witness-interview.md` as well. A corrected number is a number that goes stale
+on the next release and is wrong *silently*, which is the failure mode
+`CLAUDE.md` records in four separate places and which this sentence reproduced
+in the act of describing it. `day --help` and `ls commands/` derive it; nothing
+here should restate it.
 
 **`v0.11.0-beta.1` was tagged and never published**, and the reason belongs in
 this section rather than only in a commit: `release.yml` checked out the tag with
@@ -133,12 +148,31 @@ Scope was every harness in `scripts/` and `.github/workflows/`, not just
 measurement tools asserted more than they verified, and none of it was in day's
 shipped behaviour.
 
-**v0.12 — transportable. *Next.*** Vocabulary packs (day#73), with day#109,
+**v0.12 — transportable. *In progress: `v0.12.0-beta.1` is cut, and it is not
+the milestone.*** Vocabulary packs (day#73), with day#109,
 day#86, day#50, day#107. This is the milestone the table below still calls
 "v0.8", and it has now been deferred twice for the same stated reason: a pack
 transports a vocabulary, and transporting one whose reporting is known-wrong
 exports the defect to exactly the population `telos/v1.0`'s bar names. v0.10 and
 v0.11 are what make it safe to ship, and both have.
+
+**What `beta.1` actually carries, stated because "shipped" would be a
+lie the rest of this file would then have to work around.** It is day#86's
+witness model (`every`, `absent` with a vacuity guard, correspondence,
+authorship scoping, declare-time falsifiability, and day#146 running that check
+from `day atom declare` too), day#50's install fix, and the
+`/handoff`-`/wakeup` pair. The `pack` verb is **not built**:
+`.design/vocabulary-packs.md` is written, validated and recorded at 21 REQ / 31
+AC, and two of those requirements are implemented. So this is v0.12's first
+boundary, not its completion, and the number moved for the ordinary reason —
+five milestones had merged with no tag, which day's own `release` atom is what
+surfaced.
+
+**The tag was cut late, and the section above predicted the mechanism.** `day
+status` reported `published-artifact` unmet for 45 commits before anyone read
+it. A criterion that nothing fails over is the class this repo keeps
+rediscovering; here the criterion existed, was correct, and went unread, which
+is a fourth variation on it rather than a new one.
 
 **What v0.11 changes about how v0.12 should be built**, stated before rather than
 after: a pack is a *transport*, so every failure mode this milestone found in its
