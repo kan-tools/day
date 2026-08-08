@@ -646,6 +646,28 @@ fn contains_token(text: &str, token: &str) -> bool {
 
 /// Whether a backticked token is a repo-relative file path rather than a
 /// subject name, slash command, or template placeholder.
+/// day's own subject namespaces, taken from the constants that define them
+/// rather than re-typed here.
+///
+/// day#136: `telos/v1.0` was warned about as a missing file, in a design
+/// document whose subject *is* that telos. It reaches the extension test below
+/// because `v1.0` looks exactly like a filename with an extension — and the
+/// pressure that creates is the one day#84 describes, where the cheapest way to
+/// silence the warning is to write "the v1.0 telos" and lose the subject a
+/// later reader would run `kan show` against.
+///
+/// Sourced from the constants because a second hand-written list is this
+/// repo's most-repeated defect; `every_subject_prefix_is_excluded_from_paths`
+/// scans `src/` and fails the build when a sixth namespace is added without
+/// being added here.
+const SUBJECT_PREFIXES: &[&str] = &[
+    crate::atoms::ATOM_PREFIX,
+    crate::atoms::TELOS_PREFIX,
+    crate::bridge::BRIDGE_PREFIX,
+    crate::schema::SCHEMA_PREFIX,
+    crate::tension::TENSION_PREFIX,
+];
+
 fn looks_like_path(s: &str) -> bool {
     if s.is_empty()
         || !s.contains('/')
@@ -659,6 +681,9 @@ fn looks_like_path(s: &str) -> bool {
         // not this repo's to resolve.
         || s.starts_with('~')
         || s.contains("...")
+        // A kan subject in one of day's own namespaces. No file will ever
+        // exist there, and day defines the namespace.
+        || SUBJECT_PREFIXES.iter().any(|p| s.starts_with(p))
     {
         return false;
     }
@@ -924,6 +949,109 @@ mod tests {
             "src/cli/",
         ] {
             assert!(looks_like_path(path), "{path:?} should be a file path");
+        }
+    }
+
+    /// **day#136 — a subject whose last segment looks like a filename.**
+    ///
+    /// The test above passes for `telos/composable-process` for the wrong
+    /// reason: that slug has no dot, so it fails the extension test rather than
+    /// being recognised as a subject. `telos/v1.0` does have one, and `v1.0`
+    /// is indistinguishable from `lib.rs` by shape alone — so the exclusion has
+    /// to be about the *namespace*, not about what the slug looks like.
+    #[test]
+    fn a_subject_whose_slug_looks_like_a_filename_is_still_not_a_path() {
+        for not_a_path in [
+            "telos/v1.0",
+            "atom/v1.0",
+            "bridge/v0.7-beta2",
+            "schema/design-doc",
+            "tension/a--b",
+        ] {
+            assert!(
+                !looks_like_path(not_a_path),
+                "{not_a_path:?} is a kan subject in one of day's own namespaces, \
+                 not a file — warning about it argues an author into dropping \
+                 the exact subject a reader would `kan show`"
+            );
+        }
+    }
+
+    /// **The exclusion list is derived, not remembered.**
+    ///
+    /// `SUBJECT_PREFIXES` re-lists constants that live in five other modules,
+    /// which is exactly the shape that drifts: a sixth namespace gets a
+    /// constant and nothing points out that this list did not grow. Scanning
+    /// `src/` for the declarations means adding one fails the build here
+    /// instead of quietly reintroducing day#136 for the new namespace.
+    #[test]
+    fn every_subject_prefix_is_excluded_from_paths() {
+        let mut declared: Vec<(String, String)> = Vec::new();
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut stack = vec![src];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("src/ should be readable") {
+                let path = entry.expect("a readable dir entry").path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("a readable source file");
+                for line in text.lines() {
+                    // `pub const FOO_PREFIX: &str = "foo/";`
+                    let Some(rest) = line.trim().strip_prefix("pub const ") else {
+                        continue;
+                    };
+                    let Some((name, value)) = rest.split_once(": &str = ") else {
+                        continue;
+                    };
+                    if !name.ends_with("_PREFIX") {
+                        continue;
+                    }
+                    let value = value.trim_end_matches(';').trim_matches('"');
+                    if value.ends_with('/') {
+                        declared.push((name.to_string(), value.to_string()));
+                    }
+                }
+            }
+        }
+
+        // A scan that finds nothing would pass vacuously, which is the defect
+        // class this repo names most often. Five namespaces exist today; the
+        // floor is deliberately a floor, so adding one does not fail *here*.
+        assert!(
+            declared.len() >= 5,
+            "the scan found only {} `*_PREFIX` constants — it has stopped \
+             matching the source it is supposed to read, and would pass \
+             whatever the list said",
+            declared.len()
+        );
+
+        // Asserted through `looks_like_path`, NOT against `SUBJECT_PREFIXES`.
+        //
+        // Membership is the implementation; "a citation in this namespace is
+        // not reported as a missing file" is the property, and it is the one a
+        // reader of a design doc actually meets. Going through the function
+        // also keeps this test *revertible*: a test naming the constant makes
+        // every revert of the fix fail to compile, and `revert-demo.py` then
+        // reports DID-NOT-COMPILE — honest, and silent about whether anything
+        // asserts the fix.
+        for (name, prefix) in declared {
+            // A slug shaped like a filename, which is the day#136 case: a
+            // namespace excluded only by its slugs happening to lack a dot is
+            // not excluded at all.
+            let citation = format!("{prefix}v1.0");
+            assert!(
+                !looks_like_path(&citation),
+                "{name} declares the subject namespace {prefix:?}, but \
+                 {citation:?} is still read as a file path — so `day design \
+                 check` will warn that citing it is a missing file (day#136), \
+                 and the cheapest way to silence that is to stop naming the \
+                 subject. Add {prefix:?} to `SUBJECT_PREFIXES`."
+            );
         }
     }
 
