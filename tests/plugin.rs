@@ -154,6 +154,51 @@ fn shipped_commands() -> Vec<String> {
     out
 }
 
+/// **Every shipped command is reachable without installing the plugin.**
+///
+/// `commands/` is the plugin's payload, and a plugin nobody installed delivers
+/// nothing. day#109 measured that: no `SessionStart` hook is registered
+/// anywhere on this machine and `enabledPlugins` is null for every kan-tools
+/// project, so the wiring `day init` prints is wiring that does not happen.
+///
+/// Two commands were written, merged, and described in a pull request before
+/// anyone checked whether a session could invoke them. `day doctor`,
+/// `day next` and `day status` all passed — they confirm the ATOMS exist and
+/// are structurally blind to whether the harness can reach the COMMAND.
+///
+/// `.claude/commands/` is where Claude Code discovers project commands, and
+/// these are symlinks rather than copies so there is no second file to drift.
+/// Derived from the directory, because a hand-maintained list of links is the
+/// thing that fails to grow — the defect this file already records for
+/// `commands/` itself.
+#[test]
+fn every_shipped_command_is_reachable_in_this_repo() {
+    let root = repo_root();
+    for file in shipped_commands() {
+        let name = file
+            .strip_prefix("commands/")
+            .expect("shipped_commands prefix");
+        let link = root.join(".claude/commands").join(name);
+        let target = std::fs::read_link(&link).unwrap_or_else(|e| {
+            panic!(
+                "{name} ships in commands/ and is not linked into .claude/commands/, \
+                 so no session in this repo can invoke it without installing the \
+                 plugin ({e}). day#109: the plugin is not installed anywhere."
+            )
+        });
+        assert_eq!(
+            target,
+            std::path::Path::new("../../commands").join(name),
+            "{name} should link to the plugin file rather than copy it — a copy \
+             is a second version that drifts"
+        );
+        assert!(
+            link.exists(),
+            "{name}'s link is dangling; it resolves to nothing"
+        );
+    }
+}
+
 #[test]
 fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
     // Markers are per-command and stay explicit; the FILE LIST is derived, so a
