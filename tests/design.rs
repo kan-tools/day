@@ -377,6 +377,75 @@ fn recording_an_iterated_design_is_incremental() {
     );
 }
 
+/// **day#119 — the observe/plan pair was appended on every run.**
+///
+/// `design record` was idempotent for resolutions and not for the pair, so
+/// three passes over one document left three `Observation`s and three `Plan`s
+/// beside exactly one `Decision` per id. Non-destruction makes the cost
+/// permanent: they can only be retracted, by hand, which is a workaround a user
+/// should not have to know about.
+///
+/// **Both halves are checked, and that is the whole subtlety.** The observe text
+/// carries the validation report's summary and the plan text carries the
+/// document's own summary line, so they change on different edits. A first
+/// version decided from the observe half alone and reported `(unchanged)` for a
+/// document whose Summary had been rewritten — caught by running it, against a
+/// comment asserting the two were derived from the same thing.
+#[test]
+fn an_unchanged_design_pass_records_no_second_observe_or_plan() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("steady.md");
+    let body = |summary: &str| {
+        format!(
+            "# Feature: Steady\n\n## Summary\n{summary}\n\n## Requirements\n\
+             - REQ-1: a.\n- REQ-2: b.\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: REQ-1.\n- [ ] AC-2: REQ-2.\n\n## Architecture\n\
+             In `src/probe.rs`.\n\n## Resolved Questions\n\
+             - RQ-1: the first thing.\n"
+        )
+    };
+    std::fs::write(&doc, body("the original summary")).unwrap();
+
+    let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafysc")]);
+    let run = |kan: &std::path::Path| {
+        String::from_utf8_lossy(
+            &day(
+                dir.path(),
+                kan,
+                &["design", "record", doc.to_str().unwrap()],
+            )
+            .stdout,
+        )
+        .to_string()
+    };
+
+    let first = run(&kan);
+    assert!(
+        !first.contains("(unchanged)"),
+        "the first pass has nothing to be unchanged from: {first}"
+    );
+
+    let second = run(&kan);
+    assert_eq!(
+        second.matches("(unchanged)").count(),
+        2,
+        "an identical document must append neither half, and must say so \
+         rather than printing the existing CIDs as though they were written: \
+         {second}"
+    );
+
+    // The counts are untouched, so the *report summary* — and with it the
+    // observe text — is identical. Only the plan text moves.
+    std::fs::write(&doc, body("a completely rewritten summary")).unwrap();
+    let third = run(&kan);
+    assert!(
+        !third.contains("(unchanged)"),
+        "a document whose Summary changed is a design that changed, and must \
+         record a new pair even though the validation report is identical — \
+         deciding from the observe half alone loses exactly this edit: {third}"
+    );
+}
+
 /// The negative control, and the backward-compatibility half: a document with no
 /// ids behaves exactly as it did before day#36 — every bullet recorded, every
 /// time — and day says so rather than leaving the duplication to be discovered.

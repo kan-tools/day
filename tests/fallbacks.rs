@@ -27,7 +27,7 @@
 
 mod common;
 
-use common::{repo_root, unreadable_kan, write_kan_stub};
+use common::{repo_root, schema_claim, unreadable_kan, write_kan_stub};
 use std::path::Path;
 use std::process::Command;
 
@@ -278,6 +278,83 @@ fn fallback_hook_degrades_when_kan_cannot_read() {
         !text.trim().is_empty(),
         "the degraded hook must still say something; silence is the failure \
          mode day#60 was about"
+    );
+}
+
+/// **fallback: unreadable-subject-records-the-pair** — day#119.
+///
+/// `newest_of_kind` asks whether an identical observe/plan pair is already on
+/// the subject, so an unchanged design pass records nothing. `KanClient::show`
+/// is served from the memoized bulk read and returns `Error::Unaccounted` for a
+/// subject `status --json` listed and `show --all --json` did not — so the
+/// question can fail to be answered, and the answer day assumes decides whether
+/// a claim is written.
+///
+/// **The direction is the assertion.** Degrading to "records the pair" costs a
+/// duplicate claim on an append-only log. Degrading the other way — treating
+/// unreadable as unchanged — records NOTHING for a design pass that did happen,
+/// which is a silent loss and permanent. This test fixes the direction, because
+/// nothing else can: day is never in this mode.
+#[test]
+fn fallback_unreadable_subject_records_the_pair() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    std::fs::write(dir.path().join("src/design.rs"), "// fixture\n").unwrap();
+    std::fs::create_dir_all(dir.path().join(".design")).unwrap();
+    let doc = "# Feature: a thing\n\n## Summary\nIt does the thing.\n\n\
+        ## Requirements\n- REQ-1: first\n\n## Acceptance Criteria\n\
+        - [ ] AC-1: covers (REQ-1)\n\n## Architecture\nTouches `src/design.rs`.\n\n\
+        ## Resolved Questions\n- RQ-1: chose the first thing\n";
+    std::fs::write(dir.path().join(".design/thing.md"), doc).unwrap();
+
+    let honest = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafyreischema")]);
+    let record = |kan: &Path| {
+        String::from_utf8_lossy(
+            &day(dir.path(), kan, &["design", "record", ".design/thing.md"]).stdout,
+        )
+        .to_string()
+    };
+
+    // Premise, asserted rather than assumed: against a readable log the second
+    // pass DOES skip. Without this the test passes on a day that never skips at
+    // all, which would make the fallback assertion below meaningless.
+    record(&honest);
+    let readable_second = record(&honest);
+    assert!(
+        readable_second.contains("(unchanged)"),
+        "premise: the skip must work when the subject IS readable, or this test \
+         cannot tell the fallback from the ordinary path and would pass on a day \
+         that never skips at all: {readable_second}"
+    );
+
+    // Now the same second pass, with `thing` dropped from the bulk read only.
+    // `status --json` still lists it, so day sees a subject it cannot account
+    // for rather than a subject that does not exist.
+    let dropping = dir.path().join("kan-dropping.sh");
+    std::fs::write(
+        &dropping,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = show ] && [ \"$2\" = --all ]; then\n\
+               {inner} \"$@\" | python3 -c 'import json,sys; d=json.load(sys.stdin); \
+             d[\"subjects\"]=[e for e in d[\"subjects\"] if e[\"subject\"]!=\"thing\"]; \
+             print(json.dumps(d))'\n\
+               exit 0\n\
+             fi\n\
+             exec {inner} \"$@\"\n",
+            inner = honest.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&dropping, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let degraded = record(&dropping);
+    assert!(
+        !degraded.contains("(unchanged)"),
+        "a subject day could not read must never be reported as unchanged — \
+         that records nothing for a design pass that happened, and an \
+         append-only log cannot get it back: {degraded}"
     );
 }
 

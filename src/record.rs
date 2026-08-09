@@ -65,6 +65,13 @@ pub struct Recorded {
     pub subject: String,
     pub observe: String,
     pub plan: String,
+    /// Whether the observe/plan pair was **unchanged** since the last run, so
+    /// nothing was appended and the reported CIDs are the existing claims'
+    /// (day#119). Reported rather than silent for the same reason `skipped` is:
+    /// "recorded" and "already said this" are different facts, and printing the
+    /// second as the first is what made three passes leave six near-identical
+    /// claims nobody could order.
+    pub pair_unchanged: bool,
     pub decisions: Vec<String>,
     /// Resolution ids already on the subject, so a re-record is incremental
     /// (day#36). Reported rather than silent: "recorded 2, skipped 8" is a
@@ -80,8 +87,13 @@ pub struct Recorded {
 impl Recorded {
     pub fn render(&self) -> String {
         let mut out = format!("recorded design pass on subject `{}`\n", self.subject);
-        out.push_str(&format!("  observe  {}\n", self.observe));
-        out.push_str(&format!("  plan     {}\n", self.plan));
+        if self.pair_unchanged {
+            out.push_str(&format!("  observe  {} (unchanged)\n", self.observe));
+            out.push_str(&format!("  plan     {} (unchanged)\n", self.plan));
+        } else {
+            out.push_str(&format!("  observe  {}\n", self.observe));
+            out.push_str(&format!("  plan     {}\n", self.plan));
+        }
         for cid in &self.decisions {
             out.push_str(&format!("  decide   {cid}\n"));
         }
@@ -142,7 +154,20 @@ pub fn design(
         crate::schema::DEFAULT_SLUG,
         report.summary()
     );
-    let observe = client.append(Write::new("observe", &subject, &observe_text))?;
+    // day#119: the observe/plan pair was appended on every run, so three passes
+    // over one evolving document left three of each — while the resolution half
+    // correctly recorded one `decide` per `RQ-` id. The command already knew how
+    // to ask "is this on the subject already"; it asked for one of the three
+    // things it writes.
+    //
+    // **Superseding is done by citing, never by retracting.** The issue's
+    // preferred remedy was to retract the previous pair, and day may not: it
+    // only ever appends, and kan exposes no destroy path for it to reach. So an
+    // unchanged pair records nothing, and a changed one cites the pair it
+    // supersedes — which is how kan expresses supersession anyway, and leaves
+    // the ordering explicit rather than inferred from CID order.
+    let previous_observe = newest_of_kind(client, &subject, "Observation");
+    let previous_plan = newest_of_kind(client, &subject, "Plan");
 
     let summary = doc
         .summary_line()
@@ -151,13 +176,51 @@ pub fn design(
         "{subject} design ({shown}): {summary} [{}]",
         report.summary()
     );
-    let cites = [observe.clone()];
-    let mut write = Write::new("plan", &subject, &plan_text).cites(&cites);
-    let title = doc.title.clone();
-    if let Some(title) = title.as_deref() {
-        write = write.declaring(title, "idea");
-    }
-    let plan = client.append(write)?;
+    // **BOTH halves must be unchanged, and this is not a formality.** The two
+    // texts are derived from *different* things: the observe carries the
+    // validation report's summary, the plan carries the document's own summary
+    // line. So a document whose Summary section was rewritten while its counts
+    // stayed put changes the plan text and not the observe text — deciding from
+    // the observe half alone silently records neither, losing a real change.
+    //
+    // Caught by running it, after a comment here asserted the opposite: three
+    // passes over an edited document all reported `(unchanged)`. The mechanism
+    // the comment named was wrong about the code beside it, which is the exact
+    // failure CLAUDE.md keeps a section for.
+    //
+    // They still move together once decided, because a plan citing an observe
+    // from two passes ago is a worse record than either outcome.
+    let pair_unchanged = previous_observe
+        .as_ref()
+        .is_some_and(|(_, text)| text == &observe_text)
+        && previous_plan
+            .as_ref()
+            .is_some_and(|(_, text)| text == &plan_text);
+
+    let observe = match &previous_observe {
+        Some((cid, _)) if pair_unchanged => cid.clone(),
+        Some((cid, _)) => {
+            let cites = [cid.clone()];
+            client.append(Write::new("observe", &subject, &observe_text).cites(&cites))?
+        }
+        None => client.append(Write::new("observe", &subject, &observe_text))?,
+    };
+
+    let plan = match &previous_plan {
+        Some((cid, _)) if pair_unchanged => cid.clone(),
+        previous => {
+            let mut cites = vec![observe.clone()];
+            if let Some((cid, _)) = previous {
+                cites.push(cid.clone());
+            }
+            let mut write = Write::new("plan", &subject, &plan_text).cites(&cites);
+            let title = doc.title.clone();
+            if let Some(title) = title.as_deref() {
+                write = write.declaring(title, "idea");
+            }
+            client.append(write)?
+        }
+    };
 
     let plan_cites = [plan.clone()];
     let mut decisions = Vec::new();
@@ -196,6 +259,7 @@ pub fn design(
         subject,
         observe,
         plan,
+        pair_unchanged,
         decisions,
         skipped,
         unidentified,
@@ -223,6 +287,26 @@ pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
 /// the one site where failing toward *more* recording is right, so it is the one
 /// site the hatch is spent on. Stated because the opposite default would be the
 /// silent-loss failure this rule is about.
+/// The newest claim of `kind` on `subject`, as `(cid, text)`.
+///
+/// day#119. Newest by position: `KanClient::show` returns a subject's claims in
+/// record order, which is the same ordering `existing_resolution_ids` relies on
+/// by not needing one.
+fn newest_of_kind(client: &KanClient, subject: &str, kind: &str) -> Option<(String, String)> {
+    // fallback: unreadable-subject-records-the-pair
+    // kan-read-may-degrade: a failed read here degrades to "append the pair",
+    // which is exactly the pre-day#119 behaviour — a duplicate claim, never a
+    // lost one. The opposite degradation (treat unreadable as unchanged) would
+    // silently record NOTHING for a design pass that did happen, so the
+    // direction is chosen rather than inherited.
+    let claims = client.show(subject).ok()?;
+    claims
+        .iter()
+        .rev()
+        .find(|c| c.kind == kind)
+        .and_then(|c| c.text.clone().map(|t| (c.cid.clone(), t)))
+}
+
 fn existing_resolution_ids(
     client: &KanClient,
     subject: &str,
