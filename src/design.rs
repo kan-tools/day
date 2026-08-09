@@ -612,6 +612,15 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     if !schema.paths_section.is_empty() {
         if let Some(body) = doc.section(&schema.paths_section) {
             let paths = Document::quoted_paths(body);
+            // day#84: a citation under a declared external root is not this
+            // repo's to resolve. Partitioned BEFORE the existence test rather
+            // than filtered out of `missing` afterwards, so an external path
+            // also stops counting toward "references no existing file" — a doc
+            // citing only the other repo would otherwise FAIL for having
+            // grounded itself precisely.
+            let (external, paths): (Vec<String>, Vec<String>) = paths
+                .into_iter()
+                .partition(|p| schema.paths_external.iter().any(|root| p.starts_with(root)));
             let missing: Vec<&String> = paths.iter().filter(|p| !base.join(p).exists()).collect();
             // The rule is grounding, not omniscience: a design must point at
             // code that exists, but an Architecture section naming files it
@@ -643,6 +652,25 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
                         message: format!("referenced path does not exist yet: {path}"),
                     });
                 }
+            }
+            // Reported, not silently dropped. An exclusion a reader cannot see
+            // is one they cannot correct — and if a root is declared wrongly,
+            // this line is the only place that says so.
+            if !external.is_empty() {
+                findings.push(Finding {
+                    // `Unchecked`, which already means exactly this: a check
+                    // that could not be run, as distinct from one that ran and
+                    // found nothing. Not a new variant — day#105 put that
+                    // distinction here for the same reason, and an external
+                    // path is the textbook case of it.
+                    verdict: Verdict::Unchecked,
+                    message: format!(
+                        "{} external path(s) not checked, under declared root(s) {}: {}",
+                        external.len(),
+                        schema.paths_external.join(", "),
+                        external.join(", ")
+                    ),
+                });
             }
         }
     }
@@ -1087,6 +1115,93 @@ mod tests {
                 "a section that does yield bullets records fine: {render}"
             );
         }
+    }
+
+    /// **day#84 — a path in a sibling repo is not this repo's to resolve.**
+    ///
+    /// The whole coordination surface between day and kan is documents in one
+    /// repo about code in the other, so citing `kan/src/workspace.rs` is the
+    /// precise thing to do — and it drew `referenced path does not exist yet`.
+    /// The issue's substance is that the warning **changed what got written**:
+    /// the path was replaced by a symbol name to silence it, leaving the
+    /// document less precise than with no check at all.
+    ///
+    /// The declared root is asserted three ways, because two of them are the
+    /// ways a naive fix goes wrong.
+    #[test]
+    fn a_path_under_a_declared_external_root_is_unchecked_not_missing() {
+        // Declared the way a project declares it — as the JSON of a
+        // `day-schema` block — rather than by naming the field in Rust.
+        //
+        // That is not cosmetic. A test that touches `schema.paths_external`
+        // makes every revert of this change fail to COMPILE, and
+        // `revert-demo.py` then reports DID-NOT-COMPILE, which says nothing
+        // about whether anything asserts the fix. Going through the declaration
+        // keeps the demonstration possible, and `Schema` is
+        // `deny_unknown_fields`, so a tree without the field refuses this
+        // document loudly instead of ignoring the key.
+        let mut declared = serde_json::to_value(Schema::starter()).expect("starter serializes");
+        declared["paths_external"] = serde_json::json!(["kan/"]);
+        let schema: Schema =
+            serde_json::from_value(declared).expect("a schema declaring an external root");
+
+        let doc = Document::parse(
+            "# Feature: contract\n\n## Summary\nWhat day needs from kan.\n\n\
+             ## Requirements\n- REQ-1: a\n- REQ-2: b\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, and the cost lives in `kan/src/workspace.rs`.\n",
+        );
+        let render = check(&doc, &schema, Path::new(env!("CARGO_MANIFEST_DIR"))).render();
+
+        assert!(
+            !render.contains("referenced path does not exist yet: kan/src/workspace.rs"),
+            "a declared external root must not be reported as missing — that \
+             warning is what argued the path out of the document: {render}"
+        );
+        assert!(
+            render.contains("external path(s) not checked"),
+            "and it must be REPORTED as unchecked, not silently dropped: an \
+             exclusion a reader cannot see is one they cannot correct: {render}"
+        );
+        // The in-repo path is still counted, and still the thing that grounds
+        // the document. Partitioning before the existence test is what makes
+        // this hold: filtering `missing` afterwards would leave the external
+        // path in `paths`, so a doc citing ONLY the other repo would fail for
+        // "references no existing file" having grounded itself precisely.
+        assert!(
+            render.contains("1 of 1 referenced path(s) exist"),
+            "the external path must leave the in-repo count alone: {render}"
+        );
+    }
+
+    /// The negative control. With no root declared — every project today, since
+    /// the starter ships none — the behaviour is exactly what it was, warning
+    /// included. Without this the test above passes against a check that has
+    /// stopped looking at paths at all.
+    #[test]
+    fn an_undeclared_external_root_still_warns_exactly_as_before() {
+        let doc = Document::parse(
+            "# Feature: contract\n\n## Summary\nWhat day needs from kan.\n\n\
+             ## Requirements\n- REQ-1: a\n- REQ-2: b\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, and the cost lives in `kan/src/workspace.rs`.\n",
+        );
+        let render = check(
+            &doc,
+            &Schema::starter(),
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+        )
+        .render();
+
+        assert!(
+            render.contains("referenced path does not exist yet: kan/src/workspace.rs"),
+            "with nothing declared, day#84's warning is unchanged — the fix is \
+             opt-in per project, not a quiet narrowing for everyone: {render}"
+        );
+        assert!(
+            !render.contains("external path(s) not checked"),
+            "and nothing is reported as external: {render}"
+        );
     }
 
     #[test]

@@ -86,6 +86,24 @@ pub struct Schema {
     /// exactly what iterating on a design does.
     #[serde(default = "default_resolution_prefix")]
     pub resolution_prefix: String,
+    /// Path roots that belong to **another repository**, so a citation under
+    /// one is reported as unchecked rather than as missing (day#84).
+    ///
+    /// The whole coordination surface between day and kan is documents in one
+    /// repo about code in the other, so this recurs by construction. What made
+    /// it worth a schema field rather than a heuristic is that the warning
+    /// **changed what got written**: `kan/src/workspace.rs` was replaced with a
+    /// symbol name to silence it, leaving the document less precise than it
+    /// would have been with no check at all. A linter that degrades the artifact
+    /// it validates is worse than absent.
+    ///
+    /// Declared rather than inferred, on the same argument day#136 settled one
+    /// module over: "this segment is not a directory here" would also swallow a
+    /// genuine typo in a top-level path, and an exclusion nobody can see is one
+    /// nobody can correct. Empty by default, so a project that never cites
+    /// across a repo boundary is unaffected.
+    #[serde(default)]
+    pub paths_external: Vec<String>,
 }
 
 impl crate::atoms::Versioned for Schema {
@@ -125,6 +143,11 @@ impl Schema {
             paths_section: "Architecture".to_string(),
             resolved_section: "Resolved Questions".to_string(),
             resolution_prefix: default_resolution_prefix(),
+            // Empty in the starter, deliberately. A project that cites across
+            // a repo boundary declares the root it cites into; suggesting one
+            // here would ship an exclusion nobody asked for, and day#84's whole
+            // complaint is about a check quietly deciding what not to look at.
+            paths_external: Vec::new(),
         }
     }
 
