@@ -552,13 +552,53 @@ pub struct UnknownEvent(pub String);
 ///
 /// fallback: hook-degrades-when-kan-cannot-read
 pub fn session_notice(client: &KanClient, root: &Path) -> String {
+    let mut notices: Vec<String> = Vec::new();
+
+    // Compat first, because a pairing problem explains anything reported under
+    // it. Kept ahead of `status::compute` for a second reason: that call is the
+    // one that degrades to nothing when kan cannot be read, and a version
+    // mismatch day *can* state should not be suppressed by a status day cannot.
+    //
+    // fallback: notice-degrades-when-kan-cannot-read
+    if let Some(pairing) = compat_notice(client) {
+        notices.push(pairing);
+    }
+
     let git = Git::new(root);
-    let Ok(status) = crate::status::compute(client, &git) else {
+    if let Ok(status) = crate::status::compute(client, &git) {
+        notices.extend(status.notice());
+    }
+
+    if notices.is_empty() {
         return String::new();
-    };
-    match status.notice() {
-        Some(notice) => serde_json::json!({ "systemMessage": notice }).to_string(),
-        None => String::new(),
+    }
+    serde_json::json!({ "systemMessage": notices.join("\n\n") }).to_string()
+}
+
+/// The kan-pairing line, when the pairing is worth saying something about.
+///
+/// **Only [`Compat::TooOld`] and [`Compat::Newer`].** [`Compat::Supported`] is
+/// the quiet case by design, and [`Compat::Unknown`] is deliberately skipped
+/// here even though `day doctor` reports it: `render` phrases that case as
+/// "kan: reachable, version unknown", and reachability is precisely what this
+/// call site has *not* established. `doctor` earns that wording by calling
+/// `client.probe()` first; this hook does not probe, so emitting it would be
+/// day asserting something it never checked — `telos/honest-reads`, in the
+/// direction that is easy to miss because the text sounds harmless.
+///
+/// The absent-binary case is not day's to report at all: a `day` that cannot be
+/// found cannot say so. `hooks/bootstrap-check.sh` covers it, which is why that
+/// one script is exempt from "every SessionStart command is a `day hook`".
+///
+/// Wording comes from [`compat::render`] rather than being restated, so the
+/// range and its explanation live in exactly one place.
+fn compat_notice(client: &KanClient) -> Option<String> {
+    let kan = client.version();
+    match crate::compat::classify(kan.as_ref()) {
+        crate::compat::Compat::TooOld | crate::compat::Compat::Newer => {
+            Some(crate::compat::render(kan.as_ref()).trim_end().to_string())
+        }
+        crate::compat::Compat::Supported | crate::compat::Compat::Unknown => None,
     }
 }
 
