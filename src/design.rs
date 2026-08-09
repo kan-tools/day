@@ -163,29 +163,49 @@ impl Document {
             // author into writing, so fifteen criteria became zero with
             // nothing naming the cause.
             //
-            // The discriminator is a **qualifier, not prose**. A loose mention
-            // (`- REQ-1 is also relevant here`) stays a mention, which is what
-            // `valid_ids_and_loose_mentions_are_not_flagged_as_malformed`
-            // fixes in place: the line must be a list item, it must carry a
-            // colon, and everything between the id and that colon must be free
-            // of ordinary lowercase words. `(REQ-1)` and `— REQ-2` qualify;
-            // `is also relevant` does not.
+            // **The discriminator is STRUCTURAL, after a first attempt keyed on
+            // vocabulary got it wrong in both directions.** That version asked
+            // whether the text between the id and the colon contained an
+            // "ordinary lowercase word". A cold review reproduced both failures:
+            //
+            //   - [ ] AC-1 (covers REQ-1): …   dropped — "covers" reads as prose
+            //   - REQ-1 é válido: ver arriba   flagged — no ASCII lowercase word
+            //
+            // The first is day#123 verbatim, and the issue's own wording is
+            // "name the requirement each criterion COVERS", so it is at least as
+            // natural as the form that was fixed. The second cries wolf on any
+            // language whose words carry accents, which is a rule about English
+            // rather than about markdown.
+            //
+            // Two structural signals replace it, neither depending on what the
+            // words mean:
+            //
+            //   1. A CHECKBOX item (`- [ ] AC-1 …`) is a criterion by
+            //      construction. Nobody writes a checkbox to mention an id in
+            //      passing, so anything but the strict form there is a
+            //      declaration whose id did not parse — colon or no colon.
+            //   2. Otherwise, a BRACKETED qualifier immediately after the id
+            //      (`(REQ-1)`, `[REQ-1]`) followed by a colon. Prose does not
+            //      open a bracket where a colon belongs.
+            //
+            // `- REQ-1 is also relevant here` and `- REQ-1 is relevant: see
+            // above` are neither, and stay mentions — which
+            // `valid_ids_and_loose_mentions_are_not_flagged_as_malformed` and
+            // `a_bullet_mentioning_an_id_in_prose_is_still_not_malformed` fix
+            // in place.
+            //
             // The strict form itself. Checked here rather than relied on from
             // the branch above, which only ever saw ids that *continued*.
             if after.starts_with(':') {
                 continue;
             }
-            if is_list_item(line) {
-                let Some((gap, _)) = after.split_once(':') else {
-                    continue;
-                };
-                let reads_as_prose = gap.split_whitespace().any(|word| {
-                    let word = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
-                    word.len() >= 2 && word.chars().all(|c| c.is_ascii_lowercase())
-                });
-                if !reads_as_prose {
-                    out.push(format!("{prefix}{num}{}", gap.trim_end()));
-                }
+            let trimmed = after.trim_start();
+            if is_checkbox_item(line) {
+                let shown = after.split(':').next().unwrap_or(after).trim_end();
+                out.push(format!("{prefix}{num}{shown}"));
+            } else if is_list_item(line) && trimmed.starts_with(['(', '[']) && after.contains(':') {
+                let gap = after.split(':').next().unwrap_or_default();
+                out.push(format!("{prefix}{num}{}", gap.trim_end()));
             }
         }
         out
@@ -787,16 +807,52 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     // absence of `RQ-`. CLAUDE.md records a classifier keyed on a phrase's
     // absence being suppressed by an unrelated finding; this is the same trap
     // one section over.
+    //
+    // **The first version keyed on sub-headings alone and missed three shapes**,
+    // one of them sharper than the case it was written for: a NUMBERED list
+    // (`1. RQ-1: …`) carrying correct ids, ordered, obviously intended as
+    // resolutions, recording nothing and warning nothing. Prose paragraphs and
+    // an id-less bullet list missed too. The signal is widened to "the section
+    // has content that is trying to be a resolution", which is still positive —
+    // it asks what IS there, never whether `RQ-` is absent.
     if let Some(body) = doc.section(&schema.resolved_section) {
         let subheadings = body
             .lines()
             .filter(|l| l.trim_start().starts_with('#'))
             .count();
-        if doc.bullets(&schema.resolved_section).is_empty() && subheadings > 0 {
+        // A numbered item — `1.` or `1)` — which `bullets()` does not read,
+        // because it looks only for `- `.
+        let numbered = body
+            .lines()
+            .filter(|l| {
+                let t = l.trim_start();
+                let digits: String = t.chars().take_while(char::is_ascii_digit).collect();
+                !digits.is_empty() && t[digits.len()..].starts_with(['.', ')'])
+            })
+            .count();
+        // Any other non-blank, non-heading prose. Counted last and used only
+        // when nothing better is present, so the message names the most
+        // specific shape it found.
+        let prose = body
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+            .count();
+        let carrying = if numbered > 0 {
+            Some((numbered, "numbered item(s)"))
+        } else if subheadings > 0 {
+            Some((subheadings, "sub-heading(s)"))
+        } else if prose > 0 {
+            Some((prose, "line(s) of prose"))
+        } else {
+            None
+        };
+        if let Some((count, shape)) =
+            carrying.filter(|_| doc.bullets(&schema.resolved_section).is_empty())
+        {
             findings.push(Finding {
                 verdict: Verdict::Warn,
                 message: format!(
-                    "{} carries {subheadings} sub-heading(s) and no bullets, so \
+                    "{} carries {count} {shape} and no bullets, so \
                      `day design record` will record no decisions from it — \
                      resolutions are read from `- ` bullets only. Rewrite them as \
                      `- {}1: …` bullets, or the reasoning stays in the document \
@@ -824,6 +880,19 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
 /// head of the line is a declaration rather than a mention (day#123).
 fn is_list_item(line: &str) -> bool {
     line.trim_start().starts_with(['-', '*', '+'])
+}
+
+/// Whether `line` is a markdown **checkbox** item, `- [ ]` or `- [x]`.
+///
+/// The strongest structural signal day#123 has: a checkbox is a criterion by
+/// construction. Nobody writes `- [ ]` to mention an id in passing, so an id at
+/// the head of one that is not in the strict form is a declaration that failed
+/// to parse — which is what makes the drop reportable without any judgement
+/// about what the words say.
+fn is_checkbox_item(line: &str) -> bool {
+    let rest = line.trim_start().trim_start_matches(['-', '*', '+']);
+    let rest = rest.trim_start();
+    rest.starts_with("[ ]") || rest.starts_with("[x]") || rest.starts_with("[X]")
 }
 
 fn strip_list_prefix(line: &str) -> &str {
@@ -1161,12 +1230,51 @@ mod tests {
     /// *mentions* an id, with or without a colon later in the sentence, is
     /// still a mention — the discriminator is a qualifier versus prose, not
     /// the mere presence of a colon.
+    /// **day#123's discriminator, after a cold review broke it both ways.**
+    ///
+    /// The first version asked whether the gap between the id and the colon
+    /// contained an "ordinary lowercase word" — so `(covers REQ-1)` read as
+    /// prose and was dropped, which is day#123 verbatim and matches the issue's
+    /// own wording ("name the requirement each criterion COVERS"); and
+    /// `- REQ-1 é válido: ver arriba` was flagged, which is a rule about
+    /// English rather than about markdown.
+    ///
+    /// Both signals are structural now: a checkbox is a criterion by
+    /// construction, and a bracketed qualifier is not something prose puts
+    /// where a colon belongs.
+    #[test]
+    fn a_declaration_is_recognised_by_shape_not_by_vocabulary() {
+        for line in [
+            "- [ ] AC-1 (REQ-1): checks first",
+            "- [ ] AC-1 (covers REQ-1): checks first",
+            "- [ ] AC-1 (see REQ-1): checks",
+            "- [ ] AC-1 (covers REQ-1 and REQ-2): checks both",
+            // No colon at all: the id still did not parse, and the criterion is
+            // still dropped, so it is still a declaration day must name.
+            "- [ ] AC-1 (REQ-1) checks first",
+            "- AC-1 [REQ-1]: a bracketed qualifier outside a checkbox",
+        ] {
+            let doc = Document::parse(&format!("# F\n\n## Acceptance Criteria\n{line}\n"));
+            assert!(
+                !doc.malformed_ids("AC-").is_empty(),
+                "{line:?} is a declaration whose id did not parse, and dropping \
+                 it silently is day#123"
+            );
+        }
+    }
+
     #[test]
     fn a_bullet_mentioning_an_id_in_prose_is_still_not_malformed() {
         for line in [
             "- REQ-1 is also relevant here",
             "- REQ-1 is relevant: see the note above",
             "- REQ-2 and the surrounding text: both discussed below",
+            // day#123's other direction: prose in a language whose words carry
+            // accents was flagged, because the old rule looked for an ASCII
+            // lowercase word and found none.
+            "- REQ-1 é válido: ver arriba",
+            "- REQ-1 已解决: see above",
+            "- REQ-1 §4: see the spec",
         ] {
             let text = format!("{DOC}\n{line}\n");
             let doc = Document::parse(&text);
@@ -1210,6 +1318,53 @@ mod tests {
             render.contains("2 sub-heading(s) and no bullets"),
             "the drop must be named, and counted from the positive signal: {render}"
         );
+    }
+
+    /// **day#135 missed three shapes, and the numbered list is the sharpest.**
+    ///
+    /// A cold review found the first version keyed on sub-headings alone, so a
+    /// section like
+    ///
+    /// ```text
+    /// 1. RQ-1: chose the first thing
+    /// ```
+    ///
+    /// — correct ids, ordered, obviously intended as resolutions — recorded
+    /// zero decisions and warned about nothing. `bullets()` reads `- ` only.
+    /// Prose paragraphs and an id-less bullet list were missed too.
+    #[test]
+    fn a_resolved_section_that_records_nothing_says_so_in_every_shape() {
+        let cases = [
+            ("1. RQ-1: chose a\n2. RQ-2: chose b\n", "2 numbered item(s)"),
+            ("1) RQ-1: chose a\n", "1 numbered item(s)"),
+            ("### Q1 — a\n\nChose a.\n", "1 sub-heading(s)"),
+            (
+                "We considered options and settled on the first.\n",
+                "1 line(s) of prose",
+            ),
+        ];
+        for (body, expected) in cases {
+            let text = DOC.replace(
+                "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+                &format!("## Resolved Questions\n\n{body}"),
+            );
+            let doc = Document::parse(&text);
+
+            // premise: this shape really does yield no bullets, so `design
+            // record` really would record nothing.
+            assert!(
+                doc.bullets("Resolved Questions").is_empty(),
+                "premise broken for {body:?}: the fixture must yield no bullets"
+            );
+
+            let render = check(&doc, &schema(), Path::new("x.md")).render();
+            assert!(
+                render.contains(expected),
+                "{body:?} must be reported as {expected}, and the message must \
+                 name the shape it found rather than the one it was written \
+                 for: {render}"
+            );
+        }
     }
 
     /// The day#135 warning must not fire on the form that works. Keyed on a
