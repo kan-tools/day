@@ -90,6 +90,22 @@ fn fingerprint(source: &str) -> String {
     format!("{}:{hash:016x}", source.len())
 }
 
+/// The opening of every observe claim `design` writes.
+///
+/// **A contract between the writer and the reader in this one function**, which
+/// is why it is a constant rather than typed twice. day#158: `newest_of_kind`
+/// took the newest `Observation` of any kind on the subject, and
+/// `commands/adversarial-review.md` records every review finding as
+/// `kan observe "<finding>" --subject <subject>` — on the design subject. So
+/// after a review the "previous pair" was a review finding, and the next design
+/// pass cited it as the claim it superseded.
+pub const DESIGN_OBSERVE_OPENING: &str = "design doc ";
+
+/// The opening of every plan claim `design` writes, for a given subject.
+fn design_plan_opening(subject: &str) -> String {
+    format!("{subject} design (")
+}
+
 /// Slug for a design doc's subject: the filename stem unless overridden.
 pub fn slug_for(path: &Path) -> String {
     path.file_stem()
@@ -225,7 +241,7 @@ pub fn design(
     // reversed in meaning — recording nothing, on an append-only log, while
     // telling the user it had nothing to record.
     let observe_text = format!(
-        "design doc {shown} checked against the live {} schema: {} [doc {}]",
+        "{DESIGN_OBSERVE_OPENING}{shown} checked against the live {} schema: {} [doc {}]",
         crate::schema::DEFAULT_SLUG,
         report.summary(),
         fingerprint(&source)
@@ -242,14 +258,30 @@ pub fn design(
     // unchanged pair records nothing, and a changed one cites the pair it
     // supersedes — which is how kan expresses supersession anyway, and leaves
     // the ordering explicit rather than inferred from CID order.
-    let previous_observe = newest_of_kind(client, &subject, "Observation");
-    let previous_plan = newest_of_kind(client, &subject, "Plan");
+    // **Selected by what this mechanism WRITES, not by kind alone** (day#158).
+    //
+    // A design subject accumulates claims from several sources: review findings
+    // are `kan observe` on the same subject by this repo's own prescribed
+    // workflow, and a `Result` may sit between two design passes — day's own
+    // `witness-model` subject already looks like that. Taking the newest
+    // `Observation` picked whichever arrived last, so a design pass could report
+    // a false format migration AND cite an adversarial review's finding as the
+    // claim it superseded, into a log day cannot retract from.
+    //
+    // The opening is the discriminator because day writes it and nothing else
+    // does. It is shared with the `format!` above rather than restated, so the
+    // writer and the reader cannot drift apart — which is the failure this is.
+    let plan_opening = design_plan_opening(&subject);
+    let previous_observe =
+        newest_written_by_design(client, &subject, "Observation", DESIGN_OBSERVE_OPENING);
+    let previous_plan = newest_written_by_design(client, &subject, "Plan", &plan_opening);
 
     let summary = doc
         .summary_line()
         .unwrap_or_else(|| "(no summary section)".to_string());
     let plan_text = format!(
-        "{subject} design ({shown}): {summary} [{}]",
+        "{}{shown}): {summary} [{}]",
+        design_plan_opening(&subject),
         report.summary()
     );
     // **BOTH halves must be unchanged, and this is not a formality.** The two
@@ -373,20 +405,33 @@ pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
     (!digits.is_empty()).then(|| format!("{prefix}{digits}"))
 }
 
-/// The newest claim of `kind` on `subject`, as `(cid, text)`.
+/// The newest claim of `kind` on `subject` **that a design pass wrote**, as
+/// `(cid, text)`, identified by the opening day itself emits.
 ///
-/// day#119. Newest by position: `KanClient::show` returns a subject's claims in
-/// record order, which is the same ordering [`existing_resolution_ids`] relies
-/// on by not needing one.
+/// day#119 needed "the previous pair"; day#158 is what it cost to answer that
+/// with "the newest claim of that kind". A design subject collects claims from
+/// several sources — review findings arrive as `kan observe` on the same
+/// subject, which is what `commands/adversarial-review.md` prescribes — so the
+/// newest `Observation` is frequently not a design pass at all. Selecting by
+/// kind alone made a design pass cite a review's finding as superseded, and
+/// report a format migration that had not happened, over an unchanged document
+/// at exit 0.
+///
+/// Newest by position: `KanClient::show` returns a subject's claims in record
+/// order, which is the same ordering [`existing_resolution_ids`] relies on by
+/// not needing one.
 ///
 /// **The second `kan-read-may-degrade` site in this module, not the first.**
-/// [`existing_resolution_ids`] states the argument in full and used to call
-/// itself the only one; adding this function inherited that sentence by
-/// accident, so a comment claiming uniqueness sat on the thing that broke it.
-/// Both spend the hatch for the same reason and it is stated once, there.
+/// [`existing_resolution_ids`] states the argument in full; both spend the hatch
+/// for the same reason and it is stated once, there.
 ///
 /// [`existing_resolution_ids`]: fn@existing_resolution_ids
-fn newest_of_kind(client: &KanClient, subject: &str, kind: &str) -> Option<(String, String)> {
+fn newest_written_by_design(
+    client: &KanClient,
+    subject: &str,
+    kind: &str,
+    opening: &str,
+) -> Option<(String, String)> {
     // fallback: unreadable-subject-records-the-pair
     // kan-read-may-degrade: a failed read here degrades to "append the pair",
     // which is exactly the pre-day#119 behaviour — a duplicate claim, never a
@@ -397,7 +442,8 @@ fn newest_of_kind(client: &KanClient, subject: &str, kind: &str) -> Option<(Stri
     claims
         .iter()
         .rev()
-        .find(|c| c.kind == kind)
+        .filter(|c| c.kind == kind)
+        .find(|c| c.text.as_deref().is_some_and(|t| t.starts_with(opening)))
         .and_then(|c| c.text.clone().map(|t| (c.cid.clone(), t)))
 }
 

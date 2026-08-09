@@ -616,3 +616,88 @@ fn a_document_covering_the_record_reports_nothing() {
     );
     assert_eq!(out.status.code(), Some(0), "{stdout}");
 }
+
+/// **day#158 — a design pass cited an adversarial review's finding as the claim
+/// it superseded.**
+///
+/// `newest_of_kind` took the newest `Observation` of ANY kind on the subject,
+/// and `commands/adversarial-review.md` records every finding as
+/// `kan observe "<finding>" --subject <subject>` — on the design subject. So
+/// after a review the "previous pair" was a review finding, which lacks the
+/// document fingerprint. Three failures followed in one run over an UNCHANGED
+/// document: a false migration note, a second live observe/plan pair (day#119
+/// re-broken), and a citation asserting the design pass superseded the review's
+/// finding — into a log day cannot retract from, at exit 0.
+///
+/// It fires on this repo's own prescribed workflow: `/design` → `day design
+/// record` → `/adversarial-review`. day's `witness-model` subject already shows
+/// the near-miss, with a `Result` sitting between two design passes.
+///
+/// The fix selects by what the mechanism WRITES — an opening day emits and
+/// nothing else does — shared with the `format!` that writes it so the two
+/// cannot drift.
+#[test]
+fn an_intervening_claim_is_not_mistaken_for_the_previous_design_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("thing.md");
+    std::fs::write(
+        &doc,
+        "# Feature: thing\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+         In `src/probe.rs`.\n\n## Resolved Questions\n- RQ-1: chose a\n",
+    )
+    .unwrap();
+
+    let claims = vec![schema_claim("design-doc", "bafysc")];
+    let kan = write_kan_stub(dir.path(), &claims);
+    let run = || {
+        String::from_utf8_lossy(
+            &day(
+                dir.path(),
+                &kan,
+                &["design", "record", doc.to_str().unwrap()],
+            )
+            .stdout,
+        )
+        .to_string()
+    };
+
+    run();
+    // premise: without anything intervening, a second pass skips. If this ever
+    // stops holding, the assertion below cannot tell the fix from the ordinary
+    // path and would pass for the wrong reason.
+    let second = run();
+    assert_eq!(
+        second.matches("(unchanged)").count(),
+        2,
+        "premise: an unchanged document must skip both halves: {second}"
+    );
+
+    // A review finding, recorded exactly as `/adversarial-review` prescribes —
+    // an `Observation`, on the design subject, newer than the pair.
+    let out = std::process::Command::new(&kan)
+        .args([
+            "observe",
+            "BLOCK-1. The fix keys on a shape real kan never emits.",
+            "--subject",
+            "thing",
+        ])
+        .current_dir(dir.path())
+        .output()
+        .expect("the stub should accept a write");
+    assert!(out.status.success(), "the fixture's own write must succeed");
+
+    let third = run();
+    assert_eq!(
+        third.matches("(unchanged)").count(),
+        2,
+        "an intervening review finding is not a design pass — the document did \
+         not change, so nothing may be appended and nothing may be cited as \
+         superseded: {third}"
+    );
+    assert!(
+        !third.contains("predates the document fingerprint"),
+        "and the migration note must not fire: the fingerprinted pair is still \
+         there, one claim further back: {third}"
+    );
+}
