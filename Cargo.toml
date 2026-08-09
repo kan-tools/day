@@ -2,6 +2,13 @@
 name = "day"
 version = "0.12.0-beta.1"
 edition = "2021"
+# Measured, not inferred: CI's `msrv` job reads this value and builds with
+# exactly it, so the declaration cannot drift from the truth. The floor is set
+# by `darling` 0.23.0 -- reached transitively through `schemars_derive` -- which
+# declares `rust-version = "1.88"`, so cargo refuses to build 1.87 and below.
+# 1.85, 1.86 and 1.87 were each measured red; 1.88 clean. Bumping this line
+# re-points the CI job automatically; there is nothing else to update.
+rust-version = "1.88"
 authors = ["Maxine Levesque"]
 license = "MIT"
 description = "Structured process layer for AI-assisted development — teloi, atoms, and drift, recorded in kan."

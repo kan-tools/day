@@ -77,3 +77,62 @@ jobs:
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
+
+  # THE DECLARED MSRV IS ONLY WORTH DECLARING IF SOMETHING CHECKS IT.
+  # `rust-version` in Cargo.toml is a promise to consumers: cargo refuses to
+  # build day on an older toolchain and says why. Nothing makes that promise
+  # TRUE, though -- a dependency bump can raise the real floor above the
+  # declared one, and the declaration keeps reading fine while being wrong.
+  # That is this repo's recurring "a guarantee nothing can fail over" shape,
+  # applied to the build: a Rust requirement fails the build when it is
+  # missing, and a number in a manifest fails nothing.
+  #
+  # The floor here is transitive rather than day's own code -- `darling` 0.23.0,
+  # via `schemars_derive` -- which is exactly the case that moves without anyone
+  # editing day. `cargo update` is all it takes.
+  #
+  # THE VALUE IS READ FROM Cargo.toml RATHER THAN REPEATED HERE, so the job and
+  # the manifest cannot drift. Bumping rust-version re-points this job with no
+  # second edit -- a hardcoded version here would be a second source of truth
+  # about one fact, which is the defect class this repo keeps recording.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the declared MSRV
+        id: msrv
+        run: |
+          v=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
+          if [ -z "$v" ]; then
+            echo "::error::Cargo.toml declares no rust-version, so this job has nothing to verify. Either add one or delete this job -- a job that silently checks nothing is worse than no job."
+            exit 1
+          fi
+          echo "Declared MSRV: $v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      # RUSTUP_TOOLCHAIN is a guard, not decoration. day ships no
+      # rust-toolchain.toml today, so the toolchain installed above is what
+      # runs -- but a `rust-toolchain.toml` pinning `stable` takes precedence
+      # over an installed toolchain, and adding one is a one-file change nobody
+      # would connect to this job. kan has exactly that file, and without this
+      # line its equivalent job silently tested stable and passed regardless of
+      # the declared MSRV. Setting it here costs nothing and means this job
+      # cannot be disarmed by an unrelated commit.
+      #
+      # `check` rather than `test`: this verifies the crate COMPILES on the
+      # declared floor, which is what rust-version promises. Runtime behaviour
+      # is covered by the test job on stable -- and the test job needs a real
+      # kan, zsh, and a tag-bearing checkout, none of which the floor is about.
+      - name: Build on the declared MSRV
+        env:
+          RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
+        run: |
+          rustc --version
+          cargo check --workspace --all-targets
