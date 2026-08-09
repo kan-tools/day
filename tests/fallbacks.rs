@@ -358,6 +358,80 @@ fn fallback_unreadable_subject_records_the_pair() {
     );
 }
 
+/// **fallback: kan-omits-excluded-by-trust** — day#120.
+///
+/// `excluded_by_trust` is `#[serde(default)]`, so a kan that does not emit it
+/// reads as zero and day behaves exactly as it did before: an empty subject is
+/// absent, and the loaders offer their starter. That is the right degradation —
+/// the alternative, treating "no field" as "possibly withheld", would refuse to
+/// declare a schema on every genuinely-fresh project, which is the population
+/// `telos/v1.0` names.
+///
+/// The mode is unreachable here by construction — day pins kan >= 0.9.1 and
+/// every supported kan emits the field — which is exactly why it needs a test.
+#[test]
+fn fallback_kan_omits_excluded_by_trust() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".design")).unwrap();
+    std::fs::write(
+        dir.path().join(".design/t.md"),
+        "# F: t\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n\n## Architecture\nx\n",
+    )
+    .unwrap();
+
+    // A kan whose envelope carries NO `excluded_by_trust` key at all, for a
+    // subject that is genuinely empty.
+    let kan = dir.path().join("kan-old.sh");
+    std::fs::write(
+        &kan,
+        "#!/bin/sh\n\
+         case \"$1\" in\n\
+           --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
+           --help) echo stub; exit 0 ;;\n\
+           show) if [ \"$2\" = --all ]; then \
+             printf '{\"v\":1,\"subjects\":[{\"v\":1,\"subject\":\"schema/design-doc\",\"claims\":[]}]}\\n'; \
+             exit 0; fi ;;\n\
+           status|issues) printf '{\"v\":1,\"subjects\":[{\"subject\":\"schema/design-doc\",\"state\":\"Unclassified\"}]}\\n'; exit 0 ;;\n\
+         esac\n\
+         exit 0\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&kan, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    // premise: the payload really does omit the field. Asserted against the
+    // stub's own output, so a later edit that adds it makes this test say so
+    // instead of quietly exercising the path day is always on.
+    let payload = Command::new(&kan)
+        .args(["show", "--all", "--json"])
+        .output()
+        .expect("the stub should run");
+    let payload = String::from_utf8_lossy(&payload.stdout);
+    assert!(
+        !payload.contains("excluded_by_trust"),
+        "premise: the fixture kan must omit `excluded_by_trust` entirely, or \
+         this exercises the path every supported kan is on: {payload}"
+    );
+
+    let out = day(dir.path(), &kan, &["design", "check", ".design/t.md"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("no design-doc schema is declared"),
+        "a kan that omits the field must degrade to the pre-day#120 reading — \
+         absent, with the starter offered: {text}"
+    );
+    assert!(
+        !text.contains("trust base"),
+        "and must never claim claims were withheld, which it has no evidence \
+         of: {text}"
+    );
+}
+
 /// fallback: uncheckable-without-witness-schema
 ///
 /// A project that has declared no `schema/witness` cannot have its position

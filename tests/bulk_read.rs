@@ -567,3 +567,93 @@ fn a_subject_that_arrives_mid_read_is_not_mistaken_for_a_missing_one() {
         "and it must not be reported as unaccounted for: {text}"
     );
 }
+
+/// **day#120 — a subject whose claims are withheld by trust is not "undeclared".**
+///
+/// day read under kan's `Solo` trust base, so a schema declared by another
+/// identity came back with zero claims. Three loaders turned that into "no
+/// `<X>` schema is declared" and printed a **runnable `kan observe` starter** —
+/// so an agent following its own tooling appended a second, competing
+/// declaration under its own key, and the vocabulary forked silently. The read
+/// was certifying an absence it never established.
+///
+/// Two things are asserted, and the second is the point of putting the fix in
+/// `KanClient` rather than at the loader in the traceback:
+///
+/// 1. the message names the trust base and offers no way to declare;
+/// 2. **`assess docs` gets it too**, from the same change, without `docs.rs`
+///    being touched. There were three such sites; fixing one is the call-site
+///    shape day#101 records three instances of.
+#[test]
+fn a_subject_withheld_by_trust_is_not_reported_as_undeclared() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".design")).unwrap();
+    std::fs::write(
+        dir.path().join(".design/t.md"),
+        "# F: t\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n\n## Architecture\nx\n",
+    )
+    .unwrap();
+
+    let withholding = dir.path().join("kan-withholding.sh");
+    std::fs::write(
+        &withholding,
+        "#!/bin/sh\n\
+         case \"$1\" in\n\
+           --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
+           --help) echo stub; exit 0 ;;\n\
+           show) if [ \"$2\" = --all ]; then printf '%s\\n' \
+             '{\"v\":1,\"trust\":\"Solo\",\"excluded_by_trust\":2,\"subjects\":[{\"v\":1,\"subject\":\"schema/design-doc\",\"claims\":[],\"excluded_by_trust\":1},{\"v\":1,\"subject\":\"schema/docs\",\"claims\":[],\"excluded_by_trust\":1}]}'; \
+             exit 0; fi ;;\n\
+           status|issues) printf '%s\\n' \
+             '{\"v\":1,\"subjects\":[{\"subject\":\"schema/design-doc\",\"state\":\"Unclassified\"},{\"subject\":\"schema/docs\",\"state\":\"Unclassified\"}]}'; exit 0 ;;\n\
+         esac\n\
+         exit 0\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&withholding, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let text = |args: &[&str]| {
+        let out = day(dir.path(), &withholding, args);
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    };
+
+    let check = text(&["design", "check", ".design/t.md"]);
+    assert!(
+        check.contains("trust base does not admit"),
+        "the withheld claims must be named as withheld: {check}"
+    );
+    assert!(
+        !check.contains("no design-doc schema is declared"),
+        "and must NOT be reported as undeclared — that is the absence day did \
+         not establish: {check}"
+    );
+    assert!(
+        !check.contains("kan observe"),
+        "and must offer no starter: following it appends a competing \
+         declaration under a different key, which is how the vocabulary forks: \
+         {check}"
+    );
+
+    // The other loader, untouched by the fix, inherits it.
+    let docs = text(&["assess", "docs"]);
+    assert!(
+        docs.contains("trust base does not admit"),
+        "`assess docs` reads `schema/docs` through the same client and must \
+         inherit the distinction without `docs.rs` being edited — a guarantee \
+         wired at one call site is day#101: {docs}"
+    );
+
+    // And it must not be mistaken for the accounting guard, which answers a
+    // different question and would send a reader looking for a dropped subject.
+    assert!(
+        !check.contains("did not return it in the bulk read"),
+        "kan DID return this subject; reporting it as unaccounted describes \
+         the wrong failure: {check}"
+    );
+}

@@ -51,6 +51,15 @@ pub enum Error {
          nothing would be an absence day never verified."
     )]
     Unaccounted { subject: String },
+    #[error(
+        "`{subject}` has {count} live claim(s) that this view's trust base does \
+         not admit, so day cannot read it.\n\nThis is NOT the same as the \
+         subject being undeclared, and day will not offer to declare it: \
+         appending here would add a second, competing claim under a different \
+         key and fork the vocabulary silently.\n\nWiden the view instead — \
+         `--trust me`, or `--trust <did>` for the author who recorded it."
+    )]
+    ExcludedByTrust { subject: String, count: u64 },
     #[error("`{bin} {args}` failed ({status}){stderr}")]
     Failed {
         bin: String,
@@ -125,6 +134,18 @@ struct ShowAllEntry {
     subject: String,
     #[serde(default)]
     claims: Vec<Claim>,
+    /// Live claims kan withheld from this view's trust base (day#120).
+    ///
+    /// A subject can therefore come back with **zero claims and a non-zero
+    /// count**, which is a different fact from "nothing was ever recorded here"
+    /// and was previously indistinguishable from it: day's schema loaders
+    /// reported "no schema is declared" and printed a runnable `kan observe`
+    /// starter, so an agent following its own tooling appended a *second,
+    /// competing* declaration under its own key and forked the vocabulary.
+    ///
+    /// fallback: kan-omits-excluded-by-trust
+    #[serde(default)]
+    excluded_by_trust: u64,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -168,6 +189,15 @@ pub struct KanClient {
     /// Subjects kan listed that the bulk read did not return. Computed once,
     /// at the read, so every consumer of the log inherits it.
     unaccounted: std::cell::RefCell<Vec<String>>,
+    /// Subjects that came back with no claims *because* claims were withheld
+    /// from this view's trust base, and how many (day#120). Computed at the
+    /// read, beside `unaccounted`, for the same reason: a guarantee wired at a
+    /// call site is the defect this repo keeps rediscovering, and there are
+    /// three loaders that would each have to remember to ask.
+    trust_withheld: std::cell::RefCell<Vec<(String, u64)>>,
+    /// Subjects the bulk read returned an ENTRY for, whether or not that entry
+    /// carried visible claims. What `unaccounted` is computed against.
+    returned_subjects: std::cell::RefCell<Vec<String>>,
 }
 
 impl KanClient {
@@ -180,6 +210,8 @@ impl KanClient {
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
             unaccounted: std::cell::RefCell::new(Vec::new()),
+            trust_withheld: std::cell::RefCell::new(Vec::new()),
+            returned_subjects: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -191,6 +223,8 @@ impl KanClient {
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
             unaccounted: std::cell::RefCell::new(Vec::new()),
+            trust_withheld: std::cell::RefCell::new(Vec::new()),
+            returned_subjects: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -262,8 +296,10 @@ impl KanClient {
         // fire on evidence that went MISSING, never on evidence that arrived.
         let listed = self.subjects()?;
         let all = self.read_all()?;
-        let returned: std::collections::BTreeSet<&str> =
-            all.iter().map(|(s, _)| s.as_str()).collect();
+        // From the ENTRIES `read_all` recorded, not from the claims — see the
+        // note there. A subject kan returned as an empty entry was returned.
+        let returned: std::collections::BTreeSet<String> =
+            self.returned_subjects.borrow().iter().cloned().collect();
         let missing: Vec<String> = listed
             .iter()
             .filter(|s| !returned.contains(s.as_str()))
@@ -280,6 +316,13 @@ impl KanClient {
         *self.log.borrow_mut() = None;
         *self.subject_memo.borrow_mut() = None;
         self.unaccounted.borrow_mut().clear();
+        // Cleared with the rest, and not as an afterthought: this set is
+        // recomputed by `read_all`, so leaving it behind would make a stale
+        // "day cannot read this" outlive the read it was derived from — and it
+        // is now a hard error, so the stale version refuses rather than
+        // degrades.
+        self.trust_withheld.borrow_mut().clear();
+        self.returned_subjects.borrow_mut().clear();
     }
 
     /// kan's version, via `kan --version`, or `None` when it cannot be
@@ -379,6 +422,39 @@ impl KanClient {
         })?;
         let envelope: ShowAllEnvelope = parse(&out, &args)?;
         check_shape(envelope.v, &args)?;
+
+        // day#120. Recorded for the subjects that came back EMPTY and had
+        // claims withheld, because that is the only case where day would
+        // otherwise certify an absence it did not establish. A subject with
+        // some claims visible and some withheld is a partial view and a harder
+        // question — deliberately not answered here rather than folded in
+        // because the shapes rhyme.
+        *self.trust_withheld.borrow_mut() = envelope
+            .subjects
+            .iter()
+            .filter(|e| e.claims.is_empty() && e.excluded_by_trust > 0)
+            .map(|e| (e.subject.clone(), e.excluded_by_trust))
+            .collect();
+
+        // **The subjects kan RETURNED, taken from the entries rather than from
+        // the claims.** The accounting guard's own words are "kan lists
+        // `{subject}` but did not return it in the bulk read" — and an entry
+        // carrying zero visible claims *was* returned. Deriving the set from
+        // flattened claims made every claimless subject look dropped, so a
+        // subject whose claims kan withheld by trust reported as "day cannot
+        // tell whether it is unreadable or was dropped" when day could now tell
+        // exactly, and would say so one branch further down.
+        //
+        // This narrows what `Unaccounted` fires on: an entry that is present
+        // and empty is no longer it. That is the invariant stated correctly
+        // rather than a weakening — the case it stops covering is precisely the
+        // case the new error covers better.
+        *self.returned_subjects.borrow_mut() = envelope
+            .subjects
+            .iter()
+            .map(|e| e.subject.clone())
+            .collect();
+
         Ok(envelope
             .subjects
             .into_iter()
@@ -470,6 +546,23 @@ impl KanClient {
         if self.unaccounted.borrow().iter().any(|s| s == subject) {
             return Err(Error::Unaccounted {
                 subject: subject.to_string(),
+            });
+        }
+        // day#120, and the same argument as the guard above: an empty result
+        // day did not establish is a false certification. Three loaders turn
+        // `Ok(vec![])` into "no schema is declared" and print a runnable
+        // starter, so the distinction has to live here rather than in each of
+        // them — fixing the one in the traceback and leaving the other two is
+        // the call-site shape day#101 is about.
+        if let Some((_, count)) = self
+            .trust_withheld
+            .borrow()
+            .iter()
+            .find(|(s, _)| s == subject)
+        {
+            return Err(Error::ExcludedByTrust {
+                subject: subject.to_string(),
+                count: *count,
             });
         }
         let log = self.log.borrow();
