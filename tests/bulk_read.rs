@@ -568,24 +568,25 @@ fn a_subject_that_arrives_mid_read_is_not_mistaken_for_a_missing_one() {
     );
 }
 
-/// **day#120 — a subject whose claims are withheld by trust is not "undeclared".**
+/// **day#120 — a subject day cannot fully read is not an undeclared subject.**
 ///
-/// day read under kan's `Solo` trust base, so a schema declared by another
-/// identity came back with zero claims. Three loaders turned that into "no
-/// `<X>` schema is declared" and printed a **runnable `kan observe` starter** —
-/// so an agent following its own tooling appended a second, competing
-/// declaration under its own key, and the vocabulary forked silently. The read
-/// was certifying an absence it never established.
+/// day read under a narrowed trust base, so a schema declared by another
+/// identity was invisible. Three loaders turned that into "no `<X>` schema is
+/// declared" and printed a **runnable `kan observe` starter** — so an agent
+/// following its own tooling appended a second, competing declaration under its
+/// own key and forked the vocabulary. The read certified an absence it never
+/// established.
 ///
-/// Two things are asserted, and the second is the point of putting the fix in
-/// `KanClient` rather than at the loader in the traceback:
-///
-/// 1. the message names the trust base and offers no way to declare;
-/// 2. **`assess docs` gets it too**, from the same change, without `docs.rs`
-///    being touched. There were three such sites; fixing one is the call-site
-///    shape day#101 records three instances of.
+/// **The payloads here are the shapes real kan emits**, pinned by
+/// `kan_conformance::conformance_trust_withholding_shapes_are_what_day_keys_on`
+/// against the real binary. The first version of this test invented a third
+/// shape — an entry with `claims: []` and a non-zero count — which kan never
+/// produces, so the fix was inert in the field while this test reported it
+/// working. That is verbatim the blind spot `tests/kan_conformance.rs` exists
+/// for, and it is why the two files are cross-referenced rather than left to
+/// agree by luck.
 #[test]
-fn a_subject_withheld_by_trust_is_not_reported_as_undeclared() {
+fn a_subject_day_cannot_fully_read_is_not_reported_as_undeclared() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join(".design")).unwrap();
     std::fs::write(
@@ -595,27 +596,29 @@ fn a_subject_withheld_by_trust_is_not_reported_as_undeclared() {
     )
     .unwrap();
 
-    let withholding = dir.path().join("kan-withholding.sh");
-    std::fs::write(
-        &withholding,
-        "#!/bin/sh\n\
-         case \"$1\" in\n\
-           --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
-           --help) echo stub; exit 0 ;;\n\
-           show) if [ \"$2\" = --all ]; then printf '%s\\n' \
-             '{\"v\":1,\"trust\":\"Solo\",\"excluded_by_trust\":2,\"subjects\":[{\"v\":1,\"subject\":\"schema/design-doc\",\"claims\":[],\"excluded_by_trust\":1},{\"v\":1,\"subject\":\"schema/docs\",\"claims\":[],\"excluded_by_trust\":1}]}'; \
-             exit 0; fi ;;\n\
-           status|issues) printf '%s\\n' \
-             '{\"v\":1,\"subjects\":[{\"subject\":\"schema/design-doc\",\"state\":\"Unclassified\"},{\"subject\":\"schema/docs\",\"state\":\"Unclassified\"}]}'; exit 0 ;;\n\
-         esac\n\
-         exit 0\n",
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&withholding, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let stub = |name: &str, show_all: &str, status: &str| {
+        let path = dir.path().join(name);
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\n\
+                 case \"$1\" in\n\
+                   --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
+                   --help) echo stub; exit 0 ;;\n\
+                   show) if [ \"$2\" = --all ]; then printf '%s\\n' '{show_all}'; exit 0; fi ;;\n\
+                   status|issues) printf '%s\\n' '{status}'; exit 0 ;;\n\
+                 esac\n\
+                 exit 0\n"
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    };
 
-    let text = |args: &[&str]| {
-        let out = day(dir.path(), &withholding, args);
+    let text = |kan: &std::path::Path, args: &[&str]| {
+        let out = day(dir.path(), kan, args);
         format!(
             "{}{}",
             String::from_utf8_lossy(&out.stdout),
@@ -623,37 +626,63 @@ fn a_subject_withheld_by_trust_is_not_reported_as_undeclared() {
         )
     };
 
-    let check = text(&["design", "check", ".design/t.md"]);
+    // --- shape 1: FULLY WITHHELD. kan omits the subject from both reads and
+    // carries the count at the envelope only. This is the shape day#120's
+    // reproduction actually produces.
+    let absent = stub(
+        "kan-absent.sh",
+        r#"{"v":1,"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1}"#,
+    );
+    let check = text(&absent, &["design", "check", ".design/t.md"]);
     assert!(
-        check.contains("trust base does not admit"),
-        "the withheld claims must be named as withheld: {check}"
+        check.contains("not in this view"),
+        "a subject kan withheld entirely must be reported as unreadable, not \
+         absent — the envelope count is the only evidence it exists: {check}"
     );
     assert!(
         !check.contains("no design-doc schema is declared"),
-        "and must NOT be reported as undeclared — that is the absence day did \
-         not establish: {check}"
+        "and must NOT be reported as undeclared: {check}"
     );
     assert!(
         !check.contains("kan observe"),
-        "and must offer no starter: following it appends a competing \
-         declaration under a different key, which is how the vocabulary forks: \
-         {check}"
+        "and must offer no starter — following it forks the vocabulary, which \
+         is the whole of day#120: {check}"
     );
 
-    // The other loader, untouched by the fix, inherits it.
-    let docs = text(&["assess", "docs"]);
+    // --- shape 2: PARTIAL. The entry is present with the admitted claim and
+    // the count sits on the entry. Dangerous because day resolves newest-wins,
+    // so a withheld NEWER claim promotes a superseded declaration to current.
+    let partial = stub(
+        "kan-partial.sh",
+        r#"{"v":1,"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1,"subjects":[{"v":1,"subject":"schema/design-doc","claims":[{"cid":"bafyold","kind":"Observation","author":"did:key:zA","recorded_at":1,"text":"Old schema.\n\n```day-schema\n{\"sections\":[\"Summary\"],\"paths_section\":\"\",\"resolved_section\":\"\"}\n```\n"}],"excluded_by_trust":1}]}"#,
+        r#"{"v":1,"subjects":[{"subject":"schema/design-doc","state":"Unclassified"}],"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1}"#,
+    );
+    let check = text(&partial, &["design", "check", ".design/t.md"]);
     assert!(
-        docs.contains("trust base does not admit"),
-        "`assess docs` reads `schema/docs` through the same client and must \
-         inherit the distinction without `docs.rs` being edited — a guarantee \
-         wired at one call site is day#101: {docs}"
+        check.contains("partial history"),
+        "a partial view must be refused rather than answered from what is left: \
+         the withheld claim may be the newest, and day takes the newest: {check}"
+    );
+    assert!(
+        !check.contains("[PASS]"),
+        "and day must not validate the document against the claims it CAN see — \
+         that is reporting a currency it did not establish: {check}"
     );
 
-    // And it must not be mistaken for the accounting guard, which answers a
-    // different question and would send a reader looking for a dropped subject.
+    // --- negative control: nothing withheld, and day behaves exactly as before.
+    // Without this the assertions above would pass against a day that refuses
+    // every read.
+    let clean = stub(
+        "kan-clean.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":0,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":0}"#,
+    );
+    let check = text(&clean, &["design", "check", ".design/t.md"]);
     assert!(
-        !check.contains("did not return it in the bulk read"),
-        "kan DID return this subject; reporting it as unaccounted describes \
-         the wrong failure: {check}"
+        check.contains("no design-doc schema is declared"),
+        "with nothing withheld, a genuinely absent subject is still absent and \
+         the starter is still offered — day#120 must not make every fresh \
+         project unreadable: {check}"
     );
 }
