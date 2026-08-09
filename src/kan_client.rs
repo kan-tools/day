@@ -51,6 +51,25 @@ pub enum Error {
          nothing would be an absence day never verified."
     )]
     Unaccounted { subject: String },
+    #[error(
+        "`{subject}` has {count} claim(s) this view's trust base does not admit, \
+         so day is reading a partial history of it.\n\nday resolves \
+         newest-wins, so a withheld newer claim would silently promote a \
+         superseded one to current — reporting on it would assert a currency \
+         day cannot establish.\n\nWiden the view — `--trust me`, or \
+         `--trust <did>` for the author who recorded it."
+    )]
+    PartiallyWithheld { subject: String, count: u64 },
+    #[error(
+        "`{subject}` is not in this view, and {count} claim(s) elsewhere in the \
+         log are withheld from it — so day cannot tell whether it is undeclared \
+         or simply not admitted by this trust base.\n\nday will not offer to \
+         declare it: appending under an unadmitted key adds a second, competing \
+         claim and forks the vocabulary silently.\n\nWiden the view to check \
+         whether it is already declared — `--trust me`, or `--trust <did>` for \
+         the author who would have recorded it."
+    )]
+    AbsentUnderNarrowedTrust { subject: String, count: u64 },
     #[error("`{bin} {args}` failed ({status}){stderr}")]
     Failed {
         bin: String,
@@ -118,6 +137,24 @@ struct ShowAllEnvelope {
     v: u32,
     #[serde(default)]
     subjects: Vec<ShowAllEntry>,
+    /// Live claims withheld from this view's trust base, across the whole log.
+    ///
+    /// **This is the only signal that exists for a subject kan withheld
+    /// entirely**, measured against kan 0.11.0-beta.1 rather than assumed:
+    ///
+    /// ```text
+    /// $ KAN_IDENTITY_FILE=…/roles.d/agent-s1 kan show --all --json --trust me
+    /// {"v":1,"trust":{"base":"Solo",…},"excluded_by_trust":1,"subjects":[]}
+    /// ```
+    ///
+    /// The subject is **omitted** — from `show --all --json` and from
+    /// `status --json` both — so there is no entry to carry a count and nothing
+    /// names which subject went missing. A first attempt at day#120 keyed on an
+    /// entry with `claims: []` and a non-zero count, which kan never emits;
+    /// `tests/kan_conformance.rs` now pins both shapes against the real binary,
+    /// because a stub validates day against day's own idea of kan's CLI.
+    #[serde(default)]
+    excluded_by_trust: u64,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -125,6 +162,25 @@ struct ShowAllEntry {
     subject: String,
     #[serde(default)]
     claims: Vec<Claim>,
+    /// Claims withheld from this view **on this subject** (day#120).
+    ///
+    /// Non-zero here means a **partial** view: kan returned the entry, some
+    /// claims are visible, and at least one is not. Measured, not assumed:
+    ///
+    /// ```text
+    /// subject: shared | visible claims: 1 | entry excluded_by_trust: 1
+    /// ```
+    ///
+    /// That is the shape day has to care about most, because **day resolves
+    /// newest-wins**: `newest_fenced` walks claims in reverse and takes the
+    /// first that parses. A withheld *newest* claim therefore silently promotes
+    /// a superseded declaration to current, and day validates against it at
+    /// exit 0. A cold review demonstrated exactly that — a schema whose newer
+    /// revision added a required section passed a document missing it.
+    ///
+    /// fallback: kan-omits-excluded-by-trust
+    #[serde(default)]
+    excluded_by_trust: u64,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -132,6 +188,17 @@ struct SubjectsEnvelope {
     v: u32,
     #[serde(default)]
     subjects: Vec<SubjectEntry>,
+    /// `status --json` carries the log-wide withheld count too, and day needs
+    /// it from HERE as well as from the bulk read.
+    ///
+    /// `subjects()` does not go through `ensure_log`, so a reader that only
+    /// enumerates — `render_teloi`, `atoms::load` — would otherwise ask for the
+    /// count before anything had populated it and be told zero. That is how the
+    /// first attempt at this fix failed to fire: the guard was right, the value
+    /// it consulted was not yet set, and the behaviour-diff corpus caught it
+    /// because the fixture's output did not change.
+    #[serde(default)]
+    excluded_by_trust: u64,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -168,6 +235,19 @@ pub struct KanClient {
     /// Subjects kan listed that the bulk read did not return. Computed once,
     /// at the read, so every consumer of the log inherits it.
     unaccounted: std::cell::RefCell<Vec<String>>,
+    /// Subjects that came back with no claims *because* claims were withheld
+    /// from this view's trust base, and how many (day#120). Computed at the
+    /// read, beside `unaccounted`, for the same reason: a guarantee wired at a
+    /// call site is the defect this repo keeps rediscovering, and there are
+    /// three loaders that would each have to remember to ask.
+    trust_withheld: std::cell::RefCell<Vec<(String, u64)>>,
+    /// Claims withheld from this view across the WHOLE log (day#120). The only
+    /// evidence that a subject missing from this read might be withheld rather
+    /// than undeclared, because kan omits such a subject entirely.
+    trust_withheld_total: std::cell::Cell<u64>,
+    /// Subjects the bulk read returned an ENTRY for, whether or not that entry
+    /// carried visible claims. What `unaccounted` is computed against.
+    returned_subjects: std::cell::RefCell<Vec<String>>,
 }
 
 impl KanClient {
@@ -180,6 +260,9 @@ impl KanClient {
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
             unaccounted: std::cell::RefCell::new(Vec::new()),
+            trust_withheld: std::cell::RefCell::new(Vec::new()),
+            trust_withheld_total: std::cell::Cell::new(0),
+            returned_subjects: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -191,6 +274,9 @@ impl KanClient {
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
             unaccounted: std::cell::RefCell::new(Vec::new()),
+            trust_withheld: std::cell::RefCell::new(Vec::new()),
+            trust_withheld_total: std::cell::Cell::new(0),
+            returned_subjects: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -262,8 +348,10 @@ impl KanClient {
         // fire on evidence that went MISSING, never on evidence that arrived.
         let listed = self.subjects()?;
         let all = self.read_all()?;
-        let returned: std::collections::BTreeSet<&str> =
-            all.iter().map(|(s, _)| s.as_str()).collect();
+        // From the ENTRIES `read_all` recorded, not from the claims — see the
+        // note there. A subject kan returned as an empty entry was returned.
+        let returned: std::collections::BTreeSet<String> =
+            self.returned_subjects.borrow().iter().cloned().collect();
         let missing: Vec<String> = listed
             .iter()
             .filter(|s| !returned.contains(s.as_str()))
@@ -280,6 +368,14 @@ impl KanClient {
         *self.log.borrow_mut() = None;
         *self.subject_memo.borrow_mut() = None;
         self.unaccounted.borrow_mut().clear();
+        // Cleared with the rest, and not as an afterthought: this set is
+        // recomputed by `read_all`, so leaving it behind would make a stale
+        // "day cannot read this" outlive the read it was derived from — and it
+        // is now a hard error, so the stale version refuses rather than
+        // degrades.
+        self.trust_withheld.borrow_mut().clear();
+        self.trust_withheld_total.set(0);
+        self.returned_subjects.borrow_mut().clear();
     }
 
     /// kan's version, via `kan --version`, or `None` when it cannot be
@@ -379,6 +475,46 @@ impl KanClient {
         })?;
         let envelope: ShowAllEnvelope = parse(&out, &args)?;
         check_shape(envelope.v, &args)?;
+
+        // day#120, keyed on the two shapes kan actually emits — measured
+        // against 0.11.0-beta.1 and pinned in `tests/kan_conformance.rs`, after
+        // a first attempt keyed on a third shape that does not occur.
+        //
+        // PARTIAL: the entry is present, some claims visible, a count on the
+        // entry. This is the dangerous one, because newest-wins means a
+        // withheld newest claim promotes a superseded one.
+        *self.trust_withheld.borrow_mut() = envelope
+            .subjects
+            .iter()
+            .filter(|e| e.excluded_by_trust > 0)
+            .map(|e| (e.subject.clone(), e.excluded_by_trust))
+            .collect();
+
+        // ABSENT: kan omits a fully-withheld subject from `show --all --json`
+        // AND from `status --json`, so nothing names it and the accounting
+        // guard cannot see it either. The envelope total is the only evidence
+        // that any absence in this read is unreliable.
+        self.trust_withheld_total.set(envelope.excluded_by_trust);
+
+        // **The subjects kan RETURNED, taken from the entries rather than from
+        // the claims.** The accounting guard's own words are "kan lists
+        // `{subject}` but did not return it in the bulk read" — and an entry
+        // carrying zero visible claims *was* returned. Deriving the set from
+        // flattened claims made every claimless subject look dropped, so a
+        // subject whose claims kan withheld by trust reported as "day cannot
+        // tell whether it is unreadable or was dropped" when day could now tell
+        // exactly, and would say so one branch further down.
+        //
+        // This narrows what `Unaccounted` fires on: an entry that is present
+        // and empty is no longer it. That is the invariant stated correctly
+        // rather than a weakening — the case it stops covering is precisely the
+        // case the new error covers better.
+        *self.returned_subjects.borrow_mut() = envelope
+            .subjects
+            .iter()
+            .map(|e| e.subject.clone())
+            .collect();
+
         Ok(envelope
             .subjects
             .into_iter()
@@ -451,6 +587,23 @@ impl KanClient {
         let out = self.run(args)?;
         let envelope: SubjectsEnvelope = parse(&out, args)?;
         check_shape(envelope.v, args)?;
+        // **Recorded here as well as from the bulk read**, because the readers
+        // that need it most never take the other path. `subjects()` does not go
+        // through `ensure_log`, so `render_teloi` and `atoms::load` — which
+        // enumerate rather than look up — asked for the count before anything
+        // set it and were told zero. The guard was correct and inert; the
+        // behaviour-diff corpus caught it, because the fixture's output did not
+        // change when it was supposed to.
+        //
+        // `max`, not assignment: the two reads report the same log-wide number,
+        // and taking the larger makes the result independent of which happened
+        // first rather than dependent on an ordering nobody would think to
+        // preserve.
+        let seen = self
+            .trust_withheld_total
+            .get()
+            .max(envelope.excluded_by_trust);
+        self.trust_withheld_total.set(seen);
         Ok(envelope.subjects.into_iter().map(|s| s.subject).collect())
     }
 
@@ -472,13 +625,75 @@ impl KanClient {
                 subject: subject.to_string(),
             });
         }
-        let log = self.log.borrow();
-        let all = log.as_ref().expect("ensure_log populated it");
-        Ok(all
+        // day#120, and the same argument as the guard above: a result day did
+        // not establish is a false certification. Three loaders turn what they
+        // get here into "no schema is declared" plus a runnable starter, so the
+        // distinction lives here rather than in each of them — fixing the one
+        // in the traceback and leaving the other two is the call-site shape
+        // day#101 is about.
+        //
+        // Two cases, because kan emits two shapes and the first version of this
+        // handled a third that does not exist.
+        let claims: Vec<Claim> = {
+            let log = self.log.borrow();
+            let all = log.as_ref().expect("ensure_log populated it");
+            all.iter()
+                .filter(|(s, _)| s == subject)
+                .map(|(_, c)| c.clone())
+                .collect()
+        };
+
+        // PARTIAL: kan returned this subject and withheld some of its claims.
+        // Refused even though claims are visible, because day takes the NEWEST
+        // parseable claim and the withheld one may be newer — answering from
+        // what is left promotes a superseded declaration to current.
+        if let Some((_, count)) = self
+            .trust_withheld
+            .borrow()
             .iter()
-            .filter(|(s, _)| s == subject)
-            .map(|(_, c)| c.clone())
-            .collect())
+            .find(|(s, _)| s == subject)
+        {
+            return Err(Error::PartiallyWithheld {
+                subject: subject.to_string(),
+                count: *count,
+            });
+        }
+
+        // **The absent case is NOT decided here**, and a first version deciding
+        // it here was a cold review's MAJOR-4.
+        //
+        // kan omits a fully-withheld subject from both reads, so day has no
+        // per-subject evidence — only the envelope total, which is LOG-WIDE.
+        // Erroring on it per subject meant one withheld claim anywhere made
+        // every never-declared subject a hard error: `assess docs` exited 2
+        // over `schema/docs` because two claims on an unrelated subject were
+        // withheld, and the printed remedy ("re-run where the count is zero")
+        // is unreachable, since a collaborator's claim in a committed
+        // `.claims/` is permanent.
+        //
+        // Worse, it was the wrong way round. day refused hardest where its
+        // evidence was weakest (a log-wide count) and stayed silent where it
+        // was strongest (an enumerated read that knows a subject vanished).
+        //
+        // A log-wide fact is now reported log-wide — see
+        // [`Self::claims_withheld_from_view`], which the enumerating renders
+        // surface — and the per-subject error survives only in
+        // `atoms::newest_fenced`, where a loader is about to conclude "nothing
+        // is declared here" and print a runnable starter. That conclusion is
+        // the day#120 harm; an ordinary empty read is not.
+        Ok(claims)
+    }
+
+    /// Claims withheld from this view across the whole log (day#120).
+    ///
+    /// **Log-wide, and it must be reported that way.** kan gives no per-subject
+    /// evidence for a subject it withheld entirely, so any absence in this read
+    /// is unreliable and day cannot say which one. Every surface that
+    /// ENUMERATES subjects — rather than asking for one by name — has to carry
+    /// this, because those readers never call [`Self::show`] for a subject that
+    /// is not there and so can never be told by it.
+    pub fn claims_withheld_from_view(&self) -> u64 {
+        self.trust_withheld_total.get()
     }
 
     /// Appends a narrative claim through kan's own write verb and returns

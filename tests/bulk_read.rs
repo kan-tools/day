@@ -567,3 +567,307 @@ fn a_subject_that_arrives_mid_read_is_not_mistaken_for_a_missing_one() {
         "and it must not be reported as unaccounted for: {text}"
     );
 }
+
+/// **day#120 — a subject day cannot fully read is not an undeclared subject.**
+///
+/// day read under a narrowed trust base, so a schema declared by another
+/// identity was invisible. Three loaders turned that into "no `<X>` schema is
+/// declared" and printed a **runnable `kan observe` starter** — so an agent
+/// following its own tooling appended a second, competing declaration under its
+/// own key and forked the vocabulary. The read certified an absence it never
+/// established.
+///
+/// **The payloads here are the shapes real kan emits**, pinned by
+/// `kan_conformance::conformance_trust_withholding_shapes_are_what_day_keys_on`
+/// against the real binary. The first version of this test invented a third
+/// shape — an entry with `claims: []` and a non-zero count — which kan never
+/// produces, so the fix was inert in the field while this test reported it
+/// working. That is verbatim the blind spot `tests/kan_conformance.rs` exists
+/// for, and it is why the two files are cross-referenced rather than left to
+/// agree by luck.
+#[test]
+fn a_subject_day_cannot_fully_read_is_not_reported_as_undeclared() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".design")).unwrap();
+    std::fs::write(
+        dir.path().join(".design/t.md"),
+        "# F: t\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n\n## Architecture\nx\n",
+    )
+    .unwrap();
+
+    let stub = |name: &str, show_all: &str, status: &str| {
+        let path = dir.path().join(name);
+        std::fs::write(
+            &path,
+            format!(
+                "#!/bin/sh\n\
+                 case \"$1\" in\n\
+                   --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
+                   --help) echo stub; exit 0 ;;\n\
+                   show) if [ \"$2\" = --all ]; then printf '%s\\n' '{show_all}'; exit 0; fi ;;\n\
+                   status|issues) printf '%s\\n' '{status}'; exit 0 ;;\n\
+                 esac\n\
+                 exit 0\n"
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    };
+
+    let text = |kan: &std::path::Path, args: &[&str]| {
+        let out = day(dir.path(), kan, args);
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    };
+
+    // --- shape 1: FULLY WITHHELD. kan omits the subject from both reads and
+    // carries the count at the envelope only. This is the shape day#120's
+    // reproduction actually produces.
+    let absent = stub(
+        "kan-absent.sh",
+        r#"{"v":1,"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1}"#,
+    );
+    let check = text(&absent, &["design", "check", ".design/t.md"]);
+    assert!(
+        check.contains("not in this view"),
+        "a subject kan withheld entirely must be reported as unreadable, not \
+         absent — the envelope count is the only evidence it exists: {check}"
+    );
+    assert!(
+        !check.contains("no design-doc schema is declared"),
+        "and must NOT be reported as undeclared: {check}"
+    );
+    assert!(
+        !check.contains("kan observe"),
+        "and must offer no starter — following it forks the vocabulary, which \
+         is the whole of day#120: {check}"
+    );
+
+    // --- shape 2: PARTIAL. The entry is present with the admitted claim and
+    // the count sits on the entry. Dangerous because day resolves newest-wins,
+    // so a withheld NEWER claim promotes a superseded declaration to current.
+    let partial = stub(
+        "kan-partial.sh",
+        r#"{"v":1,"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1,"subjects":[{"v":1,"subject":"schema/design-doc","claims":[{"cid":"bafyold","kind":"Observation","author":"did:key:zA","recorded_at":1,"text":"Old schema.\n\n```day-schema\n{\"sections\":[\"Summary\"],\"paths_section\":\"\",\"resolved_section\":\"\"}\n```\n"}],"excluded_by_trust":1}]}"#,
+        r#"{"v":1,"subjects":[{"subject":"schema/design-doc","state":"Unclassified"}],"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1}"#,
+    );
+    let check = text(&partial, &["design", "check", ".design/t.md"]);
+    assert!(
+        check.contains("partial history"),
+        "a partial view must be refused rather than answered from what is left: \
+         the withheld claim may be the newest, and day takes the newest: {check}"
+    );
+    assert!(
+        !check.contains("[PASS]"),
+        "and day must not validate the document against the claims it CAN see — \
+         that is reporting a currency it did not establish: {check}"
+    );
+
+    // --- negative control: nothing withheld, and day behaves exactly as before.
+    // Without this the assertions above would pass against a day that refuses
+    // every read.
+    let clean = stub(
+        "kan-clean.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":0,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":0}"#,
+    );
+    let check = text(&clean, &["design", "check", ".design/t.md"]);
+    assert!(
+        check.contains("no design-doc schema is declared"),
+        "with nothing withheld, a genuinely absent subject is still absent and \
+         the starter is still offered — day#120 must not make every fresh \
+         project unreadable: {check}"
+    );
+}
+
+/// A stub kan serving a fixed `show --all --json` and `status --json`, so a
+/// test can put day in a trust-withholding view. Shared by the day#120
+/// round-two tests below, which all need the same two envelopes and differ
+/// only in their contents.
+fn withholding_kan(dir: &Path, name: &str, show_all: &str, status: &str) -> std::path::PathBuf {
+    let path = dir.join(name);
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh\n\
+             case \"$1\" in\n\
+               --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
+               --help) echo stub; exit 0 ;;\n\
+               show) if [ \"$2\" = --all ]; then printf '%s\\n' '{show_all}'; exit 0; fi ;;\n\
+               status|issues) printf '%s\\n' '{status}'; exit 0 ;;\n\
+               observe|plan|decide|result) echo bafyreistubwrite; exit 0 ;;\n\
+             esac\n\
+             exit 0\n"
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+/// **day#120 round two, BLOCK-1 — the guards were at the named read, and day's
+/// primary surfaces do not read by name.**
+///
+/// `render_teloi` and `atoms::load` ENUMERATE `subjects()` and filter by prefix.
+/// kan omits a fully-withheld subject from `status --json` as well as from
+/// `show --all --json`, so those loops never produce it, never call `show`, and
+/// never reach a per-subject guard. In a plain clone of a repo publishing
+/// `.claims/` — no `--trust` flag anywhere — `hook session-start` printed "No
+/// teloi are recorded for this project yet" and `doctor` printed "a valid
+/// starting state, not an error", both at exit 0, over six withheld claims.
+///
+/// The population is `telos/v1.0`'s and the channels are the two
+/// `telos/honest-reads` names. `render_teloi`'s own history is this defect once
+/// already, by a different route.
+#[test]
+fn enumerating_readers_report_a_withheld_log_rather_than_an_empty_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let withheld = withholding_kan(
+        dir.path(),
+        "kan-withheld.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":6,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":6}"#,
+    );
+    let empty = withholding_kan(
+        dir.path(),
+        "kan-empty.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":0,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":0}"#,
+    );
+    let text = |kan: &Path, args: &[&str]| {
+        let out = day(dir.path(), kan, args);
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    };
+
+    for args in [&["hook", "session-start"][..], &["doctor"][..]] {
+        let withheld_out = text(&withheld, args);
+        assert!(
+            withheld_out.contains("withheld"),
+            "{args:?} must say the log is withheld, not that the project is \
+             empty — this reader never calls `show`, so nothing else can tell \
+             it: {withheld_out}"
+        );
+        assert!(
+            !withheld_out.contains("valid starting state")
+                && !withheld_out.contains("are recorded for this project yet"),
+            "{args:?} must not reassure over a log it could not read: {withheld_out}"
+        );
+
+        // The negative control, and it is what makes the above mean anything:
+        // a genuinely empty project must still get the encouraging message. A
+        // guard that fires always is not a guard.
+        let empty_out = text(&empty, args);
+        assert!(
+            !empty_out.contains("withheld"),
+            "{args:?} on a genuinely empty log must not mention withholding: {empty_out}"
+        );
+    }
+}
+
+/// **day#120 round two, BLOCK-2 — a regression this branch caused.**
+///
+/// `PartiallyWithheld` returns `Err` for a subject whose claims are visible.
+/// Both dedup reads in `record.rs` swallow a failed read by design — right when
+/// the subject is UNREADABLE, where a duplicate is noise and a skip is a loss.
+/// Under a PARTIAL view the claims being deduplicated against are known to
+/// exist and known to be hidden, so the duplicate is not a risk but a
+/// certainty: three runs over an unchanged document produced three observes,
+/// three plans and three identical decides, each reported as a first recording.
+///
+/// day cannot retract, so that damage is permanent and grows per run. A write
+/// verb may refuse; the never-blocking rule is about hooks, which must render.
+#[test]
+fn design_record_refuses_a_partial_view_rather_than_duplicating_into_it() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".design")).unwrap();
+    std::fs::write(
+        dir.path().join(".design/thing.md"),
+        "# F: t\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n\n## Architecture\nx\n\n\
+         ## Resolved Questions\n- RQ-1: chose a\n",
+    )
+    .unwrap();
+
+    let schema = r#"{\"sections\":[\"Summary\"],\"paths_section\":\"\",\"resolved_section\":\"Resolved Questions\",\"resolution_prefix\":\"RQ-\"}"#;
+    let show_all = format!(
+        r#"{{"v":1,"trust":{{"base":"Local","authors":[]}},"excluded_by_trust":2,"subjects":[{{"v":1,"subject":"schema/design-doc","claims":[{{"cid":"bafys","kind":"Observation","author":"did:key:zA","recorded_at":1,"text":"S.\n\n```day-schema\n{schema}\n```\n"}}],"excluded_by_trust":0}},{{"v":1,"subject":"thing","claims":[{{"cid":"bafyo","kind":"Observation","author":"did:key:zA","recorded_at":2,"text":"an earlier pass"}}],"excluded_by_trust":2}}]}}"#
+    );
+    let status = r#"{"v":1,"subjects":[{"subject":"schema/design-doc","state":"Unclassified"},{"subject":"thing","state":"Unclassified"}],"trust":{"base":"Local","authors":[]},"excluded_by_trust":2}"#;
+    let kan = withholding_kan(dir.path(), "kan-partial.sh", &show_all, status);
+
+    let out = day(dir.path(), &kan, &["design", "record", ".design/thing.md"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    assert!(
+        text.contains("partial history"),
+        "a partial view must be refused with its reason, not recorded into: {text}"
+    );
+    assert!(
+        !text.contains("recorded design pass"),
+        "and nothing may be appended — day cannot retract, so a duplicate here \
+         is permanent and grows on every run: {text}"
+    );
+    assert!(
+        !out.status.success(),
+        "the refusal must be a non-zero exit, or a script will not notice it"
+    );
+}
+
+/// **day#120 round two, MAJOR-4 — an assessment verb reports; it does not
+/// refuse.**
+///
+/// With the schema unreadable under a narrowed base, `assess docs` exited 2 with
+/// a bare error, so it was unusable in exactly the multi-author repo day is for
+/// — and its remedy ("re-run where the count is zero") could never be satisfied,
+/// because a collaborator's claim in a committed `.claims/` is permanent.
+///
+/// `Level::Unchecked` is day#81's answer and already renders. The exit code
+/// stays non-zero deliberately: could-not-check outranks checked-and-clean, and
+/// `Report::unchecked` is what drives it. What changed is that day now SAYS what
+/// it could not check instead of aborting.
+#[test]
+fn assess_docs_reports_an_unreadable_schema_rather_than_aborting() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = withholding_kan(
+        dir.path(),
+        "kan-withheld.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":6,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":6}"#,
+    );
+
+    let out = day(dir.path(), &kan, &["assess", "docs"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    assert!(
+        text.contains("[UNCHECKED]"),
+        "the assessment must render, with the thing it could not check named: {text}"
+    );
+    assert!(
+        !text.starts_with("error:"),
+        "an assessment verb reports rather than aborting: {text}"
+    );
+    assert!(
+        !text.contains("re-run where the count is zero"),
+        "and must not print a remedy that cannot be reached: {text}"
+    );
+}

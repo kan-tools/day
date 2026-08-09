@@ -754,9 +754,37 @@ fn a_failed_kan_read_is_never_swallowed() {
                     // function that reports its failure properly).
                     //
                     // `let Ok(` covers `if let` and `while let` too.
+                    //
+                    // **`match` was the third shape, and it cost a whole
+                    // channel.** `practice.rs` reads with
+                    // `match client.show(..) { … Err(_) => return
+                    // Projection::default() }` — no method call after the read
+                    // and no `let Ok(` before it, so neither existing test
+                    // fired. When `kan_client::Error` gained two variants for
+                    // day#120, that arm turned "a subject withheld by trust"
+                    // into "no practice items", and the entire practice
+                    // projection vanished from `hook session-start` with no
+                    // note — while the same run printed a ⚠ block enumerating
+                    // three *other* unreadable declarations, so the completeness
+                    // warning was itself incomplete.
+                    //
+                    // Found by a cold review of the commit that added those
+                    // variants. The lesson under it is that **widening an error
+                    // type is a breaking change to every consumer**, and the
+                    // compiler cannot say so because every consumer already
+                    // handles `Result`. This scan is the only thing that can, so
+                    // it has to see every shape that discards an `Err`.
+                    //
+                    // Detected on the FOLLOWING text rather than the preceding,
+                    // because `match` sits before the read and the discarding
+                    // arm sits after it — the opposite way round from `let Ok(`.
                     let line_start = text[..found].rfind('\n').map_or(0, |i| i + 1);
                     let pattern_binding = text[line_start..found].contains("let Ok(");
-                    if pattern_binding || swallows.iter().any(|s| expr.contains(s)) {
+                    let match_arm = text[line_start..found].contains("match ")
+                        && tail
+                            .find('}')
+                            .is_some_and(|close| tail[..close].contains("Err(_)"));
+                    if pattern_binding || match_arm || swallows.iter().any(|s| expr.contains(s)) {
                         swallowed.push(text[..start].matches('\n').count());
                     }
                 }

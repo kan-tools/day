@@ -377,6 +377,110 @@ fn recording_an_iterated_design_is_incremental() {
     );
 }
 
+/// **day#119 — the observe/plan pair was appended on every run.**
+///
+/// `design record` was idempotent for resolutions and not for the pair, so
+/// three passes over one document left three `Observation`s and three `Plan`s
+/// beside exactly one `Decision` per id. Non-destruction makes the cost
+/// permanent: they can only be retracted, by hand, which is a workaround a user
+/// should not have to know about.
+///
+/// **Both halves are checked, and that is the whole subtlety.** The observe text
+/// carries the validation report's summary and the plan text carries the
+/// document's own summary line, so they change on different edits. A first
+/// version decided from the observe half alone and reported `(unchanged)` for a
+/// document whose Summary had been rewritten — caught by running it, against a
+/// comment asserting the two were derived from the same thing.
+#[test]
+fn an_unchanged_design_pass_records_no_second_observe_or_plan() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("steady.md");
+    let body = |summary: &str| {
+        format!(
+            "# Feature: Steady\n\n## Summary\n{summary}\n\n## Requirements\n\
+             - REQ-1: a.\n- REQ-2: b.\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: REQ-1.\n- [ ] AC-2: REQ-2.\n\n## Architecture\n\
+             In `src/probe.rs`.\n\n## Resolved Questions\n\
+             - RQ-1: the first thing.\n"
+        )
+    };
+    std::fs::write(&doc, body("the original summary")).unwrap();
+
+    let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafysc")]);
+    let run = |kan: &std::path::Path| {
+        String::from_utf8_lossy(
+            &day(
+                dir.path(),
+                kan,
+                &["design", "record", doc.to_str().unwrap()],
+            )
+            .stdout,
+        )
+        .to_string()
+    };
+
+    let first = run(&kan);
+    assert!(
+        !first.contains("(unchanged)"),
+        "the first pass has nothing to be unchanged from: {first}"
+    );
+
+    let second = run(&kan);
+    assert_eq!(
+        second.matches("(unchanged)").count(),
+        2,
+        "an identical document must append neither half, and must say so \
+         rather than printing the existing CIDs as though they were written: \
+         {second}"
+    );
+
+    // The counts are untouched, so the *report summary* — and with it the
+    // observe text — is identical. Only the plan text moves.
+    std::fs::write(&doc, body("a completely rewritten summary")).unwrap();
+    let third = run(&kan);
+    assert!(
+        !third.contains("(unchanged)"),
+        "a document whose Summary changed is a design that changed, and must \
+         record a new pair even though the validation report is identical — \
+         deciding from the observe half alone loses exactly this edit: {third}"
+    );
+
+    // **The case a cold review found, and the reason both texts were not
+    // enough.** Reverse a requirement's meaning: the finding counts do not
+    // move, so the observe text is identical, and the Summary section is
+    // untouched, so the plan text is identical too. Both claim texts are
+    // *summaries*; only a fingerprint over the source can see this.
+    let reversed = body("the original summary").replace(
+        "- REQ-1: a.",
+        "- REQ-1: the system stores NOTHING of its own.",
+    );
+    std::fs::write(&doc, &reversed).unwrap();
+    run(&kan);
+    let flipped = reversed.replace(
+        "- REQ-1: the system stores NOTHING of its own.",
+        "- REQ-1: the system stores EVERYTHING in a sidecar database.",
+    );
+    // premise: this edit really is invisible to both summaries. Asserted on the
+    // fixture rather than assumed, so a later change to what the texts contain
+    // makes this test say so instead of passing for a new reason.
+    assert_eq!(
+        reversed.lines().count(),
+        flipped.lines().count(),
+        "premise: the edit must not change the document's shape, only a \
+         requirement's meaning"
+    );
+    std::fs::write(&doc, &flipped).unwrap();
+    let fourth = run(&kan);
+    assert!(
+        !fourth.contains("(unchanged)"),
+        "a requirement reversed in meaning is a design that changed. Reporting \
+         `(unchanged)` here records nothing on an append-only log AND asserts \
+         to the user that there was nothing to record — the only finding in \
+         this branch where day states something false rather than staying \
+         silent: {fourth}"
+    );
+}
+
 /// The negative control, and the backward-compatibility half: a document with no
 /// ids behaves exactly as it did before day#36 — every bullet recorded, every
 /// time — and day says so rather than leaving the duplication to be discovered.
@@ -511,4 +615,89 @@ fn a_document_covering_the_record_reports_nothing() {
         "every recorded decision is covered, so nothing should be reported: {stdout}"
     );
     assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
+
+/// **day#158 — a design pass cited an adversarial review's finding as the claim
+/// it superseded.**
+///
+/// `newest_of_kind` took the newest `Observation` of ANY kind on the subject,
+/// and `commands/adversarial-review.md` records every finding as
+/// `kan observe "<finding>" --subject <subject>` — on the design subject. So
+/// after a review the "previous pair" was a review finding, which lacks the
+/// document fingerprint. Three failures followed in one run over an UNCHANGED
+/// document: a false migration note, a second live observe/plan pair (day#119
+/// re-broken), and a citation asserting the design pass superseded the review's
+/// finding — into a log day cannot retract from, at exit 0.
+///
+/// It fires on this repo's own prescribed workflow: `/design` → `day design
+/// record` → `/adversarial-review`. day's `witness-model` subject already shows
+/// the near-miss, with a `Result` sitting between two design passes.
+///
+/// The fix selects by what the mechanism WRITES — an opening day emits and
+/// nothing else does — shared with the `format!` that writes it so the two
+/// cannot drift.
+#[test]
+fn an_intervening_claim_is_not_mistaken_for_the_previous_design_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("thing.md");
+    std::fs::write(
+        &doc,
+        "# Feature: thing\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+         In `src/probe.rs`.\n\n## Resolved Questions\n- RQ-1: chose a\n",
+    )
+    .unwrap();
+
+    let claims = vec![schema_claim("design-doc", "bafysc")];
+    let kan = write_kan_stub(dir.path(), &claims);
+    let run = || {
+        String::from_utf8_lossy(
+            &day(
+                dir.path(),
+                &kan,
+                &["design", "record", doc.to_str().unwrap()],
+            )
+            .stdout,
+        )
+        .to_string()
+    };
+
+    run();
+    // premise: without anything intervening, a second pass skips. If this ever
+    // stops holding, the assertion below cannot tell the fix from the ordinary
+    // path and would pass for the wrong reason.
+    let second = run();
+    assert_eq!(
+        second.matches("(unchanged)").count(),
+        2,
+        "premise: an unchanged document must skip both halves: {second}"
+    );
+
+    // A review finding, recorded exactly as `/adversarial-review` prescribes —
+    // an `Observation`, on the design subject, newer than the pair.
+    let out = std::process::Command::new(&kan)
+        .args([
+            "observe",
+            "BLOCK-1. The fix keys on a shape real kan never emits.",
+            "--subject",
+            "thing",
+        ])
+        .current_dir(dir.path())
+        .output()
+        .expect("the stub should accept a write");
+    assert!(out.status.success(), "the fixture's own write must succeed");
+
+    let third = run();
+    assert_eq!(
+        third.matches("(unchanged)").count(),
+        2,
+        "an intervening review finding is not a design pass — the document did \
+         not change, so nothing may be appended and nothing may be cited as \
+         superseded: {third}"
+    );
+    assert!(
+        !third.contains("predates the document fingerprint"),
+        "and the migration note must not fire: the fingerprinted pair is still \
+         there, one claim further back: {third}"
+    );
 }

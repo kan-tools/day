@@ -533,3 +533,107 @@ fn conformance_the_review_commands_telos_pattern_matches_real_kan_status() {
         matched.len()
     );
 }
+
+/// **day#120 — the two shapes kan emits when a trust base withholds claims.**
+///
+/// This cell exists because the first attempt at day#120 keyed on a **third**
+/// shape: an entry with `claims: []` and a non-zero `excluded_by_trust`. kan
+/// does not emit that, so the fix was inert against the real binary while a
+/// hand-written stub in `tests/bulk_read.rs` reported it working — verbatim the
+/// blind spot this file's own module docs describe, in the milestone that
+/// quoted them.
+///
+/// Two shapes, measured rather than assumed:
+///
+/// - **fully withheld** — the subject is omitted from `show --all --json`
+///   entirely, and the count appears only at the **envelope** level;
+/// - **partial** — the entry is present with the admitted claims, and the count
+///   appears on the **entry**.
+///
+/// Both are asserted as *properties of kan*, which is what makes this a
+/// conformance cell rather than a test of day: if kan ever starts emitting the
+/// shape day originally guessed at, this fails and says so.
+#[test]
+fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
+    let Some(bin) = real_kan() else {
+        eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
+        return;
+    };
+    let dir = scratch_repo();
+
+    let kan = |args: &[&str], identity: Option<&Path>| -> String {
+        let mut cmd = Command::new(bin);
+        cmd.args(args).current_dir(dir.path());
+        if let Some(id) = identity {
+            cmd.env("KAN_IDENTITY_FILE", id);
+        }
+        let out = cmd.output().expect("kan should run");
+        assert!(
+            out.status.success(),
+            "kan {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    // A claim by the workspace's primary identity, and a second identity that
+    // does not admit it under `--trust me`.
+    kan(&["observe", "primary claim", "--subject", "shared"], None);
+    let role_added = Command::new(bin)
+        .args(["identity", "role", "add", "conformance-role"])
+        .current_dir(dir.path())
+        .output()
+        .expect("kan should run");
+    if !role_added.status.success() {
+        eprintln!("skipping: this kan has no `identity role add`");
+        return;
+    }
+    let role = dir.path().join(".kan/roles.d/conformance-role");
+    assert!(role.exists(), "the role key should have been written");
+
+    // --- shape 1: fully withheld -------------------------------------------
+    let payload = kan(
+        &["show", "--all", "--json", "--trust", "me"],
+        Some(role.as_path()),
+    );
+    let v: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
+
+    // premise: something really was withheld, or the assertions below are
+    // vacuous and would pass against a kan that withholds nothing at all.
+    assert!(
+        v["excluded_by_trust"].as_u64().unwrap_or(0) > 0,
+        "premise: the fixture must actually withhold a claim, got {payload}"
+    );
+    assert_eq!(
+        v["subjects"].as_array().map(Vec::len),
+        Some(0),
+        "kan OMITS a fully-withheld subject rather than returning it empty. If \
+         this ever fails, kan has started emitting the shape day#120's first \
+         attempt guessed at, and `read_all`'s per-entry branch becomes \
+         reachable: {payload}"
+    );
+
+    // --- shape 2: partial ---------------------------------------------------
+    kan(
+        &["observe", "role claim", "--subject", "shared"],
+        Some(role.as_path()),
+    );
+    let payload = kan(&["show", "--all", "--json", "--trust", "me"], None);
+    let v: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
+    let entry = v["subjects"]
+        .as_array()
+        .and_then(|s| s.iter().find(|e| e["subject"] == "shared"))
+        .unwrap_or_else(|| panic!("a partial view still returns the entry: {payload}"));
+
+    assert!(
+        !entry["claims"].as_array().expect("claims array").is_empty(),
+        "premise: the partial view must still show the admitted claim, or this \
+         is the fully-withheld shape again: {payload}"
+    );
+    assert!(
+        entry["excluded_by_trust"].as_u64().unwrap_or(0) > 0,
+        "a partial view carries the count ON THE ENTRY — this is what day keys \
+         `PartiallyWithheld` on, and a withheld NEWER claim is what makes it \
+         matter, since day resolves newest-wins: {payload}"
+    );
+}

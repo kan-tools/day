@@ -86,13 +86,99 @@ pub struct Schema {
     /// exactly what iterating on a design does.
     #[serde(default = "default_resolution_prefix")]
     pub resolution_prefix: String,
+    /// Path roots that belong to **another repository**, so a citation under
+    /// one is reported as unchecked rather than as missing (day#84).
+    ///
+    /// The whole coordination surface between day and kan is documents in one
+    /// repo about code in the other, so this recurs by construction. What made
+    /// it worth a schema field rather than a heuristic is that the warning
+    /// **changed what got written**: `kan/src/workspace.rs` was replaced with a
+    /// symbol name to silence it, leaving the document less precise than it
+    /// would have been with no check at all. A linter that degrades the artifact
+    /// it validates is worse than absent.
+    ///
+    /// Declared rather than inferred, on the same argument day#136 settled one
+    /// module over: "this segment is not a directory here" would also swallow a
+    /// genuine typo in a top-level path, and an exclusion nobody can see is one
+    /// nobody can correct. Empty by default, so a project that never cites
+    /// across a repo boundary is unaffected.
+    ///
+    /// **Skipped when empty, which is a compatibility requirement rather than
+    /// tidiness.** `Schema` is `deny_unknown_fields`, so a serialized
+    /// `"paths_external": []` is a hard error on every earlier day — and the
+    /// starter day prints is what a project records, so day's own suggestion
+    /// would have made new projects unreadable to the release before this one.
+    /// Measured against the real `v0.12.0-beta.1` binary:
+    ///
+    /// ```text
+    /// error: schema/design-doc: `day-schema` block could not be read:
+    ///        unknown field `paths_external`, expected one of `sections`, …
+    /// exit 2
+    /// ```
+    ///
+    /// Skipping when empty keeps a schema that does not use the feature
+    /// **byte-identical** to what earlier days wrote — the same property
+    /// `day-atom` holds for `revisits`, and for the same reason.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths_external: Vec<String>,
 }
+
+/// The reader version a `day-schema` block requires once it declares
+/// `paths_external` (day#84).
+///
+/// Stamped **only** when the field is non-empty, so a schema that does not use
+/// it stays v1 and readable by every earlier day. This is `day-atom`'s
+/// `revisits` rule applied to the second block type that needed it: the version
+/// is what turns an older day's refusal from `unknown field paths_external` —
+/// which reads as the project's mistake — into "this day reads `day-schema` v1,
+/// this block declares v2, upgrade day".
+pub const SCHEMA_VERSION_PATHS_EXTERNAL: u64 = 2;
 
 impl crate::atoms::Versioned for Schema {
     /// A design-doc schema. v1 is every block written before versioning
-    /// existed, which an absent `_version` still means.
-    const SUPPORTED_VERSION: u64 = crate::atoms::IMPLICIT_VERSION;
+    /// existed, which an absent `_version` still means; v2 adds
+    /// `paths_external`.
+    const SUPPORTED_VERSION: u64 = SCHEMA_VERSION_PATHS_EXTERNAL;
     const FENCE: &'static str = FENCE_INFO;
+}
+
+impl Schema {
+    /// The block body, version-stamped only when it needs to be.
+    ///
+    /// Spliced onto the serialized struct rather than rebuilt through a
+    /// `serde_json::Value`, for the reason `Interface::to_block_json` states:
+    /// serde_json's map re-sorts keys, so a round-trip would change the bytes
+    /// of blocks this feature is supposed to leave alone. Splicing keeps "the
+    /// stamp is the only difference" an assertable property rather than a hope.
+    pub fn to_block_json(&self) -> String {
+        self.stamp(
+            serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string()),
+            "",
+        )
+    }
+
+    /// The same body, pretty-printed — what `day init` records and what the
+    /// starter command prints. Both go through here so the printed and recorded
+    /// forms cannot disagree about the stamp, which is the property
+    /// [`Self::record`]'s own doc comment already claims for the schema itself.
+    pub fn to_block_json_pretty(&self) -> String {
+        self.stamp(
+            serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string()),
+            "\n ",
+        )
+    }
+
+    fn stamp(&self, body: String, sep: &str) -> String {
+        if self.paths_external.is_empty() {
+            return body;
+        }
+        match body.strip_prefix('{') {
+            Some(rest) => {
+                format!("{{{sep}\"_version\": {SCHEMA_VERSION_PATHS_EXTERNAL},{rest}")
+            }
+            None => body,
+        }
+    }
 }
 
 fn default_requirement_prefix() -> String {
@@ -125,14 +211,18 @@ impl Schema {
             paths_section: "Architecture".to_string(),
             resolved_section: "Resolved Questions".to_string(),
             resolution_prefix: default_resolution_prefix(),
+            // Empty in the starter, deliberately. A project that cites across
+            // a repo boundary declares the root it cites into; suggesting one
+            // here would ship an exclusion nobody asked for, and day#84's whole
+            // complaint is about a check quietly deciding what not to look at.
+            paths_external: Vec::new(),
         }
     }
 
     /// A ready-to-run `kan` invocation recording [`Self::starter`], so the
     /// error path hands over something runnable instead of prose.
     pub fn starter_command(slug: &str) -> String {
-        let json =
-            serde_json::to_string_pretty(&Self::starter()).unwrap_or_else(|_| "{}".to_string());
+        let json = Self::starter().to_block_json_pretty();
         format!(
             "  kan observe \"$(cat <<'EOF'\nDesign-doc schema for this project.\n\n\
              ```{FENCE_INFO}\n{json}\n```\nEOF\n)\" --subject {SCHEMA_PREFIX}{slug}"
@@ -161,7 +251,7 @@ impl Schema {
     /// copy-paste — the starter has one definition either way, so the
     /// printed and recorded forms cannot disagree.
     pub fn record(&self, client: &KanClient, slug: &str) -> Result<String, Error> {
-        let json = serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string());
+        let json = self.to_block_json_pretty();
         let text = format!("Design-doc schema for this project.\n\n```{FENCE_INFO}\n{json}\n```\n");
         Ok(crate::vocabulary::declare(
             client,
@@ -182,6 +272,70 @@ impl Schema {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **day#84's field must not break every earlier day.**
+    ///
+    /// `Schema` is `deny_unknown_fields`, so a serialized `"paths_external": []`
+    /// is a hard error on any day that predates the field — and the starter is
+    /// what `day init` RECORDS, so day's own suggestion would have made new
+    /// projects unreadable to the previous release. Verified against the real
+    /// `v0.12.0-beta.1` binary, which went from exit 2 (`unknown field`) to
+    /// exit 1 (the document's own honest verdict) once this held.
+    #[test]
+    fn a_schema_not_using_an_external_root_is_byte_identical_to_the_old_form() {
+        let starter = Schema::starter();
+
+        // premise: the starter really does leave the field empty. If a later
+        // edit ships a default root, this test would otherwise quietly start
+        // asserting nothing about the compatibility path.
+        assert!(
+            starter.paths_external.is_empty(),
+            "premise: the starter must declare no external roots"
+        );
+
+        for rendered in [starter.to_block_json(), starter.to_block_json_pretty()] {
+            assert!(
+                !rendered.contains("paths_external"),
+                "an unused field must not appear at all — `deny_unknown_fields` \
+                 makes its mere presence a hard error on an older day: {rendered}"
+            );
+            assert!(
+                !rendered.contains("_version"),
+                "and an unstamped block stays v1, readable by every earlier day: \
+                 {rendered}"
+            );
+        }
+    }
+
+    /// The other half: a schema that DOES use the field stamps the reader
+    /// version, so an older day refuses with "upgrade day" rather than with
+    /// `unknown field paths_external`, which reads as the project's mistake.
+    /// day#60's lesson, applied to the second block type that needed it.
+    #[test]
+    fn a_schema_using_an_external_root_declares_the_version_it_requires() {
+        let mut schema = Schema::starter();
+        schema.paths_external = vec!["kan/".to_string()];
+
+        for rendered in [schema.to_block_json(), schema.to_block_json_pretty()] {
+            assert!(
+                rendered.contains("\"_version\""),
+                "a block using v2 must say so: {rendered}"
+            );
+            assert!(
+                rendered.contains("paths_external"),
+                "and must still carry the field it stamped for: {rendered}"
+            );
+            // The stamp must not corrupt the body it is spliced onto.
+            let parsed: Schema =
+                crate::atoms::extract_fenced(&format!("x\n\n```{FENCE_INFO}\n{rendered}\n```\n"))
+                    .expect("the stamped block is present")
+                    .expect("and parses");
+            assert_eq!(
+                parsed, schema,
+                "the stamp is the only difference; the schema round-trips"
+            );
+        }
+    }
 
     #[test]
     fn starter_round_trips_through_its_own_fenced_block() {

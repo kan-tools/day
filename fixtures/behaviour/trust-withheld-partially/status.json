@@ -1,0 +1,29 @@
+{
+ "v": 1,
+ "subjects": [
+  {
+   "subject": "telos/t",
+   "subjects": [
+    "telos/t"
+   ],
+   "state": "Unclassified"
+  },
+  {
+   "subject": "practice",
+   "subjects": [
+    "practice"
+   ],
+   "state": "Unclassified"
+  }
+ ],
+ "trust": {
+  "base": "Local",
+  "authors": [
+   {
+    "did": "did:key:zFixtureAuthor",
+    "weight": 1.0
+   }
+  ]
+ },
+ "excluded_by_trust": 2
+}

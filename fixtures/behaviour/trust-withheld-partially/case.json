@@ -1,0 +1,10 @@
+{
+ "why": "Two subjects are returned with claims visible AND claims withheld. day resolves newest-wins, so a withheld newer claim silently promotes a superseded declaration. Covers the `practice` projection specifically, which swallowed this error and vanished from the hook with no note.",
+ "tags": [],
+ "tracked": [],
+ "invocations": [
+  "hook session-start",
+  "doctor",
+  "status"
+ ]
+}

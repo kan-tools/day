@@ -1,0 +1,10 @@
+{
+ "why": "Every claim in the log is withheld from this view's trust base. kan omits such a subject from `show --all --json` AND from `status --json`, so day's ENUMERATING readers never see it and never reach any per-subject guard. The envelope count is the only evidence anything exists, which is why it is read from both envelopes and surfaced on the renders rather than turned into per-subject errors. day must not report this as an empty project. `assess docs` is absent from the invocations and now stays absent for a DIFFERENT reason than when this fixture was written: it no longer over-refuses (it reports [UNCHECKED] rather than erroring), but its exit is still 2, because could-not-check outranks checked-and-clean and `Report::unchecked` drives the code. The harness treats any exit outside {0,1} as unrunnable, so a legitimately-unchecked assessment cannot be a corpus invocation. That is the harness's limit, not day's defect.",
+ "tags": [],
+ "tracked": [],
+ "invocations": [
+  "hook session-start",
+  "doctor",
+  "status"
+ ]
+}

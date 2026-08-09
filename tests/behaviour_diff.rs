@@ -41,6 +41,15 @@ fn corpus_with(dir: &Path, log: &str) -> std::path::PathBuf {
     corpus
 }
 
+/// A corpus directory containing one fixture with a caller-chosen `case.json`.
+/// Separate from [`corpus_with`] because day#145's case is a *well-formed* log
+/// whose case declares nothing — the log is not what makes it empty.
+fn corpus_with_case(dir: &Path, case: &str) -> std::path::PathBuf {
+    let corpus = corpus_with(dir, r#"{"v":1,"subjects":[]}"#);
+    std::fs::write(corpus.join("only").join("case.json"), case).unwrap();
+    corpus
+}
+
 fn diff(args: &[&str]) -> (String, Option<i32>) {
     diff_with_path(args, None)
 }
@@ -103,6 +112,165 @@ fn a_fixture_that_cannot_run_is_not_reported_as_identical() {
         "and it must never render the agreement verdict: {text}"
     );
     assert_eq!(code, Some(2), "could-not-check exits 2, not 0: {text}");
+}
+
+/// **day#145 — a fixture that invokes nothing counts as a fixture.**
+///
+/// `observe()` iterated `case["invocations"]`, so an empty list produced `{}`,
+/// the comparison loop iterated nothing, and the fixture contributed no
+/// evidence — while still satisfying `--expect-fixtures`, the guard meant to
+/// catch a corpus that stopped covering things. A corpus of N such fixtures
+/// reported a clean run having executed day zero times.
+///
+/// Neither existing guard could see it: the count counts *directories*, and the
+/// derived-list test checks membership by *name*. The corpus list is
+/// exhaustive; the corpus contents were not.
+#[test]
+fn a_fixture_that_invokes_nothing_is_not_reported_as_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = corpus_with_case(
+        dir.path(),
+        r#"{"why":"no invocations at all","tags":[],"tracked":[],"invocations":[]}"#,
+    );
+
+    let (text, code) = diff(&[
+        "--since",
+        "HEAD",
+        "--corpus",
+        corpus.to_str().unwrap(),
+        "--expect-fixtures",
+        "1",
+    ]);
+
+    assert!(
+        text.contains("declares no invocations"),
+        "the empty fixture must be named: {text}"
+    );
+
+    // A fixture missing the key entirely is the same class and used to raise a
+    // raw `KeyError` — a traceback, not a graded outcome. A harness that can
+    // crash instead of reporting is one whose silence means nothing.
+    let missing = corpus_with_case(
+        dir.path(),
+        r#"{"why":"no key at all","tags":[],"tracked":[]}"#,
+    );
+    let (text, code_missing) = diff(&[
+        "--since",
+        "HEAD",
+        "--corpus",
+        missing.to_str().unwrap(),
+        "--expect-fixtures",
+        "1",
+    ]);
+    assert!(
+        text.contains("declares no `invocations` key"),
+        "a fixture with no `invocations` key must be graded, not raise: {text}"
+    );
+    assert!(!text.contains("Traceback"), "and must not crash: {text}");
+    assert_eq!(
+        code_missing,
+        Some(2),
+        "could-not-check exits 2, not a Python traceback's 1: {text}"
+    );
+    assert!(
+        !text.lines().any(|l| l.trim() == "IDENTICAL"),
+        "and it must never render the agreement verdict: {text}"
+    );
+    assert_eq!(code, Some(2), "could-not-check exits 2, not 0: {text}");
+}
+
+/// **day#144 — the guard caught one shape of unrunnable and not day's.**
+///
+/// `assess telos` reports an unanswerable witness as `[ERROR]` on **stdout**
+/// with exit **0**, so neither `returncode not in (0, 1)` nor
+/// `"could not read" in stderr` fired. Two binaries that both declined to
+/// answer compared equal, and the harness said `IDENTICAL`.
+///
+/// The fixture reaches it the way the issue did: an `also_carries` entry
+/// declaring its own `subject`, which `every` refuses by design.
+#[test]
+fn a_fixture_whose_verdict_is_an_error_is_not_reported_as_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    // A witness day parses and then refuses on the merits — the log is
+    // well-formed, which is what makes exit 0 and a stdout `[ERROR]`.
+    let log = r#"{"v":1,"subjects":[
+        {"subject":"schema/witness","claims":[{"subject":"schema/witness","cid":"bafys","kind":"Observation","author":"did:key:zFixtureAuthor","recorded_at":10,
+          "text":"```day-witness\n{\"u\": {\"every\": {\"subject_with\": {\"kind\":\"Plan\",\"subject\":\"design/*\"}, \"also_carries\": [{\"kind\":\"Decision\",\"subject\":\"other/b\"}]}}}\n```"}]},
+        {"subject":"telos/t","claims":[{"subject":"telos/t","cid":"bafyt","kind":"Decision","text":"T.\n\n```day-telos\n{\"witnesses\":[\"u\"]}\n```","author":"did:key:zFixtureAuthor","recorded_at":11}]}
+    ]}"#;
+    let corpus = corpus_with(dir.path(), log);
+
+    let (text, code) = diff(&[
+        "--since",
+        "HEAD",
+        "--corpus",
+        corpus.to_str().unwrap(),
+        "--expect-fixtures",
+        "1",
+    ]);
+
+    // The premise is the whole point: day must have exited 0 here. If it ever
+    // starts exiting non-zero, the pre-existing guard catches it and this test
+    // stops measuring what it was written for.
+    assert!(
+        text.contains("exited 0"),
+        "premise broken — this fixture is supposed to reach the exit-0 `[ERROR]` \
+         shape the old guard could not see: {text}"
+    );
+    assert!(
+        !text.lines().any(|l| l.trim() == "IDENTICAL"),
+        "an errored verdict must never compare as agreement: {text}"
+    );
+    assert_eq!(code, Some(2), "could-not-check exits 2, not 0: {text}");
+}
+
+/// **A relative `--corpus` made every fixture unrunnable.**
+///
+/// `observe()` puts the fixture path in `FIXTURE` and runs day with
+/// `cwd=work`, so a relative path made the stub's `cat "$FIXTURE/status.json"`
+/// miss, day got empty stdout, and the run reported `CORPUS-EMPTY` against a
+/// corpus that was fine. The default is `ROOT`-based and absolute, so the
+/// documented invocation always worked and the flag never did — a mechanism
+/// with two modes, exercised only in the mode this repo happens to use.
+///
+/// Fails toward could-not-check rather than toward clean, which is why it
+/// survived: it looked like a broken corpus, not a broken harness.
+#[test]
+fn a_relative_corpus_path_resolves_against_the_repo_not_the_work_dir() {
+    let (text, code) = diff(&[
+        "--since",
+        "HEAD",
+        "--corpus",
+        "fixtures/behaviour",
+        "--expect-fixtures",
+        // Derived, not written: the count must track the shipped corpus, and
+        // hand-writing it is what this repo has been wrong about in five
+        // places. `the_shipped_corpus_has_the_fixtures_it_claims` holds the
+        // list; this holds the count, and the two catch different failures.
+        &std::fs::read_dir(repo_root().join("fixtures/behaviour"))
+            .expect("the corpus should ship")
+            .flatten()
+            .filter(|e| e.path().join("case.json").is_file())
+            .count()
+            .to_string(),
+    ]);
+
+    assert!(
+        !text.contains("CORPUS-EMPTY"),
+        "the shipped corpus is runnable; a relative path must not make it \
+         look otherwise: {text}"
+    );
+    // **Not `== 0`.** This test is about whether the PATH RESOLVED, and the
+    // first version asserted a clean comparison as well — so it failed for any
+    // uncommitted behaviour change in the working tree, which is most of
+    // development and none of this test's business. Exit 0 (identical) and
+    // exit 1 (changed) both mean the corpus ran; exit 2 is the could-not-check
+    // this test exists to rule out.
+    assert_ne!(
+        code,
+        Some(2),
+        "a relative corpus path must not be a could-not-check: {text}"
+    );
 }
 
 /// **A corpus that shrank is a could-not-check, not a clean run.**
@@ -241,9 +409,14 @@ fn the_shipped_corpus_has_the_fixtures_it_claims() {
         found,
         vec![
             "glob-named-subject".to_string(),
-            "scoped-universal".to_string()
+            "scoped-universal".to_string(),
+            "trust-withheld-entirely".to_string(),
+            "trust-withheld-partially".to_string()
         ],
-        "the corpus encodes the two regressions two cold reviews found by hand; \
-         losing one loses the evidence that this harness catches them"
+        "the corpus encodes the regressions cold reviews found by hand; losing one \
+         loses the evidence that this harness catches them. The two `trust-withheld-*` \
+         fixtures are the modes day's OWN repo can never be in — `excluded_by_trust` \
+         is 0 here — which is why four blocking defects across two review rounds all \
+         lived there and none was reachable from this repo"
     );
 }

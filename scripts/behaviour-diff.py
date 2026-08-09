@@ -163,7 +163,27 @@ def observe(binary: pathlib.Path, fixture: pathlib.Path, work: pathlib.Path) -> 
     env["DAY_KAN_BIN"] = str(work / "kan")
     env["DAY_GIT_BIN"] = str(work / "git")
     out = {}
-    for verb in case["invocations"]:
+    # **day#145: a fixture that invokes nothing is not a fixture that agreed.**
+    # `observe()` returned `{}`, the comparison loop iterated nothing, and the
+    # fixture still counted toward `--expect-fixtures` -- the guard meant to
+    # catch a corpus that stopped covering things. A corpus of N such fixtures
+    # reported a clean run having executed day zero times.
+    #
+    # `--expect-fixtures` counts DIRECTORIES, and the derived-list test checks
+    # membership by NAME, so neither can see this: the corpus list is
+    # exhaustive and the corpus contents were not.
+    #
+    # `.get`, not `case["invocations"]`. The subscript raised a raw `KeyError`
+    # for a fixture missing the key — a traceback rather than a graded outcome,
+    # which is the same malformed-fixture class day#145 is about, one line over.
+    # A fixture that cannot say what to run is exactly as unrunnable as one that
+    # says to run nothing, and both are `CORPUS-EMPTY` at exit 2.
+    invocations = case.get("invocations")
+    if not invocations:
+        missing = "declares no `invocations` key" if invocations is None else "declares no invocations"
+        raise Unrunnable(f"{fixture.name}: {missing}, so it "
+                         f"compares nothing while still counting as a fixture")
+    for verb in invocations:
         argv = [str(binary)] + verb.split()
         if "--run" in argv:
             raise SystemExit(f"{fixture.name}: --run is not allowed in the corpus")
@@ -178,9 +198,23 @@ def observe(binary: pathlib.Path, fixture: pathlib.Path, work: pathlib.Path) -> 
         # So a fixture must produce a verdict, not an error. Checked per
         # invocation rather than trusted, because the stub is the thing most
         # likely to rot and the failure is silent in the safe-looking direction.
-        if r.returncode not in (0, 1) or "could not read" in r.stderr:
+        #
+        # **day#144: the guard caught one shape of that and not the shape day
+        # actually emits.** `assess telos` reports an unanswerable witness as
+        # `[ERROR]` on STDOUT with exit 0, so neither condition above fires and
+        # two binaries that both declined to answer compared equal. Checked on
+        # stdout, anchored to the start of a line, because that is where the
+        # verdict markers are and a substring would match prose quoting one.
+        #
+        # `[UNCHECKED]` is deliberately NOT included. It is also a
+        # could-not-check, and widening this guard to cover it is a separate
+        # judgement about what the corpus is allowed to assert -- made on its
+        # own evidence, not folded in here because the shapes rhyme.
+        errored = [l for l in r.stdout.splitlines() if l.strip().startswith("[ERROR]")]
+        if r.returncode not in (0, 1) or "could not read" in r.stderr or errored:
+            detail = errored[0].strip() if errored else (r.stderr or r.stdout).strip()
             raise Unrunnable(f"{fixture.name}:{verb} exited {r.returncode}: "
-                             f"{(r.stderr or r.stdout).strip()[:200]}")
+                             f"{detail[:200]}")
         out[verb] = f"exit={r.returncode}\n{r.stdout}"
     return out
 
@@ -202,7 +236,17 @@ def main() -> int:
                     help="fixture directory (default fixtures/behaviour)")
     args = ap.parse_args()
 
-    corpus = pathlib.Path(args.corpus) if args.corpus else CORPUS
+    # **`.resolve()`, because the fixture path is handed to a subprocess that
+    # runs somewhere else.** `observe()` sets `FIXTURE` from this and runs day
+    # with `cwd=work`, so a RELATIVE `--corpus` makes the stub's
+    # `cat "$FIXTURE/status.json"` miss, day gets empty stdout, and every
+    # fixture raises `Unrunnable`. `--corpus fixtures/behaviour` -- the form a
+    # person types -- reported CORPUS-EMPTY against a corpus that is fine.
+    #
+    # The default is `ROOT / ...` and therefore absolute, so the invocation in
+    # the docstring always worked and the flag never did: a mechanism with two
+    # modes, exercised in whichever mode this repo happens to use.
+    corpus = pathlib.Path(args.corpus).resolve() if args.corpus else CORPUS
     cases = fixtures(corpus)
     if len(cases) != args.expect_fixtures:
         print(f"{CORPUS_EMPTY}: expected {args.expect_fixtures} fixture(s), found "

@@ -154,6 +154,74 @@ impl Document {
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == '.')
                     .collect();
                 out.push(format!("{prefix}{num}{tail}"));
+                continue;
+            }
+            // day#123: an id *followed* by a qualifier, then the colon —
+            // `- [ ] AC-1 (REQ-1): …`. The strict parser drops it, and the
+            // rule above does not catch it because the next character is a
+            // space. It is the shape day's own coverage warning talks an
+            // author into writing, so fifteen criteria became zero with
+            // nothing naming the cause.
+            //
+            // **The discriminator is STRUCTURAL, after a first attempt keyed on
+            // vocabulary got it wrong in both directions.** That version asked
+            // whether the text between the id and the colon contained an
+            // "ordinary lowercase word". A cold review reproduced both failures:
+            //
+            //   - [ ] AC-1 (covers REQ-1): …   dropped — "covers" reads as prose
+            //   - REQ-1 é válido: ver arriba   flagged — no ASCII lowercase word
+            //
+            // The first is day#123 verbatim, and the issue's own wording is
+            // "name the requirement each criterion COVERS", so it is at least as
+            // natural as the form that was fixed. The second cries wolf on any
+            // language whose words carry accents, which is a rule about English
+            // rather than about markdown.
+            //
+            // Two structural signals replace it, neither depending on what the
+            // words mean:
+            //
+            //   1. A CHECKBOX item (`- [ ] AC-1 …`) is a criterion by
+            //      construction. Nobody writes a checkbox to mention an id in
+            //      passing, so anything but the strict form there is a
+            //      declaration whose id did not parse — colon or no colon.
+            //   2. Otherwise, a BRACKETED qualifier immediately after the id
+            //      (`(REQ-1)`, `[REQ-1]`) followed by a colon. Prose does not
+            //      open a bracket where a colon belongs.
+            //
+            // `- REQ-1 is also relevant here` and `- REQ-1 is relevant: see
+            // above` are neither, and stay mentions — which
+            // `valid_ids_and_loose_mentions_are_not_flagged_as_malformed` and
+            // `a_bullet_mentioning_an_id_in_prose_is_still_not_malformed` fix
+            // in place.
+            //
+            // The strict form itself. Checked here rather than relied on from
+            // the branch above, which only ever saw ids that *continued*.
+            if after.starts_with(':') {
+                continue;
+            }
+            let trimmed = after.trim_start();
+            // **A checkbox alone is not enough**, which a cold review found by
+            // trying the obvious task-list line:
+            //
+            //     - [ ] REQ-1 is implemented and shipped
+            //
+            // That tracks a requirement declared correctly elsewhere. Flagging
+            // it advises rewriting it as `REQ-1: …`, which would create a
+            // DUPLICATE declaration — day's own advice making the document
+            // worse, which is day#84's complaint arriving inside day#123's fix.
+            //
+            // So a checkbox must also carry a colon or a bracketed qualifier —
+            // the same two marks that identify a declaration outside one. What
+            // the checkbox buys is that a qualifier need not be followed by a
+            // colon: `- [ ] AC-1 (REQ-1) checks first` is still a criterion
+            // whose id did not parse, and the plain list-item rule below cannot
+            // reach it.
+            if is_checkbox_item(line) && (after.contains(':') || trimmed.starts_with(['(', '['])) {
+                let shown = after.split(':').next().unwrap_or(after).trim_end();
+                out.push(format!("{prefix}{num}{shown}"));
+            } else if is_list_item(line) && trimmed.starts_with(['(', '[']) && after.contains(':') {
+                let gap = after.split(':').next().unwrap_or_default();
+                out.push(format!("{prefix}{num}{}", gap.trim_end()));
             }
         }
         out
@@ -201,6 +269,36 @@ impl Document {
             }
         }
         paths
+    }
+
+    /// Backtick-quoted tokens excluded from [`Self::quoted_paths`] **only**
+    /// because they sit in one of day's own subject namespaces (day#136).
+    ///
+    /// Collected so the caller can report the ones that are ambiguous. `telos/`,
+    /// `schema/` and `atom/` are kan namespaces, and they are also ordinary
+    /// directory names: a repo with a real `schema/` directory had
+    /// `schema/order.v2.json` dropped from the count with nothing said, which is
+    /// a report asserting a completeness it did not verify — and day#84, decided
+    /// seventy lines away, spends an `[UNCHECKED]` line to avoid exactly that.
+    fn subject_shaped_citations(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for (i, chunk) in text.split('`').enumerate() {
+            if i % 2 != 1 {
+                continue;
+            }
+            let candidate = chunk
+                .trim_end_matches(['.', ',', ')'])
+                .split(':')
+                .next()
+                .unwrap_or_default();
+            // Excluded by the namespace rule and by nothing else — a template
+            // or a slash command would fail `looks_like_path` regardless, and
+            // reporting those would be the crying-wolf this check avoids.
+            if is_path_shaped(candidate) && in_a_subject_namespace(candidate) {
+                out.push(candidate.to_string());
+            }
+        }
+        out
     }
 
     /// Bullet lines under `heading`, each becoming one `decide` claim.
@@ -456,12 +554,28 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
         for bad in doc.malformed_ids(prefix) {
             findings.push(Finding {
                 verdict: Verdict::Warn,
-                message: format!(
-                    "`{bad}` looks like a declaration but its id is not the strict form \
-                     `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
-                     coverage-checked. Renumber it, or the requirement it names is invisible \
-                     to validation"
-                ),
+                // The remedy is split by *which* malformation this is, because
+                // day#123 is a case of day's own advice being wrong and
+                // repeating "renumber it" here would repeat that.
+                // A continued id (`REQ-11a`) genuinely wants renumbering; an
+                // id followed by a qualifier (`AC-1 (REQ-1):`) wants the
+                // qualifier moved past the colon, which parses and still
+                // satisfies the coverage check.
+                message: if bad.contains(char::is_whitespace) || bad.contains('(') {
+                    format!(
+                        "`{bad}` looks like a declaration but its id is not the strict form \
+                         `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
+                         coverage-checked. Move what follows the id to after the colon \
+                         (`{prefix}1: …`), which parses and still satisfies the coverage check"
+                    )
+                } else {
+                    format!(
+                        "`{bad}` looks like a declaration but its id is not the strict form \
+                         `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
+                         coverage-checked. Renumber it, or the requirement it names is invisible \
+                         to validation"
+                    )
+                },
             });
         }
     }
@@ -564,12 +678,57 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     if !schema.paths_section.is_empty() {
         if let Some(body) = doc.section(&schema.paths_section) {
             let paths = Document::quoted_paths(body);
+            let subject_citations = Document::subject_shaped_citations(body);
+            // day#84: a citation under a declared external root is not this
+            // repo's to resolve. Partitioned BEFORE the existence test rather
+            // than filtered out of `missing` afterwards, so an external path
+            // also stops counting toward "references no existing file" — a doc
+            // citing only the other repo would otherwise FAIL for having
+            // grounded itself precisely.
+            //
+            // day#84's follow-up: matched on a **path segment boundary**, not
+            // on the raw string. `starts_with("kan")` also matched
+            // `kanban/src/store.rs`, so declaring one root silently excluded a
+            // sibling directory and turned a missing in-repo file into a PASS
+            // at exit 0 — the verdict moving the wrong way, which is worse than
+            // the warning day#84 set out to remove.
+            let (external, paths): (Vec<String>, Vec<String>) = paths.into_iter().partition(|p| {
+                schema.paths_external.iter().any(|root| {
+                    let root = root.strip_suffix('/').unwrap_or(root);
+                    !root.is_empty()
+                        && (p == root
+                            || p.strip_prefix(root)
+                                .is_some_and(|rest| rest.starts_with('/')))
+                })
+            });
             let missing: Vec<&String> = paths.iter().filter(|p| !base.join(p).exists()).collect();
             // The rule is grounding, not omniscience: a design must point at
             // code that exists, but an Architecture section naming files it
             // intends to *create* is doing its job — so an unresolved path
             // warns, and only a total absence of real ones fails.
-            if paths.is_empty() || missing.len() == paths.len() {
+            if paths.is_empty() && !external.is_empty() {
+                // day#84, the half its own commit message claimed and did not
+                // implement: partitioning empties `paths`, so `paths.is_empty()`
+                // failed the document anyway — identical verdict and exit to a
+                // day with no `paths_external` at all. A cross-repo contract
+                // document citing only the other repo was FAILED for having
+                // grounded itself precisely, which is the pressure day#84
+                // exists to remove, surviving inside its own fix.
+                //
+                // `Unchecked` rather than `Pass`: day did not verify these, and
+                // saying it did would be the same false completeness in the
+                // other direction.
+                findings.push(Finding {
+                    verdict: Verdict::Unchecked,
+                    message: format!(
+                        "{} references only external path(s), under declared root(s) {} — \
+                         grounded, but in a repo day cannot resolve, so nothing here was \
+                         checked",
+                        schema.paths_section,
+                        schema.paths_external.join(", ")
+                    ),
+                });
+            } else if paths.is_empty() || missing.len() == paths.len() {
                 findings.push(Finding {
                     verdict: Verdict::Fail,
                     message: format!(
@@ -596,6 +755,149 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
                     });
                 }
             }
+            // day#136's exclusion, reported where it is ambiguous.
+            //
+            // `telos/`, `schema/` and `atom/` are kan namespaces AND ordinary
+            // directory names, so excluding them unconditionally dropped
+            // `schema/order.v2.json` from the count with nothing said, in a repo
+            // that has a `schema/` directory. Silence is right for
+            // `telos/v1.0` — that is a subject, and warning about it is the
+            // pressure day#136 removed — so the discriminator is whether the
+            // first segment is a REAL DIRECTORY HERE. If it is, day cannot tell
+            // a subject citation from a path and says so instead of choosing.
+            let ambiguous: Vec<&String> = subject_citations
+                .iter()
+                .filter(|c| {
+                    c.split_once('/')
+                        .is_some_and(|(head, _)| base.join(head).is_dir())
+                })
+                .collect();
+            if !ambiguous.is_empty() {
+                findings.push(Finding {
+                    verdict: Verdict::Unchecked,
+                    message: format!(
+                        "{} citation(s) sit in one of day's kan namespaces AND under a real \
+                         directory of that name, so day cannot tell a subject from a path and \
+                         checked neither: {}",
+                        ambiguous.len(),
+                        ambiguous
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                });
+            }
+            // Reported, not silently dropped: an exclusion a reader cannot see
+            // is one they cannot correct.
+            //
+            // **This used to add "and if a root is declared wrongly, this line
+            // is the only place that says so", which the code below makes
+            // false.** A root that matches nothing leaves `external` empty, so
+            // the line does not render at all: `["/"]`, `[""]`, `["kan//"]`,
+            // `["kan "]` and `["./kan"]` all produce no diagnostic whatever.
+            // Measured by a cold review by cycling the value on a live schema.
+            //
+            // Corrected rather than implemented, deliberately. A mis-declared
+            // root is inert — it excludes nothing, so the paths under it are
+            // still checked and still warned about — which is the safe
+            // direction and needs no new finding. What was wrong was a comment
+            // asserting a mechanism the code beside it does not have, in the
+            // fix round created to close an instance of exactly that.
+            if !external.is_empty() {
+                findings.push(Finding {
+                    // `Unchecked`, which already means exactly this: a check
+                    // that could not be run, as distinct from one that ran and
+                    // found nothing. Not a new variant — day#105 put that
+                    // distinction here for the same reason, and an external
+                    // path is the textbook case of it.
+                    verdict: Verdict::Unchecked,
+                    message: format!(
+                        "{} external path(s) not checked, under declared root(s) {}: {}",
+                        external.len(),
+                        schema.paths_external.join(", "),
+                        external.join(", ")
+                    ),
+                });
+            }
+        }
+    }
+
+    // day#135: a resolved-questions section whose resolutions are written as
+    // `### Qn:` headings yields no bullets, so `day design record` appends no
+    // `decide` claims — and nothing said so. Five substantive resolutions in
+    // `.design/witness-interview.md` and one in v0.11's own design doc reached
+    // the log as nothing at all. The decisions and their reasoning are the most
+    // valuable output of a design pass, and they are the part that silently did
+    // not record.
+    //
+    // Keyed on the POSITIVE signal — a sub-heading under that section, which is
+    // something structurally trying to be a resolution — rather than on the
+    // absence of `RQ-`. CLAUDE.md records a classifier keyed on a phrase's
+    // absence being suppressed by an unrelated finding; this is the same trap
+    // one section over.
+    //
+    // **The first version keyed on sub-headings alone and missed three shapes**,
+    // one of them sharper than the case it was written for: a NUMBERED list
+    // (`1. RQ-1: …`) carrying correct ids, ordered, obviously intended as
+    // resolutions, recording nothing and warning nothing. Prose paragraphs and
+    // an id-less bullet list missed too. The signal is widened to "the section
+    // has content that is trying to be a resolution", which is still positive —
+    // it asks what IS there, never whether `RQ-` is absent.
+    if let Some(body) = doc.section(&schema.resolved_section) {
+        let subheadings = body
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .count();
+        // A numbered item — `1.` or `1)` — which `bullets()` does not read,
+        // because it looks only for `- `.
+        let numbered = body
+            .lines()
+            .filter(|l| {
+                let t = l.trim_start();
+                let digits: String = t.chars().take_while(char::is_ascii_digit).collect();
+                !digits.is_empty() && t[digits.len()..].starts_with(['.', ')'])
+            })
+            .count();
+        // Any other non-blank, non-heading prose. Counted last and used only
+        // when nothing better is present, so the message names the most
+        // specific shape it found.
+        // Structural non-content is excluded, after a cold review found this
+        // firing on an HTML comment and on a link-reference definition. Neither
+        // is a resolution and neither is prose; both are markdown plumbing, and
+        // excluding them needs no judgement about what the words say — which is
+        // the trap the day#123 discriminator fell into twice.
+        let prose = body
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .filter(|l| !l.starts_with('#'))
+            .filter(|l| !(l.starts_with("<!--") || l.ends_with("-->")))
+            .filter(|l| !(l.starts_with('[') && l.contains("]:")))
+            .count();
+        let carrying = if numbered > 0 {
+            Some((numbered, "numbered item(s)"))
+        } else if subheadings > 0 {
+            Some((subheadings, "sub-heading(s)"))
+        } else if prose > 0 {
+            Some((prose, "line(s) of prose"))
+        } else {
+            None
+        };
+        if let Some((count, shape)) =
+            carrying.filter(|_| doc.bullets(&schema.resolved_section).is_empty())
+        {
+            findings.push(Finding {
+                verdict: Verdict::Warn,
+                message: format!(
+                    "{} carries {count} {shape} and no bullets, so \
+                     `day design record` will record no decisions from it — \
+                     resolutions are read from `- ` bullets only. If there is \
+                     reasoning here, it stays in the document and never reaches \
+                     the log; `- {}1: …` is the form that records",
+                    schema.resolved_section, schema.resolution_prefix
+                ),
+            });
         }
     }
 
@@ -603,6 +905,25 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
         findings,
         open_questions: unquoted.matches("<!-- OPEN").count(),
     }
+}
+
+/// Whether `line` is a markdown list item — the position in which an id at the
+/// head of the line is a declaration rather than a mention (day#123).
+fn is_list_item(line: &str) -> bool {
+    line.trim_start().starts_with(['-', '*', '+'])
+}
+
+/// Whether `line` is a markdown **checkbox** item, `- [ ]` or `- [x]`.
+///
+/// The strongest structural signal day#123 has: a checkbox is a criterion by
+/// construction. Nobody writes `- [ ]` to mention an id in passing, so an id at
+/// the head of one that is not in the strict form is a declaration that failed
+/// to parse — which is what makes the drop reportable without any judgement
+/// about what the words say.
+fn is_checkbox_item(line: &str) -> bool {
+    let rest = line.trim_start().trim_start_matches(['-', '*', '+']);
+    let rest = rest.trim_start();
+    rest.starts_with("[ ]") || rest.starts_with("[x]") || rest.starts_with("[X]")
 }
 
 /// Strips a line's leading list punctuation and checkbox, so `- [ ] REQ-1:`
@@ -646,7 +967,49 @@ fn contains_token(text: &str, token: &str) -> bool {
 
 /// Whether a backticked token is a repo-relative file path rather than a
 /// subject name, slash command, or template placeholder.
+/// day's own subject namespaces, taken from the constants that define them
+/// rather than re-typed here.
+///
+/// day#136: `telos/v1.0` was warned about as a missing file, in a design
+/// document whose subject *is* that telos. It reaches the extension test below
+/// because `v1.0` looks exactly like a filename with an extension — and the
+/// pressure that creates is the one day#84 describes, where the cheapest way to
+/// silence the warning is to write "the v1.0 telos" and lose the subject a
+/// later reader would run `kan show` against.
+///
+/// Sourced from the constants because a second hand-written list is this
+/// repo's most-repeated defect; `every_subject_prefix_is_excluded_from_paths`
+/// scans `src/` and fails the build when a sixth namespace is added without
+/// being added here.
+const SUBJECT_PREFIXES: &[&str] = &[
+    crate::atoms::ATOM_PREFIX,
+    crate::atoms::TELOS_PREFIX,
+    crate::bridge::BRIDGE_PREFIX,
+    crate::schema::SCHEMA_PREFIX,
+    crate::tension::TENSION_PREFIX,
+];
+
+/// Whether `s` is in one of day's own kan namespaces.
+fn in_a_subject_namespace(s: &str) -> bool {
+    SUBJECT_PREFIXES.iter().any(|p| s.starts_with(p))
+}
+
+/// Whether `s` is a path **this repo should resolve**: path-shaped, and not in
+/// one of day's own kan namespaces.
 fn looks_like_path(s: &str) -> bool {
+    is_path_shaped(s) && !in_a_subject_namespace(s)
+}
+
+/// Whether `s` has the *shape* of a path, ignoring whose namespace it sits in.
+///
+/// Split from [`looks_like_path`] so day#136's exclusion can be **reported**
+/// where it is ambiguous rather than only applied. The first attempt tried to
+/// bypass the namespace test by rewriting the string, which changed the answer
+/// for an unrelated reason — it removed the slash this function requires, so
+/// every citation read as not-a-path and the report was silent while looking
+/// implemented. Two predicates, each answering one question, is what makes both
+/// callers correct.
+fn is_path_shaped(s: &str) -> bool {
     if s.is_empty()
         || !s.contains('/')
         || s.contains(char::is_whitespace)
@@ -857,6 +1220,499 @@ mod tests {
         );
     }
 
+    /// **day#123 — the id followed by a qualifier, which is what day's own
+    /// coverage warning talks an author into writing.**
+    ///
+    /// `[WARN] REQ-1 is not named by any acceptance criterion … explicit is
+    /// better` leads to `- [ ] AC-1 (REQ-1): …`, which the strict parser drops.
+    /// Fifteen criteria became zero, `[FAIL] acceptance criteria: 0` was loud
+    /// about the wrong thing, and no line was named.
+    ///
+    /// Asserted on the finding, not on the count: the count was already correct
+    /// (it failed at zero, which is how this was noticed), so a test on the
+    /// count alone would have passed before the fix.
+    #[test]
+    fn an_id_followed_by_a_qualifier_is_named_rather_than_dropped() {
+        let doc = "# Feature: thing\n\n## Summary\nIt does a thing.\nMore summary.\n\n\
+             ## Requirements\n- REQ-1: first\n- REQ-2: second\n\n\
+             ## Acceptance Criteria\n- [ ] AC-1 (REQ-1): checks first\n\
+             - [ ] AC-2 — REQ-2: checks second\n\n\
+             ## Architecture\nTouches `src/design.rs`.\n";
+        let parsed = Document::parse(doc);
+
+        // The id format stays strict: this is still not a declaration.
+        assert_eq!(
+            parsed.declared_ids("AC-").len(),
+            0,
+            "the strict form is unchanged; the fix is about the silence, not the parser"
+        );
+
+        assert_eq!(
+            parsed.malformed_ids("AC-"),
+            vec!["AC-1 (REQ-1)", "AC-2 — REQ-2"],
+            "both a parenthesised and a dashed qualifier are declarations whose \
+             id did not parse"
+        );
+
+        let render = check(&parsed, &schema(), Path::new("x.md")).render();
+        assert!(
+            render.contains("AC-1 (REQ-1)"),
+            "the dropped line must be named: {render}"
+        );
+        // day#123 is a case of day's advice being wrong, so the remedy must fit
+        // this malformation rather than repeat "renumber it".
+        assert!(
+            render.contains("Move what follows the id to after the colon"),
+            "the remedy must be the one that works here: {render}"
+        );
+    }
+
+    /// The day#123 fix must not turn prose into findings. A bullet that
+    /// *mentions* an id, with or without a colon later in the sentence, is
+    /// still a mention — the discriminator is a qualifier versus prose, not
+    /// the mere presence of a colon.
+    /// **day#123's discriminator, after a cold review broke it both ways.**
+    ///
+    /// The first version asked whether the gap between the id and the colon
+    /// contained an "ordinary lowercase word" — so `(covers REQ-1)` read as
+    /// prose and was dropped, which is day#123 verbatim and matches the issue's
+    /// own wording ("name the requirement each criterion COVERS"); and
+    /// `- REQ-1 é válido: ver arriba` was flagged, which is a rule about
+    /// English rather than about markdown.
+    ///
+    /// Both signals are structural now: a checkbox is a criterion by
+    /// construction, and a bracketed qualifier is not something prose puts
+    /// where a colon belongs.
+    #[test]
+    fn a_declaration_is_recognised_by_shape_not_by_vocabulary() {
+        for line in [
+            "- [ ] AC-1 (REQ-1): checks first",
+            "- [ ] AC-1 (covers REQ-1): checks first",
+            "- [ ] AC-1 (see REQ-1): checks",
+            "- [ ] AC-1 (covers REQ-1 and REQ-2): checks both",
+            // No colon at all: the id still did not parse, and the criterion is
+            // still dropped, so it is still a declaration day must name.
+            "- [ ] AC-1 (REQ-1) checks first",
+            "- AC-1 [REQ-1]: a bracketed qualifier outside a checkbox",
+        ] {
+            let doc = Document::parse(&format!("# F\n\n## Acceptance Criteria\n{line}\n"));
+            assert!(
+                !doc.malformed_ids("AC-").is_empty(),
+                "{line:?} is a declaration whose id did not parse, and dropping \
+                 it silently is day#123"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bullet_mentioning_an_id_in_prose_is_still_not_malformed() {
+        for line in [
+            "- REQ-1 is also relevant here",
+            "- REQ-1 is relevant: see the note above",
+            "- REQ-2 and the surrounding text: both discussed below",
+            // day#123's other direction: prose in a language whose words carry
+            // accents was flagged, because the old rule looked for an ASCII
+            // lowercase word and found none.
+            "- REQ-1 é válido: ver arriba",
+            "- REQ-1 已解决: see above",
+            "- REQ-1 §4: see the spec",
+        ] {
+            let text = format!("{DOC}\n{line}\n");
+            let doc = Document::parse(&text);
+            assert!(
+                doc.malformed_ids("REQ-").is_empty(),
+                "{line:?} reads as prose, not as a declaration whose id failed \
+                 to parse — flagging it would make the check cry wolf on \
+                 ordinary writing"
+            );
+        }
+    }
+
+    /// **day#135 — resolutions written as headings record nothing, silently.**
+    ///
+    /// `day design record` reads one `decide` per *bullet*. A `### Qn:` heading
+    /// yields no bullets, so five substantive resolutions in
+    /// `.design/witness-interview.md` and one in v0.11's own design doc reached
+    /// the log as nothing, with `design check` reporting `[PASS]` throughout.
+    ///
+    /// Worse than day#123 in the way that matters: that failure was loud, if
+    /// misleadingly so. This one is silent, and it fails `telos/legible-process`
+    /// on the repo that defines it.
+    #[test]
+    fn resolutions_written_as_headings_are_reported_rather_than_recording_nothing() {
+        let headings = DOC.replace(
+            "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+            "## Resolved Questions\n\n### Q1 — a\n\nChose a, because of the thing.\n\n\
+             ### Q2 — b\n\nChose b.\n",
+        );
+        let doc = Document::parse(&headings);
+
+        // Premise: this really is the shape that records nothing. Asserted
+        // rather than assumed, so the test cannot quietly stop measuring.
+        assert!(
+            doc.bullets("Resolved Questions").is_empty(),
+            "premise broken: the fixture is supposed to yield no bullets"
+        );
+
+        let render = check(&doc, &schema(), Path::new("x.md")).render();
+        assert!(
+            render.contains("2 sub-heading(s) and no bullets"),
+            "the drop must be named, and counted from the positive signal: {render}"
+        );
+    }
+
+    /// **day#135 missed three shapes, and the numbered list is the sharpest.**
+    ///
+    /// A cold review found the first version keyed on sub-headings alone, so a
+    /// section like
+    ///
+    /// ```text
+    /// 1. RQ-1: chose the first thing
+    /// ```
+    ///
+    /// — correct ids, ordered, obviously intended as resolutions — recorded
+    /// zero decisions and warned about nothing. `bullets()` reads `- ` only.
+    /// Prose paragraphs and an id-less bullet list were missed too.
+    #[test]
+    fn a_resolved_section_that_records_nothing_says_so_in_every_shape() {
+        let cases = [
+            ("1. RQ-1: chose a\n2. RQ-2: chose b\n", "2 numbered item(s)"),
+            ("1) RQ-1: chose a\n", "1 numbered item(s)"),
+            ("### Q1 — a\n\nChose a.\n", "1 sub-heading(s)"),
+            (
+                "We considered options and settled on the first.\n",
+                "1 line(s) of prose",
+            ),
+        ];
+        for (body, expected) in cases {
+            let text = DOC.replace(
+                "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+                &format!("## Resolved Questions\n\n{body}"),
+            );
+            let doc = Document::parse(&text);
+
+            // premise: this shape really does yield no bullets, so `design
+            // record` really would record nothing.
+            assert!(
+                doc.bullets("Resolved Questions").is_empty(),
+                "premise broken for {body:?}: the fixture must yield no bullets"
+            );
+
+            let render = check(&doc, &schema(), Path::new("x.md")).render();
+            assert!(
+                render.contains(expected),
+                "{body:?} must be reported as {expected}, and the message must \
+                 name the shape it found rather than the one it was written \
+                 for: {render}"
+            );
+        }
+    }
+
+    /// **The round-two minors: two false positives, fixed structurally.**
+    ///
+    /// A cold review found day#123's checkbox rule flagging an ordinary
+    /// task-list line, and day#135's prose count firing on markdown plumbing.
+    /// Both were the same error as the rule they were fixing — a signal too
+    /// broad — so both narrowings are structural rather than lexical.
+    #[test]
+    fn the_round_two_false_positives_stay_silent() {
+        // day#123: a checkbox tracking a requirement declared elsewhere. day's
+        // advice was to rewrite it as `REQ-1: …`, which would create a DUPLICATE
+        // declaration — the linter degrading the document, which is day#84's
+        // complaint arriving inside day#123's fix.
+        for line in ["- [ ] REQ-1 is implemented and shipped", "- [x] REQ-2 done"] {
+            let doc = Document::parse(&format!("# F\n\n## Requirements\n{line}\n"));
+            assert!(
+                doc.malformed_ids("REQ-").is_empty(),
+                "{line:?} is a task-list item, not a declaration whose id failed \
+                 to parse: advising a rewrite here duplicates a declaration"
+            );
+        }
+
+        // day#135: markdown plumbing is not prose trying to be a resolution.
+        for body in ["<!-- nothing yet -->\n", "[ref]: https://example.invalid\n"] {
+            let text = DOC.replace(
+                "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+                &format!("## Resolved Questions\n\n{body}"),
+            );
+            let render = check(&Document::parse(&text), &schema(), Path::new("x.md")).render();
+            assert!(
+                !render.contains("and no bullets"),
+                "{body:?} is markdown plumbing, not content trying to be a \
+                 resolution: {render}"
+            );
+        }
+    }
+
+    /// **What day#135 still fires on, decided rather than drifted into.**
+    ///
+    /// `None yet.` is one line of prose and is reported. Telling it apart from
+    /// `We considered several options and settled on the first.` needs a
+    /// judgement about what the words MEAN, which is precisely the trap
+    /// day#123's discriminator fell into twice — a rule about English rather
+    /// than about markdown.
+    ///
+    /// So the finding stays and the ADVICE was made conditional. The cold
+    /// review's complaint was that "the reasoning stays in the document" is
+    /// nonsense where there is no reasoning; "if there is reasoning here" is
+    /// true either way, and "no decisions will be recorded from this section"
+    /// is true and worth knowing for a section that says `None yet.` too.
+    #[test]
+    fn a_placeholder_resolved_section_is_reported_with_conditional_advice() {
+        let text = DOC.replace(
+            "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+            "## Resolved Questions\n\nNone yet.\n",
+        );
+        let render = check(&Document::parse(&text), &schema(), Path::new("x.md")).render();
+
+        assert!(
+            render.contains("and no bullets"),
+            "the fact is still reported — no decisions WILL be recorded: {render}"
+        );
+        assert!(
+            render.contains("If there is reasoning here"),
+            "but the advice must not assume there is reasoning to move, which \
+             is what made it nonsense on a placeholder: {render}"
+        );
+    }
+
+    /// The day#135 warning must not fire on the form that works. Keyed on a
+    /// positive signal, an ordinary bullet-form section is silent — including
+    /// when the bullets carry no `RQ-` ids, which is a different question
+    /// (day#119) and not this one's to answer.
+    #[test]
+    fn a_bullet_form_resolved_section_is_not_reported_as_recording_nothing() {
+        for doc in [
+            Document::parse(DOC),
+            Document::parse(&DOC.replace("- **Q1 — a**: chose a", "- RQ-1: chose a")),
+        ] {
+            let render = check(&doc, &schema(), Path::new("x.md")).render();
+            assert!(
+                !render.contains("sub-heading(s) and no bullets"),
+                "a section that does yield bullets records fine: {render}"
+            );
+        }
+    }
+
+    /// **day#84 — a path in a sibling repo is not this repo's to resolve.**
+    ///
+    /// The whole coordination surface between day and kan is documents in one
+    /// repo about code in the other, so citing `kan/src/workspace.rs` is the
+    /// precise thing to do — and it drew `referenced path does not exist yet`.
+    /// The issue's substance is that the warning **changed what got written**:
+    /// the path was replaced by a symbol name to silence it, leaving the
+    /// document less precise than with no check at all.
+    ///
+    /// The declared root is asserted three ways, because two of them are the
+    /// ways a naive fix goes wrong.
+    #[test]
+    fn a_path_under_a_declared_external_root_is_unchecked_not_missing() {
+        // Declared the way a project declares it — as the JSON of a
+        // `day-schema` block — rather than by naming the field in Rust.
+        //
+        // That is not cosmetic. A test that touches `schema.paths_external`
+        // makes every revert of this change fail to COMPILE, and
+        // `revert-demo.py` then reports DID-NOT-COMPILE, which says nothing
+        // about whether anything asserts the fix. Going through the declaration
+        // keeps the demonstration possible, and `Schema` is
+        // `deny_unknown_fields`, so a tree without the field refuses this
+        // document loudly instead of ignoring the key.
+        let mut declared = serde_json::to_value(Schema::starter()).expect("starter serializes");
+        declared["paths_external"] = serde_json::json!(["kan/"]);
+        let schema: Schema =
+            serde_json::from_value(declared).expect("a schema declaring an external root");
+
+        let doc = Document::parse(
+            "# Feature: contract\n\n## Summary\nWhat day needs from kan.\n\n\
+             ## Requirements\n- REQ-1: a\n- REQ-2: b\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, and the cost lives in `kan/src/workspace.rs`.\n",
+        );
+        let render = check(&doc, &schema, Path::new(env!("CARGO_MANIFEST_DIR"))).render();
+
+        assert!(
+            !render.contains("referenced path does not exist yet: kan/src/workspace.rs"),
+            "a declared external root must not be reported as missing — that \
+             warning is what argued the path out of the document: {render}"
+        );
+        assert!(
+            render.contains("external path(s) not checked"),
+            "and it must be REPORTED as unchecked, not silently dropped: an \
+             exclusion a reader cannot see is one they cannot correct: {render}"
+        );
+        // The in-repo path is still counted, and still the thing that grounds
+        // the document.
+        //
+        // This comment used to carry a second claim — that partitioning is what
+        // stops an external-ONLY document failing "references no existing file"
+        // — which the code did not implement and this fixture cannot exercise,
+        // since it always includes an in-repo path. A cold review found the
+        // claim false. The property now has its own test with a fixture that
+        // reaches it (`a_document_citing_only_external_paths_is_unchecked_not_ungrounded`),
+        // which is where a claim about behaviour belongs rather than in a
+        // comment beside a test that cannot see it.
+        assert!(
+            render.contains("1 of 1 referenced path(s) exist"),
+            "the external path must leave the in-repo count alone: {render}"
+        );
+    }
+
+    /// **day#84's own commit message claimed this and the code did not do it.**
+    ///
+    /// Partitioning empties `paths`, so `paths.is_empty()` failed the document
+    /// anyway — a cross-repo contract doc citing only the other repo was FAILED
+    /// for having grounded itself precisely, which is the pressure day#84
+    /// exists to remove, surviving inside its own fix. The original test never
+    /// caught it because its fixture always included an in-repo path.
+    #[test]
+    fn a_document_citing_only_external_paths_is_unchecked_not_ungrounded() {
+        let mut declared = serde_json::to_value(Schema::starter()).expect("starter serializes");
+        declared["paths_external"] = serde_json::json!(["kan/"]);
+        let schema: Schema = serde_json::from_value(declared).expect("a schema with a root");
+
+        let doc = Document::parse(
+            "# Feature: contract\n\n## Summary\nWhat day needs from kan.\n\n\
+             ## Requirements\n- REQ-1: a\n- REQ-2: b\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             The cost lives in `kan/src/workspace.rs`.\n",
+        );
+        let report = check(&doc, &schema, Path::new(env!("CARGO_MANIFEST_DIR")));
+        let render = report.render();
+
+        assert!(
+            !render.contains("references no existing file"),
+            "a document grounded entirely in a declared external repo is \
+             grounded; failing it is day#84 reproduced inside day#84's fix: \
+             {render}"
+        );
+        assert!(
+            render.contains("references only external path(s)"),
+            "and day must say it checked nothing rather than passing silently — \
+             `Unchecked` is not `Pass`: {render}"
+        );
+        assert!(
+            report.is_clean(),
+            "an unchecked path is not a defect in the document: {render}"
+        );
+    }
+
+    /// **day#84's root matched a raw string prefix, so `kan` swallowed
+    /// `kanban/`.** The verdict moved from WARN to PASS on a genuinely missing
+    /// in-repo file — the wrong direction, and worse than the warning day#84
+    /// set out to remove.
+    #[test]
+    fn an_external_root_matches_a_path_segment_not_a_string_prefix() {
+        let mut declared = serde_json::to_value(Schema::starter()).expect("starter serializes");
+        // Declared WITHOUT a trailing slash, which is how a person writes it
+        // and is what made the collision reachable.
+        declared["paths_external"] = serde_json::json!(["kan"]);
+        let schema: Schema = serde_json::from_value(declared).expect("a schema with a root");
+
+        let doc = Document::parse(
+            "# Feature: c\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+             ## Acceptance Criteria\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, `kan/src/workspace.rs`, and `kanban/src/store.rs`.\n",
+        );
+        let render = check(&doc, &schema, Path::new(env!("CARGO_MANIFEST_DIR"))).render();
+
+        // **Asserted on WHICH line it appears on, not on whether it appears.**
+        // A first version used `contains("kanban/src/store.rs")` and did not
+        // fail under revert: with the string-prefix bug the file still appears
+        // in the render — in the EXTERNAL list — so `contains` cannot tell the
+        // two outcomes apart. `revert-demo.py` reported it as not failing,
+        // which is the harness doing the job the assertion did not.
+        assert!(
+            render.contains("referenced path does not exist yet: kanban/src/store.rs"),
+            "`kanban/` is a different directory from the declared root `kan`, so \
+             its missing file must be reported as MISSING — with the raw-prefix \
+             match it was excluded as external instead, moving a WARN to a PASS: \
+             {render}"
+        );
+        let external_line = render
+            .lines()
+            .find(|l| l.contains("external path(s) not checked"))
+            .unwrap_or_default();
+        assert!(
+            !external_line.contains("kanban/src/store.rs"),
+            "and it must not be listed as external: {external_line}"
+        );
+        // The genuinely-external one still is, so this narrows the match rather
+        // than removing the feature.
+        assert!(
+            external_line.contains("kan/src/workspace.rs"),
+            "the real external path is still unchecked: {external_line}"
+        );
+    }
+
+    /// **day#136's exclusion was silent, always-on, and nobody opted into it.**
+    ///
+    /// `schema/`, `telos/` and `atom/` are kan namespaces AND ordinary
+    /// directory names. In a repo with a real `schema/` directory, citations
+    /// under it vanished from the count with nothing said — a report asserting
+    /// a completeness it did not verify, while day#84 seventy lines away spends
+    /// a line to avoid exactly that.
+    ///
+    /// The discriminator is whether the first segment is a real directory
+    /// **here**, so `telos/v1.0` in this repo stays silent — warning about that
+    /// is the pressure day#136 correctly removed.
+    #[test]
+    fn a_subject_citation_under_a_real_directory_of_that_name_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("schema")).unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/design.rs"), "// fixture\n").unwrap();
+
+        let doc = Document::parse(
+            "# Feature: c\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+             ## Acceptance Criteria\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, the validator `schema/order.v2.json`, \
+             and the telos `telos/v1.0`.\n",
+        );
+        let render = check(&doc, &Schema::starter(), dir.path()).render();
+
+        assert!(
+            render.contains("schema/order.v2.json"),
+            "a citation under a REAL `schema/` directory is ambiguous and must \
+             be reported rather than silently dropped from the count: {render}"
+        );
+        assert!(
+            !render.contains("telos/v1.0"),
+            "and `telos/` is not a directory here, so that citation is \
+             unambiguously a subject and stays silent — reporting it would be \
+             the noise day#136 removed: {render}"
+        );
+    }
+
+    /// The negative control. With no root declared — every project today, since
+    /// the starter ships none — the behaviour is exactly what it was, warning
+    /// included. Without this the test above passes against a check that has
+    /// stopped looking at paths at all.
+    #[test]
+    fn an_undeclared_external_root_still_warns_exactly_as_before() {
+        let doc = Document::parse(
+            "# Feature: contract\n\n## Summary\nWhat day needs from kan.\n\n\
+             ## Requirements\n- REQ-1: a\n- REQ-2: b\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, and the cost lives in `kan/src/workspace.rs`.\n",
+        );
+        let render = check(
+            &doc,
+            &Schema::starter(),
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+        )
+        .render();
+
+        assert!(
+            render.contains("referenced path does not exist yet: kan/src/workspace.rs"),
+            "with nothing declared, day#84's warning is unchanged — the fix is \
+             opt-in per project, not a quiet narrowing for everyone: {render}"
+        );
+        assert!(
+            !render.contains("external path(s) not checked"),
+            "and nothing is reported as external: {render}"
+        );
+    }
+
     #[test]
     fn a_clean_document_passes() {
         let doc = Document::parse(DOC);
@@ -924,6 +1780,109 @@ mod tests {
             "src/cli/",
         ] {
             assert!(looks_like_path(path), "{path:?} should be a file path");
+        }
+    }
+
+    /// **day#136 — a subject whose last segment looks like a filename.**
+    ///
+    /// The test above passes for `telos/composable-process` for the wrong
+    /// reason: that slug has no dot, so it fails the extension test rather than
+    /// being recognised as a subject. `telos/v1.0` does have one, and `v1.0`
+    /// is indistinguishable from `lib.rs` by shape alone — so the exclusion has
+    /// to be about the *namespace*, not about what the slug looks like.
+    #[test]
+    fn a_subject_whose_slug_looks_like_a_filename_is_still_not_a_path() {
+        for not_a_path in [
+            "telos/v1.0",
+            "atom/v1.0",
+            "bridge/v0.7-beta2",
+            "schema/design-doc",
+            "tension/a--b",
+        ] {
+            assert!(
+                !looks_like_path(not_a_path),
+                "{not_a_path:?} is a kan subject in one of day's own namespaces, \
+                 not a file — warning about it argues an author into dropping \
+                 the exact subject a reader would `kan show`"
+            );
+        }
+    }
+
+    /// **The exclusion list is derived, not remembered.**
+    ///
+    /// `SUBJECT_PREFIXES` re-lists constants that live in five other modules,
+    /// which is exactly the shape that drifts: a sixth namespace gets a
+    /// constant and nothing points out that this list did not grow. Scanning
+    /// `src/` for the declarations means adding one fails the build here
+    /// instead of quietly reintroducing day#136 for the new namespace.
+    #[test]
+    fn every_subject_prefix_is_excluded_from_paths() {
+        let mut declared: Vec<(String, String)> = Vec::new();
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut stack = vec![src];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("src/ should be readable") {
+                let path = entry.expect("a readable dir entry").path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("a readable source file");
+                for line in text.lines() {
+                    // `pub const FOO_PREFIX: &str = "foo/";`
+                    let Some(rest) = line.trim().strip_prefix("pub const ") else {
+                        continue;
+                    };
+                    let Some((name, value)) = rest.split_once(": &str = ") else {
+                        continue;
+                    };
+                    if !name.ends_with("_PREFIX") {
+                        continue;
+                    }
+                    let value = value.trim_end_matches(';').trim_matches('"');
+                    if value.ends_with('/') {
+                        declared.push((name.to_string(), value.to_string()));
+                    }
+                }
+            }
+        }
+
+        // A scan that finds nothing would pass vacuously, which is the defect
+        // class this repo names most often. Five namespaces exist today; the
+        // floor is deliberately a floor, so adding one does not fail *here*.
+        assert!(
+            declared.len() >= 5,
+            "the scan found only {} `*_PREFIX` constants — it has stopped \
+             matching the source it is supposed to read, and would pass \
+             whatever the list said",
+            declared.len()
+        );
+
+        // Asserted through `looks_like_path`, NOT against `SUBJECT_PREFIXES`.
+        //
+        // Membership is the implementation; "a citation in this namespace is
+        // not reported as a missing file" is the property, and it is the one a
+        // reader of a design doc actually meets. Going through the function
+        // also keeps this test *revertible*: a test naming the constant makes
+        // every revert of the fix fail to compile, and `revert-demo.py` then
+        // reports DID-NOT-COMPILE — honest, and silent about whether anything
+        // asserts the fix.
+        for (name, prefix) in declared {
+            // A slug shaped like a filename, which is the day#136 case: a
+            // namespace excluded only by its slugs happening to lack a dot is
+            // not excluded at all.
+            let citation = format!("{prefix}v1.0");
+            assert!(
+                !looks_like_path(&citation),
+                "{name} declares the subject namespace {prefix:?}, but \
+                 {citation:?} is still read as a file path — so `day design \
+                 check` will warn that citing it is a missing file (day#136), \
+                 and the cheapest way to silence that is to stop naming the \
+                 subject. Add {prefix:?} to `SUBJECT_PREFIXES`."
+            );
         }
     }
 

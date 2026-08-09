@@ -22,6 +22,15 @@ pub struct Report {
     /// rather than rendered on the spot so the MCP surface and the CLI report
     /// the same pairing.
     pub kan: Option<Version>,
+    /// Claims this view's trust base withheld, log-wide (day#120).
+    ///
+    /// Carried on the report because `render` has no client, and because the
+    /// alternative — deciding at the read whether the vocabulary is "empty" —
+    /// is what produced the defect: `atoms::load` ENUMERATES subjects, and kan
+    /// omits a fully-withheld one from `status --json`, so an empty result and
+    /// an unreadable log are indistinguishable at that point. The count is the
+    /// only thing that tells them apart, and it must reach the render.
+    pub withheld: u64,
 }
 
 impl Report {
@@ -52,7 +61,16 @@ impl Report {
         let mut out = String::new();
         out.push_str(&compat::render(self.kan.as_ref()));
 
-        if self.atoms.is_empty() {
+        if self.atoms.is_empty() && self.withheld > 0 {
+            // "a valid starting state, not an error" was the most emphatic of
+            // the two false reassurances a cold review reproduced: printed at
+            // exit 0, in a plain clone of a repo publishing `.claims/`, over a
+            // vocabulary day simply could not see.
+            out.push_str(&format!(
+                "atoms: none VISIBLE — {} claim(s) in this log are withheld from this view's\n       trust base, so day cannot tell an empty vocabulary from an unreadable\n       one. Widen the view (`--trust me`, or `--trust <did>`).\n",
+                self.withheld
+            ));
+        } else if self.atoms.is_empty() {
             out.push_str(
                 "atoms: none declared yet — the process vocabulary is empty, which is a\n       valid starting state, not an error. See docs/CONVENTIONS.md.\n",
             );
@@ -138,5 +156,6 @@ pub fn run(client: &KanClient) -> Result<Report, Error> {
         atoms,
         findings,
         kan,
+        withheld: client.claims_withheld_from_view(),
     })
 }
