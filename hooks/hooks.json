@@ -3,6 +3,16 @@
   "hooks": {
     "SessionStart": [
       {
+        "_comment": "The ONE hook here that is not a `day hook` invocation, and the only one that cannot be: its whole subject is day being absent, and `day hook missing-binaries` cannot report that `day` is missing because the shell never finds it to ask. Registered first so the install instruction precedes the two hooks that will fail without it. Emits a systemMessage for the human and exits 0 unconditionally -- a missing dependency must not fail a session, which would be the gate telos/affordance-not-enforcement forbids. Silent when both binaries are present. tests/plugin.rs was NARROWED rather than relaxed to permit exactly this path and no other.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/bootstrap-check.sh\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",
