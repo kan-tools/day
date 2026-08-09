@@ -47,11 +47,47 @@ pub enum Error {
 }
 
 pub fn read_document(path: &Path) -> Result<Document, Error> {
+    Ok(read_document_with_source(path)?.0)
+}
+
+/// The parsed document **and the bytes it was parsed from**.
+///
+/// day#119's second round needs the source: the claim texts a design pass
+/// writes are both *summaries*, so an edit that leaves the finding counts and
+/// the Summary line alone is invisible to them — a requirement reversed in
+/// meaning reported `(unchanged)` and recorded nothing.
+pub fn read_document_with_source(path: &Path) -> Result<(Document, String), Error> {
     let text = std::fs::read_to_string(path).map_err(|source| Error::Read {
         path: path.display().to_string(),
         source,
     })?;
-    Ok(Document::parse(&text))
+    let doc = Document::parse(&text);
+    Ok((doc, text))
+}
+
+/// A content fingerprint for a design document: byte length and an FNV-1a
+/// hash, rendered as `<len>:<hash>`.
+///
+/// **Written out rather than pulled in.** day has no hash dependency and adding
+/// one for this would not match kan's dependency set; `DefaultHasher` is the
+/// obvious alternative and is explicitly *not* stable across Rust releases,
+/// which for a value that lives in a durable claim means a toolchain upgrade
+/// would silently make every document look edited. FNV-1a is ten lines and
+/// stable because day defines it.
+///
+/// **Length is carried alongside the hash deliberately.** A 64-bit hash can
+/// collide, and a collision here fails in the bad direction — reporting
+/// `unchanged` for a document that changed, which is the defect this fixes. Two
+/// revisions of one design doc colliding on both length and hash is not a risk
+/// worth a dependency, and stating the bound is cheaper than implying there
+/// isn't one.
+fn fingerprint(source: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in source.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{}:{hash:016x}", source.len())
 }
 
 /// Slug for a design doc's subject: the filename stem unless overridden.
@@ -142,17 +178,23 @@ pub fn design(
     subject: Option<&str>,
     schema: &Schema,
 ) -> Result<Recorded, Error> {
-    let doc = read_document(path)?;
+    let (doc, source) = read_document_with_source(path)?;
     let report = design::check(&doc, schema, base);
     let subject = subject
         .map(str::to_string)
         .unwrap_or_else(|| slug_for(path));
     let shown = path.display();
 
+    // The fingerprint is what makes "unchanged" mean unchanged. Without it both
+    // texts this function compares are summaries, and the first version of
+    // day#119 reported `(unchanged)` for a document whose REQ-1 had been
+    // reversed in meaning — recording nothing, on an append-only log, while
+    // telling the user it had nothing to record.
     let observe_text = format!(
-        "design doc {shown} checked against the live {} schema: {}",
+        "design doc {shown} checked against the live {} schema: {} [doc {}]",
         crate::schema::DEFAULT_SLUG,
-        report.summary()
+        report.summary(),
+        fingerprint(&source)
     );
     // day#119: the observe/plan pair was appended on every run, so three passes
     // over one evolving document left three of each — while the resolution half

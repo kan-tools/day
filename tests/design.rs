@@ -444,6 +444,41 @@ fn an_unchanged_design_pass_records_no_second_observe_or_plan() {
          record a new pair even though the validation report is identical — \
          deciding from the observe half alone loses exactly this edit: {third}"
     );
+
+    // **The case a cold review found, and the reason both texts were not
+    // enough.** Reverse a requirement's meaning: the finding counts do not
+    // move, so the observe text is identical, and the Summary section is
+    // untouched, so the plan text is identical too. Both claim texts are
+    // *summaries*; only a fingerprint over the source can see this.
+    let reversed = body("the original summary").replace(
+        "- REQ-1: a.",
+        "- REQ-1: the system stores NOTHING of its own.",
+    );
+    std::fs::write(&doc, &reversed).unwrap();
+    run(&kan);
+    let flipped = reversed.replace(
+        "- REQ-1: the system stores NOTHING of its own.",
+        "- REQ-1: the system stores EVERYTHING in a sidecar database.",
+    );
+    // premise: this edit really is invisible to both summaries. Asserted on the
+    // fixture rather than assumed, so a later change to what the texts contain
+    // makes this test say so instead of passing for a new reason.
+    assert_eq!(
+        reversed.lines().count(),
+        flipped.lines().count(),
+        "premise: the edit must not change the document's shape, only a \
+         requirement's meaning"
+    );
+    std::fs::write(&doc, &flipped).unwrap();
+    let fourth = run(&kan);
+    assert!(
+        !fourth.contains("(unchanged)"),
+        "a requirement reversed in meaning is a design that changed. Reporting \
+         `(unchanged)` here records nothing on an append-only log AND asserts \
+         to the user that there was nothing to record — the only finding in \
+         this branch where day states something false rather than staying \
+         silent: {fourth}"
+    );
 }
 
 /// The negative control, and the backward-compatibility half: a document with no

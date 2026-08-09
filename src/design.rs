@@ -235,6 +235,36 @@ impl Document {
         paths
     }
 
+    /// Backtick-quoted tokens excluded from [`Self::quoted_paths`] **only**
+    /// because they sit in one of day's own subject namespaces (day#136).
+    ///
+    /// Collected so the caller can report the ones that are ambiguous. `telos/`,
+    /// `schema/` and `atom/` are kan namespaces, and they are also ordinary
+    /// directory names: a repo with a real `schema/` directory had
+    /// `schema/order.v2.json` dropped from the count with nothing said, which is
+    /// a report asserting a completeness it did not verify — and day#84, decided
+    /// seventy lines away, spends an `[UNCHECKED]` line to avoid exactly that.
+    fn subject_shaped_citations(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for (i, chunk) in text.split('`').enumerate() {
+            if i % 2 != 1 {
+                continue;
+            }
+            let candidate = chunk
+                .trim_end_matches(['.', ',', ')'])
+                .split(':')
+                .next()
+                .unwrap_or_default();
+            // Excluded by the namespace rule and by nothing else — a template
+            // or a slash command would fail `looks_like_path` regardless, and
+            // reporting those would be the crying-wolf this check avoids.
+            if is_path_shaped(candidate) && in_a_subject_namespace(candidate) {
+                out.push(candidate.to_string());
+            }
+        }
+        out
+    }
+
     /// Bullet lines under `heading`, each becoming one `decide` claim.
     pub fn bullets(&self, heading: &str) -> Vec<String> {
         let Some(body) = self.section(heading) else {
@@ -612,21 +642,57 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     if !schema.paths_section.is_empty() {
         if let Some(body) = doc.section(&schema.paths_section) {
             let paths = Document::quoted_paths(body);
+            let subject_citations = Document::subject_shaped_citations(body);
             // day#84: a citation under a declared external root is not this
             // repo's to resolve. Partitioned BEFORE the existence test rather
             // than filtered out of `missing` afterwards, so an external path
             // also stops counting toward "references no existing file" — a doc
             // citing only the other repo would otherwise FAIL for having
             // grounded itself precisely.
-            let (external, paths): (Vec<String>, Vec<String>) = paths
-                .into_iter()
-                .partition(|p| schema.paths_external.iter().any(|root| p.starts_with(root)));
+            //
+            // day#84's follow-up: matched on a **path segment boundary**, not
+            // on the raw string. `starts_with("kan")` also matched
+            // `kanban/src/store.rs`, so declaring one root silently excluded a
+            // sibling directory and turned a missing in-repo file into a PASS
+            // at exit 0 — the verdict moving the wrong way, which is worse than
+            // the warning day#84 set out to remove.
+            let (external, paths): (Vec<String>, Vec<String>) = paths.into_iter().partition(|p| {
+                schema.paths_external.iter().any(|root| {
+                    let root = root.strip_suffix('/').unwrap_or(root);
+                    !root.is_empty()
+                        && (p == root
+                            || p.strip_prefix(root)
+                                .is_some_and(|rest| rest.starts_with('/')))
+                })
+            });
             let missing: Vec<&String> = paths.iter().filter(|p| !base.join(p).exists()).collect();
             // The rule is grounding, not omniscience: a design must point at
             // code that exists, but an Architecture section naming files it
             // intends to *create* is doing its job — so an unresolved path
             // warns, and only a total absence of real ones fails.
-            if paths.is_empty() || missing.len() == paths.len() {
+            if paths.is_empty() && !external.is_empty() {
+                // day#84, the half its own commit message claimed and did not
+                // implement: partitioning empties `paths`, so `paths.is_empty()`
+                // failed the document anyway — identical verdict and exit to a
+                // day with no `paths_external` at all. A cross-repo contract
+                // document citing only the other repo was FAILED for having
+                // grounded itself precisely, which is the pressure day#84
+                // exists to remove, surviving inside its own fix.
+                //
+                // `Unchecked` rather than `Pass`: day did not verify these, and
+                // saying it did would be the same false completeness in the
+                // other direction.
+                findings.push(Finding {
+                    verdict: Verdict::Unchecked,
+                    message: format!(
+                        "{} references only external path(s), under declared root(s) {} — \
+                         grounded, but in a repo day cannot resolve, so nothing here was \
+                         checked",
+                        schema.paths_section,
+                        schema.paths_external.join(", ")
+                    ),
+                });
+            } else if paths.is_empty() || missing.len() == paths.len() {
                 findings.push(Finding {
                     verdict: Verdict::Fail,
                     message: format!(
@@ -652,6 +718,39 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
                         message: format!("referenced path does not exist yet: {path}"),
                     });
                 }
+            }
+            // day#136's exclusion, reported where it is ambiguous.
+            //
+            // `telos/`, `schema/` and `atom/` are kan namespaces AND ordinary
+            // directory names, so excluding them unconditionally dropped
+            // `schema/order.v2.json` from the count with nothing said, in a repo
+            // that has a `schema/` directory. Silence is right for
+            // `telos/v1.0` — that is a subject, and warning about it is the
+            // pressure day#136 removed — so the discriminator is whether the
+            // first segment is a REAL DIRECTORY HERE. If it is, day cannot tell
+            // a subject citation from a path and says so instead of choosing.
+            let ambiguous: Vec<&String> = subject_citations
+                .iter()
+                .filter(|c| {
+                    c.split_once('/')
+                        .is_some_and(|(head, _)| base.join(head).is_dir())
+                })
+                .collect();
+            if !ambiguous.is_empty() {
+                findings.push(Finding {
+                    verdict: Verdict::Unchecked,
+                    message: format!(
+                        "{} citation(s) sit in one of day's kan namespaces AND under a real \
+                         directory of that name, so day cannot tell a subject from a path and \
+                         checked neither: {}",
+                        ambiguous.len(),
+                        ambiguous
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                });
             }
             // Reported, not silently dropped. An exclusion a reader cannot see
             // is one they cannot correct — and if a root is declared wrongly,
@@ -783,7 +882,24 @@ const SUBJECT_PREFIXES: &[&str] = &[
     crate::tension::TENSION_PREFIX,
 ];
 
+/// Whether `s` is in one of day's own kan namespaces.
+fn in_a_subject_namespace(s: &str) -> bool {
+    SUBJECT_PREFIXES.iter().any(|p| s.starts_with(p))
+}
+
+/// Whether `s` has the *shape* of a path, ignoring whose namespace it sits in.
+///
+/// Split from [`looks_like_path`] so day#136's exclusion can be **reported**
+/// where it is ambiguous rather than only applied. The first attempt tried to
+/// bypass the namespace test by rewriting the string, which changed the answer
+/// for an unrelated reason — it removed the slash the shape test requires, so
+/// every citation read as not-a-path and the report was silent. Two predicates,
+/// each answering one question, is what makes both callers correct.
 fn looks_like_path(s: &str) -> bool {
+    is_path_shaped(s) && !in_a_subject_namespace(s)
+}
+
+fn is_path_shaped(s: &str) -> bool {
     if s.is_empty()
         || !s.contains('/')
         || s.contains(char::is_whitespace)
@@ -796,9 +912,6 @@ fn looks_like_path(s: &str) -> bool {
         // not this repo's to resolve.
         || s.starts_with('~')
         || s.contains("...")
-        // A kan subject in one of day's own namespaces. No file will ever
-        // exist there, and day defines the namespace.
-        || SUBJECT_PREFIXES.iter().any(|p| s.starts_with(p))
     {
         return false;
     }
@@ -1171,6 +1284,132 @@ mod tests {
         assert!(
             render.contains("1 of 1 referenced path(s) exist"),
             "the external path must leave the in-repo count alone: {render}"
+        );
+    }
+
+    /// **day#84's own commit message claimed this and the code did not do it.**
+    ///
+    /// Partitioning empties `paths`, so `paths.is_empty()` failed the document
+    /// anyway — a cross-repo contract doc citing only the other repo was FAILED
+    /// for having grounded itself precisely, which is the pressure day#84
+    /// exists to remove, surviving inside its own fix. The original test never
+    /// caught it because its fixture always included an in-repo path.
+    #[test]
+    fn a_document_citing_only_external_paths_is_unchecked_not_ungrounded() {
+        let mut declared = serde_json::to_value(Schema::starter()).expect("starter serializes");
+        declared["paths_external"] = serde_json::json!(["kan/"]);
+        let schema: Schema = serde_json::from_value(declared).expect("a schema with a root");
+
+        let doc = Document::parse(
+            "# Feature: contract\n\n## Summary\nWhat day needs from kan.\n\n\
+             ## Requirements\n- REQ-1: a\n- REQ-2: b\n\n## Acceptance Criteria\n\
+             - [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             The cost lives in `kan/src/workspace.rs`.\n",
+        );
+        let report = check(&doc, &schema, Path::new(env!("CARGO_MANIFEST_DIR")));
+        let render = report.render();
+
+        assert!(
+            !render.contains("references no existing file"),
+            "a document grounded entirely in a declared external repo is \
+             grounded; failing it is day#84 reproduced inside day#84's fix: \
+             {render}"
+        );
+        assert!(
+            render.contains("references only external path(s)"),
+            "and day must say it checked nothing rather than passing silently — \
+             `Unchecked` is not `Pass`: {render}"
+        );
+        assert!(
+            report.is_clean(),
+            "an unchecked path is not a defect in the document: {render}"
+        );
+    }
+
+    /// **day#84's root matched a raw string prefix, so `kan` swallowed
+    /// `kanban/`.** The verdict moved from WARN to PASS on a genuinely missing
+    /// in-repo file — the wrong direction, and worse than the warning day#84
+    /// set out to remove.
+    #[test]
+    fn an_external_root_matches_a_path_segment_not_a_string_prefix() {
+        let mut declared = serde_json::to_value(Schema::starter()).expect("starter serializes");
+        // Declared WITHOUT a trailing slash, which is how a person writes it
+        // and is what made the collision reachable.
+        declared["paths_external"] = serde_json::json!(["kan"]);
+        let schema: Schema = serde_json::from_value(declared).expect("a schema with a root");
+
+        let doc = Document::parse(
+            "# Feature: c\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+             ## Acceptance Criteria\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, `kan/src/workspace.rs`, and `kanban/src/store.rs`.\n",
+        );
+        let render = check(&doc, &schema, Path::new(env!("CARGO_MANIFEST_DIR"))).render();
+
+        // **Asserted on WHICH line it appears on, not on whether it appears.**
+        // A first version used `contains("kanban/src/store.rs")` and did not
+        // fail under revert: with the string-prefix bug the file still appears
+        // in the render — in the EXTERNAL list — so `contains` cannot tell the
+        // two outcomes apart. `revert-demo.py` reported it as not failing,
+        // which is the harness doing the job the assertion did not.
+        assert!(
+            render.contains("referenced path does not exist yet: kanban/src/store.rs"),
+            "`kanban/` is a different directory from the declared root `kan`, so \
+             its missing file must be reported as MISSING — with the raw-prefix \
+             match it was excluded as external instead, moving a WARN to a PASS: \
+             {render}"
+        );
+        let external_line = render
+            .lines()
+            .find(|l| l.contains("external path(s) not checked"))
+            .unwrap_or_default();
+        assert!(
+            !external_line.contains("kanban/src/store.rs"),
+            "and it must not be listed as external: {external_line}"
+        );
+        // The genuinely-external one still is, so this narrows the match rather
+        // than removing the feature.
+        assert!(
+            external_line.contains("kan/src/workspace.rs"),
+            "the real external path is still unchecked: {external_line}"
+        );
+    }
+
+    /// **day#136's exclusion was silent, always-on, and nobody opted into it.**
+    ///
+    /// `schema/`, `telos/` and `atom/` are kan namespaces AND ordinary
+    /// directory names. In a repo with a real `schema/` directory, citations
+    /// under it vanished from the count with nothing said — a report asserting
+    /// a completeness it did not verify, while day#84 seventy lines away spends
+    /// a line to avoid exactly that.
+    ///
+    /// The discriminator is whether the first segment is a real directory
+    /// **here**, so `telos/v1.0` in this repo stays silent — warning about that
+    /// is the pressure day#136 correctly removed.
+    #[test]
+    fn a_subject_citation_under_a_real_directory_of_that_name_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("schema")).unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/design.rs"), "// fixture\n").unwrap();
+
+        let doc = Document::parse(
+            "# Feature: c\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n- REQ-2: b\n\n\
+             ## Acceptance Criteria\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Architecture\n\
+             Touches `src/design.rs`, the validator `schema/order.v2.json`, \
+             and the telos `telos/v1.0`.\n",
+        );
+        let render = check(&doc, &Schema::starter(), dir.path()).render();
+
+        assert!(
+            render.contains("schema/order.v2.json"),
+            "a citation under a REAL `schema/` directory is ambiguous and must \
+             be reported rather than silently dropped from the count: {render}"
+        );
+        assert!(
+            !render.contains("telos/v1.0"),
+            "and `telos/` is not a directory here, so that citation is \
+             unambiguously a subject and stays silent — reporting it would be \
+             the noise day#136 removed: {render}"
         );
     }
 
