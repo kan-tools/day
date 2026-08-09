@@ -154,6 +154,38 @@ impl Document {
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == '.')
                     .collect();
                 out.push(format!("{prefix}{num}{tail}"));
+                continue;
+            }
+            // day#123: an id *followed* by a qualifier, then the colon —
+            // `- [ ] AC-1 (REQ-1): …`. The strict parser drops it, and the
+            // rule above does not catch it because the next character is a
+            // space. It is the shape day's own coverage warning talks an
+            // author into writing, so fifteen criteria became zero with
+            // nothing naming the cause.
+            //
+            // The discriminator is a **qualifier, not prose**. A loose mention
+            // (`- REQ-1 is also relevant here`) stays a mention, which is what
+            // `valid_ids_and_loose_mentions_are_not_flagged_as_malformed`
+            // fixes in place: the line must be a list item, it must carry a
+            // colon, and everything between the id and that colon must be free
+            // of ordinary lowercase words. `(REQ-1)` and `— REQ-2` qualify;
+            // `is also relevant` does not.
+            // The strict form itself. Checked here rather than relied on from
+            // the branch above, which only ever saw ids that *continued*.
+            if after.starts_with(':') {
+                continue;
+            }
+            if is_list_item(line) {
+                let Some((gap, _)) = after.split_once(':') else {
+                    continue;
+                };
+                let reads_as_prose = gap.split_whitespace().any(|word| {
+                    let word = word.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+                    word.len() >= 2 && word.chars().all(|c| c.is_ascii_lowercase())
+                });
+                if !reads_as_prose {
+                    out.push(format!("{prefix}{num}{}", gap.trim_end()));
+                }
             }
         }
         out
@@ -456,12 +488,28 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
         for bad in doc.malformed_ids(prefix) {
             findings.push(Finding {
                 verdict: Verdict::Warn,
-                message: format!(
-                    "`{bad}` looks like a declaration but its id is not the strict form \
-                     `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
-                     coverage-checked. Renumber it, or the requirement it names is invisible \
-                     to validation"
-                ),
+                // The remedy is split by *which* malformation this is, because
+                // day#123 is a case of day's own advice being wrong and
+                // repeating "renumber it" here would repeat that.
+                // A continued id (`REQ-11a`) genuinely wants renumbering; an
+                // id followed by a qualifier (`AC-1 (REQ-1):`) wants the
+                // qualifier moved past the colon, which parses and still
+                // satisfies the coverage check.
+                message: if bad.contains(char::is_whitespace) || bad.contains('(') {
+                    format!(
+                        "`{bad}` looks like a declaration but its id is not the strict form \
+                         `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
+                         coverage-checked. Move what follows the id to after the colon \
+                         (`{prefix}1: …`), which parses and still satisfies the coverage check"
+                    )
+                } else {
+                    format!(
+                        "`{bad}` looks like a declaration but its id is not the strict form \
+                         `{prefix}<n>:` (e.g. `{prefix}1:`) — it is not counted or \
+                         coverage-checked. Renumber it, or the requirement it names is invisible \
+                         to validation"
+                    )
+                },
             });
         }
     }
@@ -612,6 +660,12 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
 ///
 /// [`declared_ids`]: Document::declared_ids
 /// [`malformed_ids`]: Document::malformed_ids
+/// Whether `line` is a markdown list item — the position in which an id at the
+/// head of the line is a declaration rather than a mention (day#123).
+fn is_list_item(line: &str) -> bool {
+    line.trim_start().starts_with(['-', '*', '+'])
+}
+
 fn strip_list_prefix(line: &str) -> &str {
     line.trim_start()
         .trim_start_matches(['-', '*', '+'])
@@ -880,6 +934,75 @@ mod tests {
             doc.malformed_ids("REQ-").is_empty(),
             "a space after the number is a mention, not a malformed id"
         );
+    }
+
+    /// **day#123 — the id followed by a qualifier, which is what day's own
+    /// coverage warning talks an author into writing.**
+    ///
+    /// `[WARN] REQ-1 is not named by any acceptance criterion … explicit is
+    /// better` leads to `- [ ] AC-1 (REQ-1): …`, which the strict parser drops.
+    /// Fifteen criteria became zero, `[FAIL] acceptance criteria: 0` was loud
+    /// about the wrong thing, and no line was named.
+    ///
+    /// Asserted on the finding, not on the count: the count was already correct
+    /// (it failed at zero, which is how this was noticed), so a test on the
+    /// count alone would have passed before the fix.
+    #[test]
+    fn an_id_followed_by_a_qualifier_is_named_rather_than_dropped() {
+        let doc = "# Feature: thing\n\n## Summary\nIt does a thing.\nMore summary.\n\n\
+             ## Requirements\n- REQ-1: first\n- REQ-2: second\n\n\
+             ## Acceptance Criteria\n- [ ] AC-1 (REQ-1): checks first\n\
+             - [ ] AC-2 — REQ-2: checks second\n\n\
+             ## Architecture\nTouches `src/design.rs`.\n";
+        let parsed = Document::parse(doc);
+
+        // The id format stays strict: this is still not a declaration.
+        assert_eq!(
+            parsed.declared_ids("AC-").len(),
+            0,
+            "the strict form is unchanged; the fix is about the silence, not the parser"
+        );
+
+        assert_eq!(
+            parsed.malformed_ids("AC-"),
+            vec!["AC-1 (REQ-1)", "AC-2 — REQ-2"],
+            "both a parenthesised and a dashed qualifier are declarations whose \
+             id did not parse"
+        );
+
+        let render = check(&parsed, &schema(), Path::new("x.md")).render();
+        assert!(
+            render.contains("AC-1 (REQ-1)"),
+            "the dropped line must be named: {render}"
+        );
+        // day#123 is a case of day's advice being wrong, so the remedy must fit
+        // this malformation rather than repeat "renumber it".
+        assert!(
+            render.contains("Move what follows the id to after the colon"),
+            "the remedy must be the one that works here: {render}"
+        );
+    }
+
+    /// The day#123 fix must not turn prose into findings. A bullet that
+    /// *mentions* an id, with or without a colon later in the sentence, is
+    /// still a mention — the discriminator is a qualifier versus prose, not
+    /// the mere presence of a colon.
+    #[test]
+    fn a_bullet_mentioning_an_id_in_prose_is_still_not_malformed() {
+        for line in [
+            "- REQ-1 is also relevant here",
+            "- REQ-1 is relevant: see the note above",
+            "- REQ-2 and the surrounding text: both discussed below",
+        ] {
+            let text = format!("{DOC}\n{line}\n");
+            let doc = Document::parse(&text);
+            assert!(
+                doc.malformed_ids("REQ-").is_empty(),
+                "{line:?} reads as prose, not as a declaration whose id failed \
+                 to parse — flagging it would make the check cry wolf on \
+                 ordinary writing"
+            );
+        }
     }
 
     #[test]
