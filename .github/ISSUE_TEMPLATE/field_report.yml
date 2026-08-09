@@ -1,0 +1,75 @@
+name: Field report
+description: What happened when you used day on a real project.
+labels: ["field-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is the highest-leverage thing you can send.** Every defect
+        found in day so far came from running it, not from testing it — not
+        most, every one. Reports like this produced the *v0.9 — position
+        honesty* milestone (#97, #98), *v0.10 — the graph tells the truth*
+        (#95), and *v0.7.0-beta.3 — the vocabulary substrate* (#74, #76, #77).
+
+        You do not need to diagnose anything. A report that is right about the
+        symptom and wrong about the cause is still worth filing.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What you were doing
+      description: >
+        The project, roughly what kind of work was in flight, and where in a
+        cycle you were. Position-related defects have been invisible without
+        this — day behaves differently on a repo with release tags than on one
+        without, and the untagged path was broken for a long time precisely
+        because day itself has tags.
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What day did
+      description: Commands and their output, pasted rather than summarised.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, or what would have helped
+      description: >
+        Including "I could not tell whether this was working" — an unreadable
+        report is a defect here, not a documentation gap.
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: >
+        `day --version` and `kan --version`; whether day is installed as a
+        Claude Code plugin or invoked directly; whether the repo has `v*` tags;
+        anything unusual about the working tree (a worktree, a monorepo, a
+        repo kan had never seen before).
+      value: |
+        - day version:
+        - kan version:
+        - Installed as: (plugin / cargo install / from source)
+        - Repo has `v*` tags: (yes / no)
+        - Anything unusual:
+    validations:
+      required: true
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: Anything that was merely annoying
+      description: >
+        Optional, and often the useful part. Several milestones started as a
+        note that something was tedious rather than broken.
+    validations:
+      required: false
