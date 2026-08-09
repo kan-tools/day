@@ -112,7 +112,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.11.0-beta.1   # the memory layer day reads
-cargo install day --version 0.12.0-beta.1
+cargo install day --version 0.12.0-beta.2
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -158,7 +158,19 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.12.0-beta.1** extends verification to teloi. A witness could only
+Early. **v0.12.0-beta.2** is a bugfix boundary, and what it fixed is mostly
+day's own advice. `day design check` told an author to name the requirement each
+criterion covers, and following that suggestion parsed every criterion to zero
+with nothing naming the cause; citing a kan subject warned it was a missing file;
+resolutions written as headings recorded nothing at all. The harness that
+answers "did this change alter behaviour it was not meant to alter" reported
+agreement for fixtures that compared nothing. And a read could not tell *nothing
+is recorded here* from *this view cannot see what is recorded here*, so under a
+narrowed trust base day reported an empty project over a log it could not read.
+Three cold reviews found those, in that order; each returned BLOCK and each
+finding was reproduced against a running binary before being fixed.
+
+**v0.12.0-beta.1** extends verification to teloi. A witness could only
 ask *does one exist*, and over an append-only log that question starts
 answering yes and never stops — so `every` (wherever the anchor holds, the
 requirements hold on the same subject), `absent` with a vacuity guard,
