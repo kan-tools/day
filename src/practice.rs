@@ -101,8 +101,32 @@ pub fn project(client: &KanClient) -> Projection {
     let claims = match client.show(PRACTICE_SUBJECT) {
         Ok(claims) if claims.is_empty() => return Projection::default(),
         Ok(claims) => claims,
-        // No subject, or an unreadable one. Absence is not an error.
-        Err(_) => return Projection::default(),
+        // **A read that failed is not an absence, and this arm used to say it
+        // was.** The comment here read "No subject, or an unreadable one.
+        // Absence is not an error" — true when the only `Err` meant kan was
+        // broken, false the moment `kan_client::Error` gained
+        // `PartiallyWithheld` and `AbsentUnderNarrowedTrust` for day#120. From
+        // then on a withheld practice subject rendered as "no practice items",
+        // and the whole projection vanished from `hook session-start` with no
+        // note — in the same run that printed a ⚠ block enumerating three other
+        // unreadable declarations, so the completeness warning was itself
+        // incomplete.
+        //
+        // Neither the compiler nor the swallow scan could say so: every
+        // consumer already handled `Result`, and this shape is a `match` arm,
+        // which the scan did not read until it was widened for exactly this.
+        //
+        // Still fails open — a hook must never fail — but it says why.
+        Err(e) => {
+            return Projection {
+                notes: vec![format!(
+                    "`{PRACTICE_SUBJECT}` could not be read, so no practice items are \
+                     projected — this is day unable to answer, not a project without \
+                     practice: {e}"
+                )],
+                ..Projection::default()
+            };
+        }
     };
 
     let Some(local) = client.identity() else {

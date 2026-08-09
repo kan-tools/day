@@ -1,0 +1,14 @@
+{
+ "v": 1,
+ "subjects": [],
+ "trust": {
+  "base": "Local",
+  "authors": [
+   {
+    "did": "did:key:zFixtureAuthor",
+    "weight": 1.0
+   }
+  ]
+ },
+ "excluded_by_trust": 6
+}

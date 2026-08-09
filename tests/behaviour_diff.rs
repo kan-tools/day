@@ -243,7 +243,16 @@ fn a_relative_corpus_path_resolves_against_the_repo_not_the_work_dir() {
         "--corpus",
         "fixtures/behaviour",
         "--expect-fixtures",
-        "2",
+        // Derived, not written: the count must track the shipped corpus, and
+        // hand-writing it is what this repo has been wrong about in five
+        // places. `the_shipped_corpus_has_the_fixtures_it_claims` holds the
+        // list; this holds the count, and the two catch different failures.
+        &std::fs::read_dir(repo_root().join("fixtures/behaviour"))
+            .expect("the corpus should ship")
+            .flatten()
+            .filter(|e| e.path().join("case.json").is_file())
+            .count()
+            .to_string(),
     ]);
 
     assert!(
@@ -251,7 +260,17 @@ fn a_relative_corpus_path_resolves_against_the_repo_not_the_work_dir() {
         "the shipped corpus is runnable; a relative path must not make it \
          look otherwise: {text}"
     );
-    assert_eq!(code, Some(0), "a clean comparison exits 0: {text}");
+    // **Not `== 0`.** This test is about whether the PATH RESOLVED, and the
+    // first version asserted a clean comparison as well — so it failed for any
+    // uncommitted behaviour change in the working tree, which is most of
+    // development and none of this test's business. Exit 0 (identical) and
+    // exit 1 (changed) both mean the corpus ran; exit 2 is the could-not-check
+    // this test exists to rule out.
+    assert_ne!(
+        code,
+        Some(2),
+        "a relative corpus path must not be a could-not-check: {text}"
+    );
 }
 
 /// **A corpus that shrank is a could-not-check, not a clean run.**
@@ -390,9 +409,14 @@ fn the_shipped_corpus_has_the_fixtures_it_claims() {
         found,
         vec![
             "glob-named-subject".to_string(),
-            "scoped-universal".to_string()
+            "scoped-universal".to_string(),
+            "trust-withheld-entirely".to_string(),
+            "trust-withheld-partially".to_string()
         ],
-        "the corpus encodes the two regressions two cold reviews found by hand; \
-         losing one loses the evidence that this harness catches them"
+        "the corpus encodes the regressions cold reviews found by hand; losing one \
+         loses the evidence that this harness catches them. The two `trust-withheld-*` \
+         fixtures are the modes day's OWN repo can never be in — `excluded_by_trust` \
+         is 0 here — which is why four blocking defects across two review rounds all \
+         lived there and none was reachable from this repo"
     );
 }

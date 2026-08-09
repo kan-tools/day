@@ -1,0 +1,43 @@
+{
+ "v": 1,
+ "trust": {
+  "base": "Local",
+  "authors": [
+   {
+    "did": "did:key:zFixtureAuthor",
+    "weight": 1.0
+   }
+  ]
+ },
+ "excluded_by_trust": 2,
+ "subjects": [
+  {
+   "v": 1,
+   "subject": "telos/t",
+   "claims": [
+    {
+     "cid": "bafyt",
+     "kind": "Decision",
+     "text": "Process is legible.\n\n```day-telos\n{\"witnesses\":[\"verdict\"]}\n```\n",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ],
+   "excluded_by_trust": 1
+  },
+  {
+   "v": 1,
+   "subject": "practice",
+   "claims": [
+    {
+     "cid": "bafyp",
+     "kind": "Observation",
+     "text": "Record what you find.",
+     "author": "did:key:zFixtureAuthor",
+     "recorded_at": 10
+    }
+   ],
+   "excluded_by_trust": 1
+  }
+ ]
+}
