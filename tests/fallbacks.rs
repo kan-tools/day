@@ -281,6 +281,56 @@ fn fallback_hook_degrades_when_kan_cannot_read() {
     );
 }
 
+/// fallback: notice-degrades-when-kan-cannot-read
+///
+/// **A separate slug from `hook-degrades-when-kan-cannot-read`, deliberately.**
+/// That test drives `hook session-start` and never reaches `session_notice`,
+/// which is a different function with the opposite contract: session-start must
+/// still say something when degraded (day#60 — silence is its failure mode),
+/// and session-notice must say *nothing* unless it has something to report.
+/// Reusing the slug would have satisfied `a_documented_fallback_names_a_test_
+/// that_reaches_it` — its own doc admits nothing binds a slug to its site — with
+/// no test reaching the path.
+///
+/// The mode is a kan that RUNS but cannot read. The compat check is the reason
+/// this needs asserting rather than being obvious: `client.version()` fails
+/// here, which classifies as `Compat::Unknown`, and `compat_notice` must
+/// **stay quiet** on Unknown. `compat::render` phrases that case as "kan:
+/// reachable, version unknown", and this hook never called `probe`, so emitting
+/// it would have day assert a reachability it never established.
+#[test]
+fn fallback_notice_degrades_when_kan_cannot_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = unreadable_kan(dir.path());
+
+    // premise: this kan RUNS, so the degraded-read path is reached rather than
+    // the absent-kan one — which is `hooks/bootstrap-check.sh`'s job, not this.
+    let probe = Command::new(&kan)
+        .arg("--help")
+        .output()
+        .expect("the stub should be runnable");
+    assert!(
+        probe.status.success(),
+        "premise: the stub kan must succeed on --help, or this exercises the \
+         kan-is-absent path instead of the cannot-read one"
+    );
+
+    let out = day(dir.path(), &kan, &["hook", "session-notice"]);
+    assert!(
+        out.status.success(),
+        "a hook must never fail the session: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.trim().is_empty(),
+        "session-notice must stay silent when it cannot read: a notice here \
+         would be day reporting a pairing or a transition it never established. \
+         Got: {text}"
+    );
+}
+
 /// fallback: uncheckable-without-witness-schema
 ///
 /// A project that has declared no `schema/witness` cannot have its position

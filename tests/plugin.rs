@@ -71,31 +71,69 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
     }
 }
 
+/// **Narrowed, not relaxed.** This used to read "every SessionStart command is
+/// a `day hook` invocation", which the bootstrap check cannot satisfy: it
+/// exists to report that `day` is *absent*, and a `day` the shell cannot find
+/// cannot report its own absence. The old rule would have been met by a
+/// `day hook missing-binaries` that never runs in the one case it is for.
+///
+/// So the guarantee is now stronger than "starts with `day hook`": **exactly
+/// one** non-day command is permitted, it must be the known bootstrap path, and
+/// that file must exist and be executable. A second bundled script — the way
+/// this widens by accident — fails here.
 #[test]
-fn ac5_the_session_start_hook_invokes_day_and_nothing_else() {
+fn ac5_the_session_start_hook_invokes_day_and_one_bootstrap() {
     let hooks = read_json("hooks/hooks.json");
     let groups = hooks["hooks"]["SessionStart"]
         .as_array()
         .expect("SessionStart should be an array");
 
-    // Every SessionStart command must be a `day hook …` invocation — the
-    // "nothing else" guarantee — and the two day registers must both be
-    // present: the context hook and the human-facing notice hook.
+    const BOOTSTRAP: &str = "\"${CLAUDE_PLUGIN_ROOT}/hooks/bootstrap-check.sh\"";
+
     let commands: Vec<&str> = groups
         .iter()
         .flat_map(|g| g["hooks"].as_array().into_iter().flatten())
         .filter_map(|h| h["command"].as_str())
         .collect();
     assert!(!commands.is_empty(), "at least one SessionStart command");
-    for command in &commands {
+
+    let (bundled, day_hooks): (Vec<&&str>, Vec<&&str>) =
+        commands.iter().partition(|c| !c.starts_with("day hook "));
+
+    assert_eq!(
+        bundled.len(),
+        1,
+        "exactly one SessionStart command may be something other than `day hook …`, \
+         and it is the bootstrap check. Found {bundled:?}"
+    );
+    assert_eq!(
+        *bundled[0], BOOTSTRAP,
+        "the one non-day SessionStart command must be the bootstrap check"
+    );
+
+    // The command names a file the plugin ships; a rename that updates only one
+    // side would otherwise register a hook that silently never runs.
+    let script = repo_root().join("hooks/bootstrap-check.sh");
+    assert!(script.is_file(), "{} should exist", script.display());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&script)
+            .expect("metadata")
+            .permissions()
+            .mode();
         assert!(
-            command.starts_with("day hook "),
-            "SessionStart must invoke day and nothing else; found {command:?}"
+            mode & 0o111 != 0,
+            "hooks/bootstrap-check.sh must be executable; mode is {mode:o}"
         );
     }
-    assert!(commands.contains(&"day hook session-start"), "{commands:?}");
+
     assert!(
-        commands.contains(&"day hook session-notice"),
+        day_hooks.contains(&&"day hook session-start"),
+        "{commands:?}"
+    );
+    assert!(
+        day_hooks.contains(&&"day hook session-notice"),
         "{commands:?}"
     );
 }
