@@ -525,7 +525,38 @@ pub fn assess(
     root: &std::path::Path,
     since: Option<&str>,
 ) -> Result<Report, Error> {
-    let schema = DocsSchema::load(client)?;
+    // **An assessment verb reports; it does not refuse.** A cold review's
+    // MAJOR-4: with the schema unreadable under a narrowed trust base this
+    // exited 2, so `assess docs` was permanently unusable in exactly the
+    // multi-author repo day is for — and the error's remedy ("re-run where the
+    // count is zero") is unreachable, because a collaborator's claim in a
+    // committed `.claims/` never goes away.
+    //
+    // `Level::Unchecked` is day#81's answer to this shape and already renders:
+    // a check that could not run is reported as one, and the exit code follows
+    // from `is_healthy`, which does not count unchecked as failure. That is the
+    // difference between "day cannot answer this" and "your docs are wrong",
+    // which is the whole of `telos/honest-reads`.
+    let schema = match DocsSchema::load(client) {
+        Ok(schema) => schema,
+        Err(Error::Atoms(atoms::Error::Kan(
+            e @ crate::kan_client::Error::AbsentUnderNarrowedTrust { .. },
+        ))) => {
+            return Ok(Report {
+                version: String::new(),
+                findings: vec![Finding {
+                    level: Level::Unchecked,
+                    message: format!(
+                        "the docs schema could not be read, so nothing about the docs was \
+                         checked — this is day unable to answer, not a clean assessment: {e}"
+                    ),
+                }],
+                boundary: None,
+                prompts: Vec::new(),
+            });
+        }
+        Err(e) => return Err(e),
+    };
     let version = read_version(root, &schema)?;
 
     let mut findings = Vec::new();

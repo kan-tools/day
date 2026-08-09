@@ -108,6 +108,12 @@ pub struct Recorded {
     /// second as the first is what made three passes leave six near-identical
     /// claims nobody could order.
     pub pair_unchanged: bool,
+    /// Whether the previous pair predates the document fingerprint, so this
+    /// pass re-recorded it for a FORMAT reason rather than a content one
+    /// (day#119's second round). Reported because the new claim cites the old,
+    /// and an uncommented citation asserts "this supersedes that" about two
+    /// passes over an identical document.
+    pub format_migration: bool,
     pub decisions: Vec<String>,
     /// Resolution ids already on the subject, so a re-record is incremental
     /// (day#36). Reported rather than silent: "recorded 2, skipped 8" is a
@@ -129,6 +135,14 @@ impl Recorded {
         } else {
             out.push_str(&format!("  observe  {}\n", self.observe));
             out.push_str(&format!("  plan     {}\n", self.plan));
+        }
+        if self.format_migration {
+            out.push_str(
+                "  note     the previous pair predates the document fingerprint, so this pass \
+                 re-recorded it for a format reason rather than because the document \
+                 changed. The next pass over an unchanged document will report \
+                 `(unchanged)`.\n",
+            );
         }
         for cid in &self.decisions {
             out.push_str(&format!("  decide   {cid}\n"));
@@ -185,6 +199,26 @@ pub fn design(
         .unwrap_or_else(|| slug_for(path));
     let shown = path.display();
 
+    // **Refuse before appending anything if the view of this subject is
+    // partial.** A cold review's BLOCK-2, and a regression this branch caused.
+    //
+    // `newest_of_kind` and `existing_resolution_ids` both degrade a failed read
+    // to "record everything", which is right when the subject is UNREADABLE — a
+    // duplicate is noise, a skipped claim is a loss. It is wrong when the
+    // subject is PARTIALLY readable, because then the claims day would be
+    // deduplicating against are known to exist and known to be hidden, so the
+    // duplicate is not a risk but a certainty. Measured: three runs over an
+    // unchanged document produced three observes, three plans and three
+    // identical decides, reported as if each were a first recording.
+    //
+    // day cannot retract, so that damage is permanent and grows per run. A
+    // write verb may refuse — the never-blocking rule is about hooks, which
+    // must always render — and refusing is the only option that does not
+    // silently corrupt the record it exists to keep.
+    if let Err(e @ crate::kan_client::Error::PartiallyWithheld { .. }) = client.show(&subject) {
+        return Err(Error::Kan(e));
+    }
+
     // The fingerprint is what makes "unchanged" mean unchanged. Without it both
     // texts this function compares are summaries, and the first version of
     // day#119 reported `(unchanged)` for a document whose REQ-1 had been
@@ -238,6 +272,23 @@ pub fn design(
         && previous_plan
             .as_ref()
             .is_some_and(|(_, text)| text == &plan_text);
+
+    // **A pair recorded before the fingerprint existed will never compare
+    // equal, so the first pass after upgrading re-records it and cites the old
+    // one — asserting a supersession that did not happen** (a cold review's
+    // MAJOR-3). Bounded and self-healing: the second pass is `(unchanged)`
+    // again. Silent is the part that is wrong, and day's own log has 22 design
+    // subjects, so every project with a history meets this once per document.
+    //
+    // Detected by the marker's absence in the PREVIOUS claim rather than by a
+    // version stamp, because the claim is prose day wrote and there is nothing
+    // else in it to key on. Reported, not worked around: pretending the pair is
+    // unchanged would drop a pass that genuinely might have differed, and day
+    // cannot tell which from a claim written before it could.
+    let format_migration = !pair_unchanged
+        && previous_observe
+            .as_ref()
+            .is_some_and(|(_, text)| !text.contains(" [doc "));
 
     let observe = match &previous_observe {
         Some((cid, _)) if pair_unchanged => cid.clone(),
@@ -302,6 +353,7 @@ pub fn design(
         observe,
         plan,
         pair_unchanged,
+        format_migration,
         decisions,
         skipped,
         unidentified,

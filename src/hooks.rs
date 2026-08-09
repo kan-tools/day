@@ -127,6 +127,31 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
     teloi.sort();
 
     if teloi.is_empty() {
+        // **"None here" and "none this view admits" are different facts, and
+        // this said the first when the second was true** (day#120, found by a
+        // cold review of the fix meant to close it).
+        //
+        // The per-subject guards in `KanClient::show` cannot help here: this
+        // reader ENUMERATES `subjects()`, and kan omits a fully-withheld
+        // subject from `status --json` too, so the loop never produces it and
+        // never calls `show`. In a plain clone of a repo publishing `.claims/`,
+        // with no `--trust` flag anywhere, this printed "No teloi are recorded
+        // for this project yet" over six withheld claims — on the channel that
+        // reaches the model, which is the one `telos/honest-reads` names, to
+        // the population `telos/v1.0` names.
+        //
+        // `render_teloi`'s own history is this defect once already: a failed
+        // read became an empty list here and an unreadable telos vanished from
+        // the list and from its count. It came back by a different route.
+        let withheld = client.claims_withheld_from_view();
+        if withheld > 0 {
+            return format!(
+                "No teloi are visible in this view, and {withheld} claim(s) in this log are \
+                 withheld from it — so day cannot tell whether none are recorded or none \
+                 are admitted by this trust base. Widen the view (`--trust me`, or \
+                 `--trust <did>`) before concluding this project declares no telos.\n"
+            );
+        }
         return "No teloi are recorded for this project yet. A telos is a desired state of \
                 the world held up to weak equivalence — declare one with `kan decide \
                 \"<statement>\" --subject telos/<slug>` when the purpose of a piece of work \
@@ -267,6 +292,24 @@ fn render_atoms(client: &KanClient) -> String {
         // findings — so a project whose only atom day could not read was told
         // "no process atoms are declared yet", which is not a degraded answer
         // but a false one.
+        // The same guard needs the same third case as `render_teloi`: empty,
+        // nothing to report, AND nothing withheld. `atoms::load` enumerates
+        // too, so a withheld `atom/*` subject is not merely unreadable — it is
+        // absent from the list day iterates, and no per-subject check can see
+        // it. Saying "not an error" here was the more emphatic of the two false
+        // reassurances a cold review reproduced.
+        Ok(report)
+            if report.atoms.is_empty()
+                && report.findings.is_empty()
+                && client.claims_withheld_from_view() > 0 =>
+        {
+            format!(
+                "No process atoms are visible in this view, and {} claim(s) in this log are \
+                 withheld from it — so this is day unable to see the vocabulary, not a \
+                 project without one. Widen the view (`--trust me`, or `--trust <did>`).\n",
+                client.claims_withheld_from_view()
+            )
+        }
         Ok(report) if report.atoms.is_empty() && report.findings.is_empty() => String::from(
             "No process atoms are declared yet, so there is no composition to check.\n",
         ),

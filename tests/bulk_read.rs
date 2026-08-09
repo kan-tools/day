@@ -686,3 +686,188 @@ fn a_subject_day_cannot_fully_read_is_not_reported_as_undeclared() {
          project unreadable: {check}"
     );
 }
+
+/// A stub kan serving a fixed `show --all --json` and `status --json`, so a
+/// test can put day in a trust-withholding view. Shared by the day#120
+/// round-two tests below, which all need the same two envelopes and differ
+/// only in their contents.
+fn withholding_kan(dir: &Path, name: &str, show_all: &str, status: &str) -> std::path::PathBuf {
+    let path = dir.join(name);
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh\n\
+             case \"$1\" in\n\
+               --version) echo 'kan 0.11.0-beta.1'; exit 0 ;;\n\
+               --help) echo stub; exit 0 ;;\n\
+               show) if [ \"$2\" = --all ]; then printf '%s\\n' '{show_all}'; exit 0; fi ;;\n\
+               status|issues) printf '%s\\n' '{status}'; exit 0 ;;\n\
+               observe|plan|decide|result) echo bafyreistubwrite; exit 0 ;;\n\
+             esac\n\
+             exit 0\n"
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+/// **day#120 round two, BLOCK-1 — the guards were at the named read, and day's
+/// primary surfaces do not read by name.**
+///
+/// `render_teloi` and `atoms::load` ENUMERATE `subjects()` and filter by prefix.
+/// kan omits a fully-withheld subject from `status --json` as well as from
+/// `show --all --json`, so those loops never produce it, never call `show`, and
+/// never reach a per-subject guard. In a plain clone of a repo publishing
+/// `.claims/` — no `--trust` flag anywhere — `hook session-start` printed "No
+/// teloi are recorded for this project yet" and `doctor` printed "a valid
+/// starting state, not an error", both at exit 0, over six withheld claims.
+///
+/// The population is `telos/v1.0`'s and the channels are the two
+/// `telos/honest-reads` names. `render_teloi`'s own history is this defect once
+/// already, by a different route.
+#[test]
+fn enumerating_readers_report_a_withheld_log_rather_than_an_empty_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let withheld = withholding_kan(
+        dir.path(),
+        "kan-withheld.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":6,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":6}"#,
+    );
+    let empty = withholding_kan(
+        dir.path(),
+        "kan-empty.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":0,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":0}"#,
+    );
+    let text = |kan: &Path, args: &[&str]| {
+        let out = day(dir.path(), kan, args);
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    };
+
+    for args in [&["hook", "session-start"][..], &["doctor"][..]] {
+        let withheld_out = text(&withheld, args);
+        assert!(
+            withheld_out.contains("withheld"),
+            "{args:?} must say the log is withheld, not that the project is \
+             empty — this reader never calls `show`, so nothing else can tell \
+             it: {withheld_out}"
+        );
+        assert!(
+            !withheld_out.contains("valid starting state")
+                && !withheld_out.contains("are recorded for this project yet"),
+            "{args:?} must not reassure over a log it could not read: {withheld_out}"
+        );
+
+        // The negative control, and it is what makes the above mean anything:
+        // a genuinely empty project must still get the encouraging message. A
+        // guard that fires always is not a guard.
+        let empty_out = text(&empty, args);
+        assert!(
+            !empty_out.contains("withheld"),
+            "{args:?} on a genuinely empty log must not mention withholding: {empty_out}"
+        );
+    }
+}
+
+/// **day#120 round two, BLOCK-2 — a regression this branch caused.**
+///
+/// `PartiallyWithheld` returns `Err` for a subject whose claims are visible.
+/// Both dedup reads in `record.rs` swallow a failed read by design — right when
+/// the subject is UNREADABLE, where a duplicate is noise and a skip is a loss.
+/// Under a PARTIAL view the claims being deduplicated against are known to
+/// exist and known to be hidden, so the duplicate is not a risk but a
+/// certainty: three runs over an unchanged document produced three observes,
+/// three plans and three identical decides, each reported as a first recording.
+///
+/// day cannot retract, so that damage is permanent and grows per run. A write
+/// verb may refuse; the never-blocking rule is about hooks, which must render.
+#[test]
+fn design_record_refuses_a_partial_view_rather_than_duplicating_into_it() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".design")).unwrap();
+    std::fs::write(
+        dir.path().join(".design/thing.md"),
+        "# F: t\n\n## Summary\ns\n\n## Requirements\n- REQ-1: a\n\n\
+         ## Acceptance Criteria\n- [ ] AC-1: a\n\n## Architecture\nx\n\n\
+         ## Resolved Questions\n- RQ-1: chose a\n",
+    )
+    .unwrap();
+
+    let schema = r#"{\"sections\":[\"Summary\"],\"paths_section\":\"\",\"resolved_section\":\"Resolved Questions\",\"resolution_prefix\":\"RQ-\"}"#;
+    let show_all = format!(
+        r#"{{"v":1,"trust":{{"base":"Local","authors":[]}},"excluded_by_trust":2,"subjects":[{{"v":1,"subject":"schema/design-doc","claims":[{{"cid":"bafys","kind":"Observation","author":"did:key:zA","recorded_at":1,"text":"S.\n\n```day-schema\n{schema}\n```\n"}}],"excluded_by_trust":0}},{{"v":1,"subject":"thing","claims":[{{"cid":"bafyo","kind":"Observation","author":"did:key:zA","recorded_at":2,"text":"an earlier pass"}}],"excluded_by_trust":2}}]}}"#
+    );
+    let status = r#"{"v":1,"subjects":[{"subject":"schema/design-doc","state":"Unclassified"},{"subject":"thing","state":"Unclassified"}],"trust":{"base":"Local","authors":[]},"excluded_by_trust":2}"#;
+    let kan = withholding_kan(dir.path(), "kan-partial.sh", &show_all, status);
+
+    let out = day(dir.path(), &kan, &["design", "record", ".design/thing.md"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    assert!(
+        text.contains("partial history"),
+        "a partial view must be refused with its reason, not recorded into: {text}"
+    );
+    assert!(
+        !text.contains("recorded design pass"),
+        "and nothing may be appended — day cannot retract, so a duplicate here \
+         is permanent and grows on every run: {text}"
+    );
+    assert!(
+        !out.status.success(),
+        "the refusal must be a non-zero exit, or a script will not notice it"
+    );
+}
+
+/// **day#120 round two, MAJOR-4 — an assessment verb reports; it does not
+/// refuse.**
+///
+/// With the schema unreadable under a narrowed base, `assess docs` exited 2 with
+/// a bare error, so it was unusable in exactly the multi-author repo day is for
+/// — and its remedy ("re-run where the count is zero") could never be satisfied,
+/// because a collaborator's claim in a committed `.claims/` is permanent.
+///
+/// `Level::Unchecked` is day#81's answer and already renders. The exit code
+/// stays non-zero deliberately: could-not-check outranks checked-and-clean, and
+/// `Report::unchecked` is what drives it. What changed is that day now SAYS what
+/// it could not check instead of aborting.
+#[test]
+fn assess_docs_reports_an_unreadable_schema_rather_than_aborting() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = withholding_kan(
+        dir.path(),
+        "kan-withheld.sh",
+        r#"{"v":1,"trust":{"base":"Local","authors":[]},"excluded_by_trust":6,"subjects":[]}"#,
+        r#"{"v":1,"subjects":[],"trust":{"base":"Local","authors":[]},"excluded_by_trust":6}"#,
+    );
+
+    let out = day(dir.path(), &kan, &["assess", "docs"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    assert!(
+        text.contains("[UNCHECKED]"),
+        "the assessment must render, with the thing it could not check named: {text}"
+    );
+    assert!(
+        !text.starts_with("error:"),
+        "an assessment verb reports rather than aborting: {text}"
+    );
+    assert!(
+        !text.contains("re-run where the count is zero"),
+        "and must not print a remedy that cannot be reached: {text}"
+    );
+}

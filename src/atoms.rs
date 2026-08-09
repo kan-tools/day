@@ -782,6 +782,31 @@ pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
             None => continue,
         }
     }
+    // **Nothing parsed. Before reporting that as "nothing is declared", check
+    // whether this view could have seen it** (day#120, and a cold review's
+    // MAJOR-4 for where this check belongs).
+    //
+    // Every fenced-vocabulary loader funnels through here — `schema`, `docs`,
+    // `telos`, `bridge`, eight call sites — and each turns `Ok(None)` into "no
+    // <X> is declared for this project" plus a runnable `kan observe` starter.
+    // Under a narrowed trust base that starter is the harm: following it
+    // appends a second, competing declaration under a key the view does not
+    // admit, and the vocabulary forks silently.
+    //
+    // This is the ONLY place the log-wide count becomes a per-subject refusal,
+    // because it is the only place the conclusion is "declare it". `show()`
+    // used to do it and refused far too much: an ordinary absent subject is not
+    // a fork risk, and `assess docs` exited 2 over a subject unrelated to the
+    // withholding.
+    let withheld = client.claims_withheld_from_view();
+    if withheld > 0 {
+        return Err(Error::Kan(
+            crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject: subject.to_string(),
+                count: withheld,
+            },
+        ));
+    }
     Ok(None)
 }
 
