@@ -200,7 +200,23 @@ impl Document {
                 continue;
             }
             let trimmed = after.trim_start();
-            if is_checkbox_item(line) {
+            // **A checkbox alone is not enough**, which a cold review found by
+            // trying the obvious task-list line:
+            //
+            //     - [ ] REQ-1 is implemented and shipped
+            //
+            // That tracks a requirement declared correctly elsewhere. Flagging
+            // it advises rewriting it as `REQ-1: …`, which would create a
+            // DUPLICATE declaration — day's own advice making the document
+            // worse, which is day#84's complaint arriving inside day#123's fix.
+            //
+            // So a checkbox must also carry a colon or a bracketed qualifier —
+            // the same two marks that identify a declaration outside one. What
+            // the checkbox buys is that a qualifier need not be followed by a
+            // colon: `- [ ] AC-1 (REQ-1) checks first` is still a criterion
+            // whose id did not parse, and the plain list-item rule below cannot
+            // reach it.
+            if is_checkbox_item(line) && (after.contains(':') || trimmed.starts_with(['(', '['])) {
                 let shown = after.split(':').next().unwrap_or(after).trim_end();
                 out.push(format!("{prefix}{num}{shown}"));
             } else if is_list_item(line) && trimmed.starts_with(['(', '[']) && after.contains(':') {
@@ -772,9 +788,22 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
                     ),
                 });
             }
-            // Reported, not silently dropped. An exclusion a reader cannot see
-            // is one they cannot correct — and if a root is declared wrongly,
-            // this line is the only place that says so.
+            // Reported, not silently dropped: an exclusion a reader cannot see
+            // is one they cannot correct.
+            //
+            // **This used to add "and if a root is declared wrongly, this line
+            // is the only place that says so", which the code below makes
+            // false.** A root that matches nothing leaves `external` empty, so
+            // the line does not render at all: `["/"]`, `[""]`, `["kan//"]`,
+            // `["kan "]` and `["./kan"]` all produce no diagnostic whatever.
+            // Measured by a cold review by cycling the value on a live schema.
+            //
+            // Corrected rather than implemented, deliberately. A mis-declared
+            // root is inert — it excludes nothing, so the paths under it are
+            // still checked and still warned about — which is the safe
+            // direction and needs no new finding. What was wrong was a comment
+            // asserting a mechanism the code beside it does not have, in the
+            // fix round created to close an instance of exactly that.
             if !external.is_empty() {
                 findings.push(Finding {
                     // `Unchecked`, which already means exactly this: a check
@@ -833,9 +862,18 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
         // Any other non-blank, non-heading prose. Counted last and used only
         // when nothing better is present, so the message names the most
         // specific shape it found.
+        // Structural non-content is excluded, after a cold review found this
+        // firing on an HTML comment and on a link-reference definition. Neither
+        // is a resolution and neither is prose; both are markdown plumbing, and
+        // excluding them needs no judgement about what the words say — which is
+        // the trap the day#123 discriminator fell into twice.
         let prose = body
             .lines()
-            .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .filter(|l| !l.starts_with('#'))
+            .filter(|l| !(l.starts_with("<!--") || l.ends_with("-->")))
+            .filter(|l| !(l.starts_with('[') && l.contains("]:")))
             .count();
         let carrying = if numbered > 0 {
             Some((numbered, "numbered item(s)"))
@@ -854,9 +892,9 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
                 message: format!(
                     "{} carries {count} {shape} and no bullets, so \
                      `day design record` will record no decisions from it — \
-                     resolutions are read from `- ` bullets only. Rewrite them as \
-                     `- {}1: …` bullets, or the reasoning stays in the document \
-                     and never reaches the log",
+                     resolutions are read from `- ` bullets only. If there is \
+                     reasoning here, it stays in the document and never reaches \
+                     the log; `- {}1: …` is the form that records",
                     schema.resolved_section, schema.resolution_prefix
                 ),
             });
@@ -1368,6 +1406,74 @@ mod tests {
                  for: {render}"
             );
         }
+    }
+
+    /// **The round-two minors: two false positives, fixed structurally.**
+    ///
+    /// A cold review found day#123's checkbox rule flagging an ordinary
+    /// task-list line, and day#135's prose count firing on markdown plumbing.
+    /// Both were the same error as the rule they were fixing — a signal too
+    /// broad — so both narrowings are structural rather than lexical.
+    #[test]
+    fn the_round_two_false_positives_stay_silent() {
+        // day#123: a checkbox tracking a requirement declared elsewhere. day's
+        // advice was to rewrite it as `REQ-1: …`, which would create a DUPLICATE
+        // declaration — the linter degrading the document, which is day#84's
+        // complaint arriving inside day#123's fix.
+        for line in ["- [ ] REQ-1 is implemented and shipped", "- [x] REQ-2 done"] {
+            let doc = Document::parse(&format!("# F\n\n## Requirements\n{line}\n"));
+            assert!(
+                doc.malformed_ids("REQ-").is_empty(),
+                "{line:?} is a task-list item, not a declaration whose id failed \
+                 to parse: advising a rewrite here duplicates a declaration"
+            );
+        }
+
+        // day#135: markdown plumbing is not prose trying to be a resolution.
+        for body in ["<!-- nothing yet -->\n", "[ref]: https://example.invalid\n"] {
+            let text = DOC.replace(
+                "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+                &format!("## Resolved Questions\n\n{body}"),
+            );
+            let render = check(&Document::parse(&text), &schema(), Path::new("x.md")).render();
+            assert!(
+                !render.contains("and no bullets"),
+                "{body:?} is markdown plumbing, not content trying to be a \
+                 resolution: {render}"
+            );
+        }
+    }
+
+    /// **What day#135 still fires on, decided rather than drifted into.**
+    ///
+    /// `None yet.` is one line of prose and is reported. Telling it apart from
+    /// `We considered several options and settled on the first.` needs a
+    /// judgement about what the words MEAN, which is precisely the trap
+    /// day#123's discriminator fell into twice — a rule about English rather
+    /// than about markdown.
+    ///
+    /// So the finding stays and the ADVICE was made conditional. The cold
+    /// review's complaint was that "the reasoning stays in the document" is
+    /// nonsense where there is no reasoning; "if there is reasoning here" is
+    /// true either way, and "no decisions will be recorded from this section"
+    /// is true and worth knowing for a section that says `None yet.` too.
+    #[test]
+    fn a_placeholder_resolved_section_is_reported_with_conditional_advice() {
+        let text = DOC.replace(
+            "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+            "## Resolved Questions\n\nNone yet.\n",
+        );
+        let render = check(&Document::parse(&text), &schema(), Path::new("x.md")).render();
+
+        assert!(
+            render.contains("and no bullets"),
+            "the fact is still reported — no decisions WILL be recorded: {render}"
+        );
+        assert!(
+            render.contains("If there is reasoning here"),
+            "but the advice must not assume there is reasoning to move, which \
+             is what made it nonsense on a placeholder: {render}"
+        );
     }
 
     /// The day#135 warning must not fire on the form that works. Keyed on a
