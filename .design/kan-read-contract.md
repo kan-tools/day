@@ -57,8 +57,8 @@ down, at the boundary between the two repos instead of inside one.
   40 ms is almost entirely fixed per-process cost — an *empty* log costs 30 ms
   per call, a one-claim subject costs the same as the largest one, and
   `kan identity did`, which reads no log at all, costs the same again. Binary
-  startup is ~0 ms, so the cost is everything `Workspace::open` does before any
-  read happens. The consequence for kan is worth stating plainly: **no
+  startup is ~0 ms, so the cost is everything `Workspace::open`
+  (`kan/src/workspace.rs`) does before any read happens. The consequence for kan is worth stating plainly: **no
   optimisation inside the read substitutes for this.** A faster fold or a
   better index leaves day paying 41 setups; only a bulk verb collapses them to
   one.
@@ -109,6 +109,15 @@ kan is `src/kan_client.rs`, which executes the binary and parses `--json`;
 `src/probe.rs`'s `ClaimLog` is the one place that reads every subject, and it is
 the sole consumer of REQ-5. Frames will thread a selected trust base from a
 day-side frame declaration down to those calls, and nowhere else in day changes.
+
+**The cost REQ-1 is about lives in `kan/src/workspace.rs`**, not on day's side
+of the boundary — the per-invocation setup, not the read. This citation was
+removed once and replaced with the symbol name alone, to silence
+`referenced path does not exist yet: kan/src/workspace.rs`, which is the
+degradation day#84 was filed about: a linter argued a document into being less
+precise than it would have been with no check at all. It is restored now that
+`schema/design-doc` declares `kan/` external, and this section is the reason the
+declaration exists.
 
 **Verification lands in `tests/kan_conformance.rs`.** That file is day's one
 deliberate exception to the stub rule: it talks to the real kan binary and skips
