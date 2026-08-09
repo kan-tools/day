@@ -647,6 +647,39 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
         }
     }
 
+    // day#135: a resolved-questions section whose resolutions are written as
+    // `### Qn:` headings yields no bullets, so `day design record` appends no
+    // `decide` claims — and nothing said so. Five substantive resolutions in
+    // `.design/witness-interview.md` and one in v0.11's own design doc reached
+    // the log as nothing at all. The decisions and their reasoning are the most
+    // valuable output of a design pass, and they are the part that silently did
+    // not record.
+    //
+    // Keyed on the POSITIVE signal — a sub-heading under that section, which is
+    // something structurally trying to be a resolution — rather than on the
+    // absence of `RQ-`. CLAUDE.md records a classifier keyed on a phrase's
+    // absence being suppressed by an unrelated finding; this is the same trap
+    // one section over.
+    if let Some(body) = doc.section(&schema.resolved_section) {
+        let subheadings = body
+            .lines()
+            .filter(|l| l.trim_start().starts_with('#'))
+            .count();
+        if doc.bullets(&schema.resolved_section).is_empty() && subheadings > 0 {
+            findings.push(Finding {
+                verdict: Verdict::Warn,
+                message: format!(
+                    "{} carries {subheadings} sub-heading(s) and no bullets, so \
+                     `day design record` will record no decisions from it — \
+                     resolutions are read from `- ` bullets only. Rewrite them as \
+                     `- {}1: …` bullets, or the reasoning stays in the document \
+                     and never reaches the log",
+                    schema.resolved_section, schema.resolution_prefix
+                ),
+            });
+        }
+    }
+
     Report {
         findings,
         open_questions: unquoted.matches("<!-- OPEN").count(),
@@ -1001,6 +1034,57 @@ mod tests {
                 "{line:?} reads as prose, not as a declaration whose id failed \
                  to parse — flagging it would make the check cry wolf on \
                  ordinary writing"
+            );
+        }
+    }
+
+    /// **day#135 — resolutions written as headings record nothing, silently.**
+    ///
+    /// `day design record` reads one `decide` per *bullet*. A `### Qn:` heading
+    /// yields no bullets, so five substantive resolutions in
+    /// `.design/witness-interview.md` and one in v0.11's own design doc reached
+    /// the log as nothing, with `design check` reporting `[PASS]` throughout.
+    ///
+    /// Worse than day#123 in the way that matters: that failure was loud, if
+    /// misleadingly so. This one is silent, and it fails `telos/legible-process`
+    /// on the repo that defines it.
+    #[test]
+    fn resolutions_written_as_headings_are_reported_rather_than_recording_nothing() {
+        let headings = DOC.replace(
+            "## Resolved Questions\n- **Q1 — a**: chose a\n- **Q2 — b**: chose b\n",
+            "## Resolved Questions\n\n### Q1 — a\n\nChose a, because of the thing.\n\n\
+             ### Q2 — b\n\nChose b.\n",
+        );
+        let doc = Document::parse(&headings);
+
+        // Premise: this really is the shape that records nothing. Asserted
+        // rather than assumed, so the test cannot quietly stop measuring.
+        assert!(
+            doc.bullets("Resolved Questions").is_empty(),
+            "premise broken: the fixture is supposed to yield no bullets"
+        );
+
+        let render = check(&doc, &schema(), Path::new("x.md")).render();
+        assert!(
+            render.contains("2 sub-heading(s) and no bullets"),
+            "the drop must be named, and counted from the positive signal: {render}"
+        );
+    }
+
+    /// The day#135 warning must not fire on the form that works. Keyed on a
+    /// positive signal, an ordinary bullet-form section is silent — including
+    /// when the bullets carry no `RQ-` ids, which is a different question
+    /// (day#119) and not this one's to answer.
+    #[test]
+    fn a_bullet_form_resolved_section_is_not_reported_as_recording_nothing() {
+        for doc in [
+            Document::parse(DOC),
+            Document::parse(&DOC.replace("- **Q1 — a**: chose a", "- RQ-1: chose a")),
+        ] {
+            let render = check(&doc, &schema(), Path::new("x.md")).render();
+            assert!(
+                !render.contains("sub-heading(s) and no bullets"),
+                "a section that does yield bullets records fine: {render}"
             );
         }
     }
