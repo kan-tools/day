@@ -2,10 +2,15 @@
 name = "day"
 version = "0.12.0-beta.1"
 edition = "2021"
+authors = ["Maxine Levesque"]
 license = "MIT"
 description = "Structured process layer for AI-assisted development — teloi, atoms, and drift, recorded in kan."
 repository = "https://github.com/kan-tools/day"
+homepage = "https://github.com/kan-tools/day"
+documentation = "https://docs.rs/day"
 readme = "README.md"
+keywords = ["agents", "process", "teloi", "workflow", "mcp"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.6.2", features = ["derive"] }
