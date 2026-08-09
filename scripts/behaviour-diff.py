@@ -172,10 +172,18 @@ def observe(binary: pathlib.Path, fixture: pathlib.Path, work: pathlib.Path) -> 
     # `--expect-fixtures` counts DIRECTORIES, and the derived-list test checks
     # membership by NAME, so neither can see this: the corpus list is
     # exhaustive and the corpus contents were not.
-    if not case["invocations"]:
-        raise Unrunnable(f"{fixture.name}: declares no invocations, so it "
+    #
+    # `.get`, not `case["invocations"]`. The subscript raised a raw `KeyError`
+    # for a fixture missing the key — a traceback rather than a graded outcome,
+    # which is the same malformed-fixture class day#145 is about, one line over.
+    # A fixture that cannot say what to run is exactly as unrunnable as one that
+    # says to run nothing, and both are `CORPUS-EMPTY` at exit 2.
+    invocations = case.get("invocations")
+    if not invocations:
+        missing = "declares no `invocations` key" if invocations is None else "declares no invocations"
+        raise Unrunnable(f"{fixture.name}: {missing}, so it "
                          f"compares nothing while still counting as a fixture")
-    for verb in case["invocations"]:
+    for verb in invocations:
         argv = [str(binary)] + verb.split()
         if "--run" in argv:
             raise SystemExit(f"{fixture.name}: --run is not allowed in the corpus")

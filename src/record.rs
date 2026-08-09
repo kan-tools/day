@@ -321,19 +321,19 @@ pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
     (!digits.is_empty()).then(|| format!("{prefix}{digits}"))
 }
 
-/// Resolution ids already recorded as `decide` claims on a subject.
-///
-/// A read failure yields an empty set, which means
-/// "record everything" — the safe direction: a duplicate decision is noise in an
-/// append-only log, while skipping one that was never recorded loses it. This is
-/// the one site where failing toward *more* recording is right, so it is the one
-/// site the hatch is spent on. Stated because the opposite default would be the
-/// silent-loss failure this rule is about.
 /// The newest claim of `kind` on `subject`, as `(cid, text)`.
 ///
 /// day#119. Newest by position: `KanClient::show` returns a subject's claims in
-/// record order, which is the same ordering `existing_resolution_ids` relies on
-/// by not needing one.
+/// record order, which is the same ordering [`existing_resolution_ids`] relies
+/// on by not needing one.
+///
+/// **The second `kan-read-may-degrade` site in this module, not the first.**
+/// [`existing_resolution_ids`] states the argument in full and used to call
+/// itself the only one; adding this function inherited that sentence by
+/// accident, so a comment claiming uniqueness sat on the thing that broke it.
+/// Both spend the hatch for the same reason and it is stated once, there.
+///
+/// [`existing_resolution_ids`]: fn@existing_resolution_ids
 fn newest_of_kind(client: &KanClient, subject: &str, kind: &str) -> Option<(String, String)> {
     // fallback: unreadable-subject-records-the-pair
     // kan-read-may-degrade: a failed read here degrades to "append the pair",
@@ -349,13 +349,28 @@ fn newest_of_kind(client: &KanClient, subject: &str, kind: &str) -> Option<(Stri
         .and_then(|c| c.text.clone().map(|t| (c.cid.clone(), t)))
 }
 
+/// Resolution ids already recorded as `decide` claims on a subject.
+///
+/// A read failure yields an empty set, which means "record everything" — the
+/// safe direction: a duplicate decision is noise in an append-only log, while
+/// skipping one that was never recorded loses it. Stated because the opposite
+/// default would be the silent-loss failure that rule is about.
+///
+/// [`newest_of_kind`] spends the hatch on the same argument. This comment used
+/// to call itself the only site, and then drifted onto that function when it
+/// was added — so the sentence asserting uniqueness ended up on the thing that
+/// made it false. The argument lives here; the other site points at it.
+///
+/// [`newest_of_kind`]: fn@newest_of_kind
 fn existing_resolution_ids(
     client: &KanClient,
     subject: &str,
     schema: &crate::schema::Schema,
 ) -> std::collections::BTreeSet<String> {
     // kan-read-may-degrade: failing toward "record everything" is the safe
-    // direction here, and only here — see this function's doc comment.
+    // direction — see this function's doc comment. "and only here" was removed
+    // rather than reworded: `newest_of_kind` spends the hatch on the same
+    // argument, so the claim was false from the moment that function landed.
     let Ok(claims) = client.show(subject) else {
         return std::collections::BTreeSet::new();
     };

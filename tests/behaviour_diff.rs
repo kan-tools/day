@@ -146,6 +146,32 @@ fn a_fixture_that_invokes_nothing_is_not_reported_as_identical() {
         text.contains("declares no invocations"),
         "the empty fixture must be named: {text}"
     );
+
+    // A fixture missing the key entirely is the same class and used to raise a
+    // raw `KeyError` — a traceback, not a graded outcome. A harness that can
+    // crash instead of reporting is one whose silence means nothing.
+    let missing = corpus_with_case(
+        dir.path(),
+        r#"{"why":"no key at all","tags":[],"tracked":[]}"#,
+    );
+    let (text, code_missing) = diff(&[
+        "--since",
+        "HEAD",
+        "--corpus",
+        missing.to_str().unwrap(),
+        "--expect-fixtures",
+        "1",
+    ]);
+    assert!(
+        text.contains("declares no `invocations` key"),
+        "a fixture with no `invocations` key must be graded, not raise: {text}"
+    );
+    assert!(!text.contains("Traceback"), "and must not crash: {text}");
+    assert_eq!(
+        code_missing,
+        Some(2),
+        "could-not-check exits 2, not a Python traceback's 1: {text}"
+    );
     assert!(
         !text.lines().any(|l| l.trim() == "IDENTICAL"),
         "and it must never render the agreement verdict: {text}"

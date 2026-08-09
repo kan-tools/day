@@ -869,13 +869,6 @@ pub fn check(doc: &Document, schema: &Schema, base: &Path) -> Report {
     }
 }
 
-/// Strips a line's leading list punctuation and checkbox, so `- [ ] REQ-1:`
-/// and `REQ-1:` both present their id at the start. Shared by [`declared_ids`]
-/// and [`malformed_ids`] so the two agree on what a declaration line looks
-/// like.
-///
-/// [`declared_ids`]: Document::declared_ids
-/// [`malformed_ids`]: Document::malformed_ids
 /// Whether `line` is a markdown list item — the position in which an id at the
 /// head of the line is a declaration rather than a mention (day#123).
 fn is_list_item(line: &str) -> bool {
@@ -895,6 +888,13 @@ fn is_checkbox_item(line: &str) -> bool {
     rest.starts_with("[ ]") || rest.starts_with("[x]") || rest.starts_with("[X]")
 }
 
+/// Strips a line's leading list punctuation and checkbox, so `- [ ] REQ-1:`
+/// and `REQ-1:` both present their id at the start. Shared by [`declared_ids`]
+/// and [`malformed_ids`] so the two agree on what a declaration line looks
+/// like.
+///
+/// [`declared_ids`]: Document::declared_ids
+/// [`malformed_ids`]: Document::malformed_ids
 fn strip_list_prefix(line: &str) -> &str {
     line.trim_start()
         .trim_start_matches(['-', '*', '+'])
@@ -956,18 +956,21 @@ fn in_a_subject_namespace(s: &str) -> bool {
     SUBJECT_PREFIXES.iter().any(|p| s.starts_with(p))
 }
 
+/// Whether `s` is a path **this repo should resolve**: path-shaped, and not in
+/// one of day's own kan namespaces.
+fn looks_like_path(s: &str) -> bool {
+    is_path_shaped(s) && !in_a_subject_namespace(s)
+}
+
 /// Whether `s` has the *shape* of a path, ignoring whose namespace it sits in.
 ///
 /// Split from [`looks_like_path`] so day#136's exclusion can be **reported**
 /// where it is ambiguous rather than only applied. The first attempt tried to
 /// bypass the namespace test by rewriting the string, which changed the answer
-/// for an unrelated reason — it removed the slash the shape test requires, so
-/// every citation read as not-a-path and the report was silent. Two predicates,
-/// each answering one question, is what makes both callers correct.
-fn looks_like_path(s: &str) -> bool {
-    is_path_shaped(s) && !in_a_subject_namespace(s)
-}
-
+/// for an unrelated reason — it removed the slash this function requires, so
+/// every citation read as not-a-path and the report was silent while looking
+/// implemented. Two predicates, each answering one question, is what makes both
+/// callers correct.
 fn is_path_shaped(s: &str) -> bool {
     if s.is_empty()
         || !s.contains('/')
@@ -1432,10 +1435,16 @@ mod tests {
              exclusion a reader cannot see is one they cannot correct: {render}"
         );
         // The in-repo path is still counted, and still the thing that grounds
-        // the document. Partitioning before the existence test is what makes
-        // this hold: filtering `missing` afterwards would leave the external
-        // path in `paths`, so a doc citing ONLY the other repo would fail for
-        // "references no existing file" having grounded itself precisely.
+        // the document.
+        //
+        // This comment used to carry a second claim — that partitioning is what
+        // stops an external-ONLY document failing "references no existing file"
+        // — which the code did not implement and this fixture cannot exercise,
+        // since it always includes an in-repo path. A cold review found the
+        // claim false. The property now has its own test with a fixture that
+        // reaches it (`a_document_citing_only_external_paths_is_unchecked_not_ungrounded`),
+        // which is where a claim about behaviour belongs rather than in a
+        // comment beside a test that cannot see it.
         assert!(
             render.contains("1 of 1 referenced path(s) exist"),
             "the external path must leave the in-repo count alone: {render}"
