@@ -797,7 +797,20 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             };
 
             let slugs = match (all, slug) {
-                (true, _) => crate::telos::all_slugs(&client)?,
+                (true, _) => {
+                    let sweep = crate::telos::all_slugs(&client)?;
+                    if sweep.retracted > 0 {
+                        // Said once, up front — the hook's telos list already
+                        // excludes these, and the two surfaces disagreeing
+                        // about how many teloi exist was itself a finding.
+                        println!(
+                            "{} fully retracted telos subject(s) not assessed — nothing live \
+                             declares them. Name one explicitly to inspect it.",
+                            sweep.retracted
+                        );
+                    }
+                    sweep.slugs
+                }
                 (false, Some(slug)) => vec![slug],
                 (false, None) => {
                     eprintln!("error: name a telos, or pass --all to assess every declared one");

@@ -1176,3 +1176,51 @@ fn an_undated_match_set_is_labelled_eg_not_newest() {
         "no recorded_at means no recency claim: {stdout}"
     );
 }
+
+/// A fully retracted telos is not swept by `--all` — and the exclusion is
+/// counted rather than silent.
+///
+/// Found on day's own log: two scratch teloi, correctly retracted after a
+/// verification run, still drew a full assessment block each — including a
+/// `/witness-interview` suggestion and a record command citing the
+/// *retraction's* CID. The session hook already excluded them, so the two
+/// surfaces disagreed about how many teloi exist.
+#[test]
+fn a_fully_retracted_telos_is_excluded_from_the_all_sweep_and_counted() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut retraction = claim("telos/gone", "bafyreir", "");
+    retraction.kind = "Retraction".to_string();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("alive", "bafyreit", &["design-doc"]),
+            witness_schema("bafyreiw", r#"{"design-doc":{"path":".design/*.md"}}"#),
+            retraction,
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "--all"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("telos/alive"),
+        "the live telos is still assessed: {stdout}"
+    );
+    assert!(
+        !stdout.contains("telos/gone"),
+        "a retracted telos must not draw an assessment block: {stdout}"
+    );
+    assert!(
+        stdout.contains("1 fully retracted telos subject(s) not assessed"),
+        "the exclusion is counted, never silent: {stdout}"
+    );
+
+    // Naming it explicitly still works — exclusion is about the sweep, not
+    // about the subject becoming unaddressable.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "gone"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("telos/gone"),
+        "an explicitly named retracted telos is still inspectable: {stdout}"
+    );
+}

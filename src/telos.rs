@@ -1234,15 +1234,55 @@ pub fn assess_atom(
     })
 }
 
-/// Every declared telos, for `--all`.
-pub fn all_slugs(client: &KanClient) -> Result<Vec<String>, Error> {
-    let mut slugs: Vec<String> = client
-        .subjects()?
-        .into_iter()
-        .filter_map(|s| s.strip_prefix(atoms::TELOS_PREFIX).map(str::to_string))
-        .collect();
+/// The `--all` sweep: every telos still in play, and how many `telos/*`
+/// subjects were left out because nothing live declares them.
+pub struct Sweep {
+    pub slugs: Vec<String>,
+    /// Subjects whose claims fold to no statement and no title — a fully
+    /// retracted telos. The count is reported rather than the subjects
+    /// silently vanishing: the session hook already excludes these (its
+    /// per-subject fold skips a subject with nothing to render), and the two
+    /// surfaces disagreeing about how many teloi exist was itself a finding.
+    pub retracted: usize,
+}
+
+/// Every declared telos, for `--all` — folded before swept.
+///
+/// "In `subjects()`" is not "declared": a fully retracted telos still has a
+/// subject (its retraction claim is live) and used to get a full assessment
+/// block, complete with a `/witness-interview` suggestion and a record
+/// command citing the retraction's CID. The same fold the hook uses decides
+/// membership here, so `assess --all` and the hook count the same set.
+pub fn all_slugs(client: &KanClient) -> Result<Sweep, Error> {
+    let mut by_subject: BTreeMap<String, Vec<crate::kan_client::Claim>> = BTreeMap::new();
+    for (subject, claim) in client.show_all()? {
+        if subject.starts_with(atoms::TELOS_PREFIX) {
+            by_subject.entry(subject).or_default().push(claim);
+        }
+    }
+
+    let mut slugs = Vec::new();
+    let mut retracted = 0usize;
+    for subject in client.subjects()? {
+        let Some(slug) = subject.strip_prefix(atoms::TELOS_PREFIX) else {
+            continue;
+        };
+        match by_subject.get(&subject) {
+            // Listed by `status` but absent from the claim log — a state this
+            // fold cannot account for. Kept, so the sweep surfaces whatever
+            // `assess` finds there rather than quietly narrowing itself.
+            None => slugs.push(slug.to_string()),
+            Some(claims)
+                if crate::fold::declaration(claims).is_some()
+                    || crate::fold::title(claims).is_some() =>
+            {
+                slugs.push(slug.to_string())
+            }
+            Some(_) => retracted += 1,
+        }
+    }
     slugs.sort();
-    Ok(slugs)
+    Ok(Sweep { slugs, retracted })
 }
 
 #[cfg(test)]
