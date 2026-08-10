@@ -1,0 +1,94 @@
+name: Bug report
+description: day did something wrong, or reported something that was not true.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste what day printed rather than describing it. A verdict day
+        produced is more useful than an account of the verdict — most defects
+        here have been in what a report *means*, which is only visible in the
+        exact wording.
+
+        If you were using day on a real project and hit this, consider the
+        **Field report** template instead: it asks for the surrounding context
+        that has historically been the most valuable part.
+
+  - type: textarea
+    id: what-ran
+    attributes:
+      label: What you ran
+      description: The exact command, including flags.
+      render: shell
+      placeholder: day assess telos --run
+    validations:
+      required: true
+
+  - type: textarea
+    id: printed
+    attributes:
+      label: What it printed
+      description: >
+        Paste the output verbatim, including the exit code if you have it.
+        Redact anything private — but say that you did, so a missing line is
+        not read as an absent one.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead, and why
+      description: >
+        The "why" matters more than usual here. Several past reports were
+        right that something was wrong and wrong about what — and were still
+        the reason the fix happened.
+    validations:
+      required: true
+
+  - type: input
+    id: day-version
+    attributes:
+      label: day version
+      description: "`day --version`"
+      placeholder: "day 0.12.0-beta.1"
+    validations:
+      required: true
+
+  - type: input
+    id: kan-version
+    attributes:
+      label: kan version
+      description: >
+        `kan --version`. The pair matters — day declares a measured range of
+        supported kan versions.
+      placeholder: "kan 0.11.0-beta.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`day doctor` output"
+      description: >
+        Optional, but it prints the supported kan range next to the kan you
+        have, and whether the atom vocabulary composes — which rules out a
+        whole class of cause in one paste.
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Is day wrong, or unhelpful?
+      description: Both are worth filing. They get triaged differently.
+      options:
+        - day reported something that was not true
+        - day failed to report something it should have
+        - day refused something it should have accepted
+        - day is correct but the output is misleading or unclear
+        - Something else
+    validations:
+      required: true

@@ -1,0 +1,80 @@
+name: Design question
+description: Something that needs a decision or a design pass, not a patch.
+labels: ["design-question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the right change is not obvious — a new verb, a new probe
+        kind, a change to what a check reports, or a tension between two things
+        day is trying to be.
+
+        Behaviour changes go through a design pass before implementation
+        (`.design/<slug>.md`, recorded into kan, validated by `day design
+        check`). Opening this issue is the start of that, and is much cheaper
+        than a PR that has to be unwound.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: State it as a question with more than one defensible answer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-now
+    attributes:
+      label: What made this come up
+      description: >
+        The concrete thing that ran into it. A design question grounded in
+        something that actually happened gets decided; an abstract one tends
+        to sit.
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Options you can see, and what each costs
+      description: >
+        Rough is fine. Naming the option you think is wrong, and why, is often
+        more useful than arguing for the one you prefer.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: telos
+    attributes:
+      label: Which of day's teloi does this bear on?
+      description: >
+        Optional. These are recorded in day's own log; `docs/TELOS.md` has the
+        model. Two of them being in tension is a legitimate answer — that is
+        what teloi are for.
+      multiple: true
+      options:
+        - "telos/no-store-of-its-own — every durable thing is a kan claim"
+        - "telos/affordance-not-enforcement — advisory, never blocking"
+        - "telos/honest-reads — never report a partial read as a complete one"
+        - "telos/legible-process — the process is reconstructable from the record"
+        - "telos/vocabulary-substrate — a project can declare its own vocabulary"
+        - "telos/composable-process — process units compose and are revisable"
+        - "telos/v1.0 — bears on the v1.0 bar"
+        - "None of these / not sure"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Boundary check
+      description: >
+        kan owns a feature iff it needs a new or existing
+        `ClaimBody`/`ClaimKind`/`Anchor`/`RelationKind` variant, or is a pure
+        read or fold over the claim graph. day owns what is buildable as a
+        calling convention over kan's existing primitives.
+      options:
+        - label: >
+            I think this needs a change to kan's data model, so it may be
+            kan's to own (it will be labelled `upstream-kan`).
+          required: false

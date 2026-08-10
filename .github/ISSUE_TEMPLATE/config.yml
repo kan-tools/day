@@ -1,0 +1,24 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/kan-tools/day/security/advisories/new
+    about: >
+      Please report privately through GitHub, not as a public issue. See
+      SECURITY.md for what is in scope — the command-probe boundary is the
+      part worth attacking.
+
+  - name: This needs a change to kan's data model
+    url: https://github.com/kan-tools/kan/issues/new
+    about: >
+      kan owns a feature iff it needs a new or existing
+      ClaimBody/ClaimKind/Anchor/RelationKind variant, or is a pure read or
+      fold over the claim graph. File it there. If the coordination between
+      the two repos is the point, file here and it will be labelled
+      upstream-kan.
+
+  - name: How day and kan fit together
+    url: https://github.com/kan-tools/day/blob/main/docs/TELOS.md
+    about: >
+      kan is structured knowledge; day is structured process over it. TELOS.md
+      is the model, and CONVENTIONS.md is authoritative for what day actually
+      reads and writes today.
