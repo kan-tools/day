@@ -957,14 +957,31 @@ fn record_tier(
         };
         let plan = newest_fenced::<bridge::Plan>(client, &subject)?;
         if plan.is_some_and(|(_cid, p)| p.telos == slug) {
-            let reachable = bridge::check(client, bridge_slug)
-                .map(|r| r.is_reachable())
-                .unwrap_or(false);
-            prompts.push(format!(
-                "{subject} targets this telos and its plan {} reach it — but a plan that \
-                 could is not work that did",
-                if reachable { "could" } else { "could not" }
-            ));
+            // Three states, never two. This was `.unwrap_or(false)`, which
+            // rendered every error — an atom retracted after the bridge was
+            // declared, an unreadable plan — as "its plan could not reach it":
+            // a checked-and-negative verdict fabricated from a could-not-check
+            // (day#141). A kan read failure still propagates, as it does
+            // everywhere; only a state of the log that prevents the check
+            // degrades to a could-not-check line that names its cause.
+            match bridge::check(client, bridge_slug) {
+                Ok(report) => prompts.push(format!(
+                    "{subject} targets this telos and its plan {} reach it — but a plan \
+                     that could is not work that did",
+                    if report.is_reachable() {
+                        "could"
+                    } else {
+                        "could not"
+                    }
+                )),
+                Err(e @ (bridge::Error::Kan(_) | bridge::Error::Atoms(atoms::Error::Kan(_)))) => {
+                    return Err(e.into())
+                }
+                Err(e) => prompts.push(format!(
+                    "{subject} targets this telos, but whether its plan could reach it \
+                     could not be checked: {e}"
+                )),
+            }
         }
     }
     Ok(())

@@ -1066,3 +1066,45 @@ fn an_unresolvable_authorship_exclusion_is_reported_rather_than_ignored() {
         "and must not report the witness satisfied: {stdout}"
     );
 }
+
+/// day#141: a bridge check that ERRORS is a could-not-check, never
+/// "its plan could not reach it".
+///
+/// `record_tier` used `.unwrap_or(false)`, so an atom retracted after the
+/// bridge was declared — `bridge::Error::UndeclaredAtoms`, a real state of a
+/// real log — rendered as a checked-and-negative verdict day never computed.
+#[test]
+fn a_bridge_check_error_is_reported_as_could_not_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("target", "bafyreit", &["design-doc"]),
+            witness_schema("bafyreiw", r#"{"design-doc":{"path":".design/*.md"}}"#),
+            // The plan names an atom nobody declared, so `bridge::check`
+            // errors rather than answering.
+            claim(
+                "bridge/broken",
+                "bafyreib",
+                "A bridge.\n\n```day-bridge\n{\"telos\": \"target\", \"have\": [\"intent\"], \
+                 \"plan\": {\"atom\": \"ghost\"}}\n```\n",
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "target"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("could not be checked"),
+        "an errored bridge check must render as could-not-check: {stdout}"
+    );
+    assert!(
+        stdout.contains("ghost"),
+        "the could-not-check line must name its cause: {stdout}"
+    );
+    assert!(
+        !stdout.contains("could not reach"),
+        "an errored check must never render as a negative verdict: {stdout}"
+    );
+}
