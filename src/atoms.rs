@@ -633,18 +633,86 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
 /// witness had been satisfied. A declaration is not an assertion of success.
 pub fn prose_only(text: &str) -> String {
     let mut out = String::new();
-    let mut in_fence = false;
+    let mut open_ticks: Option<usize> = None;
     for line in text.lines() {
-        if line.trim_start().starts_with("```") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if !in_fence {
-            out.push_str(line);
-            out.push('\n');
+        let (ticks, info) = fence_line(line);
+        match open_ticks {
+            Some(open) => {
+                // Only a closing line ends a fence: at least as many backticks
+                // as opened it and nothing else (CommonMark). A shorter run, or
+                // a run with an info string, is body — which is what keeps a
+                // block quoted inside a four-backtick fence from toggling the
+                // state and leaking its innards into "prose".
+                if ticks >= open && info.is_empty() {
+                    open_ticks = None;
+                }
+            }
+            None => {
+                if ticks >= 3 {
+                    open_ticks = Some(ticks);
+                } else {
+                    out.push_str(line);
+                    out.push('\n');
+                }
+            }
         }
     }
     out.trim().to_string()
+}
+
+/// One line, read as a possible fence marker: the backtick-run length and
+/// whatever follows it, both after trimming.
+///
+/// The single point every fence decision goes through. It used to be three —
+/// `prose_only` toggled on any ```` ``` ````-prefixed line, [`extract_fenced`]
+/// located blocks with an infix `text.find`, and `BlockSchemas::extract`
+/// repeated the find — and the three disagreed in ways that were each their own
+/// defect: a `day-atom-ext` fence read as a malformed `day-atom` (the prefix
+/// match), a four-backtick quotation inverting the prose state (the toggle),
+/// and a body truncated at a backtick inside a JSON string (the infix close).
+fn fence_line(line: &str) -> (usize, &str) {
+    let trimmed = line.trim_start();
+    let ticks = trimmed.len() - trimmed.trim_start_matches('`').len();
+    (ticks, trimmed[ticks..].trim())
+}
+
+/// The body of the first fenced block whose info string is exactly `name`,
+/// as a slice of `text`. `None` when no such block is opened and closed.
+///
+/// Line-anchored on both ends: a fence opens on a line of three or more
+/// backticks followed by exactly `name` (an info string that merely *starts*
+/// with `name` is a different fence, not a malformed one of this kind), and
+/// closes on a line of at least as many backticks and nothing else. A fence
+/// with a different info string still tracks open/close, so a block quoted
+/// inside another fence is quotation, never extracted as the real thing.
+pub(crate) fn fenced_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
+    let mut pos = 0;
+    // (backtick count, body start offset, info string was `name`)
+    let mut open: Option<(usize, usize, bool)> = None;
+    for line in text.split_inclusive('\n') {
+        let line_start = pos;
+        pos += line.len();
+        let (ticks, info) = fence_line(line);
+        match open {
+            Some((open_ticks, body_start, is_match)) => {
+                if ticks >= open_ticks && info.is_empty() {
+                    if is_match {
+                        return Some(&text[body_start..line_start]);
+                    }
+                    open = None;
+                }
+            }
+            None => {
+                if ticks >= 3 {
+                    open = Some((ticks, pos, info == name));
+                }
+            }
+        }
+    }
+    // An opened fence that never closes is no block at all — the same answer
+    // the infix scanner gave, kept deliberately: day never writes one, so a
+    // dangling open is quotation or prose, not a claim to blame.
+    None
 }
 
 /// Pulls the first fenced block with the given info string out of a claim's
@@ -666,11 +734,8 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
     // the parameter makes that true by construction instead of by nine call
     // sites continuing to agree. Diagnostics naming the right cause is the whole
     // point of the error split.
-    let open = format!("```{}", T::FENCE);
-    let start = text.find(&open)? + open.len();
-    let rest = &text[start..];
-    let end = rest.find("```")?;
-    Some(parse_block::<T>(rest[..end].trim()))
+    let body = fenced_body(text, T::FENCE)?;
+    Some(parse_block::<T>(body.trim()))
 }
 
 /// The version gate, then the typed parse.
@@ -1291,6 +1356,65 @@ mod tests {
     fn malformed_block_is_distinguishable_from_absent_block() {
         let text = "```day-atom\n{not json}\n```";
         assert!(extract_interface(text).expect("block present").is_err());
+    }
+
+    #[test]
+    fn a_longer_fence_name_is_not_read_as_a_prefix_of_it() {
+        // `day-atom-ext` is a legal project-declared fence (RESERVED_FENCES is
+        // exact-match). The infix scanner located this block via
+        // `find("```day-atom")` and read it as a malformed `day-atom`, blaming
+        // a healthy claim for a fence it does not carry.
+        let text = "An extension block.\n\n```day-atom-ext\n{\"in\": [], \"out\": []}\n```\n";
+        assert!(extract_interface(text).is_none());
+    }
+
+    #[test]
+    fn a_block_quoted_inside_a_four_backtick_fence_stays_out_of_prose() {
+        // The quoting pattern docs/CONVENTIONS.md itself uses. The line-toggle
+        // scanner inverted its state on the nested opening fence and leaked the
+        // block's innards into prose — which feeds both rendered telos
+        // statements and the asserted-in-prose scan.
+        let text = "Quoting the convention:\n\n````\n```day-atom\n{\"in\": [\"design-doc\"]}\n```\n````\n\nAfter.";
+        let prose = prose_only(text);
+        assert!(prose.contains("Quoting the convention:"));
+        assert!(prose.contains("After."));
+        assert!(!prose.contains("design-doc"));
+    }
+
+    #[test]
+    fn a_block_quoted_inside_a_four_backtick_fence_is_not_extracted() {
+        // Quotation is not declaration: the infix scanner extracted the nested
+        // block as though the claim carried it.
+        let text = "Quoting:\n\n````\n```day-atom\n{\"in\": [], \"out\": []}\n```\n````\n";
+        assert!(extract_interface(text).is_none());
+    }
+
+    #[test]
+    fn a_backtick_run_inside_a_json_string_does_not_close_the_fence() {
+        // A closing fence is a line, not an infix: `rest.find("```")` truncated
+        // this body at the backticks inside the string and blamed the claim.
+        let text = "```day-atom\n{\"in\": [\"a ``` b\"], \"out\": [\"x\"]}\n```\n";
+        let interface = extract_interface(text)
+            .expect("block present")
+            .expect("a backtick inside a JSON string is body, not a close");
+        assert_eq!(interface.inputs, vec!["a ``` b"]);
+    }
+
+    #[test]
+    fn the_first_of_two_blocks_wins() {
+        // Pinned, not fixed: the infix scanner also took the first.
+        let text = "```day-atom\n{\"in\": [\"first\"], \"out\": [\"x\"]}\n```\n\n```day-atom\n{\"in\": [\"second\"], \"out\": [\"x\"]}\n```\n";
+        let interface = extract_interface(text).unwrap().unwrap();
+        assert_eq!(interface.inputs, vec!["first"]);
+    }
+
+    #[test]
+    fn an_unterminated_fence_is_no_block_at_all() {
+        // Pinned, not fixed: day never writes a dangling open, so one is
+        // quotation or prose — the infix scanner answered None and so does the
+        // line-anchored one.
+        let text = "```day-atom\n{\"in\": [], \"out\": []}\n";
+        assert!(extract_interface(text).is_none());
     }
 
     #[test]

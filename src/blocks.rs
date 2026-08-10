@@ -293,11 +293,11 @@ impl BlockSchemas {
         let spec = self.blocks.get(name)?;
         let fence = atoms::Fence::Owned(name.to_string());
 
-        let open = format!("```{name}");
-        let start = text.find(&open)? + open.len();
-        let rest = &text[start..];
-        let end = rest.find("```")?;
-        let body = rest[..end].trim();
+        // The same line-anchored scanner day's own blocks go through, so a
+        // declared name that extends another (`research-claim-v2` beside
+        // `research-claim`) locates its own fence rather than being read as a
+        // malformed instance of the shorter one.
+        let body = atoms::fenced_body(text, name)?.trim();
 
         Some(
             atoms::version_gate(body, fence.clone(), Self::SUPPORTED_VERSION).and_then(|value| {
@@ -758,6 +758,30 @@ mod tests {
         assert!(schemas
             .extract("x\n\n```something-else\n{}\n```\n", "something-else")
             .is_none());
+    }
+
+    /// Two declared names where one extends the other are two fences, not one
+    /// fence and its malformed shadow. The infix scanner located
+    /// `research-claim-v2` when asked for `research-claim` and reported the
+    /// project's healthy claim as carrying a malformed block of a type it does
+    /// not carry.
+    #[test]
+    fn a_declared_name_extending_another_is_not_read_as_the_shorter_one() {
+        let schemas = parse_block::<BlockSchemas>(
+            r#"{"research-claim":{"required":["medium"]},"research-claim-v2":{"required":["medium"]}}"#,
+        )
+        .unwrap();
+        let text = "x\n\n```research-claim-v2\n{\"medium\":\"anchor-verified\"}\n```\n";
+
+        assert!(
+            schemas.extract(text, "research-claim").is_none(),
+            "the longer fence is not an instance of the shorter name"
+        );
+        let ok = schemas
+            .extract(text, "research-claim-v2")
+            .expect("present under its own name")
+            .expect("valid");
+        assert_eq!(ok["medium"], "anchor-verified");
     }
 
     /// A spec this build cannot read costs that block type and nothing else,
