@@ -551,22 +551,29 @@ fn ac9_one_function_decides_whether_a_claim_may_be_injected() {
         "authorship resolution should live in one named function"
     );
 
-    // And nothing else compares an author. A second comparison anywhere is
-    // a second place the trust list would have to be added.
-    let comparisons = practice.matches("author").filter(|_| true).count();
-    let in_accepts = practice
+    // And nothing else touches an author: every `.author` field access in
+    // production code sits inside accepts()'s body, so a second place the
+    // trust list would have to be added fails here first. Counted over the
+    // production half (comments stripped, test module cut) — the previous
+    // form compared the whole file's count against a slice of itself, which
+    // is true of any file and asserted nothing; the 2026-08 review flagged
+    // it as decorative.
+    let code = production_half(&practice);
+    let accesses = code.matches(".author").count();
+    let in_accepts = code
         .split("fn accepts(")
         .nth(1)
         .and_then(|rest| rest.split("\n}").next())
-        .map(|body| body.matches("author").count())
+        .map(|body| body.matches(".author").count())
         .unwrap_or(0);
     assert!(
         in_accepts > 0,
         "accepts() should be the function that inspects the author"
     );
-    assert!(
-        comparisons >= in_accepts,
-        "sanity: accepts() is part of the file"
+    assert_eq!(
+        accesses, in_accepts,
+        "an author is inspected outside accepts() — that is a second place \
+         the trust list would have to be added (day#25/REQ-9)"
     );
 
     // The call site is single: the projection asks accepts(), and no other
