@@ -1094,7 +1094,16 @@ pub fn claims_matching(
         block_check.as_ref().map(|f| f as _);
 
     let mut found = 0usize;
-    let mut newest: Option<&str> = None;
+    // "Newest" is decided by `recorded_at`, never by iteration order.
+    // `show_all` returns the log grouped per subject, so "the last match seen"
+    // is the newest only within one subject and arbitrary across subjects —
+    // and the label affirmatively claimed recency the code never computed.
+    // day#112's tag verdict says "one of N" because tags have no ordering to
+    // compute; claims carry one, so here it is computed, and only a claim
+    // that is actually dated can win. When no match is dated, the label says
+    // "e.g." — the honest form day#112 chose — rather than "newest".
+    let mut newest: Option<(i64, &str)> = None;
+    let mut example: Option<&str> = None;
     let mut unchecked: Option<String> = None;
     for (subject, claim) in claims {
         // An instance day could not check must not read as one that did not
@@ -1144,7 +1153,12 @@ pub fn claims_matching(
             }
         }
         found += 1;
-        newest = Some(subject);
+        example.get_or_insert(subject);
+        if let Some(at) = claim.recorded_at {
+            if newest.is_none_or(|(best, _)| at > best) {
+                newest = Some((at, subject));
+            }
+        }
     }
 
     if let Some(why) = unchecked {
@@ -1157,11 +1171,13 @@ pub fn claims_matching(
 
     match found {
         0 => Verdict::Unsatisfied(format!("no live {}{window}", shape.describe())),
-        n => Verdict::Satisfied(format!(
-            "{n} {}{window}, newest on `{}`",
-            shape.describe(),
-            newest.unwrap_or_default()
-        )),
+        n => {
+            let instance = match newest {
+                Some((_, subject)) => format!("newest on `{subject}`"),
+                None => format!("e.g. on `{}` (one of {n})", example.unwrap_or_default()),
+            };
+            Verdict::Satisfied(format!("{n} {}{window}, {instance}", shape.describe()))
+        }
     }
 }
 

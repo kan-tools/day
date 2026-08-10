@@ -1108,3 +1108,71 @@ fn a_bridge_check_error_is_reported_as_could_not_check() {
         "an errored check must never render as a negative verdict: {stdout}"
     );
 }
+
+/// "newest on `X`" is decided by `recorded_at`, not by iteration order.
+///
+/// `show_all` groups the log per subject, so the last match iterated is the
+/// newest only within one subject. The earlier-listed subject here carries the
+/// LATER assessment; the label must name it.
+#[test]
+fn newest_on_names_the_claim_with_the_latest_recorded_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("t", "bafyreit", &["assessment"]),
+            witness_schema(
+                "bafyreiw",
+                r#"{"assessment":{"claim":{"kind":"Result","subject":"atom/*"}}}"#,
+            ),
+            // Listed first, recorded later.
+            common::result_claim("atom/one", "bafyreia", "Assessed one.", 200),
+            // Listed last, recorded earlier — iteration order would name this.
+            common::result_claim("atom/two", "bafyreib", "Assessed two.", 100),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("newest on `atom/one`"),
+        "the label must follow recorded_at, not iteration order: {stdout}"
+    );
+}
+
+/// A match set with no `recorded_at` at all has no newest to name, and the
+/// label must not claim one — "e.g." is the honest form, as day#112 chose
+/// for tags.
+#[test]
+fn an_undated_match_set_is_labelled_eg_not_newest() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut one = claim("atom/one", "bafyreia", "Assessed one.");
+    one.kind = "Result".to_string();
+    let mut two = claim("atom/two", "bafyreib", "Assessed two.");
+    two.kind = "Result".to_string();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("t", "bafyreit", &["assessment"]),
+            witness_schema(
+                "bafyreiw",
+                r#"{"assessment":{"claim":{"kind":"Result","subject":"atom/*"}}}"#,
+            ),
+            one,
+            two,
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("e.g. on `atom/one` (one of 2)"),
+        "undated matches must not be labelled newest: {stdout}"
+    );
+    assert!(
+        !stdout.contains("newest on"),
+        "no recorded_at means no recency claim: {stdout}"
+    );
+}
