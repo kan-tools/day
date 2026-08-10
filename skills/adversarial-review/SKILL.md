@@ -1,4 +1,5 @@
 ---
+name: adversarial-review
 allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(cargo *), Bash(npm *), Bash(make *), Bash(ls *), Bash(rg *), Read, Grep, Glob
 description: Hostile-by-default post-implementation audit against a named north star, ending in a hard verdict
 ---
@@ -17,14 +18,47 @@ description: Hostile-by-default post-implementation audit against a named north 
 > actual model: this reviews **what is already on disk or merged**, not a
 > pending subagent dispatch.
 
-## Context
+## Context — gather this yourself, and report what fails
 
-- Repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
-- Branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached HEAD or not a git repo"`
-- Diff vs. main: !`git diff --stat main...HEAD 2>/dev/null | tail -20 || echo "no main to compare against"`
-- Design docs: !`find .design -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
-- Telos subjects on record (INCLUDES RETRACTED — see Step 1): !`command -v kan >/dev/null 2>&1 || echo "kan not on PATH"; kan status 2>/dev/null | grep '^telos/' | cut -d: -f1 | sort -u | grep . || echo "none matched — if this repo HAS teloi, kan's status format has changed and this line is lying; verify with kan status before believing it"`
-- Orientation files: !`find . docs -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
+Run these before Step 0. **A read that fails is a finding, not an empty
+result**, and this section is instructions rather than pre-expanded output
+because of what happened here specifically. day#100: the telos line grepped a
+shape `kan status` no longer emits, matched nothing, its fallback printed
+`none`, and **every adversarial review in this repo silently measured against
+`CLAUDE.md` instead of nine live teloi**, exit zero throughout. A review whose
+north star is wrong is worse than no review, and nothing about that failure was
+visible from inside it.
+
+- **Repo root** — `git rev-parse --show-toplevel`.
+  **If this read fails:** you are not in a git repo, so there is no diff to
+  review. Say so and ask what to audit rather than reviewing the working
+  directory.
+- **Branch** — `git branch --show-current`.
+  **If this read fails:** or prints nothing, you are on a detached HEAD. Name
+  the commit range explicitly instead of assuming one.
+- **Diff under review** — `git diff --stat main...HEAD`.
+  **If this read fails:** there is no `main` to compare against. Say which range
+  you used instead and why; a review of the wrong range is worse than no review,
+  and this is the sentence that stops that being silent.
+- **Design docs** — `ls .design/*.md`.
+  **If this read fails:** there are no design docs, so Step 2's REQ/AC table has
+  nothing to audit against. Report that as the finding — unstated intent is
+  where drift enters — rather than inventing requirements.
+- **Teloi in play** — `kan show --all --json`, filtered to subjects beginning
+  `telos/`. Use the bulk verb: `kan show <subject>` is O(n²) in commit-anchored
+  claims and was measured at 141 s where `--all --json` takes 72 ms (kan#181).
+  **If this read fails:** kan is not on PATH or the log is unreadable. **Say
+  that, and do not fall through to the orientation-file branch in Step 1** — a
+  failed read and a project with no teloi are different states, and treating the
+  first as the second is day#100 exactly. An *empty* result is also not "no
+  teloi" until you have confirmed the log is readable and simply has none.
+- **Orientation files** — `ls *.md docs/*.md`.
+  **If this read fails:** say so; Step 1's fallback then has no source either,
+  and a review with no north star at all should stop and ask for one.
+
+The telos list you assemble is **subjects on record, not teloi in play** — it
+does not filter retracted ones, and day's own reader does
+(`src/hooks.rs:render_teloi`). Step 1 says how to narrow it.
 
 ## Your task
 
@@ -92,21 +126,23 @@ Do not paraphrase from memory and do not invent a north star.
 1. If any `telos/*` subjects exist in kan, read them (`kan show telos/<slug>`).
    Those are the north star. Quote them.
 
-   **The Context list above is subjects on record, not teloi in play.** It is a
-   grep over `kan status` and does not filter retracted ones; day's own reader
-   does (`src/hooks.rs:render_teloi`), and the two lists differ in this repo
+   **What you gathered is subjects on record, not teloi in play.** It does not
+   filter retracted ones; day's own reader does
+   (`src/hooks.rs:render_teloi`), and the two lists differ in this repo
    today. A retracted telos quoted as the north star is a review measuring
-   against a target the project abandoned — so confirm each one is live when you
-   `kan show` it, and treat the list as a starting set, not an answer.
+   against a target the project abandoned — so confirm each one is live, and
+   treat the list as a starting set, not an answer.
 2. If none exist, fall back to this repo's orientation docs (`CLAUDE.md`, an
    authoritative spec, the design doc's own Summary). Quote the specific lines.
 
-   Before you take that branch: **"none" here has two causes** — a project with
-   no teloi, and a grep whose pattern no longer matches kan's output. The second
-   is what happened to this line once already, and it reported `none` in a repo
-   with nine live teloi, silently, for as long as nobody checked. If the fallback
-   text in the Context block says the format may have changed, verify with
-   `kan status` before concluding there is no north star.
+   Before you take that branch: **"none" here has three causes** — a project with
+   no teloi, a log you could not read, and a filter that no longer matches what
+   kan emits. Only the first licenses the fallback. The third is what happened
+   here once already, and it reported `none` in a repo with nine live teloi,
+   silently, for as long as nobody checked; the second is the reason the Context
+   section tells you to report a failed kan read rather than continue past it.
+   Confirm the log is readable and genuinely empty of `telos/` subjects before
+   concluding there is no north star.
 3. State which telos or stated purpose **this particular work** was meant to
    serve. If you cannot find one, that is itself a finding: record it and say
    so — unstated purpose is where drift enters.

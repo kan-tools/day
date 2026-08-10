@@ -1,4 +1,5 @@
 ---
+name: wakeup
 allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(ls *), Bash(cargo *), Read, Grep, Glob
 description: Wake into a working thread by reading its recorded handoff and verifying what the handoff claims before trusting it
 ---
@@ -18,14 +19,39 @@ description: Wake into a working thread by reading its recorded handoff and veri
 > failure this repo has recorded twice. `day status` will say completion cannot
 > be checked for this atom, which is the honest reading.
 
-## Context
+## Context — gather this yourself, and report what fails
 
-- Repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
-- Branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached or not a git repo"`
-- HEAD: !`git log --oneline -1 2>/dev/null || echo "no commits"`
-- Working tree: !`git status --porcelain 2>/dev/null | head -20 | grep . || echo "clean"`
-- kan available: !`command -v kan >/dev/null 2>&1 && echo yes || echo "no — a handoff lives in kan, so without it this command has nothing to read"`
-- day available: !`command -v day >/dev/null 2>&1 && day doctor 2>&1 | tail -3 || echo "day not on PATH"`
+Run these before Phase 1. **A read that fails is a finding, not an empty
+result**, and this section is instructions rather than pre-expanded output
+precisely so that you get an exit code where the harness used to get a string.
+day#100 is the alternative: a telos read matched nothing, a fallback printed
+`none`, and every adversarial review in this repo measured against the wrong
+north star at exit zero for as long as nobody checked.
+
+- **Repo root** — `git rev-parse --show-toplevel`.
+  **If this read fails:** you are not in a git repo, so every Phase 2 check
+  against git is UNCHECKABLE rather than CONFIRMED. Say so and continue.
+- **Branch** — `git branch --show-current`.
+  **If this read fails:** or prints nothing, you are on a detached HEAD. Report
+  that rather than substituting the branch the handoff names.
+- **HEAD** — `git log --oneline -1`.
+  **If this read fails:** the repo has no commits, which makes the handoff's
+  `HEAD is at <sha>` claim UNCHECKABLE. Do not report it as CONFIRMED.
+- **Working tree** — `git status --porcelain`.
+  **If this read fails:** say so. Empty output means clean; a failed command
+  does not, and the two must not be reported the same way.
+- **kan** — `kan --version`.
+  **If this read fails:** kan is not on PATH, and a handoff lives in kan, so
+  this skill has nothing to read. Say that plainly and stop rather than
+  orienting from git alone and calling it a wakeup.
+- **day** — `day doctor`.
+  **If this read fails:** day is not on PATH or cannot reach kan. Phase 3 is
+  then UNCHECKABLE; report it as such rather than skipping it silently.
+
+Also note whether this is a git worktree (`git rev-parse --git-common-dir`
+differing from `--git-dir`). kan#197: a worktree gets its own `.kan/`, so kan
+reads there report "no subjects yet" against an empty log rather than failing —
+a success that means nothing. If you are in one, run kan from the main checkout.
 
 ## Your task
 

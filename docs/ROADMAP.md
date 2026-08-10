@@ -27,11 +27,11 @@ commands (`/design`, `/adversarial-review`)" against a tree holding twelve and
 
 That the correct numbers had to be derived twice while writing this paragraph
 is the argument. The first draft said "four" — counting the commands recalled
-from a session's context rather than running `ls commands/`, which lists
-`witness-interview.md` as well. A corrected number is a number that goes stale
+from a session's context rather than running `ls skills/`, which lists
+`witness-interview` as well. A corrected number is a number that goes stale
 on the next release and is wrong *silently*, which is the failure mode
 `CLAUDE.md` records in four separate places and which this sentence reproduced
-in the act of describing it. `day --help` and `ls commands/` derive it; nothing
+in the act of describing it. `day --help` and `ls skills/` derive it; nothing
 here should restate it.
 
 **`v0.11.0-beta.1` was tagged and never published**, and the reason belongs in

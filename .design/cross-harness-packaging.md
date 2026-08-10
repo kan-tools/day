@@ -82,33 +82,43 @@ feared in every respect but this one.
 
 ## Acceptance Criteria
 
-- [ ] AC-1: `plugin.json` validates against the published 1.0.0 plugin schema,
+- [x] AC-1: `plugin.json` validates against the published 1.0.0 plugin schema,
       and a test asserts every top-level key it carries is one of the ten the
       closed schema permits. (REQ-1)
-- [ ] AC-2: `mcp.json` validates against the published 1.0.0 MCP schema, and a
+- [x] AC-2: `mcp.json` validates against the published 1.0.0 MCP schema, and a
       test asserts it carries `$schema` and that its only other top-level key is
       `mcpServers`. A test also asserts `mcp.json` and `.mcp.json` describe the
       same server, so the two cannot drift. (REQ-2, REQ-9)
-- [ ] AC-3: a test enumerates `skills/` by reading the directory — never a
+- [x] AC-3: a test enumerates `skills/` by reading the directory — never a
       literal list — and asserts each child holds a `SKILL.md` whose frontmatter
       `name` equals the directory name. The count is asserted exactly and
       separately, because a count catches a parser that stopped matching and a
       derived list catches a member never added. (REQ-3)
-- [ ] AC-4: a source scan over every `SKILL.md` fails the build on any
+- [x] AC-4: a source scan over every `SKILL.md` fails the build on any
       occurrence of the `!`-backtick form, with no exemption hatch, and is
       demonstrated to fire by reintroducing one. (REQ-4)
-- [ ] AC-5: each converted atom's body names, for every read it instructs, what
-      to do when that read fails — and a test asserts the failure-handling
-      sentence is present for each. Verified against day#100 specifically: the
-      telos read must state that an empty result is to be reported, not treated
-      as "no teloi". (REQ-5)
+- [x] AC-5: each converted atom's **`## Context` section** names, for every read
+      it instructs there, what to do when that read fails — and a test asserts
+      the failure-handling clause is present for each, with the bullet count
+      asserted exactly. Verified against day#100 specifically: the telos read
+      must state that an unreadable log is to be reported, not treated as "no
+      teloi". (REQ-5)
+
+      **Narrowed to what is actually asserted.** This read "each converted atom's
+      body … for every read it instructs", which is broader than the test: the
+      Steps and Phases instruct further commands that nothing checks. It was
+      ticked against the broader reading, which is the requirement-that-fails-
+      nothing shape `CLAUDE.md` names. Two known limits, stated rather than
+      implied: the marker is a token, so `**If this read fails:** ignore it`
+      would pass; and only the Context section is scanned. Broadening it is
+      follow-up work, not a claim this milestone gets to make.
 - [ ] AC-6: `hooks/hooks.json` is reachable only from the reverse-domain
       directory, and `tests/plugin.rs`'s existing assertion that no hook emits a
       blocking decision still runs against it at its new path. (REQ-6)
-- [ ] AC-7: `claude plugin details` on the converted tree reports five skills,
+- [x] AC-7: `claude plugin details` on the converted tree reports five skills,
       two hooks and one MCP server — the same inventory it reports today — and
       the five names are unchanged. (REQ-7)
-- [ ] AC-8: a test asserts no atom name appears both under `commands/` and under
+- [x] AC-8: a test asserts no atom name appears both under `commands/` and under
       `skills/`, so the single-source rule cannot be broken by adding back a file
       rather than by editing one. (REQ-8)
 
@@ -122,20 +132,31 @@ intended shape — Agent Plugins explicitly "leaves installation, distribution,
 policy … to each client" and says nothing about discovery, so it does not replace
 the marketplace entry that makes `/plugin install day@kan-tools` work.
 
-The five atom bodies live in `commands/` today —
-`commands/design.md`, `commands/adversarial-review.md`, `commands/handoff.md`,
-`commands/wakeup.md`, `commands/witness-interview.md` — and move to
-`skills/<name>/SKILL.md`. Their frontmatter already carries `description` and
-`allowed-tools`; `allowed-tools` survives, since the Agent Skills specification
-defines it (as experimental) and Claude Code supports it. Only `name` is added.
+The five atom bodies lived one file each under the old `commands/` directory
+(design, adversarial-review, handoff, wakeup, witness-interview) and move to
+`skills/adversarial-review/SKILL.md`, `skills/design/SKILL.md`,
+`skills/handoff/SKILL.md`, `skills/wakeup/SKILL.md` and
+`skills/witness-interview/SKILL.md`. Their frontmatter already carries
+`description` and `allowed-tools`, and only `name` is added.
 
-**The `!` removal is the work.** Each body opens with a `## Context` block whose
-lines are `` !`git rev-parse --show-toplevel` ``, `` !`kan status` ``,
+**`allowed-tools` does not survive unchanged, and this document said it would.**
+The sentence above used to read "`allowed-tools` survives, since the Agent
+Skills specification defines it (as experimental) and Claude Code supports it".
+Both halves are true and the conclusion does not follow: the specification
+defines the field as a *space-separated* string (`Bash(git:*) Read`), and day's
+five bodies carry Claude Code's *comma-separated* form (`Bash(kan *), Read`), so
+a strict client splitting on spaces gets tokens matching no tool. That is
+`CLAUDE.md`'s named failure — a justification about a mechanism whose own
+specification says otherwise — caught by reading the spec rather than by
+reasoning about it. Resolved as RQ-5.
+
+**The `!` removal is the work.** Each body opened with a `## Context` block whose
+lines were `` !`git rev-parse --show-toplevel` ``, `` !`kan status` ``,
 `` !`day doctor` ``, and similar. Under REQ-4 these become instructions the agent
-executes. The `allowed-tools` grant already covers them — `commands/design.md`
-declares `Bash(kan *)`, `Bash(day *)`, `Bash(git *)` — so no permission surface
-widens, and the agent gets an exit code where the harness previously got a
-string.
+executes. The `allowed-tools` grant already covers them —
+`skills/design/SKILL.md` declares `Bash(kan *)`, `Bash(day *)`, `Bash(git *)` —
+so no permission surface widens, and the agent gets an exit code where the
+harness previously got a string.
 
 That difference is the whole argument. `src/probe.rs` states that a subject day
 cannot read is an error and never a silently empty result, and `CLAUDE.md`
@@ -195,10 +216,30 @@ channel for a Rust crate, which is a second release path that can drift from
   exported to every other harness. Removing it outright is also the correct fix
   on its own terms, since `!` assumes state that may not be present and cannot
   report that it was not.
+- RQ-5: Q: `allowed-tools` is comma-separated in day's bodies and space-separated
+  in the Agent Skills specification. Convert it, drop it, or keep the divergence?
+  **Keep the comma form.** REQ-7 (Claude Code behaviour unchanged) has an
+  acceptance criterion and conformance of this field has none: it is optional,
+  marked experimental, validated by no schema, and Agent Plugins defers the skill
+  format entirely — so nothing rejects a plugin over it. Dropping the field would
+  degrade Claude Code from pre-approved to prompting, which is a REQ-7 change for
+  no conformance gain. And the divergence fails safe: a strict client splitting on
+  spaces grants *fewer* tools and prompts, which is what
+  `telos/affordance-not-enforcement` would choose anyway. Pinned by
+  `the_allowed_tools_divergence_from_the_spec_is_deliberate` in
+  `tests/agent_plugins.rs`, so changing it is a decision rather than a tidy-up.
+
 - RQ-4: Q: Does this serve an existing telos? **No — it needs a new one.**
   `telos/v1.0`'s bar is that a non-author ships with day on a third project, and
   it says nothing about harnesses. Reading harness reach into it would widen a
   bar without re-checking it, which `CLAUDE.md` records as its own defect.
+
+  **The telos this produced is `telos/cross-harness-attained`**, declared with
+  the witness `cross-harness-trial` after a `/witness-interview` pass. It existed
+  three and a half hours before this document was last edited and was not named
+  here, so a reader could not find the north star from the document that argued
+  for it — the same findability failure the handoff thread records for RQ-4's own
+  supersession. Named now.
 
 ## Open Questions
 

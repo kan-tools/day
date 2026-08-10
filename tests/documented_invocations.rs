@@ -38,11 +38,11 @@ use std::process::Command;
 const PAGES: [&str; 7] = [
     "README.md",
     "docs/CONVENTIONS.md",
-    "commands/adversarial-review.md",
-    "commands/design.md",
-    "commands/handoff.md",
-    "commands/wakeup.md",
-    "commands/witness-interview.md",
+    "skills/adversarial-review/SKILL.md",
+    "skills/design/SKILL.md",
+    "skills/handoff/SKILL.md",
+    "skills/wakeup/SKILL.md",
+    "skills/witness-interview/SKILL.md",
 ];
 
 const FENCES: [&str; 4] = ["```bash", "```console", "```sh", "```shell"];
@@ -256,7 +256,7 @@ fn every_documented_day_invocation_parses_and_runs() {
     // counted. That the four ARE run is the point: commands telling a session
     // to read the record are commands whose read verbs had better work.
     //
-    // The five skips include `commands/witness-interview.md`'s two, which
+    // The five skips include `skills/witness-interview/SKILL.md`'s two, which
     // is honest rather than disappointing: both of its `day` examples take the
     // telos slug being interviewed, so both are genuinely templates. The page
     // is in `PAGES` so a *runnable* example added to it later is executed
@@ -307,9 +307,26 @@ fn every_documented_day_invocation_parses_and_runs() {
 fn the_corpus_covers_every_page_that_carries_a_shell_block() {
     let mut found: Vec<String> = Vec::new();
     let mut candidates = vec![repo_root().join("README.md"), repo_root().join("CLAUDE.md")];
-    for dir in ["docs", "commands"] {
-        for entry in std::fs::read_dir(repo_root().join(dir)).unwrap().flatten() {
-            candidates.push(entry.path());
+    for entry in std::fs::read_dir(repo_root().join("docs"))
+        .expect("docs/ should exist")
+        .flatten()
+    {
+        candidates.push(entry.path());
+    }
+    // The atom bodies sit one level deeper than they used to: the Agent Plugins
+    // conversion moved `commands/<name>.md` to `skills/<name>/SKILL.md`, and
+    // §7.1 fixes that depth — a client treats each immediate child of `skills/`
+    // holding a `SKILL.md` as one skill and MUST NOT recurse further. Walking
+    // exactly that far here keeps this list derived rather than literal, which
+    // is the whole point of the test: a page that quietly drops out is coverage
+    // lost with no error.
+    for entry in std::fs::read_dir(repo_root().join("skills"))
+        .expect("skills/ should exist — it is what the plugin ships")
+        .flatten()
+    {
+        let body = entry.path().join("SKILL.md");
+        if body.is_file() {
+            candidates.push(body);
         }
     }
     for path in candidates {

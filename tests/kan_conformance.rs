@@ -454,7 +454,7 @@ fn conformance_bulk_read_is_available_and_agrees_with_per_subject_reads() {
 /// `|| echo "none"` fired, and the command told every reviewer this repo had
 /// **no teloi** while eleven telos subjects sat in the log.
 ///
-/// Step 1 of that command calls the teloi "the north star" and falls back to
+/// Step 1 of that skill calls the teloi "the north star" and falls back to
 /// orientation docs when there are none, so the effect was not cosmetic: every
 /// review run here silently measured against `CLAUDE.md` instead of against the
 /// teloi, and reported nothing unusual because the fallback is a legitimate
@@ -464,12 +464,22 @@ fn conformance_bulk_read_is_available_and_agrees_with_per_subject_reads() {
 /// check — a stub prints whatever day expects. Hence here, with the real binary,
 /// skipping when kan is absent.
 ///
+/// **Re-pointed by the Agent Plugins conversion, not retired.** The skill no
+/// longer greps `kan status`; REQ-4 removed the pre-executed line, and the body
+/// now instructs `kan show --all --json` filtered to subjects beginning
+/// `telos/` (kan#181: the per-subject verb is O(n²) in commit-anchored claims).
+/// The *dependency* is unchanged — day still relies on kan emitting telos
+/// subjects it can find by prefix — so the cell follows the mechanism rather
+/// than being deleted with the string it used to match. Deleting it would have
+/// been the easy read of a green suite: the defect it guards is a filter that
+/// silently stops matching, and that is exactly as available in JSON as in text.
+///
 /// Scoped deliberately to day's own requirement, per `CLAUDE.md`: it asserts
-/// that the pattern day ships finds a telos day just wrote. It says nothing
-/// about what kan promises about `status` formatting, which is kan's fact to
-/// state and would belong in a test named for it.
+/// that the read day ships finds a telos day just wrote. It says nothing about
+/// what kan promises about `--all --json`'s schema, which is kan's fact to state
+/// and would belong in a test named for it.
 #[test]
-fn conformance_the_review_commands_telos_pattern_matches_real_kan_status() {
+fn conformance_the_review_skills_telos_read_matches_real_kan_output() {
     let Some(kan) = real_kan() else {
         eprintln!("skipping: kan is not installed (this test is advisory, per CLAUDE.md)");
         return;
@@ -491,44 +501,68 @@ fn conformance_the_review_commands_telos_pattern_matches_real_kan_status() {
         String::from_utf8_lossy(&declared.stderr)
     );
 
-    let status = Command::new(kan)
-        .arg("status")
+    // The read the shipped skill actually instructs. Extracted from the file
+    // rather than retyped, so the test cannot pass against a read the skill
+    // does not ship — the exact gap that let the stale pattern survive.
+    let body = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("skills/adversarial-review/SKILL.md"),
+    )
+    .expect("the review skill must be readable");
+    let context = body
+        .split_once("## Context")
+        .expect("the review skill must still carry a Context section")
+        .1
+        .split("\n## ")
+        .next()
+        .unwrap();
+    assert!(
+        context.contains("kan show --all --json"),
+        "the review skill's Context no longer instructs the bulk read. If it \
+         moved to another verb, re-point this cell at that verb — do not delete \
+         it, because the failure it guards (a telos filter that silently stops \
+         matching) survives any change of mechanism."
+    );
+    assert!(
+        context.contains("telos/"),
+        "the review skill's Context no longer names the `telos/` prefix it \
+         filters on"
+    );
+
+    let shown = Command::new(kan)
+        .args(["show", "--all", "--json"])
         .current_dir(repo.path())
         .output()
-        .expect("kan status should run");
-    assert!(status.status.success(), "kan status failed");
-    let text = String::from_utf8_lossy(&status.stdout);
-
-    // The pattern the shipped command actually uses. Extracted from the file
-    // rather than retyped, so the test cannot pass against a pattern the
-    // command does not ship — the exact gap that let the stale one survive.
-    let cmd = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("commands/adversarial-review.md"),
-    )
-    .expect("the review command must be readable");
-    let line = cmd
-        .lines()
-        .find(|l| l.contains("Telos subjects on record"))
-        .expect("the review command must still carry a telos line in its Context block");
+        .expect("kan show --all --json should run");
     assert!(
-        line.contains("grep '^telos/'"),
-        "the telos line no longer greps `^telos/`; if kan's format changed, this \
-         test should have failed on the match below instead — line was: {line}"
+        shown.status.success(),
+        "kan show --all --json failed: {}",
+        String::from_utf8_lossy(&shown.stderr)
     );
+    let text = String::from_utf8_lossy(&shown.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&text).expect("kan show --all --json must emit valid JSON");
 
-    let matched: Vec<&str> = text.lines().filter(|l| l.starts_with("telos/")).collect();
+    // The filter the skill describes, applied the way a reading agent would.
+    let matched: Vec<String> = parsed["subjects"]
+        .as_array()
+        .expect("`subjects` must be an array — day reads the log through it")
+        .iter()
+        .filter_map(|s| s["subject"].as_str())
+        .filter(|s| s.starts_with("telos/"))
+        .map(|s| s.to_string())
+        .collect();
+
     assert!(
         !matched.is_empty(),
-        "the review command's telos pattern matched NOTHING against real kan \
-         status output, so `/adversarial-review` would report `none` for a repo \
-         that has teloi — which is day#99's second defect recurring.\n\
-         kan status was:\n{text}"
+        "the review skill's telos filter matched NOTHING against real \
+         `kan show --all --json` output, so `/adversarial-review` would report \
+         `none` for a repo that has teloi — which is day#99's second defect \
+         recurring through a new mechanism.\n\
+         kan emitted:\n{text}"
     );
     assert!(
-        matched
-            .iter()
-            .any(|l| l.starts_with("telos/conformance-probe")),
-        "the pattern matched {} line(s) but not the telos just written; \
+        matched.iter().any(|s| s == "telos/conformance-probe"),
+        "the filter matched {} subject(s) but not the telos just written; \
          matched: {matched:?}",
         matched.len()
     );

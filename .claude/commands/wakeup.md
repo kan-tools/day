@@ -1,1 +1,0 @@
-../../commands/wakeup.md

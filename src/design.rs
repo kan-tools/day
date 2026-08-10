@@ -72,7 +72,7 @@ impl Document {
     /// [`Self::prose`] already excludes fenced blocks, and its comment states
     /// the intent — "a doc explaining `TODO` markers is not itself
     /// unfinished". Inline spans are the case that intent missed, and it bit:
-    /// `commands/design.md` tells an author to end every open question with
+    /// `skills/design/SKILL.md` tells an author to end every open question with
     /// "remove the `<!-- OPEN -->` marker", so each genuine open question
     /// contributed *two* matches — its real `<!-- OPEN: Qn -->` opener and
     /// the literal marker quoted in the instruction. A doc with two open
@@ -1940,7 +1940,7 @@ mod tests {
         assert!(report.is_clean(), "{}", report.render());
     }
 
-    /// Uses the block shape `commands/design.md` actually emits, including
+    /// Uses the block shape `skills/design/SKILL.md` actually emits, including
     /// its closing instruction line. The previous version of this test built
     /// a block *without* that line, so it asserted on text the command never
     /// produces — and the miscount below survived it.

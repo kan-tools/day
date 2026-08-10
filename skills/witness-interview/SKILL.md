@@ -1,4 +1,5 @@
 ---
+name: witness-interview
 allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(ls *), Read, Grep, Glob
 description: Establish, with a human, what would evidence a telos that declares no witnesses
 ---
@@ -27,12 +28,38 @@ description: Establish, with a human, what would evidence a telos that declares 
 > taught. A witness is a claim about what would count as evidence, and that is
 > not a thing to infer from a slug.
 
-## Context
+## Context — gather this yourself, and report what fails
 
-- Repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
-- Declared teloi: !`command -v kan >/dev/null 2>&1 && kan status 2>/dev/null | grep 'telos/' || echo "none, or kan unavailable"`
-- Witness probes declared: !`command -v kan >/dev/null 2>&1 && kan show schema/witness 2>/dev/null | tail -30 | grep . || echo "none declared, or kan unavailable"`
-- day process state: !`command -v day >/dev/null 2>&1 && { day doctor 2>&1 | grep . || echo "day produced no output"; } || echo "day not on PATH"`
+Run these before Phase 1. **A read that fails is a finding, not an empty
+result**, and this section is instructions rather than pre-expanded output
+precisely so that you get an exit code where the harness used to get a string.
+day#100 is the alternative: a telos read matched nothing, a fallback printed
+`none`, and every review in this repo measured against the wrong north star at
+exit zero for as long as nobody checked.
+
+The stakes are specific here. "This telos declares no witnesses" is the trigger
+for the whole interview, and a failed read produces exactly that appearance — so
+an unreported failure does not merely lose information, it manufactures the
+condition this skill acts on.
+
+- **Repo root** — `git rev-parse --show-toplevel`.
+  **If this read fails:** you are not in a git repo. Say so; a witness that
+  probes paths or tags has nothing to bind to.
+- **Declared teloi** — `kan show --all --json`, filtered to subjects beginning
+  `telos/`. Use the bulk verb: `kan show <subject>` is O(n²) in commit-anchored
+  claims and was measured at 141 s where `--all --json` takes 72 ms (kan#181).
+  **If this read fails:** stop and say so. Do **not** proceed as though the
+  project has no teloi, and do not offer to declare one — you would be
+  interviewing about a telos set you never read.
+- **Witness probes declared** — the `schema/witness` subject in that same
+  bulk read.
+  **If this read fails:** say so. An *absent* `schema/witness` is a real and
+  common state (the project has declared no probes yet) and Phase 3 handles it;
+  an unreadable one is not, and must not be reported as the same thing.
+- **day process state** — `day doctor`.
+  **If this read fails:** day is not on PATH or cannot reach kan. Phases 4 and 5
+  both invoke `day`, so say plainly that the interview can be conducted and its
+  result cannot be declared or confirmed.
 
 ## Your task
 

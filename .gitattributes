@@ -1,0 +1,35 @@
+# A SHELL SCRIPT MUST ARRIVE WITH LF ENDINGS, OR IT DOES NOT RUN.
+#
+# `hooks/bootstrap-check.sh` is `#!/bin/sh` and `hooks/hooks.json` invokes it
+# directly, relying on that shebang. Git for Windows installs with
+# `core.autocrlf=true` by default -- the installer's `CRLFAlways` option, which
+# `actions/checkout` does not override -- so without this file the script is
+# checked out with CRLF endings and the kernel reads the interpreter as
+# `/bin/sh\r`. Measured, not assumed: `./hooks/bootstrap-check.sh` on a
+# CRLF-converted copy fails with `bad interpreter: No such file or directory`,
+# exit 126 under Git Bash and 127 elsewhere.
+#
+# That is a defect for a real Windows user, not only for CI: the plugin installs,
+# the hook is registered, and the one check whose whole subject is telling a
+# human that day's binaries are missing cannot execute to say so. It is also
+# strictly worse than the "on Windows it likely does nothing, silently" worry
+# that three handoffs recorded -- it does not do nothing, it fails in a way whose
+# message points at the interpreter rather than at the line endings.
+#
+# `eol=lf` rather than `-text`: these files ARE text, and marking them binary
+# would lose diffs and merges to fix a checkout artifact.
+*.sh text eol=lf
+
+# The hook payload is newline-delimited JSON on stdout and is parsed by the
+# harness; a stray CR inside a `systemMessage` would travel into the model's
+# context. Same reasoning for the manifests, which clients parse.
+*.json text eol=lf
+
+# Rust, and the Markdown the atoms ship as: `tests/documented_invocations.rs`
+# EXECUTES the shell blocks in `README.md`, `docs/CONVENTIONS.md` and
+# `skills/*/SKILL.md`, so a CRLF here is a CRLF in a command line.
+*.rs text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
