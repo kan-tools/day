@@ -310,6 +310,17 @@ impl ClaimShape {
     /// this applies it. Production callers use this form so the conjunct cannot
     /// be forgotten at a call site — the failure `CLAUDE.md` records three
     /// times over.
+    /// The subject predicate alone — the one conjunct that needs no block
+    /// read and no identity, so `claims_matching` can apply it before the
+    /// version-skew scan. One body, shared with [`Self::matches_with`], so
+    /// the pre-filter and the evaluator cannot drift.
+    fn subject_admits(&self, subject: &str) -> bool {
+        match &self.subject {
+            Some(scope) => subject_matches(scope, subject),
+            None => true,
+        }
+    }
+
     fn matches_with(
         &self,
         subject: &str,
@@ -329,10 +340,8 @@ impl ClaimShape {
         // hold, an absent one is vacuously satisfied. Written as a chain of
         // early returns rather than a single expression so a new dimension is
         // an insertion, not a rewrite.
-        if let Some(scope) = &self.subject {
-            if !subject_matches(scope, subject) {
-                return false;
-            }
+        if !self.subject_admits(subject) {
+            return false;
         }
         // A claim carrying no text (a retraction, a relation) cannot satisfy
         // a text predicate, so a narrowed probe never matches one.
@@ -1094,9 +1103,36 @@ pub fn claims_matching(
         block_check.as_ref().map(|f| f as _);
 
     let mut found = 0usize;
-    let mut newest: Option<&str> = None;
+    // "Newest" is decided by `recorded_at`, never by iteration order.
+    // `show_all` returns the log grouped per subject, so "the last match seen"
+    // is the newest only within one subject and arbitrary across subjects —
+    // and the label affirmatively claimed recency the code never computed.
+    // day#112's tag verdict says "one of N" because tags have no ordering to
+    // compute; claims carry one, so here it is computed, and only a claim
+    // that is actually dated can win. When no match is dated, the label says
+    // "e.g." — the honest form day#112 chose — rather than "newest".
+    let mut newest: Option<(i64, &str)> = None;
+    let mut example: Option<&str> = None;
     let mut unchecked: Option<String> = None;
     for (subject, claim) in claims {
+        // The subject predicates need no block read, so a claim they exclude
+        // can never match this witness — and must not be able to poison it
+        // either. Before this ran first, a version-skewed block on an
+        // unrelated subject (one newer-day claim anywhere in a shared log)
+        // failed every block-predicated witness scoped `subject: "atom/*"`,
+        // which is broader than the honesty rule requires: the read is
+        // partial only with respect to claims the probe could match.
+        // `subject_admits` is the same predicate `matches_with` applies, so
+        // this pre-filter cannot drift from the evaluator.
+        //
+        // Equality, deliberately, and BEFORE the shape's own predicates so
+        // the shape's `subject` glob still applies as an independent conjunct.
+        if restrict_to_subject.is_some_and(|only| subject != only) {
+            continue;
+        }
+        if !shape.subject_admits(subject) {
+            continue;
+        }
         // An instance day could not check must not read as one that did not
         // match: it is reported, and the whole verdict becomes Error, because a
         // witness answered from a partial read is the defect beta.2 exists to
@@ -1114,11 +1150,6 @@ pub fn claims_matching(
                 });
                 unchecked.get_or_insert(why);
             }
-        }
-        // Equality, deliberately, and BEFORE the shape's own predicates so the
-        // shape's `subject` glob still applies as an independent conjunct.
-        if restrict_to_subject.is_some_and(|only| subject != only) {
-            continue;
         }
         if !shape.matches_with(subject, claim, block_check, exclude_author.as_deref()) {
             continue;
@@ -1144,7 +1175,12 @@ pub fn claims_matching(
             }
         }
         found += 1;
-        newest = Some(subject);
+        example.get_or_insert(subject);
+        if let Some(at) = claim.recorded_at {
+            if newest.is_none_or(|(best, _)| at > best) {
+                newest = Some((at, subject));
+            }
+        }
     }
 
     if let Some(why) = unchecked {
@@ -1157,11 +1193,13 @@ pub fn claims_matching(
 
     match found {
         0 => Verdict::Unsatisfied(format!("no live {}{window}", shape.describe())),
-        n => Verdict::Satisfied(format!(
-            "{n} {}{window}, newest on `{}`",
-            shape.describe(),
-            newest.unwrap_or_default()
-        )),
+        n => {
+            let instance = match newest {
+                Some((_, subject)) => format!("newest on `{subject}`"),
+                None => format!("e.g. on `{}` (one of {n})", example.unwrap_or_default()),
+            };
+            Verdict::Satisfied(format!("{n} {}{window}, {instance}", shape.describe()))
+        }
     }
 }
 

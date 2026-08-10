@@ -197,8 +197,10 @@ pub enum TelosAction {
         witness_any: Vec<Vec<String>>,
         /// Narrow which instances of a witness count, as `<witness>=<pattern>`
         /// (repeatable). The project's schema/witness map still decides which
-        /// kind of probe runs; this only tightens its pattern, so `v0.5*`
-        /// names a narrower class rather than one artifact.
+        /// kind of probe runs; this only tightens its pattern, so `'v0.5*'`
+        /// names a narrower class rather than one artifact. Quote the
+        /// argument: an unquoted `*` is expanded by the shell first, and zsh
+        /// errors on a failed match rather than passing it through (day#83).
         #[arg(long = "scope", value_parser = parse_scope)]
         scopes: Vec<(String, String)>,
     },
@@ -678,10 +680,24 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             println!("recorded verdict on `{subject}` ({cid})");
             Ok(ExitCode::SUCCESS)
         }
-        Command::Next { atom } => {
-            print!("{}", crate::record::next(&client, &atom)?);
-            Ok(ExitCode::SUCCESS)
-        }
+        Command::Next { atom } => match crate::record::next(&client, &atom) {
+            Ok(out) => {
+                print!("{out}");
+                Ok(ExitCode::SUCCESS)
+            }
+            // A typo'd atom gets told what IS declared — the reader's next act
+            // is to find the right name, and day holds the list (`telos/v1.0`:
+            // error messages that teach). Enriched here rather than in
+            // `record::next`'s own error because the list is presentation, and
+            // the exit path mirrors main's: same prefix, same code.
+            Err(e @ crate::record::Error::NoSuchAtom(_)) => {
+                let (atoms, _) = crate::atoms::load(&client)?;
+                let declared: Vec<String> = atoms.iter().map(|a| a.name.clone()).collect();
+                eprintln!("error: {e}{}", crate::telos::list_known("atoms", &declared));
+                Ok(ExitCode::from(EXIT_UNAVAILABLE))
+            }
+            Err(e) => Err(e.into()),
+        },
         // Display only, and always exit zero: status *reports* where the work
         // sits (AC-11): `day assess atom` is the gate that exits non-zero, so
         // a status finding never fails a script that merely asked where it is.
@@ -797,7 +813,20 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             };
 
             let slugs = match (all, slug) {
-                (true, _) => crate::telos::all_slugs(&client)?,
+                (true, _) => {
+                    let sweep = crate::telos::all_slugs(&client)?;
+                    if sweep.retracted > 0 {
+                        // Said once, up front — the hook's telos list already
+                        // excludes these, and the two surfaces disagreeing
+                        // about how many teloi exist was itself a finding.
+                        println!(
+                            "{} fully retracted telos subject(s) not assessed — nothing live \
+                             declares them. Name one explicitly to inspect it.",
+                            sweep.retracted
+                        );
+                    }
+                    sweep.slugs
+                }
                 (false, Some(slug)) => vec![slug],
                 (false, None) => {
                     eprintln!("error: name a telos, or pass --all to assess every declared one");
@@ -807,13 +836,23 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
 
             let mut clean = true;
             let mut unavailable = false;
+            let mut rendered = 0usize;
             for (i, slug) in slugs.iter().enumerate() {
                 if i > 0 {
                     println!("{}", "-".repeat(60));
                 }
                 match crate::telos::assess(&client, &git, slug, auth) {
                     Ok(report) => {
-                        print!("{}", report.render());
+                        // In a sweep the run-constant coda prints once at the
+                        // end; a single assessment keeps it attached. Fourteen
+                        // identical copies per run trained exactly the
+                        // skimming the coda warns against.
+                        if all {
+                            print!("{}", report.render_bare());
+                        } else {
+                            print!("{}", report.render());
+                        }
+                        rendered += 1;
                         clean &= report.is_clean();
                     }
                     // A named telos that cannot be assessed is a failed
@@ -832,6 +871,12 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                         unavailable = true;
                     }
                 }
+            }
+            // Once, and only when at least one assessment rendered — the coda
+            // reads "the evidence above", and above an all-errors sweep there
+            // is none.
+            if all && rendered > 0 {
+                print!("{}", crate::telos::Report::coda());
             }
             // "Could not check" outranks "checked and found something": a
             // check that never ran is the weaker guarantee of the two.

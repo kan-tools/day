@@ -1066,3 +1066,262 @@ fn an_unresolvable_authorship_exclusion_is_reported_rather_than_ignored() {
         "and must not report the witness satisfied: {stdout}"
     );
 }
+
+// day#141's test lives in tests/fallbacks.rs as `fallback_bridge_check_errored`
+// — the could-not-check rendering is a registered degrade path, and the
+// fallback registry is where a test that reaches one is required to live.
+
+/// "newest on `X`" is decided by `recorded_at`, not by iteration order.
+///
+/// `show_all` groups the log per subject, so the last match iterated is the
+/// newest only within one subject. The earlier-listed subject here carries the
+/// LATER assessment; the label must name it.
+#[test]
+fn newest_on_names_the_claim_with_the_latest_recorded_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("t", "bafyreit", &["assessment"]),
+            witness_schema(
+                "bafyreiw",
+                r#"{"assessment":{"claim":{"kind":"Result","subject":"atom/*"}}}"#,
+            ),
+            // Listed first, recorded later.
+            common::result_claim("atom/one", "bafyreia", "Assessed one.", 200),
+            // Listed last, recorded earlier — iteration order would name this.
+            common::result_claim("atom/two", "bafyreib", "Assessed two.", 100),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("newest on `atom/one`"),
+        "the label must follow recorded_at, not iteration order: {stdout}"
+    );
+}
+
+/// A match set with no `recorded_at` at all has no newest to name, and the
+/// label must not claim one — "e.g." is the honest form, as day#112 chose
+/// for tags.
+#[test]
+fn an_undated_match_set_is_labelled_eg_not_newest() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut one = claim("atom/one", "bafyreia", "Assessed one.");
+    one.kind = "Result".to_string();
+    let mut two = claim("atom/two", "bafyreib", "Assessed two.");
+    two.kind = "Result".to_string();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("t", "bafyreit", &["assessment"]),
+            witness_schema(
+                "bafyreiw",
+                r#"{"assessment":{"claim":{"kind":"Result","subject":"atom/*"}}}"#,
+            ),
+            one,
+            two,
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("e.g. on `atom/one` (one of 2)"),
+        "undated matches must not be labelled newest: {stdout}"
+    );
+    assert!(
+        !stdout.contains("newest on"),
+        "no recorded_at means no recency claim: {stdout}"
+    );
+}
+
+/// A fully retracted telos is not swept by `--all` — and the exclusion is
+/// counted rather than silent.
+///
+/// Found on day's own log: two scratch teloi, correctly retracted after a
+/// verification run, still drew a full assessment block each — including a
+/// `/witness-interview` suggestion and a record command citing the
+/// *retraction's* CID. The session hook already excluded them, so the two
+/// surfaces disagreed about how many teloi exist.
+#[test]
+fn a_fully_retracted_telos_is_excluded_from_the_all_sweep_and_counted() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut retraction = claim("telos/gone", "bafyreir", "");
+    retraction.kind = "Retraction".to_string();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("alive", "bafyreit", &["design-doc"]),
+            witness_schema("bafyreiw", r#"{"design-doc":{"path":".design/*.md"}}"#),
+            retraction,
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "--all"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("telos/alive"),
+        "the live telos is still assessed: {stdout}"
+    );
+    assert!(
+        !stdout.contains("telos/gone"),
+        "a retracted telos must not draw an assessment block: {stdout}"
+    );
+    assert!(
+        stdout.contains("1 fully retracted telos subject(s) not assessed"),
+        "the exclusion is counted, never silent: {stdout}"
+    );
+
+    // Naming it explicitly still works — exclusion is about the sweep, not
+    // about the subject becoming unaddressable.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "gone"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("telos/gone"),
+        "an explicitly named retracted telos is still inspectable: {stdout}"
+    );
+}
+
+/// A version-skewed block instance OUTSIDE a probe's subject scope cannot
+/// poison the witness.
+///
+/// The skew scan ran before the subject predicates, so one newer-day claim
+/// anywhere in a shared log took every block-predicated witness to [ERROR] —
+/// including witnesses whose `subject` glob, which needs no block read,
+/// already excluded that claim from ever matching. The read is partial only
+/// with respect to claims the probe could match. A skewed instance IN scope
+/// still errors the witness, which is the beta.2 guarantee unchanged.
+#[test]
+fn a_skewed_block_outside_the_subject_scope_does_not_poison_the_witness() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("t", "bafyreit", &["finding"]),
+            claim(
+                "schema/blocks",
+                "bafyreib",
+                "Blocks.\n\n```day-blocks\n{\"research-claim\": {\"required\": [\"medium\"], \
+                 \"optional\": []}}\n```\n",
+            ),
+            witness_schema(
+                "bafyreiw",
+                r#"{"finding":{"claim":{"kind":"Observation","subject":"notes/*","block":"research-claim"}}}"#,
+            ),
+            claim(
+                "notes/a",
+                "bafyreia",
+                "In scope.\n\n```research-claim\n{\"medium\": \"anchor\"}\n```\n",
+            ),
+            // Out of scope for the witness, and declaring a version no day
+            // reads. Before the fix this alone turned the verdict to ERROR.
+            claim(
+                "other/b",
+                "bafyreio",
+                "Out of scope.\n\n```research-claim\n{\"_version\": 99, \"medium\": \"x\"}\n```\n",
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[MATERIAL]"),
+        "the in-scope valid instance satisfies the witness: {stdout}"
+    );
+    assert!(
+        !stdout.contains("[ERROR]"),
+        "an out-of-scope skewed instance must not poison the witness: {stdout}"
+    );
+}
+
+/// A not-found error names what IS declared (`telos/v1.0`: error messages
+/// that teach). The reader's next act after a typo is to find the right slug,
+/// and day already holds the list.
+#[test]
+fn a_missing_slug_error_names_what_is_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("alive", "bafyreit", &["design-doc"]),
+            claim(
+                "atom/design",
+                "bafyreia",
+                "An atom.\n\n```day-atom\n{\"in\": [\"intent\"], \"out\": [\"design-doc\"]}\n```\n",
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    // The assess loop reports a failed slug on stdout and keeps sweeping, so
+    // that is where its error text lives; `next` errors through main, on
+    // stderr. Both exit 2 — could-not-check, not findings.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "nope"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(2), "{stdout}");
+    assert!(
+        stdout.contains("Declared teloi: alive"),
+        "a telos typo must name the declared teloi: {stdout}"
+    );
+
+    let out = day(dir.path(), &kan, &git, &["next", "nope"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("Declared atoms: design"),
+        "an atom typo must name the declared atoms: {stderr}"
+    );
+
+    let out = day(dir.path(), &kan, &git, &["assess", "atom", "nope"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Declared atoms: design"),
+        "assess atom teaches the same way: {stderr}"
+    );
+}
+
+/// In an `--all` sweep the run-constant coda prints once, not per telos.
+///
+/// The per-telos record command (whose `--cites` differs each time) stays per
+/// telos; the exit-code and single-frame pedagogy — identical every time —
+/// printed fourteen copies on day's own log, which trains exactly the
+/// skimming it warns against. A single assessment keeps the coda attached.
+#[test]
+fn the_all_sweep_prints_the_run_constant_coda_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("first", "bafyreia", &["design-doc"]),
+            telos_claim("second", "bafyreib", &["design-doc"]),
+            witness_schema("bafyreiw", r#"{"design-doc":{"path":".design/*.md"}}"#),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "--all"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let codas = stdout.matches("exit code is a reading").count();
+    assert_eq!(
+        codas, 1,
+        "the coda must print exactly once per run: {stdout}"
+    );
+    let record = stdout.matches("To record it:").count();
+    assert_eq!(record, 2, "the record command stays per telos: {stdout}");
+
+    // A single assessment keeps the coda attached.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "first"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        stdout.matches("exit code is a reading").count(),
+        1,
+        "single-telos output is unchanged: {stdout}"
+    );
+}
