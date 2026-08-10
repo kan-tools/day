@@ -264,11 +264,17 @@ printf 'measured row: %s\t%s (not yet committed)\n' "$tag" "$outcome"
 # thing they had just tried to fix. Correct at two of three sites is how it got
 # missed; one command that is right everywhere is the fix.
 undo_row() {
-  printf '\nThe measured row was appended but NOT committed. Discard it with:\n' >&2
-  printf '    git restore --staged --worktree %s\n' "$expectations" >&2
-  # The corpus row is a NEW file, which `git restore` does not remove.
-  if [ -f "tests/fixtures/block-corpus/$tag.jsonl" ]; then
-    printf '    rm -f tests/fixtures/block-corpus/%s.jsonl\n' "$tag" >&2
+  printf '\nThe measured row(s) were appended but NOT committed. Discard them with:\n' >&2
+  # ONE command, still — tests/harness_honesty.rs runs exactly what is
+  # printed and asserts the tree comes back clean, and a human under a failed
+  # release does not reliably run a second line. Naming the corpus row in the
+  # same `git restore --staged --worktree` both unstages the new file and
+  # removes its worktree copy (measured, git 2.x); before step 3c has run
+  # there is no corpus row and the shorter form is right.
+  if [ -n "${corpus_row:-}" ] && [ -f "${corpus_row:-}" ]; then
+    printf '    git restore --staged --worktree %s %s\n' "$expectations" "$corpus_row" >&2
+  else
+    printf '    git restore --staged --worktree %s\n' "$expectations" >&2
   fi
 }
 
