@@ -82,12 +82,27 @@ pub fn read_document_with_source(path: &Path) -> Result<(Document, String), Erro
 /// worth a dependency, and stating the bound is cheaper than implying there
 /// isn't one.
 fn fingerprint(source: &str) -> String {
+    format!("{}:{:016x}", source.len(), fnv1a(source.as_bytes()))
+}
+
+/// FNV-1a over a byte stream, shared by every fingerprint day renders and
+/// later compares (`log_fingerprint`, `position_fingerprint`, the design-doc
+/// fingerprint above). One algorithm on purpose: the review found
+/// `DefaultHasher` at two of the three sites while this file's doc comment
+/// explains why `DefaultHasher` is wrong for exactly those — it is documented
+/// as unstable across Rust releases, and these values are compared against
+/// copies rendered by an earlier run, so a toolchain upgrade would make every
+/// log and every position look changed once per upgrade.
+///
+/// Lives here rather than in a module of its own because this file is where
+/// the rationale was recorded first; ten lines do not earn a module.
+pub(crate) fn fnv1a(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in source.as_bytes() {
+    for byte in bytes {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    format!("{}:{hash:016x}", source.len())
+    hash
 }
 
 /// The opening of every observe claim `design` writes.

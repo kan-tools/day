@@ -189,6 +189,13 @@ pub fn standing(root: &Path) -> Option<Standing> {
 /// slightly noisier rather than silent. Failing *open* is the right direction —
 /// the condition being re-displayed is one that makes day's other output
 /// partial, and losing it is worse than repeating it.
+///
+/// **Unlocked read-modify-write, on purpose.** Two hooks racing (concurrent
+/// sessions in one repo) can both read the same count, so a notice may repeat
+/// early or an increment may be lost — a repetition or a short delay, never a
+/// wrong fact, and the next quiet prompt re-converges. A lock file would trade
+/// that for a stuck-lock failure mode whose cost is the notice never firing,
+/// which is the closed direction everything above chooses against.
 pub fn cadence_allows(root: &Path, cadence: u32) -> bool {
     let path = cadence_path(root);
     let seen: u32 = std::fs::read_to_string(&path)

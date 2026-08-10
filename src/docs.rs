@@ -148,8 +148,25 @@ fn read_version(root: &std::path::Path, schema: &DocsSchema) -> Result<String, E
 /// covers `version = "1.0"`, `"version": "1.0"`, and `version: 1.0`
 /// without day knowing TOML, JSON, or YAML.
 fn value_after_key(line: &str, key: &str) -> Option<String> {
-    let at = line.find(key)?;
-    let after = line[at + key.len()..].trim_start_matches(['"', ':', '=', ' ', '\t']);
+    // The key must be the line's FIRST token — bare or quoted — and must be
+    // followed by a separator. `line.find(key)` matched the key as a
+    // substring anywhere in any line, so with key `version`,
+    // `versions_tested = "12"` answered `s_tested`, prose mentioning
+    // "version 1.0" answered from prose, and a `rust-version` line ordered
+    // above `version` would have answered the MSRV — day's own Cargo.toml is
+    // one reorder away from that last one. Anchoring costs none of the
+    // format-agnosticism the doc comment above promises: all three quoted
+    // forms still parse, and only the first token may be the key.
+    let rest = line
+        .trim_start()
+        .trim_start_matches(['"', '\''])
+        .strip_prefix(key)?;
+    // The closing quote of a quoted key, then the separator that tells
+    // `version =` apart from `versions_tested =`.
+    let rest = rest.trim_start_matches(['"', '\'']).trim_start();
+    let after = rest
+        .strip_prefix([':', '='])?
+        .trim_start_matches(['"', ':', '=', ' ', '\t']);
     let value: String = after
         .chars()
         .take_while(|c| !matches!(c, '"' | ',' | ' ' | '\t'))
@@ -643,6 +660,32 @@ mod tests {
             );
         }
         assert_eq!(value_after_key("nothing here", "version"), None);
+    }
+
+    /// The anchoring half: a key matched as a substring of another key or of
+    /// prose answered with the wrong value (2026-08 review). The first token
+    /// must BE the key, and a separator must follow it.
+    #[test]
+    fn a_key_inside_another_key_or_prose_is_not_the_key() {
+        for line in [
+            // The key as a prefix of a longer key: used to answer `s_tested`.
+            r#"versions_tested = "12""#,
+            // The key mid-identifier: `rust-version` ordered above `version`
+            // would have answered the MSRV.
+            r#"rust-version = "1.88""#,
+            // The key in prose: used to answer `1.0` from a sentence.
+            "the version 1.0 shipped last week",
+            // The key as first token but with no separator.
+            "version 1.0",
+            // A TOML comment mentioning the key and a separator.
+            r#"# declares rust-version = "1.88", so cargo refuses"#,
+        ] {
+            assert_eq!(
+                value_after_key(line, "version"),
+                None,
+                "should not answer from {line:?}"
+            );
+        }
     }
 
     #[test]

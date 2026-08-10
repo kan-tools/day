@@ -327,6 +327,73 @@ fn ac10_a_transition_past_the_last_assessed_atom_is_named() {
     assert_eq!(out.status.code(), Some(0));
 }
 
+/// The assessment baseline answers from the one bulk read: kan invocation
+/// count does not scale with the number of declared atoms.
+///
+/// The 2026-08 review costed `last_assessed_atom`'s loop as one subprocess
+/// per atom — the pre-day#71 shape — and the loop is in fact memo-served, so
+/// the finding was false. This pins the property so the next reader gets an
+/// assertion instead of an argument, and a regression back to per-subject
+/// subprocess reads fails here rather than re-adding ~50ms per atom to every
+/// session start with the suite green. An invocation count, not a duration:
+/// a count measures the design, a duration measures the machine.
+#[test]
+fn the_assessment_baseline_does_not_cost_a_read_per_atom() {
+    let count_with = |n_atoms: usize| -> usize {
+        let dir = tempfile::tempdir().unwrap();
+        let mut claims = vec![witness_schema(
+            "bafyreiw",
+            r#"{"design-doc":{"path":".design/*.md"}}"#,
+        )];
+        for i in 0..n_atoms {
+            claims.push(atom(
+                &format!("a{i}"),
+                &format!("bafyreia{i}"),
+                &[],
+                &["thing"],
+                &[],
+                &[],
+            ));
+            claims.push(result_claim(
+                &format!("atom/a{i}"),
+                &format!("bafyreir{i}"),
+                "assessed.",
+                1_784_000_000_000_000 + i as i64,
+            ));
+        }
+        let kan = write_kan_stub(dir.path(), &claims);
+        // A wrapper that counts every kan invocation, then delegates to the
+        // real stub — the same mechanism `tests/honest_reads.rs` uses.
+        let counter = dir.path().join("kan-calls");
+        let counting = dir.path().join("kan-counting.sh");
+        std::fs::write(
+            &counting,
+            format!(
+                "#!/bin/sh\nprintf 'x\\n' >> {}\nexec {} \"$@\"\n",
+                counter.display(),
+                kan.display()
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&counting, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let git = write_git_stub(dir.path(), &[], &["src/lib.rs"]);
+        let out = day(dir.path(), &counting, &git, &["status"]);
+        assert_eq!(out.status.code(), Some(0));
+        std::fs::read_to_string(&counter)
+            .map(|s| s.lines().count())
+            .unwrap_or(0)
+    };
+    let small = count_with(2);
+    let large = count_with(8);
+    assert!(small > 0, "the counting stub was never invoked");
+    assert_eq!(
+        small, large,
+        "kan invocations scale with the number of atoms ({small} for 2, {large} for 8) — \
+         a per-subject subprocess read crept back in"
+    );
+}
+
 /// AC-10 second half: with no assessment ever recorded, no transition is
 /// claimed — absence of a baseline is not a change.
 #[test]
