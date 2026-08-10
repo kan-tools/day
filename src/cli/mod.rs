@@ -197,8 +197,10 @@ pub enum TelosAction {
         witness_any: Vec<Vec<String>>,
         /// Narrow which instances of a witness count, as `<witness>=<pattern>`
         /// (repeatable). The project's schema/witness map still decides which
-        /// kind of probe runs; this only tightens its pattern, so `v0.5*`
-        /// names a narrower class rather than one artifact.
+        /// kind of probe runs; this only tightens its pattern, so `'v0.5*'`
+        /// names a narrower class rather than one artifact. Quote the
+        /// argument: an unquoted `*` is expanded by the shell first, and zsh
+        /// errors on a failed match rather than passing it through (day#83).
         #[arg(long = "scope", value_parser = parse_scope)]
         scopes: Vec<(String, String)>,
     },
