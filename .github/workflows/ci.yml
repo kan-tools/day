@@ -74,7 +74,29 @@ jobs:
           zsh -c 'exit 0'
 
       - run: cargo build --workspace --all-targets
-      - run: cargo test --workspace
+      # `--no-fail-fast` IS LOAD-BEARING, NOT TIDINESS. `cargo test` aborts the
+      # whole run at the first failing TARGET, and a bare `cargo test
+      # --workspace` therefore reports on a prefix of the suite whose length
+      # depends on which target failed and where it sorts alphabetically.
+      #
+      # Measured on `main` at 9f66fee (day#178): `tests/behaviour_diff.rs`
+      # failed, and **7 of 30 targets ran**. The other 23 -- `plugin.rs`,
+      # `kan_conformance.rs`, `documented_invocations.rs`, `harness_honesty.rs`
+      # and the rest -- never executed, and `main` had been in that state since
+      # at least the previous merge. The red tick said "something failed"; it
+      # could not say "23 targets produced no result", and nothing but counting
+      # `Running` lines in the log would reveal it.
+      #
+      # That is this repo's own rule -- could-not-check outranks
+      # checked-and-clean -- broken at the RUNNER rather than inside a test. A
+      # suite that stops early does not report a smaller failure, it reports an
+      # unknown one.
+      #
+      # It does not weaken the gate. Measured by injecting a panic into an
+      # early-sorting target: with fail-fast, 4 targets ran; with
+      # `--no-fail-fast`, 30 ran; **both exited 101**. The build still fails, it
+      # just fails having actually looked.
+      - run: cargo test --workspace --no-fail-fast
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
 
