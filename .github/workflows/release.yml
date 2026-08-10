@@ -15,6 +15,13 @@ jobs:
     # available on kan-tools' current GitHub plan, so the tag policy is the
     # gate.
     environment: crates-io
+    # `contents: write` is what lets `gh release create` below run. Declared on
+    # the job rather than relying on the repository's default token permissions,
+    # which are a setting somebody can change without touching this file — and a
+    # release step that silently loses its permission would fail at the last
+    # step of a publish, after the crate is already on crates.io.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,3 +88,76 @@ jobs:
           fi
 
       - run: cargo publish --token "${{ secrets.CARGO_REGISTRY_TOKEN }}"
+
+      # THE GITHUB RELEASE IS PART OF PUBLISHING, NOT A STEP BESIDE IT.
+      #
+      # `v0.12.0-beta.2` shipped to crates.io and had no GitHub Release for a
+      # day. The other seventeen were backfilled by hand in one batch, so the
+      # gap was invisible until somebody enumerated tags against releases —
+      # which is `scripts/cut-release.sh`'s own lesson arriving one step later:
+      # "what was mechanized got done; what was ritual got dropped". A reminder
+      # here would be the ritual. The tag push already publishes the crate, so
+      # the release is created by the same event and cannot be forgotten
+      # separately.
+      #
+      # Notes come from `CHANGELOG.md`, whose section for this tag is
+      # guaranteed to exist by `every_released_tag_has_a_changelog_section` —
+      # so this reads a file another check keeps honest rather than
+      # reconstructing prose at release time.
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag="$GITHUB_REF_NAME"
+
+          # Idempotent: a re-run of this workflow must not fail because the
+          # release it already created exists. Nothing here edits an existing
+          # release — re-running is for recovering a failed publish, and
+          # silently rewriting published notes is not recovery.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists; leaving it alone"
+            exit 0
+          fi
+
+          # This tag's section: from its heading to the next `## ` heading, or
+          # to the link-definition block, whichever comes first. The OLDEST
+          # release has no following heading, so without the second stop
+          # condition it swallows all 79 definitions as body text.
+          awk -v tag="$tag" '
+            index($0, "## [" tag "]") == 1 { found = 1; next }
+            found && (index($0, "## ") == 1 || $0 ~ /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > section.md
+
+          # **Checked on the SECTION, before the definitions are appended.**
+          # Appending first and checking after would be a guard that can never
+          # fire: the definition block is 79 non-blank lines, so the file is
+          # non-empty for every tag including one with no section at all. That
+          # is this repo's own "check that cannot fail" defect, in the check
+          # written to stop a release that says nothing.
+          if ! grep -q '[^[:space:]]' section.md; then
+            echo "::error::no CHANGELOG.md section found for $tag, so there are no notes to publish. every_released_tag_has_a_changelog_section should have caught this before the tag was cut."
+            exit 1
+          fi
+
+          # The definitions make `([#165])` a link instead of literal text.
+          # Release notes are standalone markdown — they do not inherit
+          # CHANGELOG.md's definitions, and the release cut by hand for
+          # v0.12.0-beta.2 rendered four bare `[#nnn]` because of exactly this.
+          # Definitions render as nothing, so carrying all of them is free.
+          cp section.md notes.md
+          printf '\n' >> notes.md
+          grep '^\[[^]]*\]: ' CHANGELOG.md >> notes.md
+
+          # Every release so far is a prerelease, and that is a property of the
+          # version rather than a policy: a tag carrying a `-` is pre-1.0 by
+          # SemVer. Hardcoding `--prerelease` would silently mislabel the first
+          # stable release.
+          case "$tag" in
+            *-*) prerelease="--prerelease" ;;
+            *)   prerelease="" ;;
+          esac
+
+          # shellcheck disable=SC2086
+          gh release create "$tag" --title "$tag" --notes-file notes.md $prerelease

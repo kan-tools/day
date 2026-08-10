@@ -1110,3 +1110,50 @@ fn every_workflow_that_runs_the_suite_fetches_full_history() {
          exactly this."
     );
 }
+
+/// **The release workflow creates the GitHub Release**, and its notes guard is
+/// checked on the section rather than on the whole file.
+///
+/// `v0.12.0-beta.2` published to crates.io and had no GitHub Release for a day.
+/// The other seventeen had been backfilled by hand in one batch, so nothing
+/// looked wrong until tags were enumerated against releases — `cut-release.sh`'s
+/// own lesson one step later: what is mechanized gets done, what is ritual gets
+/// dropped.
+///
+/// Two properties, because the second is the one that rots quietly. The step
+/// must exist at all; and its emptiness guard must read the extracted SECTION,
+/// not the file it appends 79 link definitions to — checking after the append
+/// is a guard that can never fire.
+#[test]
+fn the_release_workflow_creates_a_github_release_with_a_guard_that_can_fire() {
+    let yaml = read(".github/workflows/release.yml");
+
+    assert!(
+        yaml.contains("gh release create"),
+        "release.yml must create the GitHub Release on the tag push that \
+         publishes the crate; a step beside the tag is the one that gets dropped"
+    );
+    assert!(
+        yaml.contains("contents: write"),
+        "and must declare the permission that lets it, rather than depending on \
+         a repository default somebody can change without touching this file"
+    );
+
+    let guard = yaml
+        .split("if ! grep -q")
+        .nth(1)
+        .expect("release.yml should guard against empty release notes");
+    let guarded_file: String = guard
+        .split_whitespace()
+        .nth(1)
+        .expect("the guard should name the file it checks")
+        .trim_end_matches(';')
+        .to_string();
+    assert_eq!(
+        guarded_file, "section.md",
+        "the emptiness guard must read the extracted section. It read \
+         `{guarded_file}` — and if that is the file the link definitions are \
+         appended to, the guard is non-empty for every tag including one with \
+         no section, which is a check that cannot fail."
+    );
+}
