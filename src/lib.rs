@@ -24,6 +24,7 @@ pub mod fold;
 pub mod git;
 pub mod hooks;
 pub mod kan_client;
+pub mod layers;
 pub mod mcp;
 pub mod position;
 pub mod practice;

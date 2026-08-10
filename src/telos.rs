@@ -430,41 +430,7 @@ impl<'de> Deserialize<'de> for WitnessSchema {
         let mut records = BTreeMap::new();
         let mut unsupported = BTreeMap::new();
         for (witness, value) in raw {
-            // The discriminator is the *author's evident intent*, not whether
-            // the pair happens to parse: an entry naming either half is a pair,
-            // and then both halves must read or the witness is unsupported.
-            //
-            // Keying on "does it parse as a pair" instead would mean a record
-            // half with a typo fell through to the single-probe branch, failed
-            // there too, and landed in `unsupported` with a message about the
-            // wrong shape — or worse, if only `material` were misspelled,
-            // parsed as a single probe and silently lost the record half. A
-            // witness that quietly stops asking half its question is the
-            // failure mode this whole milestone is about.
-            let declares_pair = value.get("material").is_some() || value.get("record").is_some();
-
-            if declares_pair {
-                match serde_json::from_value::<PairedWitness>(value) {
-                    Ok(pair) => {
-                        probes.insert(witness.clone(), pair.material);
-                        records.insert(witness, pair.record);
-                    }
-                    Err(e) => {
-                        unsupported
-                            .insert(witness, format!("declares a material/record pair but {e}"));
-                    }
-                }
-                continue;
-            }
-
-            match serde_json::from_value::<Probe>(value) {
-                Ok(probe) => {
-                    probes.insert(witness, probe);
-                }
-                Err(e) => {
-                    unsupported.insert(witness, e.to_string());
-                }
-            }
+            insert_entry(witness, value, &mut probes, &mut records, &mut unsupported);
         }
         Ok(Self {
             probes,
@@ -472,6 +438,85 @@ impl<'de> Deserialize<'de> for WitnessSchema {
             unsupported,
         })
     }
+}
+
+/// Parses **one** entry of the witness map into the three buckets.
+///
+/// Extracted from the map deserializer so the per-key layer
+/// (`schema/witness/<type>`, `.design/vocabulary-packs.md` REQ-11) parses an
+/// entry through exactly the same code the whole block does. Two
+/// implementations of one shape is `the_claim_shape_predicate_has_one_evaluator`
+/// in a different place: this function tolerates a probe kind day cannot read by
+/// demoting *that* witness, and a second copy would have to remember to — which
+/// is how the installed v0.6 binary once failed the whole schema, and with it
+/// every hook and status line in the session.
+pub(crate) fn insert_entry(
+    witness: String,
+    value: serde_json::Value,
+    probes: &mut BTreeMap<String, Probe>,
+    records: &mut BTreeMap<String, Probe>,
+    unsupported: &mut BTreeMap<String, String>,
+) {
+    // The discriminator is the *author's evident intent*, not whether
+    // the pair happens to parse: an entry naming either half is a pair,
+    // and then both halves must read or the witness is unsupported.
+    //
+    // Keying on "does it parse as a pair" instead would mean a record
+    // half with a typo fell through to the single-probe branch, failed
+    // there too, and landed in `unsupported` with a message about the
+    // wrong shape — or worse, if only `material` were misspelled,
+    // parsed as a single probe and silently lost the record half. A
+    // witness that quietly stops asking half its question is the
+    // failure mode this whole milestone is about.
+    let declares_pair = value.get("material").is_some() || value.get("record").is_some();
+
+    if declares_pair {
+        match serde_json::from_value::<PairedWitness>(value) {
+            Ok(pair) => {
+                probes.insert(witness.clone(), pair.material);
+                records.insert(witness, pair.record);
+            }
+            Err(e) => {
+                unsupported.insert(witness, format!("declares a material/record pair but {e}"));
+            }
+        }
+        return;
+    }
+
+    match serde_json::from_value::<Probe>(value) {
+        Ok(probe) => {
+            probes.insert(witness, probe);
+        }
+        Err(e) => {
+            unsupported.insert(witness, e.to_string());
+        }
+    }
+}
+
+/// One witness entry, read from **its own subject** (`schema/witness/<type>`).
+///
+/// Shares the `day-witness` fence with [`WitnessSchema`], which is the shape
+/// `.design/vocabulary-packs.md` REQ-21 requires be declared rather than
+/// implied: on the parent subject the body is the map, and on a key's own
+/// subject it is that key's *value*, because the key is already the subject.
+/// Nothing is ambiguous at read time — [`crate::atoms::extract_fenced`] locates
+/// a block by `T::FENCE` alone and the caller chooses the type from the subject
+/// it is reading.
+#[derive(Debug, Clone)]
+pub struct WitnessEntry(pub serde_json::Value);
+
+impl<'de> Deserialize<'de> for WitnessEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self(serde_json::Value::deserialize(deserializer)?))
+    }
+}
+
+impl crate::atoms::Versioned for WitnessEntry {
+    /// Deliberately `WitnessSchema`'s own value rather than a second constant.
+    /// The two carry the same fence, so a version the map refuses and the entry
+    /// accepts would be a contradiction expressed as a typo.
+    const SUPPORTED_VERSION: u64 = <WitnessSchema as crate::atoms::Versioned>::SUPPORTED_VERSION;
+    const FENCE: &'static str = FENCE_INFO;
 }
 
 impl crate::atoms::Versioned for WitnessSchema {
@@ -607,13 +652,26 @@ impl WitnessSchema {
         })
     }
 
+    /// The effective schema: day's default, overlaid by a legacy whole-block
+    /// claim on `schema/witness`, overlaid by per-key claims on
+    /// `schema/witness/<type>`.
+    ///
+    /// Goes through [`crate::layers::witness`] rather than reading the parent
+    /// subject directly, so per-key declarations reach every one of this
+    /// function's callers instead of only the ones that remembered to ask
+    /// (`.design/vocabulary-packs.md` REQ-17).
+    ///
+    /// **Still `NotDeclared` when no layer contributes anything**, which is what
+    /// keeps REQ-12's "no migration" honest: a project with no claim on either
+    /// the parent or any key sees exactly the error it saw before.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
-        let subject = format!("{SCHEMA_PREFIX}{WITNESS_SLUG}");
-        newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, schema)| schema)
-            .ok_or_else(|| Error::NotDeclared {
+        let effective = crate::layers::witness(client)?;
+        if effective.provenance.is_empty() {
+            return Err(Error::NotDeclared {
                 starter: Self::starter_command(),
-            })
+            });
+        }
+        Ok(effective.value)
     }
 }
 
