@@ -112,7 +112,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.11.0-beta.1   # the memory layer day reads
-cargo install day --version 0.12.0-beta.2
+cargo install day --version 0.12.0-beta.3
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -158,7 +158,21 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.12.0-beta.2** is a bugfix boundary, and what it fixed is mostly
+Early. **v0.12.0-beta.3** is the follow-ups of a full external review pass —
+design, implementation, testing, UX/DX/AX, process — that returned
+APPROVE-WITH-FOLLOW-UPS. Its headline pattern is worth stating because it is
+a lesson about where defects now live in this codebase: every high finding
+sat where the typed honesty architecture does not reach. The bootstrap hook
+taught strangers the exact broken install day#50 documents; the block-compat
+corpus was stale by eleven releases (and regenerating it surfaced three
+fences silently missing from the capture for five releases); the mutation
+harness printed its taxonomy honestly and exited 0 for SURVIVED; and a
+`bridge check` error rendered as "its plan could not reach it". Each fix
+moved the guarantee into a mechanism — derived pins, a derived corpus with a
+monotone-coverage test and a release-time capture, an exit-code contract, a
+three-state rendering — rather than into attention.
+
+**v0.12.0-beta.2** was a bugfix boundary, and what it fixed is mostly
 day's own advice. `day design check` told an author to name the requirement each
 criterion covers, and following that suggestion parsed every criterion to zero
 with nothing naming the cause; citing a kan subject warned it was a missing file;

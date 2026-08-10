@@ -29,7 +29,17 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 ## [Unreleased]
 
-Work merged since `v0.12.0-beta.2`.
+Nothing yet.
+
+## [v0.12.0-beta.3] — 2026-08-10
+
+*Milestone: v0.12 — transportable.* A bugfix and verification round produced
+by a full external review of the repo (design, implementation, testing,
+UX/DX/AX, process), which returned APPROVE-WITH-FOLLOW-UPS; this release is
+the follow-ups that should not wait. Its headline pattern: every high finding
+sat where the typed honesty architecture does not reach — a shipped shell
+script, a stale measured artifact, a harness exit code, a `format!` that
+flattened could-not-check into checked-and-negative.
 
 ### Added
 - The standard OSS files, so day is contributable by someone who is not its
@@ -39,9 +49,84 @@ Work merged since `v0.12.0-beta.2`.
   a CI job that keeps the declaration true by reading it from `Cargo.toml`
   rather than repeating it.
 - crates.io metadata: description, keywords, categories, repository.
+- Not-found errors teach: `day next`, `day assess telos` and `day assess atom`
+  on an unknown slug now list what is declared instead of only refusing.
 
 ### Fixed
 - `LICENSE` named a copyright holder that was not a legal person ([#121]).
+- The bootstrap hook told a broken install to run the two unpinned
+  `cargo install` commands the README documents as broken; its pins are now
+  derived at runtime from `Cargo.toml` and the kan-compat table, the same
+  derivations `tests/install_docs.rs` holds the README to ([#50] class).
+- A `bridge check` that errored rendered in `assess telos` as "its plan could
+  not reach it" — a could-not-check reported as checked-and-negative. It now
+  says the check could not be made, and why ([#141]).
+- "newest on `X`" in claim-probe verdicts was iteration order, not time; it is
+  now the maximum `recorded_at`, and an undated match set says
+  "e.g. on `X` (one of N)" rather than claiming a recency nothing computed.
+- `assess telos --all` swept fully-retracted telos subjects, advising witness
+  interviews for them and citing the retraction's own CID as the thing to
+  record against. The sweep now folds first, excludes them, and counts the
+  exclusion — so the hook and the sweep stop disagreeing about how many teloi
+  exist.
+- The "asserted in prose — not material evidence" note rendered under
+  satisfied `[MATERIAL]` verdicts, where it read as day disputing itself —
+  including on the very assessment the previous run's output said to record.
+  It now attaches only to unsatisfied findings.
+- The run-constant assessment coda (performed-vs-recorded, the exit-code
+  reading, the single-frame caveat) prints once per `--all` sweep instead of
+  once per telos; the per-telos `kan result … --cites` commands stay.
+- The fenced-block scanner was prefix-matched and hand-rolled three times
+  with divergent bugs: a project fence named `day-atom-ext` was misread as a
+  malformed `day-atom`, a block quoted inside a four-backtick fence leaked
+  into prose, and a triple-backtick inside a JSON string truncated the body.
+  One line-anchored scanner (CommonMark fence rules) now serves all three
+  consumers.
+- A version-skewed block instance on a subject a probe's own `subject`
+  predicate excludes no longer poisons that witness to `ERROR`.
+- `telos declare --title` without `--kind` was silently discarded at the
+  mechanism level (clap guarded one call surface); it is now refused.
+- Both git fingerprints hash their file lists without a joinable-separator
+  ambiguity, and both fingerprints share one FNV-1a instead of one of them
+  using the std hasher whose stability the other's comment disclaims.
+- `day assess docs`' version-key match is anchored to the start of a line
+  with a separator, so `versions_tested = "12"` or prose containing the word
+  cannot answer for the version.
+- `--scope`'s help now quotes its example and states the zsh glob trap
+  ([#83]), on the surface where the trap actually fires.
+
+### Verification
+- The block-compat corpus was stale by eleven releases, and regenerating it
+  surfaced worse: the capture stub predated `kan show --all`, so `day-bridge`,
+  `day-witness` and `day-tension` silently vanished from the capture for
+  every tag since v0.8.0-beta.1. The corpus is regenerated in full; its
+  expected tags derive from the migration-expectations table; a
+  monotone-coverage test asserts a fence a release captured never disappears
+  from a later one; the versioned-shape assertion is scoped per-tag instead
+  of resting on a premise v0.10 falsified; the corpus resolves through
+  `parse_block`, the production entry point, rather than raw serde; and
+  `cut-release.sh` captures the release's own corpus row before tagging, the
+  same no-window treatment [#118] gave the migration row.
+- `mutate.py` printed its outcomes honestly and exited 0 for all of CAUGHT,
+  SURVIVED, DID-NOT-COMPILE and ANCHOR-MISSING. Its exit code now carries the
+  taxonomy (0/1/2/3, matching the census's shape), and its baseline compile
+  check gains the clause its mutation-side twin had.
+- The kan-read swallow scan's call shapes are now derived from
+  `kan_client.rs`'s own method list plus the `::load(` convention, with a
+  floor assertion against parser rot — three live read shapes had already
+  drifted out of its hand-written vocabulary.
+- CI probes that the pinned kan can run the [#120] trust-withholding
+  conformance cell, so a future pin predating identity roles fails loudly
+  instead of the cell silently skipping on every push.
+- The release recovery instruction stays one runnable command now that the
+  release commit stages two files, and the recovery test drives the new
+  state.
+- `KanClient::bin()` (zero callers) removed; a tautological assertion in the
+  injection-boundary scan replaced with one that has teeth; a dead no-op
+  line in `behaviour-diff.py` deleted; an invocation-count test pins that
+  the status baseline read costs no extra kan calls (the review's claim that
+  it cost ~0.5s of session start was false — the calls were memo-served —
+  and the test is what keeps that true).
 
 ---
 
@@ -382,7 +467,8 @@ The first published release.
 - Atom inputs are checked against the transitive upstream closure.
 
 <!-- Releases -->
-[Unreleased]: https://github.com/kan-tools/day/compare/v0.12.0-beta.2...HEAD
+[Unreleased]: https://github.com/kan-tools/day/compare/v0.12.0-beta.3...HEAD
+[v0.12.0-beta.3]: https://github.com/kan-tools/day/compare/v0.12.0-beta.2...v0.12.0-beta.3
 [v0.12.0-beta.2]: https://github.com/kan-tools/day/compare/v0.12.0-beta.1...v0.12.0-beta.2
 [v0.12.0-beta.1]: https://github.com/kan-tools/day/compare/v0.11.0-beta.2...v0.12.0-beta.1
 [v0.11.0-beta.2]: https://github.com/kan-tools/day/compare/v0.11.0-beta.1...v0.11.0-beta.2
@@ -456,6 +542,7 @@ The first published release.
 [#136]: https://github.com/kan-tools/day/issues/136
 [#137]: https://github.com/kan-tools/day/issues/137
 [#138]: https://github.com/kan-tools/day/issues/138
+[#141]: https://github.com/kan-tools/day/issues/141
 [#144]: https://github.com/kan-tools/day/issues/144
 [#145]: https://github.com/kan-tools/day/issues/145
 [#146]: https://github.com/kan-tools/day/issues/146
