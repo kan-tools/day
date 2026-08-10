@@ -946,3 +946,73 @@ fn fallback_documented_invocations_without_zsh() {
         "and it must actually reach kan, not merely exit quietly"
     );
 }
+
+/// fallback: legacy-witness-block
+///
+/// **The mode day's own repo is never in.** `src/layers.rs` resolves a witness
+/// from three layers, and this repo has a legacy whole-block claim on
+/// `schema/witness` and no per-key subjects at all — so every run here takes the
+/// legacy path and nothing exercises the other side of the branch. That is
+/// day#91's shape exactly: the fallback is the mode in production, and the new
+/// path is the one no existing test would reach.
+///
+/// The premise is asserted **both ways round**, because the contrast is what
+/// makes this a test rather than a restatement: the same key resolves from the
+/// block when no per-key subject exists, and from the key's own subject when one
+/// does.
+#[test]
+fn fallback_legacy_witness_block() {
+    use day::kan_client::KanClient;
+    use day::probe::Probe;
+    use day::telos::WitnessSchema;
+
+    let block = common::claim(
+        "schema/witness",
+        "bafylegacyfallback",
+        "Witness probes.\n\n```day-witness\n{\"published-artifact\": {\"tag\": \"v*\"}}\n```\n",
+    );
+    let key = common::claim(
+        "schema/witness/published-artifact",
+        "bafyperkey",
+        "The published-artifact witness.\n\n```day-witness\n{\"tag\": \"v9.*\"}\n```\n",
+    );
+
+    let resolve = |claims: &[common::StubClaim]| {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_kan_stub(dir.path(), claims);
+        let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+        match WitnessSchema::load(&client)
+            .unwrap()
+            .probes
+            .get("published-artifact")
+        {
+            Some(Probe::Tag(p)) => p.clone(),
+            other => panic!("expected a tag probe, got {other:?}"),
+        }
+    };
+
+    let legacy_only = [block.clone()];
+    assert!(
+        !legacy_only
+            .iter()
+            .any(|c| c.subject.starts_with("schema/witness/")),
+        "premise: the fixture must declare no `schema/witness/<key>` subject. \
+         With one, this takes the per-key path and observes nothing about the \
+         fallback — which is the mode day's own repo is always in."
+    );
+
+    assert_eq!(
+        resolve(&legacy_only),
+        "v*",
+        "with no per-key subject the legacy block must decide — anything else \
+         would be a silent migration for every project that has one"
+    );
+
+    // and the branch this repo never takes.
+    assert_eq!(
+        resolve(&[block, key]),
+        "v9.*",
+        "with a per-key subject present it must win; if this reads `v*` the \
+         per-key layer is inert and the fallback is the only path there is"
+    );
+}
