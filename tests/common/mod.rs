@@ -563,6 +563,17 @@ impl ScratchCrate {
     /// Run one of day's own `scripts/` against this crate, and return its
     /// combined output plus whether it exited 0.
     pub fn run_script(&self, script: &str, args: &[&str]) -> (String, bool) {
+        let (text, code) = self.run_script_code(script, args);
+        (text, code == Some(0))
+    }
+
+    /// Like `run_script`, but returns the raw exit code — the half of a
+    /// harness's contract a scripted caller actually reads. `mutate.py`
+    /// printed its outcomes honestly and exited 0 for all of CAUGHT,
+    /// SURVIVED, DID-NOT-COMPILE and ANCHOR-MISSING, so nothing gating on the
+    /// status could tell them apart; the tests that pin the contract need the
+    /// code itself, not a boolean.
+    pub fn run_script_code(&self, script: &str, args: &[&str]) -> (String, Option<i32>) {
         let path = repo_root().join("scripts").join(script);
         let out = std::process::Command::new("python3")
             .arg(&path)
@@ -589,7 +600,7 @@ impl ScratchCrate {
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
             ),
-            out.status.success(),
+            out.status.code(),
         )
     }
 }
