@@ -666,7 +666,11 @@ impl WitnessSchema {
     /// the parent or any key sees exactly the error it saw before.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let effective = crate::layers::witness(client)?;
-        if effective.provenance.is_empty() {
+        // `declared`, not `provenance.is_empty()`. A legacy block of `{}` is a
+        // declaration that names no keys, and the whole-block loader returned an
+        // empty schema for it; deciding from provenance turned that into
+        // `NotDeclared` — a behaviour change REQ-12 forbids.
+        if !effective.declared {
             return Err(Error::NotDeclared {
                 starter: Self::starter_command(),
             });

@@ -69,6 +69,17 @@ pub struct Effective<T> {
     /// rather than acted on — a caller that renders per-key provenance must be
     /// able to say "and there may be keys this view cannot see".
     pub withheld: u64,
+    /// Whether **any** claim contributed a layer, as opposed to any key having
+    /// resolved to a value.
+    ///
+    /// These come apart on an empty declaration. A legacy block of `{}` is a
+    /// claim that declares no keys: provenance is empty and the project has
+    /// nonetheless declared a witness schema. Deciding "is anything declared"
+    /// from `provenance.is_empty()` turned that into `NotDeclared`, where the
+    /// whole-block loader returned an empty schema — a behaviour change REQ-12
+    /// forbids in the words "byte-identical to today's behaviour". Found by
+    /// running it, not by reading it.
+    pub declared: bool,
 }
 
 /// The parent subject a per-key subject hangs under.
@@ -99,8 +110,10 @@ pub fn witness(client: &KanClient) -> Result<Effective<WitnessSchema>, Error> {
     // is in today — so the mode that needs registering is the *other* one, and
     // the registered test asserts the premise both ways round rather than
     // trusting that this repo exercises either.
+    let mut declared = false;
     let mut schema = match newest_fenced::<WitnessSchema>(client, &parent)? {
         Some((cid, schema)) => {
+            declared = true;
             for key in schema
                 .probes
                 .keys()
@@ -151,16 +164,32 @@ pub fn witness(client: &KanClient) -> Result<Effective<WitnessSchema>, Error> {
         // buckets. Clearing first matters: a legacy paired witness overlaid by a
         // material-only key must lose its record half, or the key would keep
         // asking half a question nobody declared.
+        declared = true;
         schema.probes.remove(key);
         schema.records.remove(key);
         schema.unsupported.remove(key);
-        insert_entry(
-            key.to_string(),
-            entry.0,
-            &mut schema.probes,
-            &mut schema.records,
-            &mut schema.unsupported,
-        );
+        match entry {
+            Ok(entry) => insert_entry(
+                key.to_string(),
+                entry.0,
+                &mut schema.probes,
+                &mut schema.records,
+                &mut schema.unsupported,
+            ),
+            // **The block error is reported as itself.** Handing it to the entry
+            // parser as a string got its message wrapped in serde's "unknown
+            // variant … expected one of `path`, `tag`, …", so a claim written by
+            // a NEWER day read as a typo and the reader was pointed at fixing a
+            // claim that is fine. day#60 is that exact mistake, and
+            // `telos/honest-reads` is the telos it violates: version skew is
+            // fixed by upgrading, a malformed block by editing, and telling
+            // someone the wrong one is worse than saying nothing.
+            Err(source) => {
+                schema
+                    .unsupported
+                    .insert(key.to_string(), source.to_string());
+            }
+        }
         provenance.insert(key.to_string(), Layer::Key(cid));
     }
 
@@ -168,6 +197,7 @@ pub fn witness(client: &KanClient) -> Result<Effective<WitnessSchema>, Error> {
         value: schema,
         provenance,
         withheld: client.claims_withheld_from_view(),
+        declared,
     })
 }
 
@@ -180,26 +210,22 @@ pub fn witness(client: &KanClient) -> Result<Effective<WitnessSchema>, Error> {
 /// probe kind it cannot read: `WitnessSchema`'s own doc records that failing the
 /// whole schema over one entry took down every hook and status line in a
 /// session.
+#[allow(clippy::type_complexity)]
 fn newest_entry(
     client: &KanClient,
     subject: &str,
-) -> Result<Option<(String, WitnessEntry)>, Error> {
+) -> Result<Option<(String, Result<WitnessEntry, crate::atoms::BlockError>)>, Error> {
     for claim in client.show(subject)?.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
+        // The block error is carried out **as an error**, not flattened into a
+        // value. Flattening it into a `Value::String` for the entry parser to
+        // reject is what buried a version-skew message inside serde's "unknown
+        // variant … expected one of `path`, `tag`, …", so a claim written by a
+        // newer day read as a typo. The caller reports the error's own text.
         match extract_fenced::<WitnessEntry>(text) {
-            Some(Ok(entry)) => return Ok(Some((claim.cid.clone(), entry))),
-            Some(Err(source)) => {
-                return Ok(Some((
-                    claim.cid.clone(),
-                    // Handed on as a value the entry parser will reject, so the
-                    // key lands in `unsupported` with a reason rather than
-                    // vanishing. The reason names the block error, which is what
-                    // a reader needs to fix the claim.
-                    WitnessEntry(serde_json::Value::String(source.to_string())),
-                )));
-            }
+            Some(result) => return Ok(Some((claim.cid.clone(), result))),
             None => continue,
         }
     }

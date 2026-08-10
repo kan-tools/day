@@ -254,3 +254,54 @@ fn a_nested_subject_is_not_a_witness() {
         "only the single-segment key is a witness"
     );
 }
+
+/// **REQ-12, and a regression this change introduced before a review caught it.**
+///
+/// A legacy block of `{}` is a declaration that names no keys. The whole-block
+/// loader returned an empty schema for it; deciding "is anything declared" from
+/// whether any key resolved turned that into `NotDeclared`, which is a
+/// behaviour change REQ-12 forbids in the words "byte-identical to today's
+/// behaviour".
+#[test]
+fn an_empty_legacy_block_is_a_declaration_not_an_absence() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = write_kan_stub(dir.path(), &[legacy_block("bafyempty", "{}")]);
+    let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+
+    let schema = WitnessSchema::load(&client)
+        .expect("an empty block is a declaration; the loader must not report it absent");
+    assert!(schema.probes.is_empty());
+}
+
+/// **`telos/honest-reads`, and day#60 exactly.**
+///
+/// A per-key claim written by a NEWER day is version skew, fixed by upgrading.
+/// A malformed block is the claim's problem, fixed by editing it. Telling
+/// someone to edit a claim that is fine is the failure day#60 records.
+///
+/// The first version of this code handed the block error to the entry parser as
+/// a string, so the real message came back wrapped in serde's `unknown variant
+/// … expected one of `path`, `tag`, …` — pointing the reader at the probe kinds
+/// rather than at their day version.
+#[test]
+fn a_key_from_the_future_says_upgrade_rather_than_naming_probe_kinds() {
+    let (schema, _) = effective(&[key_claim(
+        "published-artifact",
+        "bafyfuture",
+        r#"{"_version": 999, "tag": "v*"}"#,
+    )]);
+
+    let reason = schema
+        .unsupported
+        .get("published-artifact")
+        .expect("a block from the future must be reported, not dropped");
+
+    assert!(
+        reason.contains("upgrade day"),
+        "the remedy must be the one that works: {reason}"
+    );
+    assert!(
+        !reason.contains("unknown variant"),
+        "and must not be wrapped in a parse error that blames the claim: {reason}"
+    );
+}
