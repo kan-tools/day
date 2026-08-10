@@ -97,11 +97,21 @@ feared in every respect but this one.
 - [x] AC-4: a source scan over every `SKILL.md` fails the build on any
       occurrence of the `!`-backtick form, with no exemption hatch, and is
       demonstrated to fire by reintroducing one. (REQ-4)
-- [x] AC-5: each converted atom's body names, for every read it instructs, what
-      to do when that read fails — and a test asserts the failure-handling
-      sentence is present for each. Verified against day#100 specifically: the
-      telos read must state that an empty result is to be reported, not treated
-      as "no teloi". (REQ-5)
+- [x] AC-5: each converted atom's **`## Context` section** names, for every read
+      it instructs there, what to do when that read fails — and a test asserts
+      the failure-handling clause is present for each, with the bullet count
+      asserted exactly. Verified against day#100 specifically: the telos read
+      must state that an unreadable log is to be reported, not treated as "no
+      teloi". (REQ-5)
+
+      **Narrowed to what is actually asserted.** This read "each converted atom's
+      body … for every read it instructs", which is broader than the test: the
+      Steps and Phases instruct further commands that nothing checks. It was
+      ticked against the broader reading, which is the requirement-that-fails-
+      nothing shape `CLAUDE.md` names. Two known limits, stated rather than
+      implied: the marker is a token, so `**If this read fails:** ignore it`
+      would pass; and only the Context section is scanned. Broadening it is
+      follow-up work, not a claim this milestone gets to make.
 - [ ] AC-6: `hooks/hooks.json` is reachable only from the reverse-domain
       directory, and `tests/plugin.rs`'s existing assertion that no hook emits a
       blocking decision still runs against it at its new path. (REQ-6)
@@ -223,6 +233,13 @@ channel for a Rust crate, which is a second release path that can drift from
   `telos/v1.0`'s bar is that a non-author ships with day on a third project, and
   it says nothing about harnesses. Reading harness reach into it would widen a
   bar without re-checking it, which `CLAUDE.md` records as its own defect.
+
+  **The telos this produced is `telos/cross-harness-attained`**, declared with
+  the witness `cross-harness-trial` after a `/witness-interview` pass. It existed
+  three and a half hours before this document was last edited and was not named
+  here, so a reader could not find the north star from the document that argued
+  for it — the same findability failure the handoff thread records for RQ-4's own
+  supersession. Named now.
 
 ## Open Questions
 

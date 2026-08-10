@@ -9,10 +9,19 @@
 //! Claude Code assertion, which is the measuring-the-wrong-thing-accurately
 //! defect `CLAUDE.md` records for the kan-conformance floor.
 
-mod common;
-
-use common::repo_root;
 use serde_json::Value;
+use std::path::PathBuf;
+
+/// The repo root. **Deliberately NOT `common::repo_root`**, though it is the
+/// same one line: `mod common;` drags in `tests/common/mod.rs`, which calls
+/// `std::os::unix::fs::symlink` — so importing it would make this target fail to
+/// COMPILE on Windows. Nothing in this file needs unix, and this is the
+/// conformance suite for a cross-harness portability milestone, so being the one
+/// integration target that runs on every platform is the point rather than a
+/// nicety. `.github/workflows/ci.yml`'s `windows` job runs exactly this target.
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
 
 /// The ten top-level fields the closed 1.0.0 plugin schema permits.
 /// `additionalProperties` is `false` at the root, verified against
@@ -87,14 +96,33 @@ fn frontmatter_field(front: &str, key: &str) -> Option<String> {
     })
 }
 
-/// AC-1 — `plugin.json` carries the required fields and **only** keys the closed
-/// schema permits.
+/// AC-1 — `plugin.json` satisfies the constraints day depends on, **field by
+/// field and by type**, not merely by key name.
 ///
-/// The closed-schema half is the part worth having. A manifest with an extra
-/// key is not a manifest a strict client warns about; §5 makes it invalid, and
-/// the failure mode of an invalid manifest is a plugin that does not load at
-/// all. Asserting the permitted set rather than the keys day happens to use
-/// means a future addition fails here instead of in a stranger's client.
+/// **This test shipped a fatal manifest defect and could not see it.** Its first
+/// version scanned top-level *key names* against the permitted set and stopped
+/// there. `plugin.json` carried `"author": "Maxine Levesque"` — a string where
+/// §5.4 defines an object of `name`/`email`/`url` — and every key name was
+/// legal, so the scan passed. A cold review caught it with a real validator.
+///
+/// The mechanism is the part worth remembering. §5.2 names exactly two
+/// non-fatal violations — an unknown top-level field, and a non-object
+/// `extensions` — and makes everything else fatal: *"the client MUST reject the
+/// plugin and MUST NOT discover or execute any of its components."* The scan was
+/// aimed precisely at the non-fatal category and was structurally incapable of
+/// reaching the fatal one, so it read as coverage while guaranteeing the
+/// cheapest thing available. day would have loaded **nothing** on a conformant
+/// client: no skills, no MCP server, on the milestone whose whole subject is
+/// being loadable elsewhere.
+///
+/// **Scoped honestly.** This asserts the constraints *day's own manifest* has to
+/// meet, which is what `CLAUDE.md` allows a cell like this to assert. It is not
+/// a JSON Schema implementation and must not pretend to be one — the schemas use
+/// `$ref`, `oneOf`, `not` and `propertyNames`, and a hand-rolled validator for
+/// those would be its own defect surface. **The authoritative check is
+/// `.github/workflows/agent-plugins.yml`**, which fetches both published schemas
+/// and validates both manifests with a real validator on every push, so a
+/// constraint this file does not model still fails the build.
 #[test]
 fn ac1_plugin_manifest_conforms_to_the_closed_1_0_0_schema() {
     let manifest = read_json("plugin.json");
@@ -118,6 +146,86 @@ fn ac1_plugin_manifest_conforms_to_the_closed_1_0_0_schema() {
              data belongs under `extensions`, keyed by a reverse-domain namespace — \
              never beside the ten permitted fields: {PERMITTED_PLUGIN_KEYS:?}"
         );
+    }
+
+    // EVERY field day ships, checked for TYPE — the half whose absence was the
+    // defect. A key name being legal says nothing about the value being legal,
+    // and only one of those two is fatal.
+    for (key, want_string) in [
+        ("$schema", true),
+        ("name", true),
+        ("version", true),
+        ("description", true),
+        ("homepage", true),
+        ("repository", true),
+        ("license", true),
+    ] {
+        if let Some(v) = obj.get(key) {
+            assert_eq!(
+                v.is_string(),
+                want_string,
+                "plugin.json's {key:?} must be a string; got {v}. §5.2: any schema \
+                 violation but an unknown top-level field or a non-object \
+                 `extensions` is FATAL — the client rejects the whole plugin."
+            );
+        }
+    }
+
+    // §5.4, the exact constraint that shipped broken: `author` is an OBJECT, and
+    // may contain only `name`, `email` and `url`, each a string.
+    if let Some(author) = obj.get("author") {
+        let author = author.as_object().unwrap_or_else(|| {
+            panic!(
+                "plugin.json's `author` must be an OBJECT of name/email/url, not \
+                 {author}. This exact defect shipped: a bare string passed a \
+                 key-name scan and would have made a conformant client reject \
+                 every component day ships (§5.4, §5.2)."
+            )
+        });
+        assert!(
+            !author.is_empty(),
+            "an empty `author` object says less than no `author` field at all"
+        );
+        for (k, v) in author {
+            assert!(
+                ["name", "email", "url"].contains(&k.as_str()),
+                "plugin.json's `author` may contain only name/email/url; got {k:?}. \
+                 §5.4: any other field makes the manifest invalid."
+            );
+            assert!(
+                v.is_string(),
+                "plugin.json's `author.{k}` must be a string; got {v}"
+            );
+        }
+    }
+
+    if let Some(keywords) = obj.get("keywords") {
+        let arr = keywords
+            .as_array()
+            .unwrap_or_else(|| panic!("`keywords` must be an array; got {keywords}"));
+        for k in arr {
+            assert!(k.is_string(), "every keyword must be a string; got {k}");
+        }
+    }
+
+    // §8.1: `extensions` is an object keyed by reverse-domain namespace whose
+    // values are objects. A non-object `extensions` is one of the two NON-fatal
+    // violations, which is exactly why it is worth failing here — CI's validator
+    // would report it and a client would shrug it off.
+    if let Some(ext) = obj.get("extensions") {
+        let ext = ext
+            .as_object()
+            .unwrap_or_else(|| panic!("`extensions` must be an object; got {ext}"));
+        for (ns, v) in ext {
+            assert!(
+                ns.contains('.'),
+                "`extensions` keys are reverse-domain namespaces; {ns:?} is not one"
+            );
+            assert!(
+                v.is_object(),
+                "`extensions.{ns}` must be an object; got {v}"
+            );
+        }
     }
 
     // §5.5's name constraints, asserted rather than assumed: 1–64 chars,
@@ -389,11 +497,19 @@ fn ac5_every_instructed_read_names_its_failure_handling() {
         }
     }
 
-    assert!(
-        bullets_checked >= 20,
-        "expected at least 20 instructed reads across the five skills, found \
-         {bullets_checked} — a drop that large means the bullet parse stopped \
-         matching, not that the skills got simpler"
+    // **Exact, not a floor.** `CLAUDE.md`: "Keep the count exact — it catches a
+    // parser that silently stopped matching — and derive the list, which catches
+    // a member that was never added. Neither substitutes for the other." This
+    // said `>= 20` against 28 actual bullets, so eight could have stopped being
+    // parsed with the test still green — the count half of the rule doing none
+    // of its job while looking like it was. The LIST is derived by
+    // `shipped_skills()`; this is the other half.
+    assert_eq!(
+        bullets_checked, 28,
+        "expected exactly 28 instructed reads across the five skills, found \
+         {bullets_checked}. If a bullet was added or removed, update this number \
+         — if it dropped sharply the bullet parse broke and every assertion above \
+         was checking nothing."
     );
 }
 
@@ -519,9 +635,21 @@ fn the_allowed_tools_divergence_from_the_spec_is_deliberate() {
     for name in shipped_skills() {
         let text = skill_text(&name);
         let (front, _) = split_frontmatter(&text, &name);
-        let Some(tools) = frontmatter_field(&front, "allowed-tools") else {
-            continue;
-        };
+        // **NOT a `let ... else { continue }`**, which is how this test was
+        // first written and why it guaranteed nothing. RQ-5 weighs three
+        // options — convert the field, DROP it, or keep the divergence — and a
+        // `continue` on absence passes for exactly the one RQ-5 rejected:
+        // removing `allowed-tools` from all five bodies left this green. That is
+        // `CLAUDE.md`'s "a read that fails is never a silently empty result"
+        // wearing a control-flow keyword.
+        let tools = frontmatter_field(&front, "allowed-tools").unwrap_or_else(|| {
+            panic!(
+                "skills/{name}/SKILL.md declares no `allowed-tools`. Dropping the \
+                 field is the option RQ-5 explicitly rejected: it degrades Claude \
+                 Code from pre-approved to prompting, which is a REQ-7 change. If \
+                 that is now the intent, change RQ-5 first."
+            )
+        });
         assert!(
             tools.contains(", "),
             "skills/{name}/SKILL.md's `allowed-tools` is no longer Claude Code's \

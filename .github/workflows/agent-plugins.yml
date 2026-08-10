@@ -1,0 +1,96 @@
+name: agent-plugins conformance
+
+# VALIDATE THE MANIFESTS WITH A REAL VALIDATOR, AGAINST THE PUBLISHED SCHEMAS.
+#
+# This job exists because the hermetic test that was supposed to cover it shipped
+# a FATAL manifest defect and could not see it. `plugin.json` carried
+# `"author": "Maxine Levesque"` — a string where §5.4 defines an object — and
+# `ac1_plugin_manifest_conforms_to_the_closed_1_0_0_schema` scanned top-level KEY
+# NAMES only, so every key was legal and the test passed. §5.2 names exactly two
+# non-fatal violations, an unknown top-level field and a non-object `extensions`,
+# and makes everything else fatal: "the client MUST reject the plugin and MUST
+# NOT discover or execute any of its components." The scan was aimed at the
+# non-fatal category and was structurally incapable of reaching the fatal one.
+#
+# WHY THIS IS NOT A RUST TEST. The suite is hermetic and must stay so, and these
+# schemas use `$ref`, `oneOf`, `not` and `propertyNames` — a hand-rolled
+# validator for those would be a second defect surface pretending to be a
+# guarantee. A vendored copy would go stale with nothing re-deriving it, which is
+# the hand-written-number defect this repo has recorded four times. Fetching the
+# PUBLISHED schema is the only form that catches both a bad manifest and a schema
+# that moved under us.
+#
+# WHY IT IS A SEPARATE WORKFLOW rather than a job in `ci.yml`: it needs network
+# to the spec host, and a network dependency inside the job that gates every push
+# would make an outage look like a code defect. Here it is legible as its own
+# red tick, and `ci.yml` stays hermetic.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet jsonschema
+
+      # A FETCH FAILURE MUST BE RED, NOT SKIPPED. Could-not-check outranks
+      # checked-and-clean; a validator that silently validates against nothing is
+      # the exact shape this job was created to end. `--fail` makes curl exit
+      # non-zero on an HTTP error instead of writing the error page to the file.
+      - name: Fetch the published 1.0.0 schemas
+        run: |
+          set -euo pipefail
+          curl -sS --fail --retry 3 --retry-delay 2 \
+            https://agent-plugins.org/schemas/1.0.0/plugin.schema.json -o /tmp/plugin.schema.json
+          curl -sS --fail --retry 3 --retry-delay 2 \
+            https://agent-plugins.org/schemas/1.0.0/mcp.schema.json -o /tmp/mcp.schema.json
+          python -c "import json;json.load(open('/tmp/plugin.schema.json'));json.load(open('/tmp/mcp.schema.json'))"
+          echo "fetched and parsed both schemas"
+
+      - name: Validate plugin.json and mcp.json
+        run: |
+          python - <<'PY'
+          import json, sys
+          from jsonschema import Draft202012Validator
+
+          pairs = [
+              ("plugin.json", "/tmp/plugin.schema.json"),
+              ("mcp.json", "/tmp/mcp.schema.json"),
+          ]
+          failed = False
+          for manifest, schema in pairs:
+              with open(manifest) as f:
+                  doc = json.load(f)
+              with open(schema) as f:
+                  sch = json.load(f)
+              errors = sorted(Draft202012Validator(sch).iter_errors(doc), key=lambda e: list(e.path))
+              if errors:
+                  failed = True
+                  for e in errors:
+                      where = "/".join(str(p) for p in e.path) or "(root)"
+                      print(f"::error file={manifest}::{where}: {e.message}")
+                  print(f"{manifest}: {len(errors)} error(s)")
+              else:
+                  print(f"{manifest}: OK")
+
+          # The manifest pins the schema version it claims to satisfy. If those
+          # two ever disagree, the validation above was run against a document
+          # the manifest never claimed to conform to — a green tick meaning
+          # nothing, which is worse than a red one.
+          with open("plugin.json") as f:
+              declared = json.load(f).get("$schema")
+          with open("/tmp/plugin.schema.json") as f:
+              actual = json.load(f).get("$id")
+          if declared != actual:
+              failed = True
+              print(f"::error file=plugin.json::declares $schema={declared!r} but the fetched schema's $id is {actual!r}")
+
+          sys.exit(1 if failed else 0)
+          PY

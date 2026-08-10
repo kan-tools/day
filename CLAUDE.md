@@ -452,8 +452,10 @@ So:
 - Every one of the kan-side misses above announces itself in `day doctor`, `day
   status`, or `day next <the atom you just wrote>`, and none of the three was
   run. The imperative is a `practice` item; what it costs to skip is here.
-- **A list that can be derived must be derived.** `commands/` read from the
-  directory cannot fail to grow; a literal pair can. When the enumeration was
+- **A list that can be derived must be derived.** The atom directory read from
+  disk cannot fail to grow; a literal pair can. (It was `commands/` when this was
+  written and is `skills/` since the Agent Plugins conversion — the rule is about
+  the derivation, not the path, and updating the path here is itself the rule.) When the enumeration was
   replaced by a directory read it went red immediately — four preambles
   unchecked, and the count that was supposed to catch exactly that still said
   13, because the count and the list fail differently and only one of them was

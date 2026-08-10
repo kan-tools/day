@@ -179,9 +179,14 @@ fn shipped_commands() -> Vec<String> {
         .map(|e| format!("skills/{}/SKILL.md", e.file_name().to_string_lossy()))
         .collect();
     out.sort();
+    // A floor, deliberately, and the exact count is asserted in
+    // `tests/agent_plugins.rs::ac3_every_skill_declares_the_name_of_its_directory`
+    // rather than here. This helper feeds several tests that care about "every
+    // shipped atom" and not about how many there are; duplicating the number
+    // would make adding an atom a two-file edit with one of them easy to miss.
     assert!(
-        out.len() >= 3,
-        "expected at least the three shipped atoms, found {out:?}"
+        out.len() >= 5,
+        "expected at least the five shipped atoms, found {out:?}"
     );
     out
 }
@@ -1217,21 +1222,31 @@ fn ac7_conventions_document_the_declared_block_mechanism() {
     );
 }
 
-/// day#99's guard, **retired and replaced**, recorded rather than deleted.
-///
-/// This test ran every `` !`…` `` preamble in two working directories and
-/// asserted it exits zero, because the harness treats a non-zero preamble as a
-/// load failure that aborts the whole skill before the model sees any of it. It
-/// was right about its own question, and the Agent Plugins conversion removed
-/// the question: there are no preambles left to exit anything.
-///
-/// What replaces it is stronger and cheaper — `ac4_no_skill_body_pre_executes_a_command`
-/// in `tests/agent_plugins.rs` fails the build on the syntax existing at all,
-/// with no exemption hatch, so the failure mode this guarded cannot be
-/// reintroduced rather than merely being caught when it is.
-///
-/// Noted here because a test that vanishes in a rename looks like a test that
-/// was quietly dropped, and this one took 224 s of every suite run.
+// day#99's guard, RETIRED AND REPLACED, recorded rather than deleted.
+//
+// This test ran every `!`-backtick preamble in two working directories and
+// asserted it exits zero, because the harness treats a non-zero preamble as a
+// load failure that aborts the whole skill before the model sees any of it. It
+// was right about its own question, and the Agent Plugins conversion removed
+// the question: there are no preambles left to exit anything.
+//
+// What replaces it is stronger and cheaper — `ac4_no_skill_body_pre_executes_a_command`
+// in `tests/agent_plugins.rs` fails the build on the syntax existing at all,
+// with no exemption hatch, so the failure mode this guarded cannot be
+// reintroduced rather than merely being caught when it is.
+//
+// Noted here because a test that vanishes in a rename looks like a test that
+// was quietly dropped, and this one took 224 s of every suite run.
+//
+// `//` AND NOT `///`, which is the second time this note got that wrong. Written
+// as a doc comment it attached to the function BELOW, so rustdoc documented
+// `the_boundary_check_is_wired_where_every_channel_reads` as "day#99's guard,
+// retired and replaced" — a cold review caught that. The first fix separated the
+// two with a `//` paragraph and left the note itself `///`, which clippy then
+// caught as `empty_line_after_doc_comments`: still a doc comment, still bound to
+// the next item. A retirement record documents nothing and must not be a doc
+// comment at all.
+
 /// `.design/position-honesty.md` AC-8 — the boundary check is wired at the
 /// **mechanism**, not at a caller.
 ///

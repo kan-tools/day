@@ -122,6 +122,15 @@ jobs:
       - name: Unit tests (see the note above for what this deliberately excludes)
         run: cargo test --lib
 
+      # THE PACKAGING-CONFORMANCE SUITE RUNS HERE TOO, and it is the one
+      # integration target that can. `tests/agent_plugins.rs` deliberately does
+      # not `mod common;` — that module calls `std::os::unix::fs::symlink`, and
+      # importing it for one `repo_root()` one-liner would have made the
+      # conformance suite for a CROSS-HARNESS PORTABILITY milestone the thing
+      # excluded from the only cross-platform job. Four lines bought this.
+      - name: Agent Plugins conformance suite
+        run: cargo test --test agent_plugins
+
       # THE ACTUAL QUESTION, cell 1: a Windows machine that HAS a POSIX shell.
       #
       # `windows-latest` ships Git for Windows, so `sh` is on PATH here. That
@@ -134,12 +143,27 @@ jobs:
       - name: bootstrap-check.sh, with a POSIX shell present
         shell: bash
         run: |
-          # NOT `set -e`: a non-zero exit is the single most interesting outcome
-          # here, and aborting on it would lose the exit code before the
-          # assertion below can name what went wrong.
+          # `set +e` EXPLICITLY, and it is load-bearing. GitHub Actions runs
+          # `shell: bash` as `bash --noprofile --norc -eo pipefail {0}`, so `-e`
+          # is ALREADY ON before this script starts and `set -uo pipefail` does
+          # not turn it off. An earlier version of this cell said "NOT `set -e`"
+          # and set only `-uo`, which left `-e` live: the capture below aborted
+          # the step on a non-zero hook and the diagnostic three lines down was
+          # unreachable, so the interesting case exited 3 having printed nothing
+          # about why. It failed toward red rather than toward a false pass, but
+          # it was a comment asserting a mechanism the mechanism contradicted —
+          # in the job whose stated subject is that could-not-check outranks
+          # checked-and-clean. Measured both ways before this line was written.
+          set +e
           set -uo pipefail
 
-          out=$(sh hooks/bootstrap-check.sh)
+          # Invoked the way `hooks/hooks.json` invokes it — directly, via the
+          # shebang, mode 100755 — rather than as `sh <script>`. Those are not
+          # the same test: `sh <script>` runs under whatever `sh` is on PATH and
+          # would pass on a machine where the shipped invocation cannot execute
+          # at all, which is precisely the Windows question this job is here to
+          # answer.
+          out=$(./hooks/bootstrap-check.sh)
           code=$?
           echo "exit=$code"
           echo "$out"
