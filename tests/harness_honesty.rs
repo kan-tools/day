@@ -118,6 +118,73 @@ fn every_released_tag_has_a_migration_expectation() {
     );
 }
 
+/// The commit date of a tag, in the `%cs` form `CHANGELOG.md`'s headings use.
+fn tag_commit_date(tag: &str) -> String {
+    let out = Command::new("git")
+        .args(["log", "-1", "--format=%cs", tag])
+        .current_dir(repo_root())
+        .output()
+        .expect("git should be runnable");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// **Every released tag has a `CHANGELOG.md` section, dated as the tag is
+/// dated.**
+///
+/// The changelog is written by hand, which is the shape this repo has shipped
+/// wrong repeatedly: a list nothing derives grows a hole the moment somebody
+/// tags without editing it. It did, within about an hour of the file landing —
+/// `v0.12.0-beta.2` was cut and the newest section stayed `v0.12.0-beta.1`,
+/// with the released work still sitting under `[Unreleased]`. A reviewer caught
+/// that; a reviewer is not a mechanism.
+///
+/// **The date is checked against `git log -1 --format=%cs <tag>`**, which is
+/// what the entries were written from. A heading that disagrees is either a
+/// typo or — the case worth catching — an item attributed to the wrong release,
+/// which is how day#131 came to sit under `[Unreleased]` after shipping in
+/// `v0.12.0-beta.1`.
+///
+/// **It reports could-not-check rather than passing** over an empty tag set,
+/// for exactly the reason the migration check above does: a completeness
+/// assertion over nothing is vacuously true, and a shallow checkout is the
+/// usual cause.
+#[test]
+fn every_released_tag_has_a_changelog_section() {
+    let tags = released_tags();
+    assert!(
+        !tags.is_empty(),
+        "could not check: no `v*.*.*` tags are visible, so this test has \
+         nothing to be complete about. That is not a pass — see \
+         `every_released_tag_has_a_migration_expectation`."
+    );
+
+    let text = read("CHANGELOG.md");
+    let problems: Vec<String> = tags
+        .iter()
+        .filter_map(|tag| {
+            let heading = format!("## [{tag}] — ");
+            match text.lines().find(|l| l.starts_with(&heading)) {
+                None => Some(format!("{tag}: no `{heading}…` section")),
+                Some(line) => {
+                    let dated = line[heading.len()..].trim();
+                    let actual = tag_commit_date(tag);
+                    (dated != actual)
+                        .then(|| format!("{tag}: section dated {dated}, tag committed {actual}"))
+                }
+            }
+        })
+        .collect();
+
+    assert!(
+        problems.is_empty(),
+        "CHANGELOG.md does not account for every released tag:\n{}\n\n\
+         Add the section before tagging. Which release contains an item is \
+         decided by `git tag --contains <commit>`, never by an issue's close \
+         date — day#131 closed six hours after the tag it shipped in.",
+        problems.join("\n")
+    );
+}
+
 /// The pipeline stages of the workflow's tag enumeration. Taken as text so the
 /// evasions a cold review named can be driven against it directly, rather than
 /// only against the file that currently happens to be clean.
