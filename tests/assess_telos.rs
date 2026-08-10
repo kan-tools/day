@@ -1224,3 +1224,42 @@ fn a_fully_retracted_telos_is_excluded_from_the_all_sweep_and_counted() {
         "an explicitly named retracted telos is still inspectable: {stdout}"
     );
 }
+
+/// In an `--all` sweep the run-constant coda prints once, not per telos.
+///
+/// The per-telos record command (whose `--cites` differs each time) stays per
+/// telos; the exit-code and single-frame pedagogy — identical every time —
+/// printed fourteen copies on day's own log, which trains exactly the
+/// skimming it warns against. A single assessment keeps the coda attached.
+#[test]
+fn the_all_sweep_prints_the_run_constant_coda_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("first", "bafyreia", &["design-doc"]),
+            telos_claim("second", "bafyreib", &["design-doc"]),
+            witness_schema("bafyreiw", r#"{"design-doc":{"path":".design/*.md"}}"#),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "--all"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let codas = stdout.matches("exit code is a reading").count();
+    assert_eq!(
+        codas, 1,
+        "the coda must print exactly once per run: {stdout}"
+    );
+    let record = stdout.matches("To record it:").count();
+    assert_eq!(record, 2, "the record command stays per telos: {stdout}");
+
+    // A single assessment keeps the coda attached.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "first"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        stdout.matches("exit code is a reading").count(),
+        1,
+        "single-telos output is unchanged: {stdout}"
+    );
+}

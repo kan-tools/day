@@ -809,6 +809,15 @@ impl Report {
     }
 
     pub fn render(&self) -> String {
+        format!("{}{}", self.render_bare(), Self::coda())
+    }
+
+    /// Everything telos-specific and nothing twice-tellable. The `--all`
+    /// sweep renders this per telos and [`Report::coda`] once at the end of
+    /// the run: fourteen identical copies of the same pedagogy trained
+    /// exactly the skimming the pedagogy warns against. The per-telos record
+    /// command stays per telos — its `--cites` differs each time.
+    pub fn render_bare(&self) -> String {
         let mut out = format!("Telos assessment — {}{}\n", atoms::TELOS_PREFIX, self.telos);
         if let Some(statement) = &self.statement {
             out.push_str(&format!("  {statement}\n"));
@@ -911,24 +920,24 @@ impl Report {
              To record it:\n{}\n",
             self.record_command
         ));
-        // AC-27. The exit code is a **lens** over the witness state above, not
-        // a property of the telos: a filter applied to get an up/down readout
-        // for a script or a status bar, derived on each invocation and never
-        // stored. Said out loud because the whole surface reads like a pass/fail
-        // otherwise, and a telos that can be permanently green is one whose
-        // assessment has been replaced by a token — which is exactly what RQ-11
-        // forbids a witness from consuming. day already refuses to store it;
-        // this is the report refusing to imply it.
-        out.push_str(
-            "\n  The exit code is a reading taken from the evidence above, not a verdict\n  \
-             stored on the telos. A telos is never permanently met: assess it again and\n  \
-             the answer is recomputed from whatever is true then.\n",
-        );
-        out.push_str(
-            "\n  Assessed within a single frame. Cross-frame reconciliation\n  \
-             (docs/TELOS.md) is not checked and is not implied.\n",
-        );
         out
+    }
+
+    /// The pedagogy that is identical for every assessment in a run.
+    // AC-27. The exit code is a **lens** over the witness state above, not
+    // a property of the telos: a filter applied to get an up/down readout
+    // for a script or a status bar, derived on each invocation and never
+    // stored. Said out loud because the whole surface reads like a pass/fail
+    // otherwise, and a telos that can be permanently green is one whose
+    // assessment has been replaced by a token — which is exactly what RQ-11
+    // forbids a witness from consuming. day already refuses to store it;
+    // this is the report refusing to imply it.
+    pub fn coda() -> &'static str {
+        "\n  The exit code is a reading taken from the evidence above, not a verdict\n  \
+         stored on the telos. A telos is never permanently met: assess it again and\n  \
+         the answer is recomputed from whatever is true then.\n\
+         \n  Assessed within a single frame. Cross-frame reconciliation\n  \
+         (docs/TELOS.md) is not checked and is not implied.\n"
     }
 }
 

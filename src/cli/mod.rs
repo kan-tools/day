@@ -820,13 +820,23 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
 
             let mut clean = true;
             let mut unavailable = false;
+            let mut rendered = 0usize;
             for (i, slug) in slugs.iter().enumerate() {
                 if i > 0 {
                     println!("{}", "-".repeat(60));
                 }
                 match crate::telos::assess(&client, &git, slug, auth) {
                     Ok(report) => {
-                        print!("{}", report.render());
+                        // In a sweep the run-constant coda prints once at the
+                        // end; a single assessment keeps it attached. Fourteen
+                        // identical copies per run trained exactly the
+                        // skimming the coda warns against.
+                        if all {
+                            print!("{}", report.render_bare());
+                        } else {
+                            print!("{}", report.render());
+                        }
+                        rendered += 1;
                         clean &= report.is_clean();
                     }
                     // A named telos that cannot be assessed is a failed
@@ -845,6 +855,12 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                         unavailable = true;
                     }
                 }
+            }
+            // Once, and only when at least one assessment rendered — the coda
+            // reads "the evidence above", and above an all-errors sweep there
+            // is none.
+            if all && rendered > 0 {
+                print!("{}", crate::telos::Report::coda());
             }
             // "Could not check" outranks "checked and found something": a
             // check that never ran is the weaker guarantee of the two.
