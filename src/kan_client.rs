@@ -331,10 +331,6 @@ impl KanClient {
         }
     }
 
-    pub fn bin(&self) -> &str {
-        &self.bin
-    }
-
     fn run(&self, args: &[&str]) -> Result<String, Error> {
         let output = Command::new(&self.bin)
             .args(args)
