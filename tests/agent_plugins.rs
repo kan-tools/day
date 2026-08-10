@@ -151,19 +151,23 @@ fn ac1_plugin_manifest_conforms_to_the_closed_1_0_0_schema() {
     // EVERY field day ships, checked for TYPE — the half whose absence was the
     // defect. A key name being legal says nothing about the value being legal,
     // and only one of those two is fatal.
-    for (key, want_string) in [
-        ("$schema", true),
-        ("name", true),
-        ("version", true),
-        ("description", true),
-        ("homepage", true),
-        ("repository", true),
-        ("license", true),
+    // A flat list, not `(key, want_string)` pairs: every pair carried `true`, so
+    // the parameter was machinery around `assert!(v.is_string())` that read as
+    // though some field might legitimately not be a string. `author`,
+    // `keywords` and `extensions` are the non-string fields and each is checked
+    // against its own shape below.
+    for key in [
+        "$schema",
+        "name",
+        "version",
+        "description",
+        "homepage",
+        "repository",
+        "license",
     ] {
         if let Some(v) = obj.get(key) {
-            assert_eq!(
+            assert!(
                 v.is_string(),
-                want_string,
                 "plugin.json's {key:?} must be a string; got {v}. §5.2: any schema \
                  violation but an unknown top-level field or a non-object \
                  `extensions` is FATAL — the client rejects the whole plugin."

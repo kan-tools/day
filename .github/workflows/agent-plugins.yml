@@ -70,6 +70,33 @@ jobs:
                   doc = json.load(f)
               with open(schema) as f:
                   sch = json.load(f)
+
+              # A PARSEABLE NON-SCHEMA MUST BE NAMED, NOT RAISED. Without this,
+              # anything that is valid JSON and HTTP 200 — a proxy page, an error
+              # body, a redirect landing — reaches the validator and dies as a
+              # traceback. That is red, so it is safe, but "could not check"
+              # deserves to say so rather than arriving as a stack trace nobody
+              # reads to the end.
+              try:
+                  Draft202012Validator.check_schema(sch)
+              except Exception as exc:
+                  failed = True
+                  print(f"::error file={manifest}::{schema} is valid JSON but not a valid JSON Schema, so nothing was validated: {exc}")
+                  continue
+
+              # THE MANIFEST PINS THE SCHEMA VERSION IT CLAIMS TO SATISFY, and
+              # this is checked for BOTH manifests. It was written for plugin.json
+              # alone under a comment phrased generally, which a cold review
+              # demonstrated by serving `{}` as the mcp schema: valid JSON, HTTP
+              # 200, so the fetch step passed and mcp.json "validated" against a
+              # document it never claimed to conform to. Exactly the green tick
+              # meaning nothing that the guard exists to prevent, in the half the
+              # guard did not cover.
+              declared, actual = doc.get("$schema"), sch.get("$id")
+              if declared != actual:
+                  failed = True
+                  print(f"::error file={manifest}::declares $schema={declared!r} but the fetched schema's $id is {actual!r}, so the validation below was run against the wrong document")
+
               errors = sorted(Draft202012Validator(sch).iter_errors(doc), key=lambda e: list(e.path))
               if errors:
                   failed = True
@@ -79,18 +106,6 @@ jobs:
                   print(f"{manifest}: {len(errors)} error(s)")
               else:
                   print(f"{manifest}: OK")
-
-          # The manifest pins the schema version it claims to satisfy. If those
-          # two ever disagree, the validation above was run against a document
-          # the manifest never claimed to conform to — a green tick meaning
-          # nothing, which is worse than a red one.
-          with open("plugin.json") as f:
-              declared = json.load(f).get("$schema")
-          with open("/tmp/plugin.schema.json") as f:
-              actual = json.load(f).get("$id")
-          if declared != actual:
-              failed = True
-              print(f"::error file=plugin.json::declares $schema={declared!r} but the fetched schema's $id is {actual!r}")
 
           sys.exit(1 if failed else 0)
           PY

@@ -168,8 +168,27 @@ jobs:
           echo "exit=$code"
           echo "$out"
 
+          # 126 AND 127 ARE COULD-NOT-CHECK, NOT A VERDICT ON THE HOOK, and
+          # separating them is the point of this cell rather than a refinement of
+          # it. The shell returns 126 when a file exists and cannot be executed
+          # and 127 when the interpreter is not found — which is exactly what a
+          # CRLF shebang produces: the kernel looks for `/bin/sh` followed by a
+          # carriage return and reports `bad interpreter`. Folding that into the
+          # check below would emit a definite and FALSE finding, blaming the
+          # hook's advisory contract for a checkout artifact, in the job whose
+          # stated subject is that could-not-check outranks checked-and-clean.
+          # `.gitattributes` pins `*.sh` to `eol=lf` so this should not fire; if
+          # it does, that pin stopped working and the message must say so rather
+          # than sending the reader to the script.
+          if [ "$code" = "126" ] || [ "$code" = "127" ]; then
+            echo "::error::COULD NOT EXECUTE hooks/bootstrap-check.sh (exit $code) -- the hook never ran, so this cell establishes NOTHING about its behaviour. Almost certainly line endings or the exec bit rather than the script: a CRLF shebang makes the kernel look for /bin/sh followed by a carriage return. Check that .gitattributes still pins *.sh to eol=lf and that the file is mode 100755."
+            file hooks/bootstrap-check.sh || true
+            head -c 20 hooks/bootstrap-check.sh | od -c | head -2 || true
+            exit 1
+          fi
+
           if [ "$code" != "0" ]; then
-            echo "::error::the hook exited $code. It is advisory and must exit 0 unconditionally -- a hook that fails a session because a dependency is missing is the gate telos/affordance-not-enforcement forbids."
+            echo "::error::the hook RAN and exited $code. It is advisory and must exit 0 unconditionally -- a hook that fails a session because a dependency is missing is the gate telos/affordance-not-enforcement forbids."
             exit 1
           fi
 
