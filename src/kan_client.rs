@@ -771,7 +771,7 @@ impl KanClient {
             args.push("--cites");
             args.push(cid);
         }
-        if let (Some(title), Some(kind)) = (write.title, write.kind) {
+        if let Some((title, kind)) = write.declaration {
             args.extend_from_slice(&["--title", title, "--kind", kind]);
         }
         let cid = self.run(&args)?.trim().to_string();
@@ -813,8 +813,13 @@ pub struct Write<'a> {
     pub text: &'a str,
     pub subject: &'a str,
     pub cites: &'a [String],
-    pub title: Option<&'a str>,
-    pub kind: Option<&'a str>,
+    /// `--title` and `--kind`, together or not at all. One field rather than
+    /// two `Option`s because the half-set state used to be representable and
+    /// was silently dropped: a title passed without a kind emitted neither
+    /// flag, guarded only by clap's `requires` at one call surface — the
+    /// call-site shape day#101 names, on the exact defect `CLAUDE.md` records
+    /// (`--title` silently discarding a title). A pair cannot be half-set.
+    pub declaration: Option<(&'a str, &'a str)>,
 }
 
 impl<'a> Write<'a> {
@@ -824,8 +829,7 @@ impl<'a> Write<'a> {
             text,
             subject,
             cites: &[],
-            title: None,
-            kind: None,
+            declaration: None,
         }
     }
 
@@ -835,8 +839,7 @@ impl<'a> Write<'a> {
     }
 
     pub fn declaring(mut self, title: &'a str, kind: &'a str) -> Self {
-        self.title = Some(title);
-        self.kind = Some(kind);
+        self.declaration = Some((title, kind));
         self
     }
 }

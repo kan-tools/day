@@ -19,6 +19,11 @@ pub enum Error {
     Kan(#[from] kan_client::Error),
     #[error("no subject `{0}` exists yet — declare it before referring to it")]
     NoSuchSubject(String),
+    #[error(
+        "a title and a kind travel together: got one without the other. \
+         day refuses rather than silently dropping the one it was given"
+    )]
+    HalfDeclared,
 }
 
 /// What kind of act a claim records — all [`Outcome::render`] needs in order
@@ -81,6 +86,14 @@ pub fn newest_claim(client: &KanClient, subject: &str) -> Result<Option<String>,
 }
 
 pub fn declare(client: &KanClient, d: Declaration<'_>) -> Result<Outcome, Error> {
+    // A title without a kind used to be silently dropped one layer down —
+    // clap's `requires` on one call surface was the only guard, which is the
+    // call-site shape day#101 names. The mechanism refuses instead. Checked
+    // before any kan read, so the refusal cannot be masked by kan being
+    // unreachable.
+    if d.title.is_some() != d.kind.is_some() {
+        return Err(Error::HalfDeclared);
+    }
     let prior = newest_claim(client, d.subject)?;
     let revised = prior.is_some();
 
@@ -95,7 +108,9 @@ pub fn declare(client: &KanClient, d: Declaration<'_>) -> Result<Outcome, Error>
     }
 
     let mut write = Write::new(d.verb, d.subject, d.text).cites(&cites);
-    if let (Some(title), Some(kind)) = (d.title, d.kind) {
+    // The guard above makes this pair all-or-nothing; `zip` is not a filter
+    // here, it is the two-Options-to-one-pair conversion.
+    if let Some((title, kind)) = d.title.zip(d.kind) {
         write = write.declaring(title, kind);
     }
     let cid = client.append(write)?;
@@ -112,6 +127,33 @@ pub fn declare(client: &KanClient, d: Declaration<'_>) -> Result<Outcome, Error>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The `--title` silent drop, closed at the mechanism rather than at a
+    /// call surface. The stub binary here does not exist, so this also pins
+    /// that the refusal happens *before* any kan read — a guard that ran
+    /// after `newest_claim` would report kan unreachable instead of the
+    /// actual mistake.
+    #[test]
+    fn a_title_without_a_kind_is_refused_not_dropped() {
+        let client = KanClient::with_bin(".", "kan-binary-that-must-not-run");
+        let err = declare(
+            &client,
+            Declaration {
+                subject: "telos/t",
+                verb: "decide",
+                text: "a telos",
+                title: Some("Titled"),
+                kind: None,
+                also_cite: &[],
+                act: Act::Declare,
+            },
+        )
+        .expect_err("half a declaration must be refused");
+        assert!(
+            matches!(err, Error::HalfDeclared),
+            "expected HalfDeclared, got: {err}"
+        );
+    }
 
     #[test]
     fn a_missing_referenced_subject_is_named() {
