@@ -843,10 +843,19 @@ impl Report {
                 if let Some(note) = &finding.scope_note {
                     out.push_str(&format!("             {note}\n"));
                 }
-                if let Some(claim) = &finding.asserted_by {
-                    out.push_str(&format!(
-                        "             asserted in prose by {claim} — not material evidence\n"
-                    ));
+                // Only when the verdict did NOT find material evidence. The
+                // note exists to flag a witness the log asserts and nothing
+                // evidences; under `[MATERIAL]` it read as day disputing its
+                // own verdict — and the newest prose match was typically the
+                // very assessment the previous run's record_command
+                // instructed, so following day's advice made day flag it.
+                let satisfied = matches!(&finding.verdict, Some(Verdict::Satisfied(_)));
+                if !satisfied {
+                    if let Some(claim) = &finding.asserted_by {
+                        out.push_str(&format!(
+                            "             asserted in prose by {claim} — not material evidence\n"
+                        ));
+                    }
                 }
             }
             // Any-of groups are stated after the per-type verdicts, because
@@ -1509,6 +1518,36 @@ mod tests {
         assert!(
             !report.is_clean(),
             "a prose assertion must not rescue a failing probe"
+        );
+    }
+
+    /// The complement, found by running `assess --all` on day's own log: under
+    /// `[MATERIAL]` the note read as day disputing its own verdict, and the
+    /// newest prose match was typically the very `kan result` the previous
+    /// run's record_command instructed — so following day's advice made day
+    /// flag the record of following it.
+    #[test]
+    fn a_satisfied_witness_renders_no_prose_assertion_note() {
+        let report = Report {
+            telos: "t".into(),
+            statement: None,
+            findings: vec![WitnessFinding {
+                witness: "published-artifact".into(),
+                verdict: Some(Verdict::Satisfied("git tag v1.0.0".into())),
+                asserted_by: Some("bafyclaim".into()),
+                scope_note: None,
+            }],
+            checkable: true,
+            groups: vec![crate::bridge::Group::One("published-artifact".into())],
+            prompts: vec![],
+            record_command: String::new(),
+        };
+        let rendered = report.render();
+        assert!(rendered.contains("[MATERIAL]"), "{rendered}");
+        assert!(
+            !rendered.contains("not material evidence"),
+            "material evidence needs no prose caveat — the note is for a \
+             witness the log asserts and nothing evidences: {rendered}"
         );
     }
 
