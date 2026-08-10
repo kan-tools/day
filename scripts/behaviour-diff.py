@@ -332,7 +332,6 @@ def main() -> int:
             if before[verb] != after[verb]:
                 key = f"{fx.name}:{verb}"
                 changed.append(key)
-                (unexplained, changed)[key in declared]  # noop, readability
                 if key not in declared:
                     unexplained.append((key, before[verb], after[verb]))
 
