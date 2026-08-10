@@ -40,12 +40,37 @@ command -v kan >/dev/null 2>&1 || missing="${missing:+$missing }kan"
 banner='day plugin: required binaries are not on PATH'
 body='Missing: '"$missing"
 
+# The install commands are DERIVED, never hand-written. Every published day is
+# a pre-release, so a plain `cargo install day` errors; a plain `cargo install
+# kan` silently installs the one stable kan, 0.1.0, which is below day's
+# measured floor — the worse failure because it looks like it worked (day#50).
+# This script ships inside the plugin next to the two files that know the right
+# pins, so it reads them the same way tests/install_docs.rs derives the
+# README's: the day pin is this crate's version, the kan pin is the newest kan
+# tests/fixtures/kan-compat.tsv records as `ok`.
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+day_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/Cargo.toml" 2>/dev/null | head -n 1)
+kan_version=$(awk -F'	' '$2 == "ok" {v = $1} END {if (v != "") print substr(v, 2)}' \
+  "$root/tests/fixtures/kan-compat.tsv" 2>/dev/null)
+
 install_lines=
 case " $missing " in
-  *" day "*) install_lines="${install_lines}\\n    cargo install day" ;;
+  *" day "*)
+    if [ -n "$day_version" ]; then
+      install_lines="${install_lines}\\n    cargo install day --version $day_version"
+    else
+      # The derivation failed; say where the pin lives rather than print a
+      # command the README documents as broken.
+      install_lines="${install_lines}\\n    cargo install day --version <see the Install section of the plugin README>"
+    fi ;;
 esac
 case " $missing " in
-  *" kan "*) install_lines="${install_lines}\\n    cargo install kan" ;;
+  *" kan "*)
+    if [ -n "$kan_version" ]; then
+      install_lines="${install_lines}\\n    cargo install kan --version $kan_version"
+    else
+      install_lines="${install_lines}\\n    cargo install kan --version <see the Install section of the plugin README>"
+    fi ;;
 esac
 
 printf '{"systemMessage":"%s"}\n' "\

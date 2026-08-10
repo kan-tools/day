@@ -5,6 +5,7 @@
 {"body": {"done": ["published-artifact"], "in": ["design-doc"], "next": [], "out": ["code-change"]}, "fence": "day-atom"}
 {"body": {"have": ["intent"], "plan": {"seq": [{"atom": "design"}, {"any": [{"atom": "build"}, {"atom": "build"}]}]}, "telos": "corpus-telos"}, "fence": "day-bridge"}
 {"body": {"have": ["intent"], "plan": {"seq": [{"atom": "design"}, {"atom": "build"}]}, "telos": "corpus-telos"}, "fence": "day-bridge"}
+{"body": {"in": ["design-doc"], "next": ["corpus-review"], "out": ["code-change"]}, "fence": "day-atom"}
 {"body": {"in": ["intent"], "next": ["build"], "out": ["design-doc"]}, "fence": "day-atom"}
 {"body": {"scope": {"published-artifact": "v9*"}, "witnesses": ["published-artifact"]}, "fence": "day-telos"}
 {"body": {"witnesses": ["code-change"]}, "fence": "day-telos"}

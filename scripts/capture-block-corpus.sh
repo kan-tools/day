@@ -22,9 +22,18 @@
 # those are the block types whose readers changed most recently (day#34's scope,
 # day#70's ClaimShape), so the uncaptured half was the half with the most history.
 #
-# Usage: scripts/capture-block-corpus.sh [output-dir]
+# Usage: scripts/capture-block-corpus.sh [--current <tag>] [output-dir]
+#
+#   --current <tag>   capture only what the CURRENT tree writes, as <tag>.
+#                     Run by scripts/cut-release.sh before tagging; the
+#                     all-tags sweep stays the by-hand regeneration path.
 set -euo pipefail
 
+CURRENT_TAG=
+if [ "${1:-}" = "--current" ]; then
+  CURRENT_TAG="${2:?--current needs a tag}"
+  shift 2
+fi
 OUT="${1:-tests/fixtures/block-corpus}"
 REPO="$(git rev-parse --show-toplevel)"
 WORK="$(mktemp -d)"
@@ -59,6 +68,32 @@ if not any(s["subject"] == subj for s in status["subjects"]):
     status["subjects"].append({"subject": subj, "subjects": [subj], "state": "Unclassified"})
     json.dump(status, open(status_path, "w"))
 APPEND
+  # `kan show --all --json`, the bulk read day makes since v0.8 (day#71).
+  # Without it the stub answered `show --all` as though `--all` were a subject
+  # named "--all", so every read-before-write verb on a v0.8+ day met an empty
+  # log and was refused — and `day-bridge`, `day-witness` and `day-tension`
+  # silently vanished from the corpus for every tag from v0.8.0-beta.1 on.
+  # That is the generator's documented failure mode ("less output, checked by
+  # nothing") recurring in the tool built after it was documented; the
+  # monotone-coverage test in tests/block_corpus.rs is the check that now
+  # fails on it. Shape mirrors tests/common's STUB_SHOW_ALL_PY.
+  cat > "$dir/data/show_all.py" <<'SHOWALL'
+import json, sys, pathlib
+data = pathlib.Path(sys.argv[1])
+entries = []
+for f in sorted(data.glob("show-*.json")):
+    entry = json.loads(f.read_text())
+    entry.setdefault("inbound", [])
+    entry.setdefault("trust", {"base": "Solo", "authors": []})
+    entry.setdefault("excluded_by_trust", 0)
+    entries.append(entry)
+print(json.dumps({
+    "v": 1,
+    "trust": {"base": "Solo", "authors": []},
+    "excluded_by_trust": 0,
+    "subjects": entries,
+}))
+SHOWALL
   printf '{"v":1,"subjects":[]}\n' > "$dir/data/status.json"
   cat > "$dir/kan-stub.sh" <<'STUB'
 #!/bin/sh
@@ -68,6 +103,7 @@ case "$1" in
   identity) echo "did:key:zCorpusStub"; exit 0 ;;
   status|issues) cat "$D/status.json"; exit 0 ;;
   show)
+    if [ "$2" = "--all" ]; then python3 "$D/show_all.py" "$D"; exit 0; fi
     f="$D/show-$(printf '%s' "$2" | tr '/' '_').json"
     if [ -f "$f" ]; then cat "$f"
     else printf '{"v":1,"subject":"%s","subjects":[],"claims":[],"inbound":[]}\n' "$2"; fi
@@ -118,19 +154,11 @@ for fence, body in re.findall(r"```(day-[a-z]+)\n(.*?)\n```", text, re.S):
 PY
 }
 
-for tag in $(git -C "$REPO" tag --list 'v*' --sort=creatordate); do
-  echo "==> $tag"
-  tree="$WORK/$tag"
-  git -C "$REPO" worktree add --detach -q "$tree" "$tag" 2>/dev/null || {
-    echo "    could not check out $tag, skipping"; continue; }
-
-  if ! (cd "$tree" && cargo build --quiet --release 2>/dev/null); then
-    echo "    does not build with the current toolchain, skipping"
-    git -C "$REPO" worktree remove --force "$tree" 2>/dev/null || true
-    continue
-  fi
-
-  bin="$tree/target/release/day"
+# Drive one built binary through the scenario and write its corpus file.
+# Shared by the all-tags loop and `--current`, so the release-time capture
+# cannot drift from the historical one.
+capture_one() {
+  bin="$1"; tag="$2"
   run="$WORK/run-$tag"
   make_stub "$run"
   ( cd "$run" && git init -q . && git commit -q --allow-empty -m init )
@@ -146,8 +174,17 @@ for tag in $(git -C "$REPO" tag --list 'v*' --sort=creatordate); do
   # went missing the first time this ran.
   ( cd "$run" && "$bin" atom declare design --in intent --out design-doc --next build ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" atom declare build --in design-doc --out code-change --done published-artifact ) >/dev/null 2>&1 || true
+  # The shapes newer verbs write, each attempted for the same reason: a tag
+  # whose CLI predates the flag refuses it and appends nothing. `--revisits`
+  # writes the corpus's only `_version: 2` atom (v0.10+), and the pair is a
+  # proper return (corpus-build2 reaches corpus-review through `next`) so the
+  # captured block is a well-formed example, not a reported finding.
+  ( cd "$run" && "$bin" atom declare corpus-build2 --in design-doc --out code-change --next corpus-review ) >/dev/null 2>&1 || true
+  ( cd "$run" && "$bin" atom declare corpus-review --in code-change --out verdict --revisits corpus-build2 ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" telos declare corpus-telos "A captured telos." --witness code-change ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" telos declare corpus-scoped "A scoped telos." --witness published-artifact --scope 'published-artifact=v9*' ) >/dev/null 2>&1 || true
+  # `--witness-any` writes the nested-group witness list (v0.12+).
+  ( cd "$run" && "$bin" telos declare corpus-any "Either suffices." --witness-any code-change,verdict ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" bridge declare corpus-bridge --telos corpus-telos --have intent --plan "design > build" ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" bridge declare corpus-branch --telos corpus-telos --have intent --plan "design > (build | build)" ) >/dev/null 2>&1 || true
   ( cd "$run" && "$bin" telos tension corpus-telos corpus-scoped "A captured tension." ) >/dev/null 2>&1 || true
@@ -172,9 +209,35 @@ for tag in $(git -C "$REPO" tag --list 'v*' --sort=creatordate); do
     echo "    (removing empty fixture: this version wrote no capturable block)"
     rm -f "$out"
   fi
+}
 
-  git -C "$REPO" worktree remove --force "$tree" 2>/dev/null || true
-done
+if [ "${CURRENT_TAG:-}" != "" ]; then
+  # `--current <tag>`: capture what the CURRENT tree writes, under the tag
+  # about to be cut. Run by scripts/cut-release.sh before tagging, for the
+  # same reason the migration row is measured there: a corpus row added on the
+  # tag push cannot fail until the NEXT release, which is how this corpus went
+  # stale by eleven releases with every check green (2026-08-10 review,
+  # finding 2). The tree at cut time is by construction the release content.
+  echo "==> $CURRENT_TAG (current tree)"
+  ( cd "$REPO" && cargo build --quiet --release )
+  capture_one "$REPO/target/release/day" "$CURRENT_TAG"
+else
+  for tag in $(git -C "$REPO" tag --list 'v*' --sort=creatordate); do
+    echo "==> $tag"
+    tree="$WORK/$tag"
+    git -C "$REPO" worktree add --detach -q "$tree" "$tag" 2>/dev/null || {
+      echo "    could not check out $tag, skipping"; continue; }
+
+    if ! (cd "$tree" && cargo build --quiet --release 2>/dev/null); then
+      echo "    does not build with the current toolchain, skipping"
+      git -C "$REPO" worktree remove --force "$tree" 2>/dev/null || true
+      continue
+    fi
+
+    capture_one "$tree/target/release/day" "$tag"
+    git -C "$REPO" worktree remove --force "$tree" 2>/dev/null || true
+  done
+fi
 
 echo
 echo "Corpus written to $OUT. Commit it; tests/block_corpus.rs reads it on every push."

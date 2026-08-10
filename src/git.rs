@@ -212,8 +212,6 @@ impl Git {
     ///
     /// fallback: no-boundary-fingerprint
     pub fn position_fingerprint(&self) -> Result<String, Error> {
-        use std::hash::{Hash, Hasher};
-
         let boundary = self
             .cycle_boundary()?
             .map(|b| b.tag)
@@ -222,20 +220,12 @@ impl Git {
         // changed-since half is then simply empty.
         let mut changed = self.changed_files(&boundary).unwrap_or_default();
         changed.sort();
-        // The tracked set, which is what the no-boundary fallback reads. Hashed
-        // rather than inlined: a repo's file list is long, and this value is
-        // written to the cache and compared, not read by a person.
+        // The tracked set, which is what the no-boundary fallback reads.
         //
         // fallback: no-boundary-fingerprint
         let mut tracked = self.tracked_files("*").unwrap_or_default();
         tracked.sort();
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        tracked.hash(&mut hasher);
-        Ok(format!(
-            "{boundary}:{}:{:x}",
-            changed.join(","),
-            hasher.finish()
-        ))
+        Ok(fingerprint_of(&boundary, &changed, &tracked))
     }
 
     pub fn changed_files(&self, since: &str) -> Result<Vec<String>, Error> {
@@ -300,4 +290,62 @@ impl Boundary {
 /// used to give a clearer error than a git failure would.
 pub fn looks_like_repo(root: &Path) -> bool {
     root.join(".git").exists()
+}
+
+/// The fingerprint's rendering, separated from the git reads so it can be
+/// pinned by a test that needs no repository.
+///
+/// Both file lists are hashed — with NUL element separators, which no path
+/// can contain — rather than one inlined with `,`, which a path *can*
+/// contain: `["a,b"]` and `["a", "b"]` used to render identically, so a
+/// position move between those states served a stale line, silently. And FNV
+/// rather than `DefaultHasher`, whose value this is compared against across
+/// runs of possibly different toolchains — `src/record.rs` holds the
+/// algorithm and the rationale. The boundary stays readable up front: it is
+/// the one part a person scanning the cache file can act on.
+fn fingerprint_of(boundary: &str, changed: &[String], tracked: &[String]) -> String {
+    let mut bytes = Vec::new();
+    for list in [changed, tracked] {
+        bytes.extend_from_slice(&(list.len() as u64).to_le_bytes());
+        for path in list {
+            bytes.extend_from_slice(path.as_bytes());
+            bytes.push(0);
+        }
+    }
+    format!("{boundary}:{:016x}", crate::record::fnv1a(&bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The comma-ambiguity defect: one path containing a comma and two paths
+    /// used to render the same inlined string, so a real position move could
+    /// serve a stale fingerprint. NUL-separated hashing makes the two feeds
+    /// distinct by construction.
+    #[test]
+    fn a_path_containing_a_comma_is_not_two_paths() {
+        let one = fingerprint_of("v1", &["a,b".into()], &[]);
+        let two = fingerprint_of("v1", &["a".into(), "b".into()], &[]);
+        assert_ne!(one, two, "{one} vs {two}");
+    }
+
+    /// The NUL separator's own case: equal counts, equal concatenation, so
+    /// neither the length prefix nor the bytes alone can tell them apart —
+    /// only the element boundary can.
+    #[test]
+    fn an_element_boundary_cannot_migrate() {
+        let one = fingerprint_of("v1", &["ab".into(), "c".into()], &[]);
+        let two = fingerprint_of("v1", &["a".into(), "bc".into()], &[]);
+        assert_ne!(one, two);
+    }
+
+    /// The two lists are length-prefixed, so an element cannot migrate from
+    /// one list to the other and feed the same bytes.
+    #[test]
+    fn a_changed_file_is_not_a_tracked_file() {
+        let changed = fingerprint_of("v1", &["a".into()], &[]);
+        let tracked = fingerprint_of("v1", &[], &["a".into()]);
+        assert_ne!(changed, tracked);
+    }
 }

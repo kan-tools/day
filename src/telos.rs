@@ -326,10 +326,18 @@ pub enum Error {
     // Every variant that concerns one subject **names that subject**, so a
     // caller which already knows it does not have to guess whether to prefix.
     // Guessing is what printed `telos/bad: telos/bad: …`.
-    #[error("{}{}: no such telos is declared", atoms::TELOS_PREFIX, .0)]
-    NoSuchTelos(String),
-    #[error("no atom `{0}` is declared")]
-    NoSuchAtom(String),
+    //
+    // And it names what IS declared: the reader's next act after a typo is to
+    // find the right slug, and day already holds the list it would tell them
+    // to go and derive (`telos/v1.0`: error messages that teach).
+    #[error(
+        "{}{slug}: no such telos is declared{}",
+        atoms::TELOS_PREFIX,
+        list_known("teloi", declared)
+    )]
+    NoSuchTelos { slug: String, declared: Vec<String> },
+    #[error("no atom `{slug}` is declared{}", list_known("atoms", declared))]
+    NoSuchAtom { slug: String, declared: Vec<String> },
     #[error(
         "no witness schema is declared for this project (expected a `{FENCE_INFO}` block on \
          subject `{SCHEMA_PREFIX}{WITNESS_SLUG}`).\n\nWhat would evidence a witness type is \
@@ -337,6 +345,15 @@ pub enum Error {
          published artifact differs by project. Record a starter with:\n\n{starter}"
     )]
     NotDeclared { starter: String },
+}
+
+/// `. Declared teloi: a, b, c` — or nothing when nothing is, because "the
+/// declared ones are: <empty>" reads as a render bug rather than a fact.
+pub(crate) fn list_known(what: &str, declared: &[String]) -> String {
+    if declared.is_empty() {
+        return format!(". No {what} are declared yet");
+    }
+    format!(". Declared {what}: {}", declared.join(", "))
 }
 
 /// What would evidence each witness type, declared per project.
@@ -809,6 +826,15 @@ impl Report {
     }
 
     pub fn render(&self) -> String {
+        format!("{}{}", self.render_bare(), Self::coda())
+    }
+
+    /// Everything telos-specific and nothing twice-tellable. The `--all`
+    /// sweep renders this per telos and [`Report::coda`] once at the end of
+    /// the run: fourteen identical copies of the same pedagogy trained
+    /// exactly the skimming the pedagogy warns against. The per-telos record
+    /// command stays per telos — its `--cites` differs each time.
+    pub fn render_bare(&self) -> String {
         let mut out = format!("Telos assessment — {}{}\n", atoms::TELOS_PREFIX, self.telos);
         if let Some(statement) = &self.statement {
             out.push_str(&format!("  {statement}\n"));
@@ -843,10 +869,19 @@ impl Report {
                 if let Some(note) = &finding.scope_note {
                     out.push_str(&format!("             {note}\n"));
                 }
-                if let Some(claim) = &finding.asserted_by {
-                    out.push_str(&format!(
-                        "             asserted in prose by {claim} — not material evidence\n"
-                    ));
+                // Only when the verdict did NOT find material evidence. The
+                // note exists to flag a witness the log asserts and nothing
+                // evidences; under `[MATERIAL]` it read as day disputing its
+                // own verdict — and the newest prose match was typically the
+                // very assessment the previous run's record_command
+                // instructed, so following day's advice made day flag it.
+                let satisfied = matches!(&finding.verdict, Some(Verdict::Satisfied(_)));
+                if !satisfied {
+                    if let Some(claim) = &finding.asserted_by {
+                        out.push_str(&format!(
+                            "             asserted in prose by {claim} — not material evidence\n"
+                        ));
+                    }
                 }
             }
             // Any-of groups are stated after the per-type verdicts, because
@@ -902,24 +937,24 @@ impl Report {
              To record it:\n{}\n",
             self.record_command
         ));
-        // AC-27. The exit code is a **lens** over the witness state above, not
-        // a property of the telos: a filter applied to get an up/down readout
-        // for a script or a status bar, derived on each invocation and never
-        // stored. Said out loud because the whole surface reads like a pass/fail
-        // otherwise, and a telos that can be permanently green is one whose
-        // assessment has been replaced by a token — which is exactly what RQ-11
-        // forbids a witness from consuming. day already refuses to store it;
-        // this is the report refusing to imply it.
-        out.push_str(
-            "\n  The exit code is a reading taken from the evidence above, not a verdict\n  \
-             stored on the telos. A telos is never permanently met: assess it again and\n  \
-             the answer is recomputed from whatever is true then.\n",
-        );
-        out.push_str(
-            "\n  Assessed within a single frame. Cross-frame reconciliation\n  \
-             (docs/TELOS.md) is not checked and is not implied.\n",
-        );
         out
+    }
+
+    /// The pedagogy that is identical for every assessment in a run.
+    // AC-27. The exit code is a **lens** over the witness state above, not
+    // a property of the telos: a filter applied to get an up/down readout
+    // for a script or a status bar, derived on each invocation and never
+    // stored. Said out loud because the whole surface reads like a pass/fail
+    // otherwise, and a telos that can be permanently green is one whose
+    // assessment has been replaced by a token — which is exactly what RQ-11
+    // forbids a witness from consuming. day already refuses to store it;
+    // this is the report refusing to imply it.
+    pub fn coda() -> &'static str {
+        "\n  The exit code is a reading taken from the evidence above, not a verdict\n  \
+         stored on the telos. A telos is never permanently met: assess it again and\n  \
+         the answer is recomputed from whatever is true then.\n\
+         \n  Assessed within a single frame. Cross-frame reconciliation\n  \
+         (docs/TELOS.md) is not checked and is not implied.\n"
     }
 }
 
@@ -957,14 +992,33 @@ fn record_tier(
         };
         let plan = newest_fenced::<bridge::Plan>(client, &subject)?;
         if plan.is_some_and(|(_cid, p)| p.telos == slug) {
-            let reachable = bridge::check(client, bridge_slug)
-                .map(|r| r.is_reachable())
-                .unwrap_or(false);
-            prompts.push(format!(
-                "{subject} targets this telos and its plan {} reach it — but a plan that \
-                 could is not work that did",
-                if reachable { "could" } else { "could not" }
-            ));
+            // Three states, never two. This was `.unwrap_or(false)`, which
+            // rendered every error — an atom retracted after the bridge was
+            // declared, an unreadable plan — as "its plan could not reach it":
+            // a checked-and-negative verdict fabricated from a could-not-check
+            // (day#141). A kan read failure still propagates, as it does
+            // everywhere; only a state of the log that prevents the check
+            // degrades to a could-not-check line that names its cause.
+            //
+            // fallback: bridge-check-errored
+            match bridge::check(client, bridge_slug) {
+                Ok(report) => prompts.push(format!(
+                    "{subject} targets this telos and its plan {} reach it — but a plan \
+                     that could is not work that did",
+                    if report.is_reachable() {
+                        "could"
+                    } else {
+                        "could not"
+                    }
+                )),
+                Err(e @ (bridge::Error::Kan(_) | bridge::Error::Atoms(atoms::Error::Kan(_)))) => {
+                    return Err(e.into())
+                }
+                Err(e) => prompts.push(format!(
+                    "{subject} targets this telos, but whether its plan could reach it \
+                     could not be checked: {e}"
+                )),
+            }
         }
     }
     Ok(())
@@ -983,7 +1037,10 @@ pub fn assess(
     let subject = format!("{}{slug}", atoms::TELOS_PREFIX);
     let claims = client.show(&subject)?;
     if claims.is_empty() {
-        return Err(Error::NoSuchTelos(slug.to_string()));
+        return Err(Error::NoSuchTelos {
+            slug: slug.to_string(),
+            declared: all_slugs(client)?.slugs,
+        });
     }
 
     let declared = newest_fenced::<Witnesses>(client, &subject)?
@@ -1170,7 +1227,10 @@ pub fn assess_atom(
     let atom = atoms
         .iter()
         .find(|a| a.name == slug)
-        .ok_or_else(|| Error::NoSuchAtom(slug.to_string()))?;
+        .ok_or_else(|| Error::NoSuchAtom {
+            slug: slug.to_string(),
+            declared: atoms.iter().map(|a| a.name.clone()).collect(),
+        })?;
 
     let done = &atom.interface.done;
     if done.is_empty() {
@@ -1208,15 +1268,55 @@ pub fn assess_atom(
     })
 }
 
-/// Every declared telos, for `--all`.
-pub fn all_slugs(client: &KanClient) -> Result<Vec<String>, Error> {
-    let mut slugs: Vec<String> = client
-        .subjects()?
-        .into_iter()
-        .filter_map(|s| s.strip_prefix(atoms::TELOS_PREFIX).map(str::to_string))
-        .collect();
+/// The `--all` sweep: every telos still in play, and how many `telos/*`
+/// subjects were left out because nothing live declares them.
+pub struct Sweep {
+    pub slugs: Vec<String>,
+    /// Subjects whose claims fold to no statement and no title — a fully
+    /// retracted telos. The count is reported rather than the subjects
+    /// silently vanishing: the session hook already excludes these (its
+    /// per-subject fold skips a subject with nothing to render), and the two
+    /// surfaces disagreeing about how many teloi exist was itself a finding.
+    pub retracted: usize,
+}
+
+/// Every declared telos, for `--all` — folded before swept.
+///
+/// "In `subjects()`" is not "declared": a fully retracted telos still has a
+/// subject (its retraction claim is live) and used to get a full assessment
+/// block, complete with a `/witness-interview` suggestion and a record
+/// command citing the retraction's CID. The same fold the hook uses decides
+/// membership here, so `assess --all` and the hook count the same set.
+pub fn all_slugs(client: &KanClient) -> Result<Sweep, Error> {
+    let mut by_subject: BTreeMap<String, Vec<crate::kan_client::Claim>> = BTreeMap::new();
+    for (subject, claim) in client.show_all()? {
+        if subject.starts_with(atoms::TELOS_PREFIX) {
+            by_subject.entry(subject).or_default().push(claim);
+        }
+    }
+
+    let mut slugs = Vec::new();
+    let mut retracted = 0usize;
+    for subject in client.subjects()? {
+        let Some(slug) = subject.strip_prefix(atoms::TELOS_PREFIX) else {
+            continue;
+        };
+        match by_subject.get(&subject) {
+            // Listed by `status` but absent from the claim log — a state this
+            // fold cannot account for. Kept, so the sweep surfaces whatever
+            // `assess` finds there rather than quietly narrowing itself.
+            None => slugs.push(slug.to_string()),
+            Some(claims)
+                if crate::fold::declaration(claims).is_some()
+                    || crate::fold::title(claims).is_some() =>
+            {
+                slugs.push(slug.to_string())
+            }
+            Some(_) => retracted += 1,
+        }
+    }
     slugs.sort();
-    Ok(slugs)
+    Ok(Sweep { slugs, retracted })
 }
 
 #[cfg(test)]
@@ -1492,6 +1592,36 @@ mod tests {
         assert!(
             !report.is_clean(),
             "a prose assertion must not rescue a failing probe"
+        );
+    }
+
+    /// The complement, found by running `assess --all` on day's own log: under
+    /// `[MATERIAL]` the note read as day disputing its own verdict, and the
+    /// newest prose match was typically the very `kan result` the previous
+    /// run's record_command instructed — so following day's advice made day
+    /// flag the record of following it.
+    #[test]
+    fn a_satisfied_witness_renders_no_prose_assertion_note() {
+        let report = Report {
+            telos: "t".into(),
+            statement: None,
+            findings: vec![WitnessFinding {
+                witness: "published-artifact".into(),
+                verdict: Some(Verdict::Satisfied("git tag v1.0.0".into())),
+                asserted_by: Some("bafyclaim".into()),
+                scope_note: None,
+            }],
+            checkable: true,
+            groups: vec![crate::bridge::Group::One("published-artifact".into())],
+            prompts: vec![],
+            record_command: String::new(),
+        };
+        let rendered = report.render();
+        assert!(rendered.contains("[MATERIAL]"), "{rendered}");
+        assert!(
+            !rendered.contains("not material evidence"),
+            "material evidence needs no prose caveat — the note is for a \
+             witness the log asserts and nothing evidences: {rendered}"
         );
     }
 

@@ -889,6 +889,14 @@ fn unreadable_from(
 /// baseline is *the* last assessment regardless of which atom it was on.
 /// Claims kan returns are already live (retracted ones are gone), so a
 /// retracted assessment simply stops being the baseline — AC-14 for free.
+///
+/// The per-atom `show` calls here are **memo-served** (day#71): every one
+/// answers from the single bulk read `KanClient` already holds, so this loop
+/// costs zero kan subprocesses however many atoms are declared. Stated
+/// because the 2026-08 review read this loop as one invocation per atom —
+/// the pre-day#71 cost — and `tests/status.rs` now pins the property the
+/// comment claims, so the next reader gets an assertion rather than an
+/// argument.
 fn last_assessed_atom(client: &KanClient, atoms: &[Atom]) -> Result<Option<String>, Error> {
     let mut best: Option<(i64, String)> = None; // (recorded_at µs, atom slug)
     for atom in atoms {

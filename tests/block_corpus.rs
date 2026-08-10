@@ -61,9 +61,18 @@ fn load_corpus() -> Vec<Captured> {
 /// Deserializing a captured body into the type this build uses for that fence.
 /// Returns the error message on failure, so a break names the shape and the
 /// version that wrote it rather than just failing.
+///
+/// Through `day::atoms::parse_block` — the production entry point — not raw
+/// serde. The raw form re-implemented the read without the version gate, so
+/// the `_version: 2` atoms v0.10+ really write reported as unreadable here
+/// while the shipped reader reads them fine: a corpus harness validating the
+/// corpus against its own idea of the reader, which is the stub-test failure
+/// mode this suite exists to avoid.
 fn resolve(fence: &str, body: &serde_json::Value) -> Result<(), String> {
-    fn attempt<T: serde::de::DeserializeOwned>(body: &serde_json::Value) -> Result<(), String> {
-        serde_json::from_value::<T>(body.clone())
+    fn attempt<T: serde::de::DeserializeOwned + day::atoms::Versioned>(
+        body: &serde_json::Value,
+    ) -> Result<(), String> {
+        day::atoms::parse_block::<T>(&serde_json::to_string(body).map_err(|e| e.to_string())?)
             .map(|_| ())
             .map_err(|e| e.to_string())
     }
@@ -117,29 +126,101 @@ fn ac10_this_build_resolves_every_shape_a_released_version_wrote() {
     );
 }
 
-/// The corpus has to actually span day's release history, or the test above
-/// passes by covering nothing. Pins the versions and the fences present, so
-/// silently losing coverage fails rather than quietly shrinking the guarantee.
+/// The released tags the corpus must cover, derived from
+/// `tests/fixtures/migration-expectations.tsv` — the committed list
+/// `scripts/cut-release.sh` refuses to leave incomplete — rather than from
+/// `git tag`, which a shallow CI checkout does not have, or from a literal
+/// list, which is how the corpus went stale by eleven releases with every
+/// check green (2026-08-10 review, finding 2): the pin list was a floor that
+/// never grew, in the test carrying the derivation lesson in its own doc
+/// comment.
+fn released_tags() -> Vec<String> {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/migration-expectations.tsv");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{} is unreadable: {e}", path.display()));
+    let tags: Vec<String> = text
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('#') && !l.trim().is_empty())
+        .filter_map(|l| l.split('\t').next().map(str::to_string))
+        .collect();
+    assert!(
+        !tags.is_empty(),
+        "migration-expectations.tsv lists no released tags, so corpus \
+         completeness cannot mean anything"
+    );
+    tags
+}
+
+/// `v<major>.<minor>.<patch>-beta.<n>` as a sortable key. Every released day
+/// tag has this shape; refusing anything else is deliberate — a tag this
+/// cannot order would silently break the monotone-coverage assertion below.
+fn semver_key(tag: &str) -> (u64, u64, u64, u64) {
+    let parse = |s: &str| -> u64 {
+        s.parse()
+            .unwrap_or_else(|_| panic!("unparseable release tag component {s:?} in {tag:?}"))
+    };
+    let rest = tag
+        .strip_prefix('v')
+        .unwrap_or_else(|| panic!("tag {tag:?} lacks the v prefix"));
+    let (triplet, beta) = match rest.split_once("-beta.") {
+        Some((t, b)) => (t, parse(b)),
+        None => (rest, u64::MAX), // a stable release orders after its betas
+    };
+    let mut parts = triplet.split('.').map(parse);
+    (
+        parts.next().expect("major"),
+        parts.next().expect("minor"),
+        parts.next().expect("patch"),
+        beta,
+    )
+}
+
+/// Tags with a release row and no corpus file, each with the measured reason.
+/// v0.1.x had no write verbs at all — driven by the capture script, they
+/// append nothing, and an empty fixture claiming to be a version's shapes is
+/// worse than none.
+const WROTE_NO_BLOCKS: &[&str] = &["v0.1.1-beta.1", "v0.1.2-beta.1"];
+
+/// The corpus has to actually span day's release history, or the resolve test
+/// passes by covering nothing. Coverage is derived, not pinned: every tag the
+/// expectations file records is expected here, so a new release without a
+/// corpus row fails on the push that adds its expectations row —
+/// `cut-release.sh` measures both before tagging — instead of never.
 #[test]
 fn ac10_the_corpus_spans_the_release_history_it_claims_to() {
     let corpus = load_corpus();
     let tags: BTreeSet<&str> = corpus.iter().map(|c| c.tag.as_str()).collect();
     let fences: BTreeSet<&str> = corpus.iter().map(|c| c.fence.as_str()).collect();
 
-    // v0.1.x wrote no capturable block, so the corpus starts at v0.2.
-    for expected in [
-        "v0.2.0-beta.1",
-        "v0.3.0-beta.1",
-        "v0.4.0-beta.1",
-        "v0.5.0-beta.1",
-        "v0.6.0-beta.1",
-        "v0.7.0-beta.1",
-    ] {
-        assert!(
-            tags.contains(expected),
-            "the corpus lost coverage of {expected}: {tags:?}"
-        );
-    }
+    let expected: Vec<String> = released_tags()
+        .into_iter()
+        .filter(|t| !WROTE_NO_BLOCKS.contains(&t.as_str()))
+        .collect();
+    let missing: Vec<&String> = expected
+        .iter()
+        .filter(|t| !tags.contains(t.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "the corpus has no file for released tag(s) {missing:?} — the \
+         guarantee \"this build resolves every shape any released version \
+         wrote\" is unverified for them. Regenerate with \
+         scripts/capture-block-corpus.sh (or, for a tag being cut, \
+         `--current <tag>`)."
+    );
+    let unexpected: Vec<&str> = tags
+        .iter()
+        .filter(|t| !expected.iter().any(|e| e == *t))
+        .copied()
+        .collect();
+    assert!(
+        unexpected.is_empty(),
+        "the corpus holds file(s) for {unexpected:?}, which \
+         migration-expectations.tsv does not record as released — either the \
+         release row is missing (cut-release.sh refuses that state) or the \
+         corpus file describes a version that does not exist"
+    );
 
     // **All seven** block types day owns (day#87). The corpus reached only four
     // until the capture stub could serve its own writes back: `bridge declare`
@@ -172,21 +253,87 @@ fn ac10_the_corpus_spans_the_release_history_it_claims_to() {
     }
 }
 
-/// The shapes in the corpus must be the ones a released version actually wrote,
-/// which means they must not carry `_version` — versioning did not exist in any
-/// released version. A corpus row with a `_version` is a sign the fixtures were
-/// regenerated against an unreleased build and no longer describe history.
+/// **A fence a release captured never disappears from a later release.**
+///
+/// The union check above is satisfied by OLD tags carrying a fence, so it
+/// cannot see a fence vanishing from every tag after some point — which is
+/// exactly what happened: the capture stub predated `show --all`, so from
+/// v0.8.0-beta.1 (the release that moved reads to the day#71 bulk read)
+/// `day-bridge`, `day-witness` and `day-tension` silently dropped out of the
+/// capture for every subsequent tag, and the guarantee quietly narrowed to
+/// shapes last written five releases ago. The generator's failure mode is
+/// less output with no error; this is the check keyed on the positive signal.
+///
+/// day has never removed a write verb, so coverage must be cumulative. If a
+/// verb is ever deliberately retired, this test is where that decision gets
+/// recorded — as an explicit exception with the release that retired it, not
+/// by deleting the assertion.
 #[test]
-fn ac10_no_captured_shape_carries_a_version_no_release_could_write() {
+fn a_fence_a_release_captured_never_disappears_from_a_later_release() {
+    let corpus = load_corpus();
+    let mut tags: Vec<&str> = corpus
+        .iter()
+        .map(|c| c.tag.as_str())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    tags.sort_by_key(|t| semver_key(t));
+
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for tag in tags {
+        let here: BTreeSet<&str> = corpus
+            .iter()
+            .filter(|c| c.tag == tag)
+            .map(|c| c.fence.as_str())
+            .collect();
+        let lost: Vec<&&str> = seen.iter().filter(|f| !here.contains(**f)).collect();
+        assert!(
+            lost.is_empty(),
+            "{tag} captured no {lost:?}, which earlier release(s) did capture. \
+             Either that verb broke at this version — worth knowing — or the \
+             capture scenario stopped reaching it, which is how three fences \
+             went missing for five releases with the union check green."
+        );
+        seen.extend(here);
+    }
+}
+
+/// The shapes in the corpus must be ones the writing version could actually
+/// write. A `_version` is legitimate only where the release that introduced
+/// that (fence, version) pair is at or below the tag that wrote it — the
+/// premise "versioning did not exist in any released version" was true when
+/// this test was written and false since v0.10.0-beta.1, which deadlocked the
+/// corpus: a faithful regeneration tripped the old assertion, so the corpus
+/// could not be regenerated without editing a test, and was not (2026-08-10
+/// review, finding 2).
+#[test]
+fn ac10_no_captured_shape_carries_a_version_its_release_could_not_write() {
+    // (fence, version) -> the release that introduced writing it. Append-only:
+    // a new versioned shape adds a row here when the writer ships.
+    let introduced: &[(&str, u64, &str)] = &[("day-atom", 2, "v0.10.0-beta.1")];
+
     for Captured { tag, fence, body } in load_corpus() {
-        if let Some(object) = body.as_object() {
-            assert!(
-                !object.contains_key(day::atoms::VERSION_KEY),
-                "{tag}'s `{fence}` carries `{}`, which no released version could \
-                 write — the corpus was captured from an unreleased build",
+        let Some(version) = body.get(day::atoms::VERSION_KEY).and_then(|v| v.as_u64()) else {
+            continue;
+        };
+        let Some((_, _, intro)) = introduced
+            .iter()
+            .find(|(f, v, _)| *f == fence && *v == version)
+        else {
+            panic!(
+                "{tag}'s `{fence}` carries `{}: {version}`, a versioned shape this \
+                 test does not know a writer for — if a release really writes it, \
+                 add its introduction row; otherwise the corpus was captured from \
+                 an unreleased build",
                 day::atoms::VERSION_KEY
             );
-        }
+        };
+        assert!(
+            semver_key(&tag) >= semver_key(intro),
+            "{tag}'s `{fence}` carries `{}: {version}`, which was not writable \
+             until {intro} — the corpus row cannot be what that release wrote",
+            day::atoms::VERSION_KEY
+        );
     }
 }
 

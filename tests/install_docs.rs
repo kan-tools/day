@@ -198,3 +198,75 @@ fn the_status_section_leads_with_the_current_version() {
         crate_version()
     );
 }
+
+/// **The bootstrap script's install advice carries the same derived pins.**
+///
+/// The one surface whose entire job is teaching an uncontextualized user how
+/// to install printed the two commands the README documents as broken: a
+/// plain `cargo install day` errors (every release is a pre-release), and a
+/// plain `cargo install kan` installs the one stable kan, 0.1.0 — below the
+/// measured floor, and the worse failure because it looks like it worked
+/// (day#50). The README's pins are derived and tested; the script's were
+/// hand-written and tested by nothing. This drives the script with the
+/// binaries hidden and asserts its output names the same pins the README's
+/// tests derive — so the script cannot drift from the measurement any more
+/// than the README can.
+#[test]
+fn the_bootstrap_script_pins_the_versions_it_tells_a_stranger_to_install() {
+    let script = repo_root().join("hooks/bootstrap-check.sh");
+    let out = std::process::Command::new("sh")
+        .arg(&script)
+        // A PATH without ~/.cargo/bin hides day and kan while keeping the
+        // POSIX tools the script itself needs.
+        .env("PATH", "/usr/bin:/bin")
+        .output()
+        .expect("bootstrap-check.sh should run");
+    assert!(out.status.success(), "the script exits 0 unconditionally");
+    let msg = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(
+        msg.contains("cargo install day --version"),
+        "with day missing, the script should print a pinned day install; got: {msg}"
+    );
+
+    let day_pin = format!("cargo install day --version {}", crate_version());
+    assert!(
+        msg.contains(&day_pin),
+        "the script's day pin should be this crate's version — expected \
+         `{day_pin}` in: {msg}"
+    );
+
+    // The kan pin: newest `ok` row of the compat table, exactly as
+    // `the_documented_kan_version_is_one_day_was_measured_against` derives it.
+    let tsv = std::fs::read_to_string(repo_root().join("tests/fixtures/kan-compat.tsv"))
+        .expect("kan-compat.tsv should ship");
+    let newest_ok = tsv
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('#') && !l.trim().is_empty())
+        .filter_map(|l| {
+            let mut cols = l.split('\t');
+            let version = cols.next()?;
+            (cols.next()? == "ok").then_some(version)
+        })
+        .next_back()
+        .expect("kan-compat.tsv records at least one ok row");
+    let kan_pin = format!(
+        "cargo install kan --version {}",
+        newest_ok.trim_start_matches('v')
+    );
+    assert!(
+        msg.contains(&kan_pin),
+        "the script's kan pin should be the newest measured-ok kan — expected \
+         `{kan_pin}` in: {msg}"
+    );
+
+    // And the broken forms are gone: an unpinned install command must not
+    // appear. A pinned line contains the unpinned prefix, so assert on the
+    // JSON line-break that followed the bare command.
+    for broken in ["cargo install day\\n", "cargo install kan\\n"] {
+        assert!(
+            !msg.contains(broken),
+            "the script still prints the unpinned `{broken}` the README \
+             documents as broken (day#50)"
+        );
+    }
+}

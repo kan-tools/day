@@ -119,3 +119,67 @@ fn mutate_leaves_target_built_from_the_restored_source() {
          would measure the mutation rather than the restored source"
     );
 }
+
+/// **The exit code carries the outcome taxonomy, not just the text.**
+///
+/// The harness printed CAUGHT / SURVIVED / DID-NOT-COMPILE / ANCHOR-MISSING as
+/// distinct named states and exited 0 for every one of them — so a scripted
+/// caller gating on the status read a survived mutation as green. That is the
+/// repo's own headline rule ("could-not-check outranks checked-and-clean in
+/// the exit code... every tool in scripts/ reports its outcomes as distinct
+/// named states for this reason"), violated by the tool the rule cites.
+/// Found by the 2026-08-10 full review (finding 3).
+///
+/// The contract, matching demonstration-census.py's shape:
+///   0 CAUGHT · 1 SURVIVED · 2 could-not-check (anchor/compile) · 3 BASELINE-RED
+#[test]
+fn mutate_exit_codes_distinguish_survived_and_could_not_check_from_caught() {
+    // ANCHOR-MISSING is decided before any cargo runs, so this arm is cheap.
+    let c = ScratchCrate::new();
+    c.write("src/lib.rs", LIB_TWO);
+    let (text, code) = c.run_script_code(
+        "mutate.py",
+        &["src/lib.rs", "{ not in the file }", "{ 99 }", "probe"],
+    );
+    assert!(text.contains("ANCHOR-MISSING"), "{text}");
+    assert_eq!(code, Some(2), "could-not-check must not exit 0: {text}");
+
+    // SURVIVED: a crate whose only test does not assert the mutated value.
+    let c = ScratchCrate::new();
+    c.write("src/lib.rs", LIB_TWO).write(
+        "tests/a.rs",
+        "#[test]\nfn asserts_nothing_about_answer() { assert!(true); }\n",
+    );
+    let (text, code) = c.run_script_code("mutate.py", &["src/lib.rs", "{ 2 }", "{ 99 }", "probe"]);
+    assert!(text.contains("SURVIVED"), "{text}");
+    assert_eq!(
+        code,
+        Some(1),
+        "a survived mutation is the finding the caller asked about; it must \
+         be distinguishable from CAUGHT in the exit code: {text}"
+    );
+    assert_eq!(c.read("src/lib.rs"), LIB_TWO, "the file must be restored");
+
+    // DID-NOT-COMPILE: a mutation that breaks the build says nothing about
+    // coverage, and must not exit like a checked outcome.
+    let c = ScratchCrate::new();
+    c.write("src/lib.rs", LIB_TWO).write(
+        "tests/a.rs",
+        "#[test]\nfn a_catches_it() { assert_eq!(scratch::answer(), 2); }\n",
+    );
+    let (text, code) =
+        c.run_script_code("mutate.py", &["src/lib.rs", "{ 2 }", "{ 2 +++ }", "probe"]);
+    assert!(text.contains("DID-NOT-COMPILE"), "{text}");
+    assert_eq!(code, Some(2), "could-not-check must not exit 0: {text}");
+
+    // BASELINE-RED keeps its own code: a failed precondition, per
+    // demonstration-census.py's "git failed" vs "a commit is missing" split.
+    let c = ScratchCrate::new();
+    c.write("src/lib.rs", LIB_TWO).write(
+        "tests/a.rs",
+        "#[test]\nfn already_broken() { assert_eq!(scratch::answer(), 3); }\n",
+    );
+    let (text, code) = c.run_script_code("mutate.py", &["src/lib.rs", "{ 2 }", "{ 99 }", "probe"]);
+    assert!(text.contains("BASELINE-RED"), "{text}");
+    assert_eq!(code, Some(3), "{text}");
+}

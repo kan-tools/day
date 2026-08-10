@@ -637,6 +637,16 @@ fn cut_release_puts_the_measured_row_in_the_tagged_commit() {
         "run-migration-cell.sh",
         "echo refused-honestly\n",
     );
+    // Step 3c resolves the corpus capture the same way; the stub writes the
+    // row the real script would, so the pre-tag staged state includes a NEW
+    // file — the state that makes a bare `git restore` recovery incomplete,
+    // since restore does not remove new files.
+    stub(
+        &repo.join("scripts"),
+        "capture-block-corpus.sh",
+        "mkdir -p tests/fixtures/block-corpus\n\
+         echo '{\"body\":{},\"fence\":\"day-atom\"}' > \"tests/fixtures/block-corpus/$2.jsonl\"\n",
+    );
     run_git(repo, &["add", "-A"]);
     run_git(repo, &["commit", "-qm", "init"]);
 
@@ -744,6 +754,16 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
         "run-migration-cell.sh",
         "echo refused-honestly\n",
     );
+    // Step 3c resolves the corpus capture the same way; the stub writes the
+    // row the real script would, so the pre-tag staged state includes a NEW
+    // file — the state that makes a bare `git restore` recovery incomplete,
+    // since restore does not remove new files.
+    stub(
+        &repo.join("scripts"),
+        "capture-block-corpus.sh",
+        "mkdir -p tests/fixtures/block-corpus\n\
+         echo '{\"body\":{},\"fence\":\"day-atom\"}' > \"tests/fixtures/block-corpus/$2.jsonl\"\n",
+    );
     run_git(repo, &["add", "-A"]);
     run_git(repo, &["commit", "-qm", "init"]);
     // The commit at step 4b now fails, after `git add` has staged the row.
@@ -793,6 +813,12 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
     assert!(
         staged.contains("migration-expectations.tsv"),
         "premise: the row must be STAGED when the script dies here; got {staged:?}"
+    );
+    // And the corpus row — a NEW file, the state a bare `git restore`
+    // cannot clean, which is what makes the compound recovery line necessary.
+    assert!(
+        staged.contains("block-corpus/v9.9.9.jsonl"),
+        "premise: the corpus row must be STAGED when the script dies here; got {staged:?}"
     );
 
     // Now run exactly what it told the maintainer to run.

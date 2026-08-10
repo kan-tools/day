@@ -8,6 +8,19 @@ Distinguishes the outcomes that matter and never conflates them:
   DID-NOT-COMPILE   the mutation was ill-formed; says NOTHING about coverage
   ANCHOR-MISSING    the text was not found; the mutation never happened
 
+The exit code carries the same distinctions, because a scripted caller reads
+nothing else. This harness printed them honestly and then exited 0 for all of
+CAUGHT, SURVIVED, DID-NOT-COMPILE and ANCHOR-MISSING — so a loop over
+mutations, or a CI step, read a survived mutation as green. That is the exact
+rule this repo's practice states ("could-not-check outranks checked-and-clean
+in the exit code... every tool in scripts/ reports its outcomes as distinct
+named states"), violated by the tool the rule cites. The contract, matching
+demonstration-census.py's shape:
+  0  CAUGHT          checked, and the coverage is real
+  1  SURVIVED        checked, and found the gap the caller asked about
+  2  ANCHOR-MISSING / DID-NOT-COMPILE   could not check
+  3  BASELINE-RED    could not check; the tree failed the precondition
+
 Restores from a backup in a finally block, so an interrupt cannot leave a
 mutated tree — the failure that left src/status.rs mutated earlier in this
 session.
@@ -42,12 +55,12 @@ def main() -> int:
 
     if anchor not in original:
         print(f"{name}: ANCHOR-MISSING (the mutation never happened)")
-        return 0
+        return 2
 
     mutated = original.replace(anchor, replacement, 1)
     if mutated == original:
         print(f"{name}: ANCHOR-MISSING (replacement identical to anchor)")
-        return 0
+        return 2
 
     # The baseline, BEFORE the tree is touched. One extra suite run per
     # invocation, accepted deliberately: a mutation harness is not something you
@@ -55,17 +68,18 @@ def main() -> int:
     # "could not check" is spelled the same way as the strongest possible result.
     base = subprocess.run(SUITE, capture_output=True, text=True)
     base_out = base.stdout + base.stderr
-    if "could not compile" in base_out or "\nerror[" in base_out:
+    if ("could not compile" in base_out or "\nerror[" in base_out
+            or base_out.startswith("error[")):
         print(f"{name}: BASELINE-RED (the tree does not build; nothing was mutated)")
         for line in base_out.splitlines()[:4]:
             print(f"    {line}")
-        return 1
+        return 3
     if "FAILED" in base_out:
         print(f"{name}: BASELINE-RED (the suite was already failing; nothing was mutated)")
         for line in failing_tests(base_out)[:4]:
             print(f"    {line}")
         print("    Fix the baseline first — against a red suite every mutation reports CAUGHT.")
-        return 1
+        return 3
 
     backup = pathlib.Path(tempfile.mkdtemp()) / p.name
     shutil.copy2(p, backup)
@@ -75,8 +89,10 @@ def main() -> int:
         out = r.stdout + r.stderr
         if "could not compile" in out or "\nerror[" in out or out.startswith("error["):
             print(f"{name}: DID-NOT-COMPILE (inconclusive — says nothing about coverage)")
+            code = 2
         elif "FAILED" in out:
             print(f"{name}: CAUGHT")
+            code = 0
             # `--no-fail-fast` above is what makes this list complete. Without it
             # cargo stops at the first failing test BINARY, so a mutation caught
             # by tests in three targets reports one, and the author concludes the
@@ -85,6 +101,7 @@ def main() -> int:
                 print(f"    {line}")
         else:
             print(f"{name}: *** SURVIVED *** — nothing asserts this")
+            code = 1
     finally:
         # `shutil.copy` and an explicit touch, NOT `copy2`: copy2 preserves the
         # backup's mtime, so cargo's change detection does not see the restore
@@ -107,7 +124,7 @@ def main() -> int:
             print("    warning: the post-restore rebuild failed; `target/` may still")
             print("    hold artifacts built from the mutant. Run `cargo build` before")
             print("    probing anything by hand.")
-    return 0
+    return code
 
 
 if __name__ == "__main__":

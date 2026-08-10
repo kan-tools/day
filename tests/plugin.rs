@@ -551,22 +551,29 @@ fn ac9_one_function_decides_whether_a_claim_may_be_injected() {
         "authorship resolution should live in one named function"
     );
 
-    // And nothing else compares an author. A second comparison anywhere is
-    // a second place the trust list would have to be added.
-    let comparisons = practice.matches("author").filter(|_| true).count();
-    let in_accepts = practice
+    // And nothing else touches an author: every `.author` field access in
+    // production code sits inside accepts()'s body, so a second place the
+    // trust list would have to be added fails here first. Counted over the
+    // production half (comments stripped, test module cut) — the previous
+    // form compared the whole file's count against a slice of itself, which
+    // is true of any file and asserted nothing; the 2026-08 review flagged
+    // it as decorative.
+    let code = production_half(&practice);
+    let accesses = code.matches(".author").count();
+    let in_accepts = code
         .split("fn accepts(")
         .nth(1)
         .and_then(|rest| rest.split("\n}").next())
-        .map(|body| body.matches("author").count())
+        .map(|body| body.matches(".author").count())
         .unwrap_or(0);
     assert!(
         in_accepts > 0,
         "accepts() should be the function that inspects the author"
     );
-    assert!(
-        comparisons >= in_accepts,
-        "sanity: accepts() is part of the file"
+    assert_eq!(
+        accesses, in_accepts,
+        "an author is inspected outside accepts() — that is a second place \
+         the trust list would have to be added (day#25/REQ-9)"
     );
 
     // The call site is single: the projection asks accepts(), and no other
@@ -741,12 +748,50 @@ fn ac10_conventions_document_the_practice_subject_and_replace_token() {
 #[test]
 fn a_failed_kan_read_is_never_swallowed() {
     const MARKER: &str = "kan-read-may-degrade:";
-    let reads = [
-        "client.show(",
-        "client.subjects(",
-        "client.issues(",
-        "::load(client)",
-    ];
+    // **Derived from `KanClient`, not hand-listed.** The literal list this
+    // replaces knew four call shapes while the code used six — `Schema::load(
+    // &client, …)`, `atoms::load(client)` behind the exact-arity
+    // `::load(client)` pattern, and `.show_all()` were all invisible to it,
+    // which is the "list fails to grow" class this repo documents. Every
+    // fallible `&self` method on `KanClient` is a kan read (or write) whose
+    // `Err` this scan must see, so the pattern set is read off the one file
+    // that defines them: a new method is covered the day it is written, or
+    // the derivation's own floor assertion below fails.
+    //
+    // Writes (`append`, `relate`) are deliberately IN: a swallowed write
+    // error loses a claim as silently as a swallowed read loses a subject.
+    let kan_client_src = std::fs::read_to_string(repo_root().join("src").join("kan_client.rs"))
+        .expect("src/kan_client.rs should exist");
+    let mut derived: Vec<String> = Vec::new();
+    for window in kan_client_src.split("pub fn ").skip(1) {
+        // The signature runs to the opening brace; multi-line signatures are
+        // why this does not stop at the line end.
+        let signature = window.split('{').next().unwrap_or("");
+        let name: String = window.chars().take_while(|c| ident_char(*c)).collect();
+        if signature.contains("&self") && signature.contains("-> Result<") && !name.is_empty() {
+            derived.push(format!(".{name}("));
+        }
+    }
+    derived.sort();
+    derived.dedup();
+    // The floor: a regex-rot in the derivation must fail loudly, not shrink
+    // coverage silently. Names, not a bare count — a count catches a parser
+    // that stopped matching, the list catches a member that was never added,
+    // and this asserts both.
+    for core in [".show(", ".show_all(", ".subjects(", ".issues(", ".append("] {
+        assert!(
+            derived.iter().any(|d| d == core),
+            "the read-shape derivation lost `{core}` — its parse of \
+             src/kan_client.rs has rotted: {derived:?}"
+        );
+    }
+    // The module-loader convention is not derivable from KanClient: any
+    // `pub fn load(client…)` across src/ is a kan read. Matched by prefix so
+    // every arity and receiver spelling (`load(client)`, `load(&client,
+    // slug)`, `load(self.client)`) is covered — the exact-arity form is how
+    // three call sites escaped.
+    let reads: Vec<String> = derived.into_iter().chain(["::load(".to_string()]).collect();
+    let reads: Vec<&str> = reads.iter().map(String::as_str).collect();
     let swallows = [
         ".unwrap_or_default(",
         ".unwrap_or(",
@@ -788,7 +833,7 @@ fn a_failed_kan_read_is_never_swallowed() {
                 .join("\n");
 
             let mut swallowed: Vec<usize> = Vec::new();
-            for read in reads {
+            for read in &reads {
                 let mut from = 0;
                 while let Some(at) = text[from..].find(read) {
                     let found = from + at;
