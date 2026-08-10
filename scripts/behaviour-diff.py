@@ -55,7 +55,9 @@ import argparse
 import json
 import os
 import pathlib
+import atexit
 import shutil
+import tempfile
 import subprocess
 import sys
 
@@ -273,9 +275,25 @@ def main() -> int:
         print(r.stderr.strip()[-800:], file=sys.stderr)
         return 2
 
-    work = pathlib.Path(os.environ.get("TMPDIR", "/tmp")) / "day-behaviour-work"
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True)
+    # **A PRIVATE WORK DIRECTORY PER INVOCATION, not a fixed shared path.**
+    #
+    # This was `TMPDIR/day-behaviour-work` — one path, for every concurrent
+    # caller — and each run began by deleting it. `tests/behaviour_diff.rs` has
+    # eight tests of which seven invoke this script, and cargo runs the tests in
+    # a target concurrently, so one test could `rmtree` the stubs another was
+    # about to exec. The failure surfaced as `CORPUS-EMPTY: … kan is not
+    # reachable (tried to run TMPDIR/day-behaviour-work/kan)` — day#178, which
+    # made `main` red on two of three merges and green on the third.
+    #
+    # `mkdtemp` removes the sharing rather than serialising access to it: there
+    # is no lock to forget and no ordering to get right, and two runs of this
+    # script can no longer interact at all.
+    work = pathlib.Path(tempfile.mkdtemp(prefix="day-behaviour-work-"))
+    # `atexit` rather than `try/finally`, because `main()` returns from five
+    # places below and a cleanup that covers four of them is the kind of
+    # almost-right this file exists to avoid. A unique directory that is never
+    # removed is a slow leak across a suite that invokes this seven times.
+    atexit.register(shutil.rmtree, work, ignore_errors=True)
     for name, body in (("kan", KAN_STUB), ("git", GIT_STUB)):
         p = work / name
         p.write_text(body)
