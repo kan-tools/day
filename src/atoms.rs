@@ -678,7 +678,15 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
 /// The version gate itself lives in [`version_gate`], shared with the
 /// project-declared path so a project's own vocabulary inherits the same
 /// diagnostics rather than growing a parallel set.
-pub(crate) fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
+///
+/// `pub` (not `pub(crate)`) for one external consumer: `tests/block_corpus.rs`
+/// resolves every captured released shape through this exact entry point,
+/// because a corpus test that re-implements the gate validates the corpus
+/// against its own idea of the reader — raw `serde_json::from_value` did
+/// exactly that, and reported the `_version: 2` atoms v0.10+ really write as
+/// unreadable when the shipped reader reads them fine. Not test-only: every
+/// production block parse comes through here.
+pub fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
     json: &str,
 ) -> Result<T, BlockError> {
     let value = version_gate(json, Fence::Borrowed(T::FENCE), T::SUPPORTED_VERSION)?;
