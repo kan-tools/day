@@ -1,4 +1,5 @@
 ---
+name: handoff
 allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(ls *), Read, Grep, Glob
 description: Write this session's handoff onto its thread, stating claims the next wakeup can verify
 ---
@@ -17,13 +18,36 @@ description: Write this session's handoff onto its thread, stating claims the ne
 > that check belongs to the next session rather than to this one — a criterion
 > asserting its own quality would be the witness-that-cannot-fail day#86 names.
 
-## Context
+## Context — gather this yourself, and report what fails
 
-- Branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached or not a git repo"`
-- HEAD: !`git log --oneline -1 2>/dev/null || echo "no commits"`
-- Tree: !`git status --porcelain 2>/dev/null | head -20 | grep . || echo "clean"`
-- Unpushed: !`git log --oneline @{u}..HEAD 2>/dev/null | head -10 | grep . || echo "nothing unpushed, or no upstream"`
-- day position: !`command -v day >/dev/null 2>&1 && day status 2>&1 | head -20 || echo "day not on PATH"`
+Run these before Phase 1. **A read that fails is a finding, not an empty
+result**, and this section is instructions rather than pre-expanded output
+precisely so that you get an exit code where the harness used to get a string.
+It matters more here than anywhere else in day: an unavailable read that looks
+like an empty one becomes a *claim* in the record, and `/wakeup` will then
+report it CONFIRMED against the same absence.
+
+- **Branch** — `git branch --show-current`.
+  **If this read fails:** or prints nothing, you are on a detached HEAD. Write
+  that in the handoff; do not name a branch you did not read.
+- **HEAD** — `git log --oneline -1`.
+  **If this read fails:** the repo has no commits. Say so rather than omitting
+  the line, since a missing HEAD claim reads as an oversight.
+- **Tree** — `git status --porcelain`.
+  **If this read fails:** say so in the handoff. Empty output means clean; a
+  failed command does not, and "clean" is a claim the next session will check.
+- **Unpushed** — `git log --oneline @{u}..HEAD`.
+  **If this read fails:** there is no upstream. Record *that*, not "nothing
+  unpushed" — they are different facts and only one of them is reassuring.
+- **day position** — `day status`.
+  **If this read fails:** day is not on PATH or cannot reach kan. Say so
+  instead of writing a position from memory; a remembered position is exactly
+  the unfalsifiable prose this skill exists to keep out of the record.
+
+Also note whether this is a git worktree (`git rev-parse --git-common-dir`
+differing from `--git-dir`). kan#197: a worktree gets its own `.kan/`, so Phase
+4's write would fork the log into one nobody reads. **Run the write from the
+main checkout.**
 
 ## Your task
 

@@ -170,31 +170,32 @@ fn hooks_are_only_registered_on_events_that_deliver_stdout_to_the_model() {
 /// hand-maintained list was skipped, because nothing fails when a list does not
 /// grow. A list that reads the directory cannot fail to grow.
 fn shipped_commands() -> Vec<String> {
-    let dir = repo_root().join("commands");
+    let dir = repo_root().join("skills");
     let mut out: Vec<String> = std::fs::read_dir(&dir)
-        .expect("commands/ should exist — it is what the plugin ships")
+        .expect("skills/ should exist — it is what the plugin ships")
         .flatten()
-        .filter_map(|e| {
-            let path = e.path();
-            if path.extension().is_some_and(|x| x == "md") {
-                path.file_name()
-                    .map(|n| format!("commands/{}", n.to_string_lossy()))
-            } else {
-                None
-            }
-        })
+        .filter(|e| e.path().is_dir())
+        .filter(|e| e.path().join("SKILL.md").is_file())
+        .map(|e| format!("skills/{}/SKILL.md", e.file_name().to_string_lossy()))
         .collect();
     out.sort();
     assert!(
         out.len() >= 3,
-        "expected at least the three shipped commands, found {out:?}"
+        "expected at least the three shipped atoms, found {out:?}"
     );
     out
 }
 
+/// The atom name a shipped body belongs to — `skills/design/SKILL.md` → `design`.
+fn atom_name(rel: &str) -> &str {
+    rel.strip_prefix("skills/")
+        .and_then(|r| r.strip_suffix("/SKILL.md"))
+        .unwrap_or_else(|| panic!("{rel} is not a shipped skill body path"))
+}
+
 /// **Every shipped command is reachable without installing the plugin.**
 ///
-/// `commands/` is the plugin's payload, and a plugin nobody installed delivers
+/// `skills/` is the plugin's payload, and a plugin nobody installed delivers
 /// nothing. day#109 measured that: no `SessionStart` hook is registered
 /// anywhere on this machine and `enabledPlugins` is null for every kan-tools
 /// project, so the wiring `day init` prints is wiring that does not happen.
@@ -204,35 +205,42 @@ fn shipped_commands() -> Vec<String> {
 /// `day next` and `day status` all passed — they confirm the ATOMS exist and
 /// are structurally blind to whether the harness can reach the COMMAND.
 ///
-/// `.claude/commands/` is where Claude Code discovers project commands, and
-/// these are symlinks rather than copies so there is no second file to drift.
+/// `.claude/skills/` is where Claude Code discovers project skills, and these
+/// are symlinks rather than copies so there is no second file to drift.
 /// Derived from the directory, because a hand-maintained list of links is the
 /// thing that fails to grow — the defect this file already records for
 /// `commands/` itself.
+///
+/// **Repointed from `.claude/commands/` by the Agent Plugins conversion**, and
+/// the reachability question is unchanged by that move: Claude Code folds
+/// `commands/` and `skills/` into one inventory keyed by name, so a skill at
+/// `skills/design/` creates `/design` exactly as `commands/design.md` did. What
+/// would break silently is the *linking* — a link left pointing at a path that
+/// no longer exists resolves to nothing and the slash command simply stops
+/// appearing, with nothing to say so. Hence the dangling check below.
 #[test]
 fn every_shipped_command_is_reachable_in_this_repo() {
     let root = repo_root();
     for file in shipped_commands() {
-        let name = file
-            .strip_prefix("commands/")
-            .expect("shipped_commands prefix");
-        let link = root.join(".claude/commands").join(name);
+        let name = atom_name(&file);
+        let link = root.join(".claude/skills").join(name);
         let target = std::fs::read_link(&link).unwrap_or_else(|e| {
             panic!(
-                "{name} ships in commands/ and is not linked into .claude/commands/, \
+                "{name} ships in skills/ and is not linked into .claude/skills/, \
                  so no session in this repo can invoke it without installing the \
                  plugin ({e}). day#109: the plugin is not installed anywhere."
             )
         });
         assert_eq!(
             target,
-            std::path::Path::new("../../commands").join(name),
-            "{name} should link to the plugin file rather than copy it — a copy \
-             is a second version that drifts"
+            std::path::Path::new("../../skills").join(name),
+            "{name} should link to the plugin directory rather than copy it — a \
+             copy is a second version that drifts"
         );
         assert!(
-            link.exists(),
-            "{name}'s link is dangling; it resolves to nothing"
+            link.join("SKILL.md").is_file(),
+            "{name}'s link is dangling; it resolves to nothing, and a dangling \
+             skill link is a slash command that silently stops existing"
         );
     }
 }
@@ -242,21 +250,24 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
     // Markers are per-command and stay explicit; the FILE LIST is derived, so a
     // new command cannot ship unasserted — it fails here until it is named.
     let markers = [
-        ("commands/design.md", "design document"),
-        ("commands/adversarial-review.md", "APPROVE WITH FOLLOW-UPS"),
-        ("commands/witness-interview.md", "what would evidence"),
+        ("skills/design/SKILL.md", "design document"),
+        (
+            "skills/adversarial-review/SKILL.md",
+            "APPROVE WITH FOLLOW-UPS",
+        ),
+        ("skills/witness-interview/SKILL.md", "what would evidence"),
         // The read half. Its premise: a handoff is a claim about state at the
         // moment it was written, and state moves. A command that reports a
         // handoff as current is copy-paste with extra steps, failing in the
         // direction that matters — a stale handoff read as fresh carries the
         // authority of the record.
-        ("commands/wakeup.md", "rather than believing it"),
+        ("skills/wakeup/SKILL.md", "rather than believing it"),
         // The write half, and the property that makes the pair a round trip
         // rather than two commands about the same subject: prose immune to
         // verification survives `/wakeup`'s check by being unfalsifiable, which
         // is the defect day#86 names one level out.
         (
-            "commands/handoff.md",
+            "skills/handoff/SKILL.md",
             "the claims the next `/wakeup` will check",
         ),
     ];
@@ -289,7 +300,8 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
 
 #[test]
 fn ac8_the_review_atom_declares_all_four_verdicts() {
-    let text = std::fs::read_to_string(repo_root().join("commands/adversarial-review.md")).unwrap();
+    let text =
+        std::fs::read_to_string(repo_root().join("skills/adversarial-review/SKILL.md")).unwrap();
     for verdict in ["APPROVE", "APPROVE WITH FOLLOW-UPS", "REDIRECT", "BLOCK"] {
         assert!(text.contains(verdict), "missing verdict {verdict:?}");
     }
@@ -313,8 +325,8 @@ fn ac8_the_review_atom_declares_all_four_verdicts() {
 #[test]
 fn ac9_neither_command_hardcodes_an_invocation_of_the_other() {
     let cases = [
-        ("commands/design.md", "/adversarial-review"),
-        ("commands/adversarial-review.md", "/design"),
+        ("skills/design/SKILL.md", "/adversarial-review"),
+        ("skills/adversarial-review/SKILL.md", "/design"),
     ];
     for (file, forbidden) in cases {
         let text = std::fs::read_to_string(repo_root().join(file)).unwrap();
@@ -1161,102 +1173,21 @@ fn ac7_conventions_document_the_declared_block_mechanism() {
     );
 }
 
-/// day#99 — every `` !`…` `` line in a shipped command's preamble must exit
-/// zero, because the harness treats a non-zero preamble command as a load
-/// failure and aborts the whole skill before the model sees any of it. One
-/// unguarded `ls` of four orientation files (three of which do not exist in
-/// this repo) made `/adversarial-review` unloadable here, and nothing noticed:
-/// `tests/plugin.rs` checked what the command files SAY and never ran what
-/// they DO.
+/// day#99's guard, **retired and replaced**, recorded rather than deleted.
 ///
-/// Run in two working directories on purpose. The repo root alone is the
-/// trap CLAUDE.md names — "a mechanism with two modes gets tested in whichever
-/// mode this repo is in" — and for these lines the interesting mode is the one
-/// where nothing exists: no `.design/`, no `docs/`, no git. That is every fresh
-/// clone and every repo day is installed into, which is exactly the population
-/// `telos/v1.0`'s bar names. A guard that only works where the files already
-/// exist is not a guard.
-#[test]
-fn command_preambles_exit_zero_even_where_nothing_exists() {
-    let shell = ["zsh", "bash", "sh"]
-        .into_iter()
-        .find(|s| {
-            std::process::Command::new("command")
-                .args(["-v", s])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-                || std::process::Command::new(s)
-                    .arg("-c")
-                    .arg("exit 0")
-                    .output()
-                    .map(|o| o.status.success())
-                    .unwrap_or(false)
-        })
-        .expect("a POSIX shell must be available to check command preambles");
-
-    let empty = std::env::temp_dir().join(format!("day-preamble-{}", std::process::id()));
-    std::fs::create_dir_all(&empty).expect("temp dir for the nothing-exists case");
-
-    let mut checked = 0usize;
-    for rel in shipped_commands() {
-        let rel = rel.as_str();
-        let text = std::fs::read_to_string(repo_root().join(rel)).unwrap();
-
-        for (n, line) in text.lines().enumerate() {
-            let Some(rest) = line.split_once("!`") else {
-                continue;
-            };
-            let Some((cmd, _)) = rest.1.split_once('`') else {
-                panic!("{rel}:{} has an unterminated !` command", n + 1);
-            };
-            checked += 1;
-
-            for (mode, cwd) in [
-                ("repo root", repo_root()),
-                ("nothing exists", empty.clone()),
-            ] {
-                let out = std::process::Command::new(shell)
-                    .arg("-c")
-                    .arg(cmd)
-                    .current_dir(&cwd)
-                    .output()
-                    .unwrap_or_else(|e| panic!("{rel}:{} could not run under {shell}: {e}", n + 1));
-
-                assert!(
-                    out.status.success(),
-                    "{rel}:{} exits {:?} under {shell} in the `{mode}` case, which \
-                     aborts the skill load before the model sees anything.\n  \
-                     command: {cmd}\n  stderr: {}",
-                    n + 1,
-                    out.status.code(),
-                    String::from_utf8_lossy(&out.stderr).trim(),
-                );
-            }
-        }
-    }
-
-    let _ = std::fs::remove_dir_all(&empty);
-
-    // A generator whose failure mode is "less output" needs an exhaustive
-    // expectation, not a trusting loop: if the `!` parse silently stopped
-    // matching, every assertion above would pass by checking nothing.
-    //
-    // **The count stays hand-written; the FILE LIST does not.** Those are
-    // different failure modes and only one of them is caught by a number. This
-    // said 13 "across the two command files" while three shipped, because the
-    // list was a literal and a third command could be added without touching
-    // it — so the new file's four preambles went unchecked and the count still
-    // matched. Deriving the list from `commands/` turned that into a red build
-    // the moment it was wrong, which is how 17 got here.
-    assert_eq!(
-        checked, 28,
-        "expected 28 `!` preamble commands across the shipped command files; found \
-         {checked}. If a line was added or removed, update this number — if it \
-         dropped to zero the parse broke and this test was asserting nothing."
-    );
-}
-
+/// This test ran every `` !`…` `` preamble in two working directories and
+/// asserted it exits zero, because the harness treats a non-zero preamble as a
+/// load failure that aborts the whole skill before the model sees any of it. It
+/// was right about its own question, and the Agent Plugins conversion removed
+/// the question: there are no preambles left to exit anything.
+///
+/// What replaces it is stronger and cheaper — `ac4_no_skill_body_pre_executes_a_command`
+/// in `tests/agent_plugins.rs` fails the build on the syntax existing at all,
+/// with no exemption hatch, so the failure mode this guarded cannot be
+/// reintroduced rather than merely being caught when it is.
+///
+/// Noted here because a test that vanishes in a rename looks like a test that
+/// was quietly dropped, and this one took 224 s of every suite run.
 /// `.design/position-honesty.md` AC-8 — the boundary check is wired at the
 /// **mechanism**, not at a caller.
 ///

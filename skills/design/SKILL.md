@@ -1,4 +1,5 @@
 ---
+name: design
 allowed-tools: Bash(kan *), Bash(day *), Bash(git *), Bash(gh *), Bash(ls *), Bash(mkdir *), Bash(shasum *), Read, Grep, Glob, Write
 description: Interactive, iterative design document authoring grounded in codebase exploration, recorded into kan
 ---
@@ -17,15 +18,43 @@ description: Interactive, iterative design document authoring grounded in codeba
 > kan's ADR-18 flagged it as workflow creep, since interactive multi-turn
 > authoring is process, not durable fact-recording. This is that migration.
 
-## Context
+## Context — gather this yourself, and report what fails
 
-- Current repo root: !`git rev-parse --show-toplevel 2>/dev/null || echo "not a git repo"`
-- Current branch: !`git branch --show-current 2>/dev/null | grep . || echo "detached HEAD or not a git repo"`
-- kan available: !`command -v kan >/dev/null 2>&1 && echo yes || echo "no (spine not built yet — write plain files, skip kan integration steps)"`
-- kan subjects (if kan exists): !`command -v kan >/dev/null 2>&1 && kan status 2>/dev/null || true`
-- day process state: !`command -v day >/dev/null 2>&1 && day doctor 2>&1 || echo "day not on PATH"`
-- Existing design docs: !`find .design -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
-- Orientation files: !`find . docs -maxdepth 1 -name "*.md" 2>/dev/null | sort | grep . || echo "none"`
+Run these before Phase 1. **A read that fails is a finding, not an empty
+result**, and this section is instructions rather than pre-expanded output
+precisely so that you get an exit code where the harness used to get a string.
+day#100 is the alternative: a telos read matched nothing, a fallback printed
+`none`, and every review in this repo measured against the wrong north star at
+exit zero for as long as nobody checked.
+
+- **Repo root** — `git rev-parse --show-toplevel`.
+  **If this read fails:** you are not in a git repo. Say so; `.design/` still
+  works, but nothing downstream that anchors to a commit will.
+- **Branch** — `git branch --show-current`.
+  **If this read fails:** or prints nothing, you are on a detached HEAD. Note it
+  rather than naming a branch you did not read.
+- **kan** — `kan --version`.
+  **If this read fails:** kan is not on PATH. Fall back to writing plain files
+  under `.design/` and say in the document that it still needs back-filling into
+  the log (Phase 5). This is the one read whose failure has a defined fallback,
+  and it is defined *here* so that taking it is a decision rather than a
+  silence.
+- **Subjects already on record** — `kan show --all --json`. Use the bulk verb:
+  `kan show <subject>` is O(n²) in commit-anchored claims and was measured at
+  141 s where `--all --json` takes 72 ms (kan#181).
+  **If this read fails:** say so, and do **not** treat it as an empty log. A
+  design written against "no prior claims" that were merely unreadable will
+  re-derive decisions already settled, which is the failure this skill exists
+  to prevent.
+- **day process state** — `day doctor`.
+  **If this read fails:** day is not on PATH or cannot reach kan. Phases 5–7
+  are then unavailable; say which ones you skipped and why.
+- **Existing design docs** — `ls .design/*.md`.
+  **If this read fails:** `.design/` does not exist yet. That is the normal
+  first-time state; Phase 2 creates it. Say "none yet", not "none".
+- **Orientation files** — `ls *.md docs/*.md`.
+  **If this read fails:** say so. A design pass with no orientation files has no
+  authoritative spec to contradict, which is worth stating rather than assuming.
 
 ## Your task
 
@@ -203,8 +232,10 @@ declared. The fix is not to ask people to remember a verb. It is to attach the
 verb to a step that already happens — this one. (Recorded on `process-model`;
 `docs/ROADMAP.md` v0.5 carries the evidence.)
 
-1. **Establish the target telos.** Read the teloi already on record
-   (`kan status | grep 'telos/'`). Either this work serves one that exists — say
+1. **Establish the target telos.** Read the teloi already on record — the
+   `telos/` subjects in the `kan show --all --json` you took in Context, and if
+   that read failed, say so rather than concluding there are none. Either this
+   work serves one that exists — say
    which, and why — or it needs a new one. A milestone-shaped design usually
    does: the state of the world where this work is done and visible.
 

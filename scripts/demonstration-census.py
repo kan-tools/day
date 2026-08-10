@@ -47,7 +47,7 @@ EXEMPTION_RE = re.compile(r"^No trailer:", re.MULTILINE)
 # The first version exempted a commit whose files were all `.md` or `.tsv`. The
 # second narrowed that to an allowlist of paths "no test reads". Both were
 # guesses about which files are invertible, and both were wrong: this repo
-# EXECUTES the examples in `README.md`, `docs/CONVENTIONS.md` and `commands/*.md`
+# EXECUTES the examples in `README.md`, `docs/CONVENTIONS.md` and `skills/*/SKILL.md`
 # (`tests/documented_invocations.rs`), reads `CLAUDE.md` (`tests/plugin.rs`), and
 # reads every `.md` under `docs/` by joining the directory — so the allowlist's
 # own premise could not even be scanned for reliably, and the scan written to

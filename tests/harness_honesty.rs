@@ -346,7 +346,7 @@ fn run_git(cwd: &Path, args: &[&str]) {
 /// that is what a reviewer reads at the moment it applies.
 #[test]
 fn the_review_atom_states_adr_52_and_the_demonstration_rule() {
-    let text = read("commands/adversarial-review.md");
+    let text = read("skills/adversarial-review/SKILL.md");
     assert!(
         text.contains("ADR-52"),
         "the review command must name ADR-52: a round of fixes to a BLOCK gets \

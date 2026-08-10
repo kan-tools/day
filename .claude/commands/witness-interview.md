@@ -1,1 +1,0 @@
-../../commands/witness-interview.md

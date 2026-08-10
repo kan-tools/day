@@ -621,7 +621,7 @@ fn a_document_covering_the_record_reports_nothing() {
 /// it superseded.**
 ///
 /// `newest_of_kind` took the newest `Observation` of ANY kind on the subject,
-/// and `commands/adversarial-review.md` records every finding as
+/// and `skills/adversarial-review/SKILL.md` records every finding as
 /// `kan observe "<finding>" --subject <subject>` — on the design subject. So
 /// after a review the "previous pair" was a review finding, which lacks the
 /// document fingerprint. Three failures followed in one run over an UNCHANGED

@@ -95,7 +95,7 @@ fn fingerprint(source: &str) -> String {
 /// **A contract between the writer and the reader in this one function**, which
 /// is why it is a constant rather than typed twice. day#158: `newest_of_kind`
 /// took the newest `Observation` of any kind on the subject, and
-/// `commands/adversarial-review.md` records every review finding as
+/// `skills/adversarial-review/SKILL.md` records every review finding as
 /// `kan observe "<finding>" --subject <subject>` — on the design subject. So
 /// after a review the "previous pair" was a review finding, and the next design
 /// pass cited it as the claim it superseded.
@@ -411,7 +411,7 @@ pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
 /// day#119 needed "the previous pair"; day#158 is what it cost to answer that
 /// with "the newest claim of that kind". A design subject collects claims from
 /// several sources — review findings arrive as `kan observe` on the same
-/// subject, which is what `commands/adversarial-review.md` prescribes — so the
+/// subject, which is what `skills/adversarial-review/SKILL.md` prescribes — so the
 /// newest `Observation` is frequently not a design pass at all. Selecting by
 /// kind alone made a design pass cite a review's finding as superseded, and
 /// report a format migration that had not happened, over an unchanged document
