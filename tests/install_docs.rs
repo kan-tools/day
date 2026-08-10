@@ -247,7 +247,7 @@ fn the_bootstrap_script_pins_the_versions_it_tells_a_stranger_to_install() {
             let version = cols.next()?;
             (cols.next()? == "ok").then_some(version)
         })
-        .last()
+        .next_back()
         .expect("kan-compat.tsv records at least one ok row");
     let kan_pin = format!(
         "cargo install kan --version {}",

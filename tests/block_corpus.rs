@@ -135,8 +135,8 @@ fn ac10_this_build_resolves_every_shape_a_released_version_wrote() {
 /// never grew, in the test carrying the derivation lesson in its own doc
 /// comment.
 fn released_tags() -> Vec<String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/migration-expectations.tsv");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/migration-expectations.tsv");
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("{} is unreadable: {e}", path.display()));
     let tags: Vec<String> = text
@@ -160,7 +160,9 @@ fn semver_key(tag: &str) -> (u64, u64, u64, u64) {
         s.parse()
             .unwrap_or_else(|_| panic!("unparseable release tag component {s:?} in {tag:?}"))
     };
-    let rest = tag.strip_prefix('v').unwrap_or_else(|| panic!("tag {tag:?} lacks the v prefix"));
+    let rest = tag
+        .strip_prefix('v')
+        .unwrap_or_else(|| panic!("tag {tag:?} lacks the v prefix"));
     let (triplet, beta) = match rest.split_once("-beta.") {
         Some((t, b)) => (t, parse(b)),
         None => (rest, u64::MAX), // a stable release orders after its betas
@@ -195,7 +197,10 @@ fn ac10_the_corpus_spans_the_release_history_it_claims_to() {
         .into_iter()
         .filter(|t| !WROTE_NO_BLOCKS.contains(&t.as_str()))
         .collect();
-    let missing: Vec<&String> = expected.iter().filter(|t| !tags.contains(t.as_str())).collect();
+    let missing: Vec<&String> = expected
+        .iter()
+        .filter(|t| !tags.contains(t.as_str()))
+        .collect();
     assert!(
         missing.is_empty(),
         "the corpus has no file for released tag(s) {missing:?} — the \
