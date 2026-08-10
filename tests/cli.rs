@@ -35,8 +35,25 @@ fn ac2_init_doctor_and_hook_all_succeed_when_kan_is_reachable() {
     }
 }
 
+/// **This test is named for a case it does not exercise**, which is why it is
+/// now two tests.
+///
+/// `missing_kan()` sets `DAY_KAN_BIN` to a path that does not exist — so this
+/// drives the *override* path, not the absent-install path a user without kan
+/// is in. The distinction went unnoticed because both produced one message, and
+/// that message told an override user to "set `DAY_KAN_BIN` to its path" when
+/// the variable was already set and was what selected the missing file.
+///
+/// It also asserted `stderr.contains("cargo install kan")` under the label "the
+/// message should say how to fix it". When the override message was first split
+/// out, its text read "`cargo install kan` will not fix it" — and this
+/// assertion **passed against a sentence saying the opposite of what it
+/// checks**. A phrase-presence grep cannot tell a recommendation from its
+/// negation; `CLAUDE.md` files that as a defect class, and it very nearly
+/// shipped here. The remedy string is now kept out of the override text
+/// entirely, which is what makes the two cases distinguishable at all.
 #[test]
-fn ac2_doctor_exits_non_zero_with_a_clear_message_when_kan_is_absent() {
+fn ac2_doctor_reports_a_bad_day_kan_bin_as_an_override_not_a_missing_install() {
     let dir = tempfile::tempdir().unwrap();
     let out = day(dir.path(), &missing_kan(dir.path()), &["doctor"]);
 
@@ -47,8 +64,54 @@ fn ac2_doctor_exits_non_zero_with_a_clear_message_when_kan_is_absent() {
         "expected a clear message, got: {stderr}"
     );
     assert!(
+        stderr.contains("DAY_KAN_BIN is set and selected that path"),
+        "the override case must say the variable chose this path, got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("cargo install kan"),
+        "the override case must NOT recommend installing kan — the variable is \
+         already set and points at the missing file, so an install fixes nothing. \
+         This assertion is the negation the old phrase-presence check could not \
+         express. Got: {stderr}"
+    );
+}
+
+/// The case the test above was named for and never covered: **no
+/// `DAY_KAN_BIN`, and no `kan` on `PATH`.** Here `cargo install kan` genuinely
+/// is the remedy, and the message must say so.
+///
+/// `PATH` is set to an empty directory rather than cleared, because an unset
+/// `PATH` makes the OS fall back to a default search path on some platforms —
+/// which would find a real kan and test nothing.
+#[test]
+fn ac2_doctor_recommends_installing_kan_when_it_is_genuinely_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty = dir.path().join("empty-path");
+    std::fs::create_dir_all(&empty).unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_day"))
+        .arg("doctor")
+        .current_dir(dir.path())
+        .env_remove("DAY_KAN_BIN")
+        .env("PATH", &empty)
+        .output()
+        .expect("failed to run day");
+
+    assert!(!out.status.success(), "doctor should fail without kan");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("kan is not reachable"),
+        "expected a clear message, got: {stderr}"
+    );
+    assert!(
         stderr.contains("cargo install kan"),
-        "the message should say how to fix it, got: {stderr}"
+        "with no override set, an absent kan IS fixed by installing it, and this \
+         is the one case where the message should say so. Got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("is set and selected that path"),
+        "nothing set DAY_KAN_BIN here, so the override wording would be a lie: \
+         {stderr}"
     );
 }
 

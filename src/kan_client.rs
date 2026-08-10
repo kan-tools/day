@@ -31,6 +31,42 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+    /// The same failure, when `DAY_KAN_BIN` chose the path — which needs a
+    /// **different remedy**, and saying so is the whole point of the split.
+    ///
+    /// `NotReachable`'s text ends "or set `DAY_KAN_BIN` to its path", which is
+    /// useless advice when that variable is already set and is what selected the
+    /// missing file. It also opens with "Install it with `cargo install kan`",
+    /// pointing at a missing kan install that is not the problem.
+    ///
+    /// day#178 is what that cost. `scripts/behaviour-diff.py` writes its own kan
+    /// **stub** into a work directory and points `DAY_KAN_BIN` at it; when the
+    /// stub went missing, CI reported "kan is not reachable … Install it with
+    /// `cargo install kan`" — in a job that had already asserted `kan --version`
+    /// runs. The message sent every reader to kan's installation, and the file
+    /// was one the harness itself had written seconds earlier.
+    ///
+    /// **The words `cargo install kan` are deliberately absent from this text**,
+    /// and that is not stylistic. The first draft read "`cargo install kan` will
+    /// not fix it" — which contains the exact substring
+    /// `ac2_doctor_exits_non_zero_...` greps for, so that test went on passing
+    /// against a message stating the command would NOT help. A phrase-presence
+    /// assertion cannot tell a recommendation from its negation, which
+    /// `CLAUDE.md` records as a defect class ("a classifier keyed on the absence
+    /// of a phrase"). Keeping the string out of this variant is what lets the two
+    /// cases be told apart by a grep at all.
+    #[error(
+        "kan is not reachable (tried to run `{bin}`): {source}\n\n\
+         {KAN_BIN_ENV} is set and selected that path, so this is NOT a missing kan \
+         install and installing one will not help. Either the path is wrong, the \
+         file is not executable, or something removed it. Unset {KAN_BIN_ENV} to \
+         fall back to the `kan` on PATH."
+    )]
+    OverrideNotReachable {
+        bin: String,
+        #[source]
+        source: std::io::Error,
+    },
     #[error(
         "could not read `{args}` output from kan: {detail}\n\nThis usually means kan's \
          --json shape changed. day pins to a shape version rather than parsing rendered \
@@ -248,13 +284,25 @@ pub struct KanClient {
     /// Subjects the bulk read returned an ENTRY for, whether or not that entry
     /// carried visible claims. What `unaccounted` is computed against.
     returned_subjects: std::cell::RefCell<Vec<String>>,
+    /// Whether `bin` came from `DAY_KAN_BIN` rather than the default. Decides
+    /// which unreachable-message a reader gets, because the two have different
+    /// remedies and the wrong one costs real time (day#178).
+    bin_from_env: bool,
 }
 
 impl KanClient {
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
-        let bin = std::env::var(KAN_BIN_ENV).unwrap_or_else(|_| "kan".to_string());
+        // Provenance is recorded, not re-derived at the point of failure: reading
+        // the environment again when the error is built would report whatever the
+        // variable says *then*, which in a test that sets and clears it is a
+        // different fact from the one that chose this binary.
+        let (bin, bin_from_env) = match std::env::var(KAN_BIN_ENV) {
+            Ok(v) => (v, true),
+            Err(_) => ("kan".to_string(), false),
+        };
         Self {
             bin,
+            bin_from_env,
             cwd: cwd.into(),
             log: std::cell::RefCell::new(None),
             subject_memo: std::cell::RefCell::new(None),
@@ -269,6 +317,9 @@ impl KanClient {
     pub fn with_bin(cwd: impl Into<PathBuf>, bin: impl Into<String>) -> Self {
         Self {
             bin: bin.into(),
+            // Chosen by the caller, not by the environment — so the remedy the
+            // override message names would be wrong here.
+            bin_from_env: false,
             cwd: cwd.into(),
             log: std::cell::RefCell::new(None),
             subject_memo: std::cell::RefCell::new(None),
@@ -289,9 +340,13 @@ impl KanClient {
             .args(args)
             .current_dir(&self.cwd)
             .output()
-            .map_err(|source| Error::NotReachable {
-                bin: self.bin.clone(),
-                source,
+            .map_err(|source| {
+                let bin = self.bin.clone();
+                if self.bin_from_env {
+                    Error::OverrideNotReachable { bin, source }
+                } else {
+                    Error::NotReachable { bin, source }
+                }
             })?;
 
         if !output.status.success() {
