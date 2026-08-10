@@ -678,10 +678,24 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             println!("recorded verdict on `{subject}` ({cid})");
             Ok(ExitCode::SUCCESS)
         }
-        Command::Next { atom } => {
-            print!("{}", crate::record::next(&client, &atom)?);
-            Ok(ExitCode::SUCCESS)
-        }
+        Command::Next { atom } => match crate::record::next(&client, &atom) {
+            Ok(out) => {
+                print!("{out}");
+                Ok(ExitCode::SUCCESS)
+            }
+            // A typo'd atom gets told what IS declared — the reader's next act
+            // is to find the right name, and day holds the list (`telos/v1.0`:
+            // error messages that teach). Enriched here rather than in
+            // `record::next`'s own error because the list is presentation, and
+            // the exit path mirrors main's: same prefix, same code.
+            Err(e @ crate::record::Error::NoSuchAtom(_)) => {
+                let (atoms, _) = crate::atoms::load(&client)?;
+                let declared: Vec<String> = atoms.iter().map(|a| a.name.clone()).collect();
+                eprintln!("error: {e}{}", crate::telos::list_known("atoms", &declared));
+                Ok(ExitCode::from(EXIT_UNAVAILABLE))
+            }
+            Err(e) => Err(e.into()),
+        },
         // Display only, and always exit zero: status *reports* where the work
         // sits (AC-11): `day assess atom` is the gate that exits non-zero, so
         // a status finding never fails a script that merely asked where it is.

@@ -326,10 +326,18 @@ pub enum Error {
     // Every variant that concerns one subject **names that subject**, so a
     // caller which already knows it does not have to guess whether to prefix.
     // Guessing is what printed `telos/bad: telos/bad: …`.
-    #[error("{}{}: no such telos is declared", atoms::TELOS_PREFIX, .0)]
-    NoSuchTelos(String),
-    #[error("no atom `{0}` is declared")]
-    NoSuchAtom(String),
+    //
+    // And it names what IS declared: the reader's next act after a typo is to
+    // find the right slug, and day already holds the list it would tell them
+    // to go and derive (`telos/v1.0`: error messages that teach).
+    #[error(
+        "{}{slug}: no such telos is declared{}",
+        atoms::TELOS_PREFIX,
+        list_known("teloi", declared)
+    )]
+    NoSuchTelos { slug: String, declared: Vec<String> },
+    #[error("no atom `{slug}` is declared{}", list_known("atoms", declared))]
+    NoSuchAtom { slug: String, declared: Vec<String> },
     #[error(
         "no witness schema is declared for this project (expected a `{FENCE_INFO}` block on \
          subject `{SCHEMA_PREFIX}{WITNESS_SLUG}`).\n\nWhat would evidence a witness type is \
@@ -337,6 +345,15 @@ pub enum Error {
          published artifact differs by project. Record a starter with:\n\n{starter}"
     )]
     NotDeclared { starter: String },
+}
+
+/// `. Declared teloi: a, b, c` — or nothing when nothing is, because "the
+/// declared ones are: <empty>" reads as a render bug rather than a fact.
+pub(crate) fn list_known(what: &str, declared: &[String]) -> String {
+    if declared.is_empty() {
+        return format!(". No {what} are declared yet");
+    }
+    format!(". Declared {what}: {}", declared.join(", "))
 }
 
 /// What would evidence each witness type, declared per project.
@@ -1018,7 +1035,10 @@ pub fn assess(
     let subject = format!("{}{slug}", atoms::TELOS_PREFIX);
     let claims = client.show(&subject)?;
     if claims.is_empty() {
-        return Err(Error::NoSuchTelos(slug.to_string()));
+        return Err(Error::NoSuchTelos {
+            slug: slug.to_string(),
+            declared: all_slugs(client)?.slugs,
+        });
     }
 
     let declared = newest_fenced::<Witnesses>(client, &subject)?
@@ -1205,7 +1225,10 @@ pub fn assess_atom(
     let atom = atoms
         .iter()
         .find(|a| a.name == slug)
-        .ok_or_else(|| Error::NoSuchAtom(slug.to_string()))?;
+        .ok_or_else(|| Error::NoSuchAtom {
+            slug: slug.to_string(),
+            declared: atoms.iter().map(|a| a.name.clone()).collect(),
+        })?;
 
     let done = &atom.interface.done;
     if done.is_empty() {

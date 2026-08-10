@@ -1225,6 +1225,52 @@ fn a_fully_retracted_telos_is_excluded_from_the_all_sweep_and_counted() {
     );
 }
 
+/// A not-found error names what IS declared (`telos/v1.0`: error messages
+/// that teach). The reader's next act after a typo is to find the right slug,
+/// and day already holds the list.
+#[test]
+fn a_missing_slug_error_names_what_is_declared() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("alive", "bafyreit", &["design-doc"]),
+            claim(
+                "atom/design",
+                "bafyreia",
+                "An atom.\n\n```day-atom\n{\"in\": [\"intent\"], \"out\": [\"design-doc\"]}\n```\n",
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    // The assess loop reports a failed slug on stdout and keeps sweeping, so
+    // that is where its error text lives; `next` errors through main, on
+    // stderr. Both exit 2 — could-not-check, not findings.
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "nope"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(2), "{stdout}");
+    assert!(
+        stdout.contains("Declared teloi: alive"),
+        "a telos typo must name the declared teloi: {stdout}"
+    );
+
+    let out = day(dir.path(), &kan, &git, &["next", "nope"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("Declared atoms: design"),
+        "an atom typo must name the declared atoms: {stderr}"
+    );
+
+    let out = day(dir.path(), &kan, &git, &["assess", "atom", "nope"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Declared atoms: design"),
+        "assess atom teaches the same way: {stderr}"
+    );
+}
+
 /// In an `--all` sweep the run-constant coda prints once, not per telos.
 ///
 /// The per-telos record command (whose `--cites` differs each time) stays per
