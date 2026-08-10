@@ -1067,47 +1067,9 @@ fn an_unresolvable_authorship_exclusion_is_reported_rather_than_ignored() {
     );
 }
 
-/// day#141: a bridge check that ERRORS is a could-not-check, never
-/// "its plan could not reach it".
-///
-/// `record_tier` used `.unwrap_or(false)`, so an atom retracted after the
-/// bridge was declared — `bridge::Error::UndeclaredAtoms`, a real state of a
-/// real log — rendered as a checked-and-negative verdict day never computed.
-#[test]
-fn a_bridge_check_error_is_reported_as_could_not_check() {
-    let dir = tempfile::tempdir().unwrap();
-    let kan = write_kan_stub(
-        dir.path(),
-        &[
-            telos_claim("target", "bafyreit", &["design-doc"]),
-            witness_schema("bafyreiw", r#"{"design-doc":{"path":".design/*.md"}}"#),
-            // The plan names an atom nobody declared, so `bridge::check`
-            // errors rather than answering.
-            claim(
-                "bridge/broken",
-                "bafyreib",
-                "A bridge.\n\n```day-bridge\n{\"telos\": \"target\", \"have\": [\"intent\"], \
-                 \"plan\": {\"atom\": \"ghost\"}}\n```\n",
-            ),
-        ],
-    );
-    let git = write_git_stub(dir.path(), &[], &[".design/a.md"]);
-
-    let out = day(dir.path(), &kan, &git, &["assess", "telos", "target"]);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("could not be checked"),
-        "an errored bridge check must render as could-not-check: {stdout}"
-    );
-    assert!(
-        stdout.contains("ghost"),
-        "the could-not-check line must name its cause: {stdout}"
-    );
-    assert!(
-        !stdout.contains("could not reach"),
-        "an errored check must never render as a negative verdict: {stdout}"
-    );
-}
+// day#141's test lives in tests/fallbacks.rs as `fallback_bridge_check_errored`
+// — the could-not-check rendering is a registered degrade path, and the
+// fallback registry is where a test that reaches one is required to live.
 
 /// "newest on `X`" is decided by `recorded_at`, not by iteration order.
 ///
@@ -1222,6 +1184,60 @@ fn a_fully_retracted_telos_is_excluded_from_the_all_sweep_and_counted() {
     assert!(
         stdout.contains("telos/gone"),
         "an explicitly named retracted telos is still inspectable: {stdout}"
+    );
+}
+
+/// A version-skewed block instance OUTSIDE a probe's subject scope cannot
+/// poison the witness.
+///
+/// The skew scan ran before the subject predicates, so one newer-day claim
+/// anywhere in a shared log took every block-predicated witness to [ERROR] —
+/// including witnesses whose `subject` glob, which needs no block read,
+/// already excluded that claim from ever matching. The read is partial only
+/// with respect to claims the probe could match. A skewed instance IN scope
+/// still errors the witness, which is the beta.2 guarantee unchanged.
+#[test]
+fn a_skewed_block_outside_the_subject_scope_does_not_poison_the_witness() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            telos_claim("t", "bafyreit", &["finding"]),
+            claim(
+                "schema/blocks",
+                "bafyreib",
+                "Blocks.\n\n```day-blocks\n{\"research-claim\": {\"required\": [\"medium\"], \
+                 \"optional\": []}}\n```\n",
+            ),
+            witness_schema(
+                "bafyreiw",
+                r#"{"finding":{"claim":{"kind":"Observation","subject":"notes/*","block":"research-claim"}}}"#,
+            ),
+            claim(
+                "notes/a",
+                "bafyreia",
+                "In scope.\n\n```research-claim\n{\"medium\": \"anchor\"}\n```\n",
+            ),
+            // Out of scope for the witness, and declaring a version no day
+            // reads. Before the fix this alone turned the verdict to ERROR.
+            claim(
+                "other/b",
+                "bafyreio",
+                "Out of scope.\n\n```research-claim\n{\"_version\": 99, \"medium\": \"x\"}\n```\n",
+            ),
+        ],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+
+    let out = day(dir.path(), &kan, &git, &["assess", "telos", "t"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[MATERIAL]"),
+        "the in-scope valid instance satisfies the witness: {stdout}"
+    );
+    assert!(
+        !stdout.contains("[ERROR]"),
+        "an out-of-scope skewed instance must not poison the witness: {stdout}"
     );
 }
 

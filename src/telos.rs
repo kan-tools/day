@@ -999,6 +999,8 @@ fn record_tier(
             // (day#141). A kan read failure still propagates, as it does
             // everywhere; only a state of the log that prevents the check
             // degrades to a could-not-check line that names its cause.
+            //
+            // fallback: bridge-check-errored
             match bridge::check(client, bridge_slug) {
                 Ok(report) => prompts.push(format!(
                     "{subject} targets this telos and its plan {} reach it — but a plan \

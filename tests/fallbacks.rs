@@ -210,6 +210,56 @@ fn fallback_kan_omits_recorded_at() {
     assert_eq!(claim.cid, "bafy1");
 }
 
+/// fallback: bridge-check-errored
+///
+/// day#141: a bridge check that ERRORS is a could-not-check, never "its plan
+/// could not reach it". `record_tier` used `.unwrap_or(false)`, so an atom
+/// retracted after the bridge was declared — `bridge::Error::UndeclaredAtoms`,
+/// a real state of a real log — rendered as a checked-and-negative verdict day
+/// never computed. day's own log holds no broken bridge, which is exactly why
+/// nothing else exercises this mode.
+#[test]
+fn fallback_bridge_check_errored() {
+    let dir = tempfile::tempdir().unwrap();
+    let fixture = [
+        common::claim(
+            "telos/target",
+            "bafyreit",
+            "A telos with no witnesses, so no probe needs git.",
+        ),
+        common::claim(
+            "bridge/broken",
+            "bafyreib",
+            "A bridge.\n\n```day-bridge\n{\"telos\": \"target\", \"have\": [\"intent\"], \
+             \"plan\": {\"atom\": \"ghost\"}}\n```\n",
+        ),
+    ];
+    // The plan names `ghost` and the log declares no atoms at all, so
+    // `bridge::check` must error rather than answer — the mode under test,
+    // distinct from "checked and unreachable".
+    assert!(
+        fixture.iter().all(|c| !c.subject.starts_with("atom/")),
+        "premise: the fixture must declare NO atoms, so the check errors \
+         rather than answers"
+    );
+    let kan = write_kan_stub(dir.path(), &fixture);
+
+    let out = day(dir.path(), &kan, &["assess", "telos", "target"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("could not be checked"),
+        "an errored bridge check must render as could-not-check: {stdout}"
+    );
+    assert!(
+        stdout.contains("ghost"),
+        "the could-not-check line must name its cause: {stdout}"
+    );
+    assert!(
+        !stdout.contains("could not reach"),
+        "an errored check must never render as a negative verdict: {stdout}"
+    );
+}
+
 /// fallback: stale-cache-without-cadence
 ///
 /// A cache written by an older day has fewer lines than this one writes. Losing
