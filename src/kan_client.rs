@@ -486,16 +486,22 @@ impl KanClient {
     /// so a fingerprint over it would miss exactly the appends that move a
     /// position: an observation, a result, a verdict on a subject already open.
     pub fn log_fingerprint(&self) -> Result<String, Error> {
-        use std::hash::{Hash, Hasher};
-
         let claims = self.show_all()?;
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        claims.len().hash(&mut hasher);
+        // FNV rather than `DefaultHasher`, which is documented-unstable across
+        // Rust releases: this value is rendered into `.day/` and compared by a
+        // later run, so a toolchain upgrade would make every log look changed.
+        // `src/record.rs` holds the algorithm and the full rationale. NUL
+        // separators, because neither a subject nor a CID can contain one, so
+        // two different pair lists cannot feed identical bytes.
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&(claims.len() as u64).to_le_bytes());
         for (subject, claim) in &claims {
-            subject.hash(&mut hasher);
-            claim.cid.hash(&mut hasher);
+            bytes.extend_from_slice(subject.as_bytes());
+            bytes.push(0);
+            bytes.extend_from_slice(claim.cid.as_bytes());
+            bytes.push(0);
         }
-        Ok(format!("{:x}", hasher.finish()))
+        Ok(format!("{:016x}", crate::record::fnv1a(&bytes)))
     }
 
     /// The actual `kan show --all --json` process. Everything else is served
