@@ -298,6 +298,50 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
     }
 }
 
+/// day#173 — `/handoff` binds its thread explicitly, and **has no default**.
+///
+/// The asymmetry with `/wakeup` is deliberate and is the fix, not an oversight
+/// left in place. `/wakeup` may default to `agents/handoff/main` because reading
+/// the wrong thread costs a paragraph. Phase 2 of this skill instructs a
+/// *supersession*, so writing the wrong thread replaces whatever handoff is
+/// newest there — and `main` is the only thread name the sibling skill mentions,
+/// which makes the dangerous guess the obvious one. It nearly happened writing
+/// the handoff that filed this: `agents/handoff/main` was mid-thread on
+/// `day config` at the time.
+///
+/// Asserted on the *absence* of a default rather than on the presence of an
+/// Arguments section, because an Arguments section that says "defaults to main"
+/// would satisfy the weaker check while shipping the defect.
+#[test]
+fn day_173_the_handoff_atom_binds_its_thread_and_defaults_to_nothing() {
+    let text = std::fs::read_to_string(repo_root().join("skills/handoff/SKILL.md")).unwrap();
+    let flat = text.replace("**", "").to_lowercase();
+    let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    assert!(
+        flat.contains("### arguments") || flat.contains("## arguments"),
+        "skills/handoff/SKILL.md has no Arguments section, so `<thread>` is never \
+         bound and the subject is guessed (day#173)"
+    );
+    assert!(
+        flat.contains("there is deliberately no default thread"),
+        "skills/handoff/SKILL.md must say it has no default thread. `/wakeup` \
+         defaults to agents/handoff/main safely; this skill supersedes what it \
+         finds, so the same default would clobber a thread it was never meant to \
+         touch."
+    );
+    assert!(
+        flat.contains("ask which thread"),
+        "with no default, the skill must ASK. Falling through to a guess is the \
+         defect with an extra step."
+    );
+    assert!(
+        flat.contains("day#173"),
+        "the reasoning should name the issue it closes, so a later reader finds \
+         the history rather than reading the asymmetry as sloppiness"
+    );
+}
+
 #[test]
 fn ac8_the_review_atom_declares_all_four_verdicts() {
     let text =

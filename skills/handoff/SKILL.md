@@ -53,6 +53,27 @@ main checkout.**
 
 Write the handoff for this thread onto `agents/handoff/<thread>`.
 
+### Arguments
+
+- `/handoff <thread>` — write onto `agents/handoff/<thread>`.
+- `/handoff --list` — show which handoff threads exist and when each was last
+  written, then stop. Read them from `kan show --all --json` and filter to
+  subjects under `agents/handoff/`, the same way `/wakeup --list` does.
+- `/handoff` with no argument — use the thread **this session woke into**, if
+  `/wakeup` established one. If it did not, **ask which thread, and wait.**
+
+**There is deliberately no default thread**, which is where this skill differs
+from `/wakeup`, and day#173 is why. Phase 2 below instructs a *supersession*: a
+guessed subject does not merely file under an odd name, it replaces whatever
+handoff is newest there. `/wakeup` defaults to `agents/handoff/main` safely
+because reading the wrong thread costs a paragraph; writing the wrong thread
+costs the thread. `main` is also the only thread name the sibling skill
+mentions, which makes the dangerous guess the obvious one — so this skill asks
+instead of guessing.
+
+If the work of this session does not belong on any existing thread, say so and
+propose a new slug. A new thread is cheap; a clobbered one is not.
+
 ### The premise, which decides everything below
 
 **Write the claims the next `/wakeup` will check.** That command takes a
