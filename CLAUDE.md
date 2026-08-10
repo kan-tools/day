@@ -453,13 +453,17 @@ So:
   status`, or `day next <the atom you just wrote>`, and none of the three was
   run. The imperative is a `practice` item; what it costs to skip is here.
 - **A list that can be derived must be derived.** The atom directory read from
-  disk cannot fail to grow; a literal pair can. (It was `commands/` when this was
-  written and is `skills/` since the Agent Plugins conversion — the rule is about
-  the derivation, not the path, and updating the path here is itself the rule.) When the enumeration was
-  replaced by a directory read it went red immediately — four preambles
-  unchecked, and the count that was supposed to catch exactly that still said
-  13, because the count and the list fail differently and only one of them was
-  derived.
+  disk cannot fail to grow; a literal pair can. When the enumeration was replaced
+  by a directory read it went red immediately — four preambles unchecked, and the
+  count that was supposed to catch exactly that still said 13, because the count
+  and the list fail differently and only one of them was derived.
+
+  (The directory was `commands/` when this was written and is `skills/` since the
+  Agent Plugins conversion. The rule is about the derivation, not the path —
+  and a mechanical rename left this very paragraph reading "…is itself the rule.)
+  When the enumeration was replaced…", a parenthesis dropped into the middle of a
+  sentence it had nothing to do with. Repairing prose is not what a `sed` is for,
+  which is the smaller version of the lesson the paragraph already carries.)
 - **A count and a list are different guarantees.** Keep the count exact — it
   catches a parser that silently stopped matching — and derive the list, which
   catches a member that was never added. Neither substitutes for the other.
