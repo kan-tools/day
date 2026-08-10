@@ -1,0 +1,13 @@
+{"body": {"_version": 2, "in": ["code-change"], "next": [], "out": ["verdict"], "revisits": ["corpus-build2"]}, "fence": "day-atom"}
+{"body": {"assessment": {"claim": {"kind": "Result", "subject": "atom/*"}}, "code-change": {"path": "src/*"}, "design-doc": {"path": ".design/*.md"}, "published-artifact": {"tag": "v*"}, "verdict": {"claim": {"kind": "Decision", "starts_with": "adversarial review of"}}}, "fence": "day-witness"}
+{"body": {"between": ["corpus-scoped", "corpus-telos"]}, "fence": "day-tension"}
+{"body": {"criterion_prefix": "AC-", "min_criteria": 2, "min_requirements": 2, "paths_section": "Architecture", "placeholders": ["TODO", "TBD"], "requirement_prefix": "REQ-", "resolution_prefix": "RQ-", "resolved_section": "Resolved Questions", "sections": ["Summary", "Requirements", "Acceptance Criteria", "Architecture"]}, "fence": "day-schema"}
+{"body": {"doc_files": ["README.md"], "release_subject": "release", "version_files": ["README.md"], "version_key": "version", "version_source": "Cargo.toml"}, "fence": "day-docs"}
+{"body": {"done": ["published-artifact"], "in": ["design-doc"], "next": [], "out": ["code-change"]}, "fence": "day-atom"}
+{"body": {"have": ["intent"], "plan": {"seq": [{"atom": "design"}, {"any": [{"atom": "build"}, {"atom": "build"}]}]}, "telos": "corpus-telos"}, "fence": "day-bridge"}
+{"body": {"have": ["intent"], "plan": {"seq": [{"atom": "design"}, {"atom": "build"}]}, "telos": "corpus-telos"}, "fence": "day-bridge"}
+{"body": {"in": ["design-doc"], "next": ["corpus-review"], "out": ["code-change"]}, "fence": "day-atom"}
+{"body": {"in": ["intent"], "next": ["build"], "out": ["design-doc"]}, "fence": "day-atom"}
+{"body": {"scope": {"published-artifact": "v9*"}, "witnesses": ["published-artifact"]}, "fence": "day-telos"}
+{"body": {"witnesses": ["code-change"]}, "fence": "day-telos"}
+{"body": {"witnesses": [["code-change", "verdict"]]}, "fence": "day-telos"}
