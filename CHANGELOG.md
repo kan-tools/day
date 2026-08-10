@@ -4,32 +4,82 @@ All notable changes to `day`, newest first.
 
 **Every release so far is a prerelease.** There is no stable line, the
 conventions are v0, and `cargo install day` will not select a version without
-an explicit `--version`. Because all 17 releases are marked as prereleases on
+an explicit `--version`. Because every release is marked as a prerelease on
 GitHub, `/releases/latest` returns 404 — GitHub excludes prereleases from it.
 Nothing depends on that endpoint; the release workflow triggers on tag push.
 
-**These entries were reconstructed after the fact**, from the tags, the commit
-history, and the issues closed in each release window. They were written when
-the repository had 17 tags and no GitHub Releases at all. Where a release's
-own commits name an issue, that issue is cited; where they do not, the entry
-describes what the commits did. Milestone names are the ones the repository
-actually used, because they say what each release was *about* better than a
-version number does.
+**The entries through `v0.12.0-beta.1` were reconstructed after the fact**,
+from the tags, the commit history, and the issues closed in each release
+window; they were written when the repository had 17 tags and no GitHub
+Releases at all. From `v0.12.0-beta.2` onward they are written at release
+time. Where a release's own commits name an issue, that issue is cited; where
+they do not, the entry describes what the commits did. Milestone names are the
+ones the repository actually used, because they say what each release was
+*about* better than a version number does.
+
+**Which release contains an item is decided by ancestry, never by close date.**
+`git tag --contains <commit>` is the question; an issue's `closedAt` is not.
+day#17 closed three minutes after the `v0.4.0-beta.1` tag and shipped in v0.4;
+day#131 closed six hours after the `v0.12.0-beta.1` tag and shipped in
+v0.12.0-beta.1. Both would be filed a release late by a window-based pairing,
+and one of them was.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 ## [Unreleased]
 
-Work merged since `v0.12.0-beta.1`.
+Work merged since `v0.12.0-beta.2`.
+
+### Added
+- The standard OSS files, so day is contributable by someone who is not its
+  author: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue forms,
+  a PR template, and this changelog.
+- A declared MSRV (`rust-version = "1.88"`, set transitively by `darling`) and
+  a CI job that keeps the declaration true by reading it from `Cargo.toml`
+  rather than repeating it.
+- crates.io metadata: description, keywords, categories, repository.
 
 ### Fixed
-- `/plugin install kan-tools/day` failed: the repo shipped a plugin manifest
-  but no marketplace manifest ([#156]).
-- `telos/v1.0` was cited as a live telos in four places and had no claims in
-  kan ([#131]).
+- `LICENSE` named a copyright holder that was not a legal person ([#121]).
 
 ---
+
+## [v0.12.0-beta.2] — 2026-08-09
+
+*Milestone: v0.12 — transportable.* The fix rounds the milestone's cold
+reviews produced, and the first release installable as a plugin.
+
+### Added
+- The plugin says what to install when its binaries are absent, and the compat
+  notice reports a too-old or newer kan at session start ([#165]). With the
+  companion `kan-tools/plugins` marketplace, this closed `/plugin install`
+  never having worked from a URL ([#156]).
+- `.design/read-visibility.md` — a design for a read that cannot be mistaken
+  for an absence ([#160]).
+
+### Changed
+- `kan/` is declared an external root in day's own workspace, dogfooding
+  [#84] and restoring the citation that declaring it cost.
+- `docs/ROADMAP.md`: `v0.12.0-beta.1` is a cut, and it is not the v0.12
+  milestone.
+
+### Fixed
+- A subject withheld by trust was reported as an undeclared subject — and the
+  first fix for it keyed on a shape kan never emits ([#120]).
+- A path under a declared external root is unchecked, not missing; and an
+  unused external-root field must not break every earlier day ([#84]).
+- An unchanged design pass recorded nothing, and a changed one now cites what
+  it supersedes ([#119]). A design pass no longer cites a review's finding as
+  superseded ([#158]).
+- An id followed by a qualifier is named, not silently dropped ([#123]).
+- A resolved section that records nothing now says so ([#135]).
+- A subject in day's own namespace is not a missing file ([#136]).
+- Two ways a `behaviour-diff` fixture compared nothing and reported agreement
+  ([#144], [#145]).
+- The behaviour harness now runs on the modes day is never in — a mechanism
+  with two modes had only ever been exercised in the one this repo is in.
+- `.claude/worktrees/` is gitignored, after a stray `git add -A` committed one.
 
 ## [v0.12.0-beta.1] — 2026-08-08
 
@@ -78,6 +128,8 @@ log that question starts answering yes and never stops.
 - An `every` verdict described a wider set than the one it quantified over.
 - `behaviour-diff` reported IDENTICAL by four paths; two fixed, two filed
   ([#144], [#145]).
+- `telos/v1.0` was cited as a live telos in four places and had no claims in
+  kan ([#131]). Closed six hours after this tag, and shipped in it.
 
 ## [v0.11.0-beta.2] — 2026-08-04
 
@@ -330,7 +382,8 @@ The first published release.
 - Atom inputs are checked against the transitive upstream closure.
 
 <!-- Releases -->
-[Unreleased]: https://github.com/kan-tools/day/compare/v0.12.0-beta.1...HEAD
+[Unreleased]: https://github.com/kan-tools/day/compare/v0.12.0-beta.2...HEAD
+[v0.12.0-beta.2]: https://github.com/kan-tools/day/compare/v0.12.0-beta.1...v0.12.0-beta.2
 [v0.12.0-beta.1]: https://github.com/kan-tools/day/compare/v0.11.0-beta.2...v0.12.0-beta.1
 [v0.11.0-beta.2]: https://github.com/kan-tools/day/compare/v0.11.0-beta.1...v0.11.0-beta.2
 [v0.11.0-beta.1]: https://github.com/kan-tools/day/compare/v0.10.0-beta.2...v0.11.0-beta.1
@@ -373,6 +426,7 @@ The first published release.
 [#78]: https://github.com/kan-tools/day/issues/78
 [#81]: https://github.com/kan-tools/day/issues/81
 [#83]: https://github.com/kan-tools/day/issues/83
+[#84]: https://github.com/kan-tools/day/issues/84
 [#87]: https://github.com/kan-tools/day/issues/87
 [#89]: https://github.com/kan-tools/day/issues/89
 [#91]: https://github.com/kan-tools/day/issues/91
@@ -393,10 +447,19 @@ The first published release.
 [#115]: https://github.com/kan-tools/day/issues/115
 [#116]: https://github.com/kan-tools/day/issues/116
 [#118]: https://github.com/kan-tools/day/issues/118
+[#119]: https://github.com/kan-tools/day/issues/119
+[#120]: https://github.com/kan-tools/day/issues/120
+[#121]: https://github.com/kan-tools/day/issues/121
+[#123]: https://github.com/kan-tools/day/issues/123
 [#131]: https://github.com/kan-tools/day/issues/131
+[#135]: https://github.com/kan-tools/day/issues/135
+[#136]: https://github.com/kan-tools/day/issues/136
 [#137]: https://github.com/kan-tools/day/issues/137
 [#138]: https://github.com/kan-tools/day/issues/138
 [#144]: https://github.com/kan-tools/day/issues/144
 [#145]: https://github.com/kan-tools/day/issues/145
 [#146]: https://github.com/kan-tools/day/issues/146
 [#156]: https://github.com/kan-tools/day/issues/156
+[#158]: https://github.com/kan-tools/day/issues/158
+[#160]: https://github.com/kan-tools/day/issues/160
+[#165]: https://github.com/kan-tools/day/issues/165
