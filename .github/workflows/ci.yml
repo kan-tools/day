@@ -78,6 +78,141 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
 
+  # WINDOWS IS A MEASUREMENT BEFORE IT IS A GATE, and this job is deliberately
+  # narrower than `test` rather than a copy of it with `runs-on` changed.
+  #
+  # WHY IT EXISTS. `hooks/bootstrap-check.sh` is `#!/bin/sh`, and the claim that
+  # on Windows it "likely does nothing, silently" has now been written into three
+  # consecutive handoffs and measured zero times. A guess restated is still a
+  # guess, and this repo's rule is to measure before asserting -- an expectation
+  # table written from reasoning was eight rows and five wrong. So this job's
+  # subject is that one script, and the build cells are what make its result
+  # trustworthy rather than the point.
+  #
+  # WHAT IT CANNOT CHECK, named rather than silently omitted, because
+  # could-not-check outranks checked-and-clean:
+  #
+  #   The integration suite does not run here and cannot. Seventeen files under
+  #   `tests/` call `std::os::unix::fs::symlink`, including `tests/common/mod.rs`,
+  #   which every integration target imports -- so they do not fail on Windows,
+  #   they fail to COMPILE. `cargo test --lib` is therefore what runs: the 185
+  #   unit tests, which live in `src/` and carry no `std::os::unix` at all.
+  #   Making the integration suite portable is a separate piece of work, and
+  #   pretending this job covers it by running a command that cannot build would
+  #   be the could-not-check-reported-as-clean failure one level up.
+  #
+  #   `.claude/skills/` is five symlinks (mode 120000). A Windows checkout
+  #   without `core.symlinks` turns them into text files holding their target
+  #   path, so the local-reachability wiring is a known open question on Windows
+  #   -- and it is `every_shipped_command_is_reachable_in_this_repo` that would
+  #   answer it, which is in the suite that cannot compile. Stated so the gap is
+  #   visible rather than inferred from a green tick.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # day's own code is portable -- `src/` carries no `std::os::unix`, no
+      # `cfg(unix)` and no `cfg(target_os)`. This asserts that stays true.
+      - name: Build on Windows
+        run: cargo build --workspace
+
+      - name: Unit tests (see the note above for what this deliberately excludes)
+        run: cargo test --lib
+
+      # THE ACTUAL QUESTION, cell 1: a Windows machine that HAS a POSIX shell.
+      #
+      # `windows-latest` ships Git for Windows, so `sh` is on PATH here. That
+      # makes this cell the with-bash mode, which is NOT the population the
+      # worry is about -- and saying so matters, because a green tick from a
+      # runner that happens to have bash would otherwise read as "Windows is
+      # fine". This asserts what day depends on: the hook exits 0 and says the
+      # words `cargo install day` when the binaries are absent. Neither binary is
+      # installed in this job, so the missing-binaries path is the one exercised.
+      - name: bootstrap-check.sh, with a POSIX shell present
+        shell: bash
+        run: |
+          # NOT `set -e`: a non-zero exit is the single most interesting outcome
+          # here, and aborting on it would lose the exit code before the
+          # assertion below can name what went wrong.
+          set -uo pipefail
+
+          out=$(sh hooks/bootstrap-check.sh)
+          code=$?
+          echo "exit=$code"
+          echo "$out"
+
+          if [ "$code" != "0" ]; then
+            echo "::error::the hook exited $code. It is advisory and must exit 0 unconditionally -- a hook that fails a session because a dependency is missing is the gate telos/affordance-not-enforcement forbids."
+            exit 1
+          fi
+
+          # A missing interpreter must report could-not-check, never pass. This
+          # is the shape `scripts/mutate.py` exists to stop being reinvented
+          # badly: an absent tool that silently skips its own assertion is the
+          # failure mode this repo keeps recording.
+          command -v python >/dev/null 2>&1 || {
+            echo "::error::python is not on PATH, so the payload could not be validated. Reporting could-not-check rather than passing."
+            exit 1
+          }
+
+          printf '%s' "$out" | python -c '
+          import json, sys
+          d = json.load(sys.stdin)
+          assert list(d) == ["systemMessage"], f"a hook may emit only a systemMessage here; got {list(d)}"
+          m = d["systemMessage"]
+          for want in ("cargo install day", "cargo install kan"):
+              assert want in m, f"the notice must name {want!r}; got {m!r}"
+          print("OK: exits 0, emits only a systemMessage, names both install commands")
+          '
+
+      # THE ACTUAL QUESTION, cell 2: a Windows machine with NO POSIX shell.
+      #
+      # This is the mode the handoffs worry about and the one a default runner
+      # does not represent, so it is invoked the way a shell-less Windows would:
+      # straight through cmd.exe, which is the closest reachable stand-in for a
+      # harness that does not route hook commands through Git Bash.
+      #
+      # IT ASSERTS NOTHING ABOUT THE OUTCOME, on purpose. A test asserting "cmd
+      # cannot run this" goes red the day someone fixes it, which is a gate
+      # pointing the wrong way. What it does is RECORD the outcome in the job
+      # summary so the claim stops being a guess -- and it fails only if the
+      # measurement itself could not be taken.
+      #
+      # What this still does not establish is how Claude Code dispatches a hook
+      # command on Windows. That is the other side of the interface and belongs
+      # in its docs, not in an inference drawn from this cell.
+      - name: bootstrap-check.sh, with no POSIX shell (measurement, not a gate)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = (cmd /c "hooks\bootstrap-check.sh" 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          if ($null -eq $code) {
+            Write-Output "::error::the measurement did not complete -- no exit code was captured, so this cell established nothing"
+            exit 1
+          }
+          $emitted = if ([string]::IsNullOrWhiteSpace($out)) { "NOTHING (silent)" } else { $out.Trim() }
+          $summary = @"
+          ### ``hooks/bootstrap-check.sh`` invoked through ``cmd.exe``
+
+          Measured on ``windows-latest``, with no POSIX shell in the invocation path.
+
+          | | |
+          | --- | --- |
+          | exit code | ``$code`` |
+          | output | ``$emitted`` |
+
+          Recorded rather than asserted: this cell exists to replace a guess that
+          has been restated across three handoffs and measured none of them. It
+          does not establish how Claude Code dispatches hook commands on Windows.
+          "@
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          Write-Output "exit=$code"
+          Write-Output "output=$emitted"
+
   # THE DECLARED MSRV IS ONLY WORTH DECLARING IF SOMETHING CHECKS IT.
   # `rust-version` in Cargo.toml is a promise to consumers: cargo refuses to
   # build day on an older toolchain and says why. Nothing makes that promise
