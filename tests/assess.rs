@@ -140,10 +140,39 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
         .find(|(p, _)| p.file_name().unwrap() == "git.rs")
         .expect("src/git.rs should exist");
 
+    // **Whitespace-insensitive, because rustfmt decides the layout.** The scan
+    // matched the literal `self.run(&["`, so a multi-line argv was invisible —
+    // and TWO of this file's nine call sites are already written that way
+    // (`tags_with_dates`, and `sync_state`, added by the branch this scan was
+    // widened for). The invariant was therefore selected by line length: add an
+    // argument, watch the call wrap past 100 columns, and it silently leaves
+    // the whitelist's jurisdiction. Found by a cold review that added a
+    // multi-line `push --force` and watched it compile, pass, and stay
+    // fmt-clean.
+    let normalised: String = {
+        // Collapse whitespace so `self.run(&[\n "push",` reads as one form.
+        // Comments are stripped first, or a commented-out call would count.
+        let code = common::strip_line_comments(&git_rs.1);
+        code.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
     let mut invocations = 0;
-    let mut rest = git_rs.1.as_str();
-    while let Some(at) = rest.find("self.run(&[\"") {
-        let after = &rest[at + "self.run(&[\"".len()..];
+    let mut rest = normalised.as_str();
+    // **The EARLIEST of the two openings, not the first that matches.**
+    // `find(A).or_else(|| find(B))` takes A's match even when B occurs sooner,
+    // so every call in the B form before the last A form is skipped — which is
+    // how the first attempt at this fix still saw 7 of 9 and said so only
+    // because the derived floor below made it say so.
+    loop {
+        let spaced = rest.find("self.run(&[ \"");
+        let tight = rest.find("self.run(&[\"");
+        let (at, open) = match (spaced, tight) {
+            (Some(s), Some(t)) if s < t => (s, "self.run(&[ \""),
+            (Some(_), Some(t)) => (t, "self.run(&[\""),
+            (Some(s), None) => (s, "self.run(&[ \""),
+            (None, Some(t)) => (t, "self.run(&[\""),
+            (None, None) => break,
+        };
+        let after = &rest[at + open.len()..];
         // The first two argv elements as written, so a two-word entry can be
         // matched against what the call actually says. Elements are `"a", "b"`
         // in source, and a non-literal (a `&format!`) simply yields no second
@@ -167,6 +196,18 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
         invocations += 1;
         rest = after;
     }
+    // **A floor, not `> 0`.** The count is what catches a parser that stopped
+    // matching, and `> 0` cannot: the scan saw 7 of 9 call sites for as long as
+    // two of them were multi-line, and reported clean the whole time. Derived
+    // from the source rather than hardcoded, so adding a call raises the floor
+    // with it and only a scan that stops *seeing* one fails.
+    let actual = count_run_calls(&git_rs.1);
+    assert_eq!(
+        invocations, actual,
+        "the scan matched {invocations} of {actual} `self.run(&[…])` call sites \
+         in src/git.rs — a whitelist that cannot see a call cannot constrain it, \
+         and rustfmt decides which calls are multi-line"
+    );
     assert!(
         invocations > 0,
         "the scan should have found git invocations"
@@ -476,4 +517,18 @@ fn ac8_the_mcp_surface_has_no_way_to_authorize_execution() {
         "src/mcp.rs must never construct Authorization::Run — an agent calling a \
          read-shaped tool cannot be allowed to execute project-declared commands"
     );
+}
+
+/// Every `self.run(&[…])` in a source, however rustfmt laid it out.
+///
+/// Deliberately a different mechanism from the whitelist scan's own parse: if
+/// both counted the same way, they would agree while both being wrong, which
+/// is the shape of a check that validates itself.
+pub fn count_run_calls(source: &str) -> usize {
+    common::strip_line_comments(source)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .matches("self.run(&[")
+        .count()
 }

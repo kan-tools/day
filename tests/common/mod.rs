@@ -680,3 +680,79 @@ impl Default for ScratchCrate {
         Self::new()
     }
 }
+
+/// Strips `//` comments, **string-aware**, for the source scans.
+///
+/// The naive `line.find("//")` truncates at a `//` inside a string literal, so
+/// anything later on that line becomes invisible to the scan. Demonstrated
+/// against the shipped scans: a line reading
+/// `format!("https://example.com/{}", crate::cache::CACHE_DIR)` compiles, is
+/// fmt-clean, and passes the guard that exists to keep the renderer from
+/// touching the cache — while the same line without the URL is flagged. Three
+/// scans had it, one of them the `.day/` carve-out this repo calls load-bearing.
+///
+/// The reason for stripping at all is right and unchanged: a rule's own doc
+/// comment has to be able to name the thing it forbids. This only narrows
+/// *what counts as a comment* to what the compiler would agree is one.
+///
+/// Handles `"…"` and `'…'` with backslash escapes, and raw strings `r"…"` /
+/// `r#"…"#`. Not a Rust parser: a `//` inside a block comment is still treated
+/// as code, which fails toward scanning MORE than it should — the safe
+/// direction for a guard whose false positives are visible and whose false
+/// negatives are not.
+pub fn strip_line_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| {
+            let bytes = line.as_bytes();
+            let mut i = 0;
+            // Inside a normal string: the delimiter that ends it.
+            let mut quote: Option<u8> = None;
+            // Inside a raw string: how many `#` close it.
+            let mut raw_hashes: Option<usize> = None;
+            while i < bytes.len() {
+                let c = bytes[i];
+                if let Some(hashes) = raw_hashes {
+                    if c == b'"' && line[i + 1..].bytes().take(hashes).all(|b| b == b'#') {
+                        raw_hashes = None;
+                        i += 1 + hashes;
+                        continue;
+                    }
+                    i += 1;
+                    continue;
+                }
+                if let Some(q) = quote {
+                    if c == b'\\' {
+                        i += 2;
+                        continue;
+                    }
+                    if c == q {
+                        quote = None;
+                    }
+                    i += 1;
+                    continue;
+                }
+                // `r"`, `r#"`, `r##"` … open a raw string.
+                if c == b'r' {
+                    let hashes = line[i + 1..].bytes().take_while(|b| *b == b'#').count();
+                    if line.as_bytes().get(i + 1 + hashes) == Some(&b'"') {
+                        raw_hashes = Some(hashes);
+                        i += 2 + hashes;
+                        continue;
+                    }
+                }
+                if c == b'"' || c == b'\'' {
+                    quote = Some(c);
+                    i += 1;
+                    continue;
+                }
+                if c == b'/' && bytes.get(i + 1) == Some(&b'/') {
+                    return line[..i].to_string();
+                }
+                i += 1;
+            }
+            line.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}

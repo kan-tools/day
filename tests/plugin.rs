@@ -662,12 +662,32 @@ fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
             if path.extension().is_none_or(|e| e != "rs") {
                 continue;
             }
-            let text = std::fs::read_to_string(&path).unwrap();
-            if !text.contains(&cache_dir_literal) {
+            // **The constant counts as touching the cache, not just the
+            // literal.** This scanned only `".day"`, so a module reaching the
+            // cache through `crate::cache::CACHE_DIR` routed around the guard
+            // — and the harness-footer branch is the first code to do it
+            // (legitimately, in `src/git.rs`, to exclude the cache from a
+            // dirtiness read). A cold review then demonstrated the hole: a
+            // function added to `src/status.rs` that reads the cache *to
+            // decide* survived this test.
+            //
+            // `src/git.rs` is exempt for the one use that is not a touch:
+            // naming the directory in a pathspec so git ignores it. That is
+            // the cache being *excluded*, which is the opposite of reading it,
+            // and the exemption is narrow — the constant, in that file, only.
+            let code = common::strip_line_comments(&std::fs::read_to_string(&path).unwrap());
+            let names_it = code.contains(&cache_dir_literal)
+                || code.contains("cache::CACHE_DIR")
+                || code.contains("cache::VARIANTS_FILE")
+                || code.contains("cache::STATUS_LINE_FILE");
+            if !names_it {
                 continue;
             }
-            if path.file_name().unwrap() == "cache.rs" {
+            let name = path.file_name().unwrap();
+            if name == "cache.rs" {
                 cache_rs_has_it = true;
+            } else if name == "git.rs" && !code.contains(&cache_dir_literal) {
+                // exempt: excluding the cache from a git pathspec is not a read
             } else {
                 offenders.push(path.display().to_string());
             }
@@ -763,7 +783,17 @@ fn a_failed_kan_read_is_never_swallowed() {
     let kan_client_src = std::fs::read_to_string(repo_root().join("src").join("kan_client.rs"))
         .expect("src/kan_client.rs should exist");
     let mut derived: Vec<String> = Vec::new();
-    for window in kan_client_src.split("pub fn ").skip(1) {
+    // **Every visibility, not just `pub`.** The split was on the literal
+    // `"pub fn "`, so a `pub(crate) fn` returning `Result` was invisible to the
+    // derivation and its swallows escaped the guard entirely — the same
+    // "a guard whose scope is selected by the code it guards" that widening
+    // this scan to `-> Option<` was meant to end, with the selector moved from
+    // return type to visibility. Demonstrated by a cold review against the
+    // built scan.
+    let normalised = kan_client_src
+        .replace("pub(crate) fn ", "pub fn ")
+        .replace("pub(super) fn ", "pub fn ");
+    for window in normalised.split("pub fn ").skip(1) {
         // The signature runs to the opening brace; multi-line signatures are
         // why this does not stop at the line end.
         let signature = window.split('{').next().unwrap_or("");
@@ -838,10 +868,7 @@ fn a_failed_kan_read_is_never_swallowed() {
             let raw_lines: Vec<&str> = raw.lines().collect();
             let text: String = raw_lines
                 .iter()
-                .map(|l| match l.find("//") {
-                    Some(i) => l[..i].to_string(),
-                    None => (*l).to_string(),
-                })
+                .map(|l| common::strip_line_comments(l))
                 .collect::<Vec<_>>()
                 .join("\n");
 
@@ -1023,10 +1050,7 @@ fn an_ordering_is_never_read_off_the_raw_next() {
             // matcher gets to see **across** lines.
             let code_lines: Vec<String> = lines
                 .iter()
-                .map(|l| match l.find("//") {
-                    Some(at) => l[..at].to_string(),
-                    None => (*l).to_string(),
-                })
+                .map(|l| common::strip_line_comments(l))
                 .collect();
             let code = code_lines.join("\n");
 
@@ -1409,10 +1433,7 @@ fn production_half(text: &str) -> String {
     let cut = cfg_test_module_line(&lines);
     lines[..cut]
         .iter()
-        .map(|l| match l.find("//") {
-            Some(i) => l[..i].to_string(),
-            None => (*l).to_string(),
-        })
+        .map(|l| common::strip_line_comments(l))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -2077,5 +2098,51 @@ fn every_witness_carrying_declaration_is_followed_by_a_caution() {
          skipped it for five of day's own nine atoms (day#146) and nothing said so. \
          If a new declare verb genuinely carries no witness types, raise \
          WITHOUT_WITNESSES and say which it is."
+    );
+}
+
+/// **The source scans strip comments string-aware, or a URL blinds them.**
+///
+/// `line.find("//")` truncates at a `//` inside a string literal, so anything
+/// later on that line is invisible to every scan that strips this way. Three
+/// did, including `ac13`'s renderer guard and this file's own kan-read guard —
+/// the build-failing invariant CLAUDE.md calls the shape a rule should want.
+/// Demonstrated by a cold review with a line that compiles and is fmt-clean:
+/// `format!("https://example.com/{}", crate::cache::CACHE_DIR)` passed, while
+/// the same line without the URL was flagged.
+///
+/// The reason for stripping at all is unchanged and right: a rule's own doc
+/// comment has to be able to name the thing it forbids. This pins the narrower
+/// definition — what the *compiler* would call a comment.
+#[test]
+fn the_comment_stripper_is_not_blinded_by_a_url_in_a_string() {
+    // The case that defeated the naive stripper: a `//` inside a literal,
+    // followed on the same line by the token a scan is looking for.
+    let line = r#"    let u = format!("https://example.com/{}", crate::cache::CACHE_DIR);"#;
+    let stripped = common::strip_line_comments(line);
+    assert!(
+        stripped.contains("crate::cache::CACHE_DIR"),
+        "a `//` inside a string literal must not truncate the line, or every \
+         scan that strips comments is blind after any URL: {stripped:?}"
+    );
+
+    // And it still does its actual job: a real trailing comment goes.
+    let commented = r#"    let x = 1; // crate::cache::CACHE_DIR mentioned in prose"#;
+    assert!(
+        !common::strip_line_comments(commented).contains("CACHE_DIR"),
+        "a genuine comment must still be stripped, or the rule's own doc \
+         comment trips the rule"
+    );
+
+    // Raw strings and escapes, the two shapes that would otherwise desync the
+    // quote tracking for the rest of the line.
+    assert!(
+        common::strip_line_comments(r##"    let r = r#"a // b"#; let y = TOKEN;"##)
+            .contains("TOKEN"),
+        "a raw string containing `//` must not truncate the line"
+    );
+    assert!(
+        common::strip_line_comments(r#"    let e = "a \" // b"; let y = TOKEN;"#).contains("TOKEN"),
+        "an escaped quote must not desync the string tracking"
     );
 }

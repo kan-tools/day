@@ -623,10 +623,7 @@ fn tests_without_a_premise_assertion(registry: &str) -> Vec<String> {
         let end = body.find("\n}\n").unwrap_or(body.len());
         let code: String = body[..end]
             .lines()
-            .map(|l| match l.find("//") {
-                Some(i) => &l[..i],
-                None => l,
-            })
+            .map(common::strip_line_comments)
             .collect::<Vec<_>>()
             .join("\n");
         if !code.contains("premise:") {

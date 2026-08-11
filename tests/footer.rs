@@ -840,10 +840,7 @@ fn renderer_sources() -> Vec<(PathBuf, String)> {
             let text = std::fs::read_to_string(&p).unwrap();
             let code = text
                 .lines()
-                .map(|l| match l.find("//") {
-                    Some(i) => &l[..i],
-                    None => l,
-                })
+                .map(common::strip_line_comments)
                 .collect::<Vec<_>>()
                 .join("\n");
             (p, code)
