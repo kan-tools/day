@@ -180,9 +180,12 @@ fn ac9_status_works_with_the_cache_absent() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("Current atom: build"));
 }
 
-/// AC-8: the status line reads **only** the cache. Point the kan binary at a
-/// path that does not exist and it still renders, because it never invokes
-/// kan — proof by the one thing that would break if it did.
+/// AC-8, and the harness footer's AC-12: the status line reads **only** the
+/// cache. Point the kan binary *and* the git binary at paths that do not
+/// exist and it still renders, because it invokes neither — proof by the two
+/// things that would break if it did. The footer grew git and identity
+/// reads, and every one of them belongs to the session-start hook (REQ-10);
+/// this is the criterion that keeps that true as the footer grows further.
 #[test]
 fn ac8_the_status_line_reads_only_the_cache() {
     let dir = tempfile::tempdir().unwrap();
@@ -191,14 +194,15 @@ fn ac8_the_status_line_reads_only_the_cache() {
     day(dir.path(), &kan, &git, &["hook", "session-start"]);
 
     let missing_kan = dir.path().join("no-such-kan");
-    let out = day(dir.path(), &missing_kan, &git, &["status-line"]);
+    let missing_git = dir.path().join("no-such-git");
+    let out = day(dir.path(), &missing_kan, &missing_git, &["status-line"]);
     assert!(
         out.status.success(),
-        "status-line must not fail when kan is absent"
+        "status-line must not fail when kan and git are absent"
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("day · atom: build"),
+        stdout.contains("atom: build"),
         "should render from the cache: {stdout:?}"
     );
 }

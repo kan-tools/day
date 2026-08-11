@@ -1066,3 +1066,111 @@ fn fallback_legacy_witness_block() {
          per-key layer is inert and the fallback is the only path there is"
     );
 }
+
+/// The footer names the repo from the directory when there is no remote —
+/// the fresh `git init` state, which is the population `telos/v1.0` names
+/// (`.design/harness-footer.md` REQ-12).
+#[test]
+fn fallback_no_remote() {
+    let dir = tempfile::tempdir().unwrap();
+    repo_without_a_release(dir.path());
+
+    let out = Command::new("git")
+        .args(["remote"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+        "premise: the fixture must have no remote — with one configured this \
+         exercises the org/name path day's own repo is always on"
+    );
+
+    let git = day::git::Git::new(dir.path());
+    assert_eq!(
+        git.remote_url().unwrap(),
+        None,
+        "no remote must read as None, never as an error"
+    );
+    let ctx = day::hooks::footer_context(&git);
+    let dirname = std::fs::canonicalize(dir.path())
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        ctx.repo.as_deref(),
+        Some(dirname.as_str()),
+        "with no remote the footer names the main checkout's directory"
+    );
+}
+
+/// A remote URL of no recognised shape falls back to the directory name
+/// rather than a mangled `org/name` (`.design/harness-footer.md` REQ-14) —
+/// a wrong repo name is worse than a plain one.
+#[test]
+fn fallback_unrecognised_remote() {
+    let dir = tempfile::tempdir().unwrap();
+    repo_without_a_release(dir.path());
+    git(dir.path(), &["remote", "add", "origin", "/a/local/path"]);
+
+    assert!(
+        day::footer::repo_from_remote("/a/local/path").is_none(),
+        "premise: the remote URL must be of no recognised shape — a \
+         recognised one exercises the org/name path instead"
+    );
+
+    let ctx = day::hooks::footer_context(&day::git::Git::new(dir.path()));
+    let dirname = std::fs::canonicalize(dir.path())
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        ctx.repo.as_deref(),
+        Some(dirname.as_str()),
+        "an unrecognised remote must yield the directory name, never a \
+         mangled org/name"
+    );
+}
+
+/// Every footer read failing omits every segment — the footer's context
+/// assembly must not fail a hook over a decoration
+/// (`.design/harness-footer.md` REQ-7).
+#[test]
+fn fallback_footer_reads_degrade() {
+    let dir = tempfile::tempdir().unwrap();
+    let git = day::git::Git::with_bin(
+        dir.path(),
+        dir.path().join("no-such-git").display().to_string(),
+    );
+
+    assert!(
+        git.sync_state().is_err(),
+        "premise: every git read must fail — against a working repo this \
+         exercises the populated path instead"
+    );
+
+    let ctx = day::hooks::footer_context(&git);
+    assert!(
+        ctx.repo.is_none() && ctx.branch.is_none() && ctx.sync.is_none() && ctx.checkout.is_none(),
+        "every segment must be omitted, not defaulted: {ctx:?}"
+    );
+
+    // And what remains still renders: one line, no empty context line.
+    let rendered = day::footer::render_unreadable(
+        &day::footer::Surround {
+            context: ctx,
+            role: None,
+            withheld: 0,
+        },
+        day::footer::Style::Plain,
+    );
+    assert_eq!(
+        rendered.lines().count(),
+        1,
+        "an all-absent context earns no line: {rendered:?}"
+    );
+}

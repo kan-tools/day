@@ -362,6 +362,107 @@ fn position_cache_fingerprint(git: &Git, client: &KanClient) -> Option<String> {
     })
 }
 
+/// Assembles everything the footer renders besides the position: repo,
+/// branch, sync and checkout from git; the active role and the withheld
+/// count from kan (`.design/harness-footer.md` REQ-4..7).
+///
+/// **This is the only place those reads happen** (REQ-10): the footer is
+/// rendered here in the hook and cached; `day status-line` reads the cache
+/// and invokes nothing, which is what keeps it inside Claude Code's 300 ms
+/// cancellation budget. Every read degrades to an omitted segment rather
+/// than an error — a hook must not fail over a decoration.
+///
+/// fallback: footer-reads-degrade
+fn footer_surround(client: &KanClient, git: &Git) -> crate::footer::Surround {
+    crate::footer::Surround {
+        context: footer_context(git),
+        role: client.active_role(),
+        withheld: client.claims_withheld_from_view(),
+    }
+}
+
+/// The git half of the footer's context: repo name, branch, sync, checkout.
+/// Public so the acceptance tests can drive it against fixture repositories
+/// — AC-14's worktree assertion in particular is about *this* assembly, not
+/// about the renderer.
+pub fn footer_context(git: &Git) -> crate::footer::Context {
+    let canonical = |p: std::path::PathBuf| std::fs::canonicalize(&p).unwrap_or(p);
+
+    let mut context = crate::footer::Context::default();
+    if let Ok(sync) = git.sync_state() {
+        // Real porcelain-v2 output always carries the branch header, even
+        // detached or unborn. Output without it is not a sync state day
+        // read — it is a git that printed nothing — and rendering it would
+        // claim a clean tree from an empty read.
+        if sync.branch.is_some() {
+            context.branch = sync.branch.clone();
+            context.sync = Some(crate::footer::Sync {
+                dirty: sync.dirty,
+                ahead_behind: sync.ahead_behind,
+            });
+        }
+    }
+
+    // The main checkout's root: the parent of the common git dir — not
+    // `--show-toplevel`, which names the *current* checkout and therefore a
+    // worktree's own directory, precisely in the case the footer exists to
+    // make visible (RQ-7).
+    let main_root = git
+        .common_dir()
+        .ok()
+        .map(canonical)
+        .and_then(|c| c.parent().map(std::path::Path::to_path_buf));
+
+    // Repo name: the remote when there is one, the main checkout's directory
+    // otherwise (REQ-12); an unrecognised remote URL falls back rather than
+    // guessing (REQ-14).
+    //
+    // fallback: unrecognised-remote
+    context.repo = git
+        .remote_url()
+        .ok()
+        .flatten()
+        .and_then(|url| crate::footer::repo_from_remote(&url))
+        .or_else(|| {
+            main_root
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+        });
+
+    if let (Some(top), Some(main_root)) = (git.toplevel().ok().map(canonical), main_root) {
+        context.checkout = Some(if top == main_root {
+            crate::footer::Checkout::Main
+        } else if let Ok(rel) = top.strip_prefix(&main_root) {
+            crate::footer::Checkout::UnderMain(rel.display().to_string())
+        } else {
+            crate::footer::Checkout::Elsewhere(top.display().to_string())
+        });
+    }
+
+    context
+}
+
+/// Renders the footer for the current state and writes it to the cache.
+/// `None` for the status renders the could-not-read state (the ninth,
+/// REQ-1) rather than leaving the bar showing a stale earlier session.
+fn write_footer(
+    client: &KanClient,
+    git: &Git,
+    root: &Path,
+    status: Option<&crate::status::Status>,
+) {
+    let surround = footer_surround(client, git);
+    let style = crate::footer::Style::resolve(&crate::footer::EnvSignals::from_env());
+    let rendered = match status {
+        Some(status) => crate::footer::render(status, &surround, style),
+        None => crate::footer::render_unreadable(&surround, style),
+    };
+    // Display-only, latency-only. Best-effort: if it fails the status line
+    // simply shows nothing until the next session start.
+    let _ = crate::cache::write_status_line(root, &rendered);
+}
+
 /// Runs position inference, writes the status-line cache, and returns a short
 /// block naming where the work sits for the model.
 ///
@@ -383,12 +484,17 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
     let status = match crate::status::compute(client, &git) {
         Ok(s) => s,
-        Err(_) => return String::new(),
+        Err(_) => {
+            // The bar still gets a truthful rendering: "kan could not be
+            // read" is the ninth footer state, and leaving the cache holding
+            // an earlier session's position would display confidently from a
+            // read that just failed.
+            write_footer(client, &git, root, None);
+            return String::new();
+        }
     };
 
-    // Display-only, latency-only. The write is best-effort: if it fails the
-    // status line simply shows nothing until the next session start.
-    let _ = crate::cache::write_status_line(root, &status.render_line());
+    write_footer(client, &git, root, Some(&status));
 
     // And what the per-prompt hook needs, so it can re-display without repeating
     // this read. Recorded here because this is the one place that already pays
@@ -712,12 +818,13 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // assessments and four commits. `day status` and the line disagreed, and the
     // line is the surface a human actually watches.
     //
-    // It costs nothing extra. `status` is already computed here, `render_line`
-    // is pure, and reaching this point means the fingerprint moved — so the
-    // write happens exactly when the answer can have changed and never on the
-    // cheap path above. Zero additional kan invocations, which is the property
-    // REQ-4 pins, rather than a duration, which would measure the machine.
-    let _ = crate::cache::write_status_line(root, &status.render_line());
+    // Reaching this point means the fingerprint moved — so the write happens
+    // exactly when the answer can have changed and never on the cheap path
+    // above, which stays at zero kan invocations (the property REQ-4 pins,
+    // rather than a duration, which would measure the machine). The footer's
+    // own reads (one `kan identity role list`, a few git reads) are paid only
+    // here, on the path already paying for a full recompute.
+    write_footer(client, &git, root, Some(&status));
 
     if let Some(fp) = fingerprint {
         let _ = crate::cache::write_standing(

@@ -90,15 +90,37 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // mutating verbs is both leakier (git has many) and prone to false
     // positives — the first version of this test flagged `git tag --list`,
     // which is a read, because it matched a pattern meant for `git tag -d`.
-    const ALLOWED_READS: [&str; 7] = [
-        "tag",
-        "diff",
-        "log",
-        "rev-parse",
-        "show",
-        "status",
-        "ls-files",
+    //
+    // Every entry carries its reason (REQ-13/AC-5 of
+    // `.design/harness-footer.md`): the list is deliberately narrow, every
+    // addition widens what src/git.rs may reach, and an entry added without a
+    // stated reason fails below. The reason lives here, at the whitelist,
+    // rather than only in a design document that nothing re-checks.
+    const ALLOWED_READS: [(&str, &str); 8] = [
+        ("tag", "cycle boundaries: the last release and its date"),
+        ("diff", "files changed since the boundary, for path probes"),
+        ("log", "commit history, read-only"),
+        (
+            "rev-parse",
+            "repo roots and the main checkout, for the footer",
+        ),
+        ("show", "committed file contents at a boundary"),
+        ("status", "branch, ahead/behind and dirtiness, in one read"),
+        ("ls-files", "the tracked set, for unbounded path probes"),
+        (
+            "remote",
+            "the origin URL, so the footer names the repo as org/name \
+             (REQ-13); `get-url` is unambiguously a read",
+        ),
     ];
+    for (name, reason) in ALLOWED_READS {
+        assert!(
+            !reason.trim().is_empty(),
+            "the permitted git subcommand `{name}` states no reason — the \
+             whitelist is deliberately narrow, and an unexplained entry is \
+             how it silently widens"
+        );
+    }
     let git_rs = sources
         .iter()
         .find(|(p, _)| p.file_name().unwrap() == "git.rs")
@@ -110,9 +132,11 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
         let after = &rest[at + "self.run(&[\"".len()..];
         let subcommand: String = after.chars().take_while(|c| *c != '"').collect();
         assert!(
-            ALLOWED_READS.contains(&subcommand.as_str()),
+            ALLOWED_READS.iter().any(|(name, _)| *name == subcommand),
             "src/git.rs invokes `git {subcommand}`, which is not one of the permitted \
-             read subcommands {ALLOWED_READS:?}. day's git access is read-only."
+             read subcommands {:?}. day's git access is read-only, and a new read \
+             subcommand needs a stated reason at this whitelist.",
+            ALLOWED_READS.map(|(name, _)| name)
         );
         invocations += 1;
         rest = after;

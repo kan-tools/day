@@ -661,6 +661,45 @@ impl KanClient {
         (!did.is_empty()).then_some(did)
     }
 
+    /// The declared role whose DID is the active one, via `kan identity role
+    /// list --json` — what the footer's identity segment names (REQ-6 of
+    /// `.design/harness-footer.md`).
+    ///
+    /// One invocation carries both halves: the envelope's `active` DID and
+    /// the declared roles with theirs, so this can never pair a DID from one
+    /// read with roles from another. day invents no vocabulary here — the
+    /// names are kan's own declared roles (kan#115).
+    ///
+    /// `None` on any failure and on any non-match, deliberately (REQ-7): no
+    /// declared roles, no active identity, a kan without the verb, and an
+    /// unparseable envelope all read as "nothing to report", which omits the
+    /// segment — the same contract as [`Self::identity`], for the same
+    /// keychain-prompt reason.
+    pub fn active_role(&self) -> Option<String> {
+        #[derive(serde::Deserialize)]
+        struct Envelope {
+            #[serde(default)]
+            active: String,
+            #[serde(default)]
+            roles: Vec<Role>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Role {
+            name: String,
+            did: String,
+        }
+        let out = self.run(&["identity", "role", "list", "--json"]).ok()?;
+        let envelope: Envelope = serde_json::from_str(&out).ok()?;
+        if envelope.active.is_empty() {
+            return None;
+        }
+        envelope
+            .roles
+            .into_iter()
+            .find(|role| role.did == envelope.active)
+            .map(|role| role.name)
+    }
+
     /// Every subject in the log, via `kan status --json`.
     pub fn subjects(&self) -> Result<Vec<String>, Error> {
         if let Some(memo) = self.subject_memo.borrow().as_ref() {

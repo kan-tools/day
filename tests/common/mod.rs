@@ -170,6 +170,7 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     // "foreign" simply by declaring it with a different author.
     std::fs::write(data.join("identity"), STUB_AUTHOR).unwrap();
     let _ = std::fs::remove_file(data.join("append-count"));
+    let _ = std::fs::remove_file(data.join("roles.json"));
 
     let mut subjects: Vec<&str> = claims.iter().map(|c| c.subject.as_str()).collect();
     subjects.sort_unstable();
@@ -229,6 +230,16 @@ DATA="{data}"
 case "$1" in
   --help) echo "kan (test stub)"; exit 0 ;;
   identity)
+    # `kan identity role list --json` (kan#115): served from `roles.json`
+    # when a test wrote one (see `write_stub_roles`), else an envelope with
+    # no declared roles — the state day's footer must render by omitting the
+    # identity segment. A malformed `roles.json` models a kan whose output
+    # day cannot parse, which must also read as "nothing to report".
+    if [ "$2" = "role" ]; then
+      if [ -f "$DATA/roles.json" ]; then cat "$DATA/roles.json"; exit 0; fi
+      printf '{{"v":1,"active":"%s","roles":[]}}\n' "$(cat "$DATA/identity" 2>/dev/null)"
+      exit 0
+    fi
     # `kan identity did` prints the public identifier. A stub whose identity
     # file is absent models kan being unable to reach the keychain, which is
     # a real state day has to fail closed on rather than guess through.
@@ -302,6 +313,13 @@ esac
     }
 
     script
+}
+
+/// What the stub's `kan identity role list --json` serves. Write the raw
+/// JSON (or deliberately not-JSON, to model an unparseable kan) after
+/// [`write_kan_stub`], which clears any previous one.
+pub fn write_stub_roles(dir: &Path, json: &str) {
+    std::fs::write(dir.join("kan-stub-data").join("roles.json"), json).unwrap();
 }
 
 /// One claim in kan's `--json` shape. Which fields are present depends on
