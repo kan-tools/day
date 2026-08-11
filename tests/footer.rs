@@ -1445,3 +1445,112 @@ fn the_cache_day_writes_is_not_reported_as_dirtiness() {
         "excluding the cache must not stop day seeing the user's own changes"
     );
 }
+
+/// The dirtiness read is anchored at the **repository top**, not at whatever
+/// directory day happens to be run from.
+///
+/// A pathspec is resolved against the process working directory, and day is
+/// routinely run from somewhere other than the root: `statusline_root` takes
+/// the harness's `workspace.current_dir`, and Claude Code does not guarantee
+/// that is the project root. The first version of the cache exclusion wrote
+/// `-- . :(exclude).day` and had both failures at once — reporting a clean
+/// tree over a dirty repo from a subdirectory (which the code *before* the
+/// exclusion got right), and failing to exclude a nested `pkg/app/.day/`.
+///
+/// **This test exists in the subdirectory mode on purpose.** Its predecessor
+/// built `Git::new(&root)` at the toplevel and edited a file at the toplevel,
+/// which is `practice` #25 — a mechanism with two modes gets tested in
+/// whichever mode this repo happens to be in — reproduced in the commit that
+/// cites it.
+#[test]
+fn dirtiness_is_read_from_the_repo_top_not_the_process_cwd() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = fixture_repo(dir.path());
+    let nested = root.join("pkg/app");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    let from_root = day::git::Git::new(&root);
+    let from_sub = day::git::Git::new(&nested);
+
+    assert!(
+        !from_root.sync_state().unwrap().dirty && !from_sub.sync_state().unwrap().dirty,
+        "premise: the fixture must start clean from both vantage points"
+    );
+
+    // Dirt at the repo ROOT, with day looking from a SUBDIRECTORY.
+    std::fs::write(root.join("a.txt"), "edited\n").unwrap();
+    assert!(
+        from_sub.sync_state().unwrap().dirty,
+        "a change at the repo root must be seen from a subdirectory — a \
+         pathspec anchored to the cwd reports a clean tree over a dirty repo, \
+         beside a footer that names the whole repository"
+    );
+    std::fs::write(root.join("a.txt"), "a\n").unwrap();
+
+    // And a NESTED cache is still excluded, which the cwd-anchored form also
+    // got wrong once day had run from a subdirectory.
+    std::fs::create_dir_all(nested.join(day::cache::CACHE_DIR)).unwrap();
+    std::fs::write(
+        nested.join(day::cache::CACHE_DIR).join("statusline"),
+        "day - build",
+    )
+    .unwrap();
+    // `-uall`: plain `--porcelain` collapses an untracked directory to `pkg/`,
+    // so the premise would be asserting against a string git never prints.
+    let porcelain = Command::new("git")
+        .args(["status", "--porcelain", "-uall"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&porcelain.stdout).contains("pkg/app/.day/"),
+        "premise: git must see the NESTED cache as untracked, or this measures \
+         nothing: {}",
+        String::from_utf8_lossy(&porcelain.stdout)
+    );
+    for (name, git) in [("root", &from_root), ("subdirectory", &from_sub)] {
+        assert!(
+            !git.sync_state().unwrap().dirty,
+            "a nested .day/ must be excluded when read from the {name}"
+        );
+    }
+}
+
+/// The stale-confident-bar defect, on the path that runs **every prompt**.
+///
+/// `hook user-prompt` returned empty on a compute failure and wrote no footer,
+/// so a kan that broke *after* session start left the bar showing a confident
+/// position for the rest of the session while `day status` correctly reported
+/// the log could not be read. The first fix covered `session_start`'s two
+/// early returns and left this one — the worse omission, since session-start
+/// runs once and this runs every turn.
+#[test]
+fn a_broken_kan_replaces_the_bar_from_the_per_prompt_path_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+
+    // A good session first, so there is a confident position to go stale.
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+    let fresh = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        !fresh.contains("could not be read"),
+        "premise: the first session must produce an ordinary footer:\n{fresh}"
+    );
+
+    // kan breaks, and the only hook that runs is the per-prompt one.
+    let broken = dir.path().join("broken-kan.sh");
+    std::fs::write(&broken, "#!/bin/sh\necho boom >&2\nexit 3\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&broken, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = day_cmd(dir.path(), &broken, &["hook", "user-prompt"]);
+    assert!(out.status.success(), "the hook must still exit zero");
+
+    let after = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        after.contains("could not be read"),
+        "the per-prompt path must replace the bar when kan breaks — leaving it \
+         holding the previous session's position displays confidently from a \
+         read that just failed, every turn, for the rest of the session:\n{after}"
+    );
+}

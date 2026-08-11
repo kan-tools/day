@@ -245,13 +245,27 @@ impl Git {
         // shows a permanent "dirty" mark with the user having done nothing.
         // A display whose stated justification is "dirty means commit" must
         // not be counting its own artifacts.
+        // **`:/` and `:(top,…)`, never `.`.** Both halves are anchored at the
+        // repository top, because a pathspec is resolved against the PROCESS
+        // working directory and day is routinely run from somewhere else —
+        // `statusline_root` takes the harness's `workspace.current_dir`, and
+        // Claude Code does not guarantee that is the project root.
+        //
+        // The first version wrote `-- . :(exclude).day` and had both failures
+        // at once, measured by two cold reviewers: from a subdirectory it
+        // reported a CLEAN tree over a dirty repo (which the pre-fix code got
+        // right, so the exclusion introduced it), and once day had run from a
+        // subdirectory the nested `pkg/app/.day/` was not excluded either — so
+        // it failed at its own job in exactly the fresh-`git init` population
+        // its own comment names. `glob` is what makes the exclusion reach a
+        // nested cache rather than only the one at the top.
         let out = self.run(&[
             "status",
             "--porcelain=v2",
             "--branch",
             "--",
-            ".",
-            &format!(":(exclude){}", crate::cache::CACHE_DIR),
+            ":/",
+            &format!(":(top,exclude,glob)**/{}/**", crate::cache::CACHE_DIR),
         ])?;
         let mut state = SyncState::default();
         for line in out.lines() {

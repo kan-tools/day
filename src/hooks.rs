@@ -850,8 +850,23 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
 
     // Git state moved (or there is nothing cached): pay for the real answer
     // once, and re-cache it so the next prompts are cheap again.
-    let Ok(status) = crate::status::compute(client, &git) else {
-        return String::new();
+    let status = match crate::status::compute(client, &git) {
+        Ok(status) => status,
+        Err(_) => {
+            // **The bar is told here too, and this is the half that matters
+            // most.** The first fix for the stale-confident-bar defect covered
+            // `session_start`'s two early returns and left this one, which is
+            // the worse omission: session-start runs once, this runs every
+            // prompt. A kan that breaks *after* session start therefore left
+            // the bar showing a confident position for the rest of the
+            // session, while `day status` correctly reported the log could not
+            // be read — the day#60 asymmetry, on the surface a human watches.
+            //
+            // Found by a cold review that drove all four kan-failure paths;
+            // the test written for the first fix drove one of them.
+            write_unreadable_footer(client, root);
+            return String::new();
+        }
     };
     let cadence = status.cadence;
 
