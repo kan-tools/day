@@ -206,6 +206,21 @@ def observe(binary: pathlib.Path, fixture: pathlib.Path, work: pathlib.Path) -> 
     # which is the same malformed-fixture class day#145 is about, one line over.
     # A fixture that cannot say what to run is exactly as unrunnable as one that
     # says to run nothing, and both are `CORPUS-EMPTY` at exit 2.
+    # **Artifacts from a previous observation are not this one's output.** The
+    # work directory is shared, and every head observation runs before the base
+    # ones — so once `.day/` became part of what is compared, the base run read
+    # back the head run's leftover files and they compared EQUAL. Measured: the
+    # `trust-withheld-partially` fixture reported three differences where its
+    # sibling reported six, and the missing three were exactly the `.variants`
+    # file the older binary never writes.
+    #
+    # Caught by following that asymmetry rather than by a test, which is worth
+    # noting: two fixtures alike in every relevant way disagreeing about how
+    # much changed is a signal, and the harness had no way to say so itself.
+    cache = work / ".day"
+    if cache.is_dir():
+        shutil.rmtree(cache)
+
     invocations = case.get("invocations")
     if not invocations:
         missing = "declares no `invocations` key" if invocations is None else "declares no invocations"

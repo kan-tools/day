@@ -1,0 +1,34 @@
+# The behaviour changes the harness-footer branch intends, declared so any
+# OTHER difference surfaces as UNEXPLAINED. Regenerate the run with:
+#
+#   xargs -a fixtures/behaviour/EXPECTED.harness-footer python3 scripts/behaviour-diff.py \
+#     --since 9b8afa7 --expect-fixtures 4
+#
+# Every entry is the footer's own surface: the cache files it writes. The
+# two assess-telos fixtures are absent on purpose — that verb does not touch
+# the cache, and they showed differences only while a shared work directory
+# was leaking one binary's artifacts into the other's observation.
+--expect
+trust-withheld-entirely:doctor :: .day/statusline
+--expect
+trust-withheld-entirely:doctor :: .day/statusline.variants
+--expect
+trust-withheld-entirely:hook session-start :: .day/statusline
+--expect
+trust-withheld-entirely:hook session-start :: .day/statusline.variants
+--expect
+trust-withheld-entirely:status :: .day/statusline
+--expect
+trust-withheld-entirely:status :: .day/statusline.variants
+--expect
+trust-withheld-partially:doctor :: .day/statusline
+--expect
+trust-withheld-partially:doctor :: .day/statusline.variants
+--expect
+trust-withheld-partially:hook session-start :: .day/statusline
+--expect
+trust-withheld-partially:hook session-start :: .day/statusline.variants
+--expect
+trust-withheld-partially:status :: .day/statusline
+--expect
+trust-withheld-partially:status :: .day/statusline.variants
