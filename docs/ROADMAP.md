@@ -1070,6 +1070,44 @@ and transition reporting; a format designed now gets redesigned then.
   an atom, and the process framework co-evolves with the project's teloi.
 - Non-Claude-Code harnesses. The CLI core is already harness-agnostic, so this
   is packaging rather than redesign.
+- **Human interventions as recorded events** (day#195). day records what the
+  process produced and nothing about where a person had to step in — which is
+  some of the highest-value retrospective signal there is, and `crosslink` had
+  it in its original data model. Every intervention marks a spot where the
+  process did not carry itself, and no current artifact shows one: a design doc
+  records the decision, not the three redirections before it.
+
+  It is day's under ADR-18 (an ordinary claim, no kan data-model change), and
+  it gives meta-evaluation something real to measure — "how often did the human
+  intervene, on what, and did that rate fall" is a question about whether day
+  works, answerable from the record rather than from impressions.
+
+  **Two constraints are the design, not details.** It must be explicitly
+  invoked rather than automatic, or day is classifying its own evidence and the
+  log measures the classifier; and "intervention" has to mean something
+  narrower than "the human typed", or it is a transcript. A transcript is what
+  `telos/legible-process` says the record should make unnecessary.
+
+### Driver affordances, which are not atoms
+
+`/askme` (day#193) is the first of a category worth naming: a **UX shortcut for
+a specifically-shaped human intervention on an in-process flow**, rather than a
+step in the process. The operator recognises that there is semi-structured input
+worth delivering and pauses to deliver it efficiently.
+
+The distinction earns its place because `tests/plugin.rs` expects every
+`skills/*` entry to declare a composing `day-atom`, and that expectation is
+right for process steps and wrong for these. `day doctor` is the existing
+precedent — useful, shipped, invoked by a person, part of no pipeline. The
+exception must be stated rather than the check weakened: anything that *is* a
+process step should still fail `day doctor` when it does not compose.
+
+`/askme` ships with **fixed prompting**; making its questions declarable
+(day#194) is sequenced behind the declared-preference layer, with
+`.design/day-config.md` RQ-1 and `.design/harness-footer.md` REQ-19. Three
+deferrals citing the same reason is a sequence rather than a coincidence, and
+the sequence exists so a seventh absent-means-default loader is not added by
+accident inside a convenience feature.
 
 ## v1.0 — Someone else ships with it
 
