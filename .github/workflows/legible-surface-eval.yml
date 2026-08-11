@@ -34,19 +34,42 @@ jobs:
       - name: Build day
         run: cargo build --release
 
+      # The script's exit codes are a contract and this honours it: 2 means a
+      # prerequisite was missing or a field could not be derived — a
+      # could-not-check, which must not be reported as a failed eval. Letting
+      # any non-zero turn the run red would collapse the distinction the
+      # script's own header draws.
       - name: Capture the footer under the standardized setup
         run: |
+          set +e
           DAY_BIN="$PWD/target/release/day" scripts/capture-footer.sh eval-out
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo "::warning title=capture could not run::A prerequisite was missing or a ground-truth field could not be derived. This is NOT a failed eval — nothing was scored."
+            exit 0
+          fi
+          [ "$status" -eq 0 ] || exit "$status"
           echo '--- capture ---'
           cat eval-out/capture.txt
           echo '--- ground truth ---'
           cat eval-out/ground-truth.json
 
+      # **The two artifacts by name, never the directory.** `eval-out/` also
+      # holds the fixture, and the fixture holds a kan workspace with a 0600
+      # signing seed — uploading the tree would publish a private key into a
+      # downloadable artifact. Naming the files keeps the blast radius to what
+      # is meant to be read.
       - name: Upload capture for scoring
+        if: hashFiles('eval-out/capture.txt') != ''
         uses: actions/upload-artifact@v4
         with:
           name: legible-surface-capture
-          path: eval-out/
+          path: |
+            eval-out/capture.txt
+            eval-out/ground-truth.json
+          # Existence is not content: the script guarantees a non-empty
+          # capture or exits 2, which is what actually protects this.
           if-no-files-found: error
 
       - name: What this run is, and is not

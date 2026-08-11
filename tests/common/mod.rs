@@ -322,6 +322,52 @@ pub fn write_stub_roles(dir: &Path, json: &str) {
     std::fs::write(dir.join("kan-stub-data").join("roles.json"), json).unwrap();
 }
 
+/// Makes the stub report `n` claims withheld from this view, log-wide — the
+/// `TrustBase::Solo` narrowing kan#121 reproduced, and what
+/// `KanClient::claims_withheld_from_view` returns.
+///
+/// Exists so a test can drive the *delivery* of the narrowing rather than
+/// only the renderer that formats it: REQ-7's "a narrowing is never omitted"
+/// was asserted over the pure renderer while the one line that supplies the
+/// count could be hardcoded to zero with the whole suite green.
+pub fn write_stub_withheld(dir: &Path, n: u64) {
+    std::fs::write(dir.join("kan-stub-data").join("withheld"), n.to_string()).unwrap();
+}
+
+/// A stub that counts how many times it was invoked, so a test can assert
+/// **zero** invocations rather than "it survived a missing binary".
+///
+/// The difference is the whole of AC-12: a command that shells out and
+/// discards the error passes a missing-binary test and fails this one.
+/// Returns the wrapper to use as `DAY_KAN_BIN`/`DAY_GIT_BIN` and the file
+/// whose length is the call count.
+pub fn write_counting_stub(dir: &Path, name: &str, inner: &Path) -> (PathBuf, PathBuf) {
+    let counter = dir.join(format!("{name}-calls"));
+    let wrapper = dir.join(format!("{name}-counting.sh"));
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nprintf 'x' >> {}\nexec {} \"$@\"\n",
+            counter.display(),
+            inner.display()
+        ),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    (wrapper, counter)
+}
+
+/// How many times a [`write_counting_stub`] wrapper was invoked.
+pub fn stub_calls(counter: &Path) -> usize {
+    std::fs::read_to_string(counter)
+        .map(|s| s.len())
+        .unwrap_or(0)
+}
+
 /// One claim in kan's `--json` shape. Which fields are present depends on
 /// the body: narrative claims carry `text`, `Subject` claims carry `title`,
 /// and a `Retraction` carries neither — day has to cope with all three, so
@@ -433,6 +479,12 @@ const STUB_SHOW_ALL_PY: &str = r#"
 import json, sys, pathlib
 
 data = pathlib.Path(sys.argv[1])
+# Claims kan withheld from this view, log-wide. Written by
+# `write_stub_withheld`; absent means none, which is the ordinary case.
+withheld = 0
+f = data / "withheld"
+if f.exists():
+    withheld = int(f.read_text().strip() or 0)
 entries = []
 for f in sorted(data.glob("show-*.json")):
     entry = json.loads(f.read_text())
@@ -442,7 +494,7 @@ for f in sorted(data.glob("show-*.json")):
 print(json.dumps({
     "v": 1,
     "trust": {"base": "Solo", "authors": []},
-    "excluded_by_trust": 0,
+    "excluded_by_trust": withheld,
     "subjects": entries,
 }))
 "#;

@@ -37,6 +37,14 @@ pub fn session_start(client: &KanClient, root: &Path) -> String {
         out.push_str(&format!(
             "kan is not reachable, so no telos or atom context is available this session.\n{e}\n",
         ));
+        // **The bar is told too.** These early returns are the paths a broken
+        // kan actually takes, and for one release they were the paths on
+        // which no footer was written at all — so the status line kept
+        // showing the previous session's confident position while `day
+        // status` correctly reported the log could not be read. The
+        // could-not-read state existed and was unreachable: its only caller
+        // sat downstream of both of these returns.
+        write_unreadable_footer(client, root);
         // Still injected: nothing in SAFETY depends on kan, and a session
         // where day's process layer is degraded is not a session where it is
         // safe to stage blindly. Returning early here would drop the
@@ -51,6 +59,7 @@ pub fn session_start(client: &KanClient, root: &Path) -> String {
             out.push_str(&format!(
                 "kan is installed but its log could not be read here ({e}).\nIf this repo isn't tracked by kan yet, that's expected.\n",
             ));
+            write_unreadable_footer(client, root);
             out.push_str(SAFETY);
             return out;
         }
@@ -376,6 +385,21 @@ fn position_cache_fingerprint(git: &Git, client: &KanClient) -> Option<String> {
 fn footer_surround(client: &KanClient, git: &Git) -> crate::footer::Surround {
     crate::footer::Surround {
         context: footer_context(git),
+        // **The cost, stated rather than left implicit**, because a cold
+        // review objected to exactly this and the objection is good: the
+        // segment renders identically for no declared roles, a kan too old
+        // for the verb, a kan that errored, and output day could not parse —
+        // which is "day could not look" spelled like "there is nothing here",
+        // the shape this scan exists to catch. What makes it survivable is
+        // that the segment is a decoration, while the caveats qualifying the
+        // *report* — the narrowing and the partial-read count — are pinned
+        // separately and cannot be omitted at all, for width or for anything
+        // else. The objection is recorded on `harness-footer` against RQ-2
+        // rather than resolved here.
+        //
+        // kan-read-may-degrade: RQ-2 decided that for the identity segment
+        // specifically, absent and error both omit — recorded as a decision
+        // before this was built, so not this fix round's to reverse quietly.
         role: client.active_role(),
         withheld: client.claims_withheld_from_view(),
     }
@@ -443,24 +467,47 @@ pub fn footer_context(git: &Git) -> crate::footer::Context {
     context
 }
 
-/// Renders the footer for the current state and writes it to the cache.
-/// `None` for the status renders the could-not-read state (the ninth,
-/// REQ-1) rather than leaving the bar showing a stale earlier session.
-fn write_footer(
-    client: &KanClient,
-    git: &Git,
-    root: &Path,
-    status: Option<&crate::status::Status>,
-) {
+/// Renders every footer variant for the current state and writes them to the
+/// cache, for `day status-line` to pick from.
+///
+/// **All variants, not one**, because the two things the choice depends on —
+/// the terminal width and the user's `DAY_FOOTER` — are known where the
+/// status line runs and not here. See `crate::footer` for why that keeps the
+/// `.day/` carve-out intact.
+fn write_footer(client: &KanClient, git: &Git, root: &Path, status: &crate::status::Status) {
     let surround = footer_surround(client, git);
-    let style = crate::footer::Style::resolve(&crate::footer::EnvSignals::from_env());
-    let rendered = match status {
-        Some(status) => crate::footer::render(status, &surround, style),
-        None => crate::footer::render_unreadable(&surround, style),
-    };
     // Display-only, latency-only. Best-effort: if it fails the status line
     // simply shows nothing until the next session start.
-    let _ = crate::cache::write_status_line(root, &rendered);
+    let _ = crate::cache::write_status_line(
+        root,
+        &crate::footer::render(
+            status,
+            &surround,
+            crate::footer::Style::Emoji,
+            crate::footer::FALLBACK_BUDGET,
+        ),
+        &crate::footer::render_variants(status, &surround),
+    );
+}
+
+/// The could-not-read-the-log-at-all footer, for the paths where there is no
+/// `Status` to render because kan itself failed.
+///
+/// Takes no `Git` of its own on purpose: git may be perfectly readable when
+/// kan is not, and the context line is exactly the part still worth showing
+/// (REQ-7 — a partial view is information).
+fn write_unreadable_footer(client: &KanClient, root: &Path) {
+    let git = Git::new(root);
+    let surround = footer_surround(client, &git);
+    let _ = crate::cache::write_status_line(
+        root,
+        &crate::footer::render_unreadable(
+            &surround,
+            crate::footer::Style::Emoji,
+            crate::footer::FALLBACK_BUDGET,
+        ),
+        &crate::footer::render_unreadable_variants(&surround),
+    );
 }
 
 /// Runs position inference, writes the status-line cache, and returns a short
@@ -485,16 +532,15 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     let status = match crate::status::compute(client, &git) {
         Ok(s) => s,
         Err(_) => {
-            // The bar still gets a truthful rendering: "kan could not be
-            // read" is the ninth footer state, and leaving the cache holding
-            // an earlier session's position would display confidently from a
-            // read that just failed.
-            write_footer(client, &git, root, None);
+            // The bar still gets a truthful rendering: leaving the cache
+            // holding an earlier session's position would display
+            // confidently from a read that just failed.
+            write_unreadable_footer(client, root);
             return String::new();
         }
     };
 
-    write_footer(client, &git, root, Some(&status));
+    write_footer(client, &git, root, &status);
 
     // And what the per-prompt hook needs, so it can re-display without repeating
     // this read. Recorded here because this is the one place that already pays
@@ -824,7 +870,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // rather than a duration, which would measure the machine). The footer's
     // own reads (one `kan identity role list`, a few git reads) are paid only
     // here, on the path already paying for a full recompute.
-    write_footer(client, &git, root, Some(&status));
+    write_footer(client, &git, root, &status);
 
     if let Some(fp) = fingerprint {
         let _ = crate::cache::write_standing(

@@ -1002,6 +1002,23 @@ are *renderable*, which is why the override exists. The declared preference
 layer (a `schema/*` claim) is specified and deliberately not built until `day
 config` lands.
 
+**The cache holds every variant and the status line picks one.** Width and
+`DAY_FOOTER` are knowable only where `day status-line` runs — Claude Code
+sets `COLUMNS` before invoking it, and a person exporting `DAY_FOOTER` is
+setting it in *that* environment, not the hook's — so rendering one string at
+hook time made both unreachable, and `DAY_FOOTER=plain day status-line` did
+nothing at all. The hook now writes `.day/statusline.variants` (tagged
+renderings, widest first) alongside `.day/statusline` (one rendering, for a
+reader that predates variants), and the status line prints the widest variant
+that fits. This stays inside the carve-out: the cache holds nothing but
+rendered display state, and choosing which pre-rendered string to show is a
+display decision, not day deciding anything it reports. Width is *estimated*
+— the same encodable-versus-renderable asymmetry — so budgets are
+conservative and anything dropped for width is marked (`…+2`), because a
+segment silently missing would be indistinguishable from one day could not
+fill, and that distinction is load-bearing. The narrowing indicator and the
+partial-read report are never elided for width at all.
+
 ## Declared block types — `schema/blocks`
 
 day owns seven fenced block types and, until v0.7, a project could invent

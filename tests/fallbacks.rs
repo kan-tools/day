@@ -1115,10 +1115,29 @@ fn fallback_unrecognised_remote() {
     repo_without_a_release(dir.path());
     git(dir.path(), &["remote", "add", "origin", "/a/local/path"]);
 
+    // **The premise reads the FIXTURE, not the parser.** It used to assert
+    // `repo_from_remote("/a/local/path").is_none()` — a property of the code
+    // under test, true whatever the fixture does, so deleting the `remote add`
+    // above left this passing and the test measuring REQ-12's fallback
+    // instead of REQ-14's. A premise that inspects only its own side of the
+    // interface cannot notice when the scenario evaporates.
+    let configured = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(dir.path())
+        .output()
+        .expect("git should be runnable");
+    let url = String::from_utf8_lossy(&configured.stdout)
+        .trim()
+        .to_string();
+    assert_eq!(
+        url, "/a/local/path",
+        "premise: the fixture must have a remote configured, and of no \
+         recognised shape — with none, this exercises the no-remote fallback"
+    );
     assert!(
-        day::footer::repo_from_remote("/a/local/path").is_none(),
-        "premise: the remote URL must be of no recognised shape — a \
-         recognised one exercises the org/name path instead"
+        day::footer::repo_from_remote(&url).is_none(),
+        "premise: and that configured URL must be unrecognised, or this reads \
+         the org/name path"
     );
 
     let ctx = day::hooks::footer_context(&day::git::Git::new(dir.path()));
@@ -1167,10 +1186,83 @@ fn fallback_footer_reads_degrade() {
             withheld: 0,
         },
         day::footer::Style::Plain,
+        100,
     );
     assert_eq!(
         rendered.lines().count(),
         1,
         "an all-absent context earns no line: {rendered:?}"
     );
+}
+
+/// A cache written by an older day carries no variants file, and the status
+/// line must serve the single rendering it did write rather than a blank bar
+/// (`.design/harness-footer.md`, the width-variant change).
+///
+/// Found by dogfooding the *other* direction: a debug build's hook wrote the
+/// variants and the installed release printed every one of them at once,
+/// because a single file changed shape under two binaries that are the same
+/// program in principle and different builds in practice.
+#[test]
+fn fallback_cache_without_variants() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join(day::cache::CACHE_DIR);
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join(day::cache::STATUS_LINE_FILE), "day - build").unwrap();
+
+    assert!(
+        !cache.join(day::cache::VARIANTS_FILE).exists(),
+        "premise: the variants file must be absent — with one present this \
+         exercises the current-format path, which every other session is on"
+    );
+
+    assert_eq!(
+        day::cache::read_status_line(dir.path()).as_deref(),
+        Some("day - build"),
+        "an older day's cache must still serve"
+    );
+
+    // And what the status line does with it: no variant headers, so it is
+    // printed as it stands rather than dropped.
+    assert_eq!(
+        day::footer::select("day - build", 80, day::footer::Style::Emoji),
+        None,
+        "text with no variant headers must report that it has none, so the \
+         caller prints it verbatim"
+    );
+}
+
+/// `COLUMNS` unset — a Claude Code older than v2.1.153, or a hand-run
+/// `day status-line` — lays the footer out against an assumed 80 columns
+/// rather than against zero, which would elide everything.
+#[test]
+fn fallback_no_columns_assume_80() {
+    let signals = day::footer::EnvSignals::default();
+    assert!(
+        signals.columns.is_none(),
+        "premise: COLUMNS must be unset — with it set this measures the \
+         ordinary path Claude Code puts every session on"
+    );
+    assert_eq!(signals.width(), day::footer::ASSUMED_COLUMNS);
+
+    // An unparseable or zero value is the same state, not a zero-width
+    // terminal: laying out against 0 would drop every segment.
+    for bogus in ["", "   ", "not-a-number", "0"] {
+        let signals = day::footer::EnvSignals {
+            columns: Some(bogus.to_string()),
+            ..day::footer::EnvSignals::default()
+        };
+        assert_eq!(
+            signals.width(),
+            day::footer::ASSUMED_COLUMNS,
+            "COLUMNS={bogus:?} must read as unknown, never as a width"
+        );
+    }
+
+    // And a real value is honoured, or the assertions above pass vacuously.
+    let signals = day::footer::EnvSignals {
+        columns: Some("133".into()),
+        ..day::footer::EnvSignals::default()
+    };
+    assert_eq!(signals.width(), 133);
 }

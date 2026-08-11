@@ -180,12 +180,17 @@ fn ac9_status_works_with_the_cache_absent() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("Current atom: build"));
 }
 
-/// AC-8, and the harness footer's AC-12: the status line reads **only** the
-/// cache. Point the kan binary *and* the git binary at paths that do not
-/// exist and it still renders, because it invokes neither — proof by the two
-/// things that would break if it did. The footer grew git and identity
-/// reads, and every one of them belongs to the session-start hook (REQ-10);
-/// this is the criterion that keeps that true as the footer grows further.
+/// AC-8, and the harness footer's AC-12: the status line makes **zero** kan
+/// and **zero** git invocations, *asserted against counting stubs*.
+///
+/// **Counting, not missing.** This pointed both binaries at nonexistent
+/// paths, which only catches an invocation whose failure is fatal — adding a
+/// `Git::sync_state()` and a `client.identity()` to the `status-line`
+/// handler, discarding both results, left it passing. That is the same
+/// mistake `user_prompt` made and the same fix it got: pin the *invocation
+/// count*, which measures the design, not a duration or a survival, which
+/// measure the machine. The footer keeps growing reads, and every one of them
+/// belongs to the session-start hook (REQ-10); this is what keeps that true.
 #[test]
 fn ac8_the_status_line_reads_only_the_cache() {
     let dir = tempfile::tempdir().unwrap();
@@ -193,17 +198,40 @@ fn ac8_the_status_line_reads_only_the_cache() {
     // Populate the cache via a real session start.
     day(dir.path(), &kan, &git, &["hook", "session-start"]);
 
-    let missing_kan = dir.path().join("no-such-kan");
-    let missing_git = dir.path().join("no-such-git");
-    let out = day(dir.path(), &missing_kan, &missing_git, &["status-line"]);
-    assert!(
-        out.status.success(),
-        "status-line must not fail when kan and git are absent"
-    );
+    let (counting_kan, kan_calls) = common::write_counting_stub(dir.path(), "kan", &kan);
+    let (counting_git, git_calls) = common::write_counting_stub(dir.path(), "git", &git);
+    let out = day(dir.path(), &counting_kan, &counting_git, &["status-line"]);
+    assert!(out.status.success(), "status-line must exit zero");
+
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("atom: build"),
         "should render from the cache: {stdout:?}"
+    );
+    assert_eq!(
+        common::stub_calls(&kan_calls),
+        0,
+        "the status line invoked kan; it has 300ms before Claude Code cancels \
+         it, and every read belongs in the hook"
+    );
+    assert_eq!(
+        common::stub_calls(&git_calls),
+        0,
+        "the status line invoked git; same budget, same rule"
+    );
+
+    // Non-vacuity: the counters must be capable of counting. The hook, which
+    // legitimately reads both, moves them.
+    day(
+        dir.path(),
+        &counting_kan,
+        &counting_git,
+        &["hook", "session-start"],
+    );
+    assert!(
+        common::stub_calls(&kan_calls) > 0 && common::stub_calls(&git_calls) > 0,
+        "the counting stubs never counted anything, so the assertions above \
+         prove nothing"
     );
 }
 

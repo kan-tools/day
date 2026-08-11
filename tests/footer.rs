@@ -57,79 +57,230 @@ fn here(atom: &str, done_met: usize, done_total: usize, next: &[&str]) -> Here {
     }
 }
 
-/// The nine states REQ-1 names: four position forms, four message kinds, and
-/// the could-not-read report. Returned as (name, rendered) so a failure names
-/// the state rather than an index.
-fn nine_states(surround: &Surround, style: Style) -> Vec<(&'static str, String)> {
-    let mut states = Vec::new();
+/// A width no fixture in this file reaches, so a test that is not *about*
+/// elision never accidentally measures it.
+const ROOMY: usize = 200;
 
-    let mut setup = blank_status();
-    setup.uncheckable = true;
-    states.push(("setup", footer::render(&setup, surround, style)));
-
-    states.push(("no-atom", footer::render(&blank_status(), surround, style)));
-
-    let mut one = blank_status();
-    one.here = vec![here("build", 1, 2, &["review"])];
-    states.push(("one-atom", footer::render(&one, surround, style)));
-
-    let mut many = blank_status();
-    many.here = vec![here("build", 0, 0, &[]), here("release", 0, 0, &[])];
-    states.push(("many-atoms", footer::render(&many, surround, style)));
-
-    let mut transition = blank_status();
-    transition.here = vec![here("review", 0, 0, &[])];
-    transition.transition = Some(Transition {
-        from: "build".into(),
-        to: vec!["review".into()],
-    });
-    states.push(("transition", footer::render(&transition, surround, style)));
-
-    let mut boundary = blank_status();
-    boundary.here = vec![here("review", 0, 0, &[])];
-    boundary.unrecorded_boundary =
-        Some("v1.0.0 is tagged but no `release` claim records it".into());
-    states.push(("boundary", footer::render(&boundary, surround, style)));
-
-    let mut unrecorded = blank_status();
-    unrecorded.here = vec![here("review", 0, 0, &[])];
-    unrecorded.unrecorded = vec!["code-change".into()];
-    states.push(("unrecorded", footer::render(&unrecorded, surround, style)));
-
-    let mut off_sequence = blank_status();
-    off_sequence.here = vec![here("review", 0, 0, &[])];
-    off_sequence.off_sequence =
-        vec!["review produced its output but upstream build did not".into()];
-    states.push((
-        "off-sequence",
-        footer::render(&off_sequence, surround, style),
-    ));
-
-    states.push(("unreadable", footer::render_unreadable(surround, style)));
-
-    states
+/// One state the footer must render, and **what it must say** — not merely
+/// that it differs from the others.
+///
+/// The distinction is the whole point. The first version of this table
+/// asserted only that the states were pairwise distinct, and three mutations
+/// walked through it: off-sequence findings wearing the unrecorded glyph,
+/// `behind` rendered as `ahead`, and the setup line naming the wrong subject
+/// all keep nine outputs distinct while making one of them **wrong**. Nine
+/// distinct wrong strings satisfy distinctness; only content catches this.
+struct State {
+    name: &'static str,
+    status: Status,
+    /// Substrings the rendering must contain, per style. Written per style
+    /// because the glyph is the state's identity here — that is what REQ-1's
+    /// "a glyph key that covers only the mockup's four" is about.
+    emoji: &'static [&'static str],
+    plain: &'static [&'static str],
 }
 
-/// AC-1 and AC-11: all nine states through the renderer, nine distinct
-/// outputs, in the emoji and the plain rendering alike — the same table
-/// drives both, so a state one style can express and the other cannot fails
-/// here rather than in a terminal.
+impl State {
+    fn expected(&self, style: Style) -> &'static [&'static str] {
+        match style {
+            Style::Emoji => self.emoji,
+            Style::Plain => self.plain,
+        }
+    }
+}
+
+/// The ten states the footer renders: four position forms, four message
+/// kinds, the partial-read report, and the could-not-read-at-all report.
+///
+/// **Ten, not REQ-1's nine.** REQ-1 named nine and folded two distinct facts
+/// into "the partial-read report": a log day read *partially* (`Status.
+/// unreadable` is non-empty, so the position beside it is computed over an
+/// incomplete vocabulary) and a log day could not read *at all*. Only the
+/// second was built first time round, and the requirement's wording is why
+/// nobody noticed. Recorded on `harness-footer`.
+fn all_states() -> Vec<State> {
+    let with = |f: &dyn Fn(&mut Status)| {
+        let mut s = blank_status();
+        f(&mut s);
+        s
+    };
+    vec![
+        State {
+            name: "setup",
+            status: with(&|s| s.uncheckable = true),
+            // Names the subject that resolves it (day#108). Asserted by name
+            // so renaming the target fails here rather than drifting.
+            emoji: &["setup: declare schema/witness"],
+            plain: &["setup: declare schema/witness"],
+        },
+        State {
+            name: "no-atom",
+            status: blank_status(),
+            emoji: &["no atom in play"],
+            plain: &["no atom in play"],
+        },
+        State {
+            name: "one-atom",
+            status: with(&|s| s.here = vec![here("build", 1, 2, &["review"])]),
+            emoji: &["atom: build", "1/2 done", "next: review"],
+            plain: &["atom: build", "1/2 done", "next: review"],
+        },
+        State {
+            name: "many-atoms",
+            status: with(&|s| s.here = vec![here("build", 0, 0, &[]), here("release", 0, 0, &[])]),
+            emoji: &["atom? build | release"],
+            plain: &["atom? build | release"],
+        },
+        State {
+            name: "transition",
+            status: with(&|s| {
+                s.here = vec![here("review", 0, 0, &[])];
+                s.transition = Some(Transition {
+                    from: "build".into(),
+                    to: vec!["review".into()],
+                });
+            }),
+            emoji: &["⤳ ", "past `build`"],
+            plain: &["moved: ", "past `build`"],
+        },
+        State {
+            name: "boundary",
+            status: with(&|s| {
+                s.here = vec![here("review", 0, 0, &[])];
+                s.unrecorded_boundary = Some("v1.0.0 is tagged but unrecorded".into());
+            }),
+            emoji: &["🏷 ", "v1.0.0"],
+            plain: &["tag: ", "v1.0.0"],
+        },
+        State {
+            name: "unrecorded",
+            status: with(&|s| {
+                s.here = vec![here("review", 0, 0, &[])];
+                s.unrecorded = vec!["code-change".into()];
+            }),
+            emoji: &["✍ ", "code-change"],
+            plain: &["unrecorded: ", "code-change"],
+        },
+        State {
+            name: "off-sequence",
+            status: with(&|s| {
+                s.here = vec![here("review", 0, 0, &[])];
+                s.off_sequence = vec!["a step was skipped".into()];
+            }),
+            emoji: &["❗ ", "a step was skipped"],
+            plain: &["skipped: ", "a step was skipped"],
+        },
+        State {
+            name: "partial-read",
+            status: with(&|s| {
+                s.here = vec![here("review", 0, 0, &[])];
+                s.unreadable = vec![day::status::Unreadable {
+                    message: "an atom block could not be read".into(),
+                    cause: day::status::Cause::Malformed,
+                }];
+            }),
+            emoji: &["◐ ", "1 unreadable"],
+            plain: &["? ", "1 unreadable"],
+        },
+        State {
+            name: "unreadable",
+            status: blank_status(), // rendered by render_unreadable, below
+            emoji: &["⛔ ", "kan could not be read"],
+            plain: &["!! ", "kan could not be read"],
+        },
+    ]
+}
+
+/// Renders every state, using the total-failure renderer for the state that
+/// has one. Returns (name, rendered) so a failure names the state.
+fn render_all(surround: &Surround, style: Style, budget: usize) -> Vec<(&'static str, String)> {
+    all_states()
+        .into_iter()
+        .map(|s| {
+            let rendered = if s.name == "unreadable" {
+                footer::render_unreadable(surround, style, budget)
+            } else {
+                footer::render(&s.status, surround, style, budget)
+            };
+            (s.name, rendered)
+        })
+        .collect()
+}
+
+/// AC-1 and AC-11: every state renders, says **what it means**, and is
+/// distinguishable from every other — in both renderings, from one table, so
+/// a state one style can express and the other cannot fails here rather than
+/// in a terminal.
 #[test]
-fn ac1_ac11_the_nine_states_render_distinctly_in_both_styles() {
-    for style in [Style::Emoji, Style::Plain] {
-        let states = nine_states(&Surround::default(), style);
-        assert_eq!(states.len(), 9);
-        for (i, (name_a, out_a)) in states.iter().enumerate() {
+fn ac1_ac11_every_state_renders_its_own_content_in_both_styles() {
+    for style in Style::ALL {
+        let states = all_states();
+        let rendered = render_all(&Surround::default(), style, ROOMY);
+        assert_eq!(rendered.len(), states.len());
+
+        // Content: the assertion distinctness cannot make.
+        for (state, (name, out)) in states.iter().zip(&rendered) {
+            assert_eq!(state.name, *name);
+            for needle in state.expected(style) {
+                assert!(
+                    out.contains(needle),
+                    "{name} ({style:?}) must contain {needle:?} — a state that \
+                     renders someone else's glyph is still 'distinct':\n{out}"
+                );
+            }
+        }
+
+        // And distinctness on top, which content alone does not give.
+        for (i, (name_a, out_a)) in rendered.iter().enumerate() {
             assert!(!out_a.is_empty(), "{name_a} rendered empty ({style:?})");
-            for (name_b, out_b) in &states[i + 1..] {
+            for (name_b, out_b) in &rendered[i + 1..] {
                 assert_ne!(
                     out_a, out_b,
-                    "{name_a} and {name_b} render identically in {style:?} — a \
-                     state that cannot be told apart is a state the footer drops"
+                    "{name_a} and {name_b} render identically in {style:?}"
                 );
             }
         }
     }
+}
+
+/// AC-11's other half, and the one the first version left to inference:
+/// **the plain rendering is plain.** Filling `PLAIN`'s glyph table with emoji
+/// kept nine distinct non-empty strings and the entire suite green, so the
+/// requirement that exists because "terminals vary in whether they render
+/// emoji at all" was asserted by nothing.
+#[test]
+fn ac11_the_plain_rendering_is_pure_ascii() {
+    let populated = Surround {
+        context: Context {
+            repo: Some("kan-tools/day".into()),
+            branch: Some("main".into()),
+            sync: Some(Sync {
+                dirty: true,
+                ahead_behind: Some((3, 2)),
+            }),
+            checkout: Some(Checkout::UnderMain(".claude/worktrees/abcd".into())),
+        },
+        role: Some("director".into()),
+        withheld: 2,
+    };
+    for (name, out) in render_all(&populated, Style::Plain, ROOMY) {
+        assert!(
+            out.is_ascii(),
+            "{name} rendered non-ASCII in the plain style, which exists for \
+             terminals that cannot draw emoji at all:\n{out}"
+        );
+    }
+    // Non-vacuity: the same fixture in the emoji style must NOT be ASCII, or
+    // the assertion above would pass on a footer that renders nothing.
+    let emoji: String = render_all(&populated, Style::Emoji, ROOMY)
+        .into_iter()
+        .map(|(_, out)| out)
+        .collect();
+    assert!(
+        !emoji.is_ascii(),
+        "the emoji rendering must actually use emoji, or the ASCII assertion \
+         above proves nothing"
+    );
 }
 
 /// AC-2: one inferred atom and several candidates render differently, and
@@ -137,8 +288,8 @@ fn ac1_ac11_the_nine_states_render_distinctly_in_both_styles() {
 /// present in both renderings.
 #[test]
 fn ac2_atom_ambiguity_survives_both_renderings() {
-    for style in [Style::Emoji, Style::Plain] {
-        let states = nine_states(&Surround::default(), style);
+    for style in Style::ALL {
+        let states = render_all(&Surround::default(), style, ROOMY);
         let one = &states.iter().find(|(n, _)| *n == "one-atom").unwrap().1;
         let many = &states.iter().find(|(n, _)| *n == "many-atoms").unwrap().1;
         assert!(one.contains("atom: "), "{style:?}: {one}");
@@ -148,25 +299,63 @@ fn ac2_atom_ambiguity_survives_both_renderings() {
     }
 }
 
-/// AC-3: the literal `day` appears at most once, over every one of the nine
-/// states — in the emoji rendering it appears zero times (the anchor is ☀️,
-/// REQ-3), and the plain rendering spends its one occurrence on the anchor.
+/// AC-3 / REQ-3: **`day` is not repeated per line** — the word becomes one
+/// anchor at the left of the first line.
+///
+/// Stated as the anchor property, not as "the literal `day` appears at most
+/// once in the output", which is what this asserted first time round and is
+/// **false in day's own repo**: the fixture was an empty `Surround`, so no
+/// repo name ever rendered, and driven for real the plain footer reads
+/// `day setup: …` / `kan-tools/day - on main - …` — twice, because the repo
+/// is *named* `kan-tools/day`. A repo may legitimately contain the word; the
+/// requirement is about day stamping its own name on every line.
+///
+/// So the fixture below deliberately names the repo `kan-tools/day`: the
+/// test now runs against the string that falsified its predecessor.
 #[test]
-fn ac3_the_literal_day_appears_at_most_once_in_every_state() {
-    for style in [Style::Emoji, Style::Plain] {
-        for (name, rendered) in nine_states(&Surround::default(), style) {
-            let count = rendered.matches("day").count();
+fn ac3_the_anchor_is_not_repeated_per_line() {
+    let named_day = Surround {
+        context: Context {
+            repo: Some("kan-tools/day".into()),
+            branch: Some("day-branch".into()),
+            sync: Some(Sync::default()),
+            checkout: Some(Checkout::Main),
+        },
+        role: None,
+        withheld: 0,
+    };
+    for style in Style::ALL {
+        for (name, rendered) in render_all(&named_day, style, ROOMY) {
+            let anchored = rendered
+                .lines()
+                .filter(|l| l.starts_with("day ") || l.starts_with("☀️"))
+                .count();
             assert!(
-                count <= 1,
-                "{name} ({style:?}) contains `day` {count} times:\n{rendered}"
+                anchored <= 1,
+                "{name} ({style:?}) stamps the anchor on {anchored} lines — \
+                 REQ-3 is that it appears once, at the left of the first:\n{rendered}"
             );
+            if style == Style::Emoji {
+                assert!(
+                    !rendered.lines().any(|l| l.starts_with("day ")),
+                    "{name}: the emoji rendering's anchor is ☀️, not the word:\n{rendered}"
+                );
+            }
         }
     }
 }
 
 /// AC-6: clean, dirty, ahead, behind, and dirty-and-ahead-and-behind each
-/// render distinguishably — five distinct outputs, not the presence of a
-/// phrase, because commit, push and pull are different remedies (REQ-5).
+/// render distinguishably (REQ-5) — because commit, push and pull are
+/// different remedies and one glyph cannot name which.
+///
+/// **The counts are symmetric on purpose.** The first version used `(3, 0)`
+/// for ahead and `(0, 2)` for behind, so the five outputs differed because
+/// `3 != 2` — and swapping the `ahead`/`behind` glyphs (making the footer say
+/// "pull" when you should push, which is exactly REQ-5's stated worry) left
+/// the whole suite green. A fixture that is symmetric under the mutation it
+/// fears cannot detect it, so `(3, 0)` and `(0, 3)` differ *only* by which
+/// mark is used.
 #[test]
 fn ac6_the_five_sync_states_render_distinctly() {
     let sync = |dirty, ab| Surround {
@@ -179,20 +368,25 @@ fn ac6_the_five_sync_states_render_distinctly() {
         },
         ..Surround::default()
     };
-    for style in [Style::Emoji, Style::Plain] {
-        let outputs: Vec<String> = [
-            sync(false, Some((0, 0))), // clean
-            sync(true, Some((0, 0))),  // dirty
-            sync(false, Some((3, 0))), // ahead
-            sync(false, Some((0, 2))), // behind
-            sync(true, Some((3, 2))),  // all at once
-        ]
-        .iter()
-        .map(|s| footer::render(&blank_status(), s, style))
-        .collect();
-        for (i, a) in outputs.iter().enumerate() {
-            for b in &outputs[i + 1..] {
-                assert_ne!(a, b, "two sync states render alike in {style:?}: {a}");
+    for style in Style::ALL {
+        let cases = [
+            ("clean", sync(false, Some((0, 0)))),
+            ("dirty", sync(true, Some((0, 0)))),
+            ("ahead", sync(false, Some((3, 0)))),
+            ("behind", sync(false, Some((0, 3)))),
+            ("all", sync(true, Some((3, 3)))),
+        ];
+        let outputs: Vec<(&str, String)> = cases
+            .iter()
+            .map(|(name, s)| (*name, footer::render(&blank_status(), s, style, ROOMY)))
+            .collect();
+        for (i, (name_a, a)) in outputs.iter().enumerate() {
+            for (name_b, b) in &outputs[i + 1..] {
+                assert_ne!(
+                    a, b,
+                    "{name_a} and {name_b} render alike in {style:?} — with equal \
+                     counts, only the mark can tell them apart:\n{a}"
+                );
             }
         }
     }
@@ -204,20 +398,96 @@ fn ac6_the_five_sync_states_render_distinctly() {
 /// the identity may vanish, the narrowing may not.
 #[test]
 fn ac9_a_non_zero_narrowing_is_never_omitted() {
-    for style in [Style::Emoji, Style::Plain] {
+    let crowded = Context {
+        repo: Some("kan-tools/day".into()),
+        branch: Some("a-rather-long-branch-name-here".into()),
+        sync: Some(Sync {
+            dirty: true,
+            ahead_behind: Some((12, 34)),
+        }),
+        checkout: Some(Checkout::Elsewhere(
+            "/Users/m/code/worktrees/day-behaviour-0009e02f9dcb/tree".into(),
+        )),
+    };
+    for style in Style::ALL {
         for role in [None, Some("director".to_string())] {
-            let surround = Surround {
-                context: Context::default(),
-                role,
-                withheld: 3,
-            };
-            for (name, rendered) in nine_states(&surround, style) {
-                assert!(
-                    rendered.contains("3 withheld"),
-                    "{name} ({style:?}) hides a non-zero narrowing:\n{rendered}"
-                );
+            for context in [Context::default(), crowded.clone()] {
+                // Every budget, including the narrowest: a caveat elided to
+                // save room is a caveat that lied, so width pressure must
+                // never be a route to dropping it.
+                for budget in [ROOMY, 72, 48, 20] {
+                    let surround = Surround {
+                        context: context.clone(),
+                        role: role.clone(),
+                        withheld: 3,
+                    };
+                    for (name, rendered) in render_all(&surround, style, budget) {
+                        assert!(
+                            rendered.contains("3 withheld"),
+                            "{name} ({style:?}, budget {budget}) hides a non-zero \
+                             narrowing:\n{rendered}"
+                        );
+                    }
+                }
             }
         }
+    }
+}
+
+/// REQ-1's ninth state, and the companion to AC-9: **the partial-read report
+/// is pinned too.** `Status.unreadable` means the position rendered beside it
+/// was computed over a vocabulary day knows it could not fully read, which is
+/// a caveat on everything else on the footer — so it survives every budget,
+/// exactly as the narrowing does.
+///
+/// It reached the model channel and not the human's bar, which is the day#60
+/// asymmetry `src/hooks.rs` already records as mattering most in practice.
+#[test]
+fn the_partial_read_report_reaches_the_bar_and_is_never_elided() {
+    let mut status = blank_status();
+    status.here = vec![here("build", 1, 2, &["review"])];
+    status.unreadable = vec![
+        day::status::Unreadable {
+            message: "an atom block could not be read".into(),
+            cause: day::status::Cause::Malformed,
+        },
+        day::status::Unreadable {
+            message: "a witness probe kind is too new".into(),
+            cause: day::status::Cause::VersionSkew,
+        },
+    ];
+    let crowded = Surround {
+        context: Context {
+            repo: Some("kan-tools/day".into()),
+            branch: Some("a-rather-long-branch-name-here".into()),
+            sync: Some(Sync {
+                dirty: true,
+                ahead_behind: Some((12, 34)),
+            }),
+            checkout: Some(Checkout::UnderMain(".claude/worktrees/abcd".into())),
+        },
+        role: Some("director".into()),
+        withheld: 0,
+    };
+    for style in Style::ALL {
+        for budget in [ROOMY, 72, 48, 20] {
+            let out = footer::render(&status, &crowded, style, budget);
+            assert!(
+                out.contains("2 unreadable"),
+                "the partial-read report must reach the bar at every width — \
+                 a confident position computed over a vocabulary day could not \
+                 read is the inversion telos/honest-reads forbids ({style:?}, \
+                 budget {budget}):\n{out}"
+            );
+        }
+        // And it says nothing when there is nothing to say.
+        let mut clean = blank_status();
+        clean.here = vec![here("build", 1, 2, &["review"])];
+        let out = footer::render(&clean, &crowded, style, ROOMY);
+        assert!(
+            !out.contains("unreadable"),
+            "a fully-readable log must produce no partial-read report:\n{out}"
+        );
     }
 }
 
@@ -240,18 +510,76 @@ fn ac10_the_tray_truncates_visibly_or_not_at_all() {
     fits.here = vec![here("build", 0, 0, &[])];
     fits.unrecorded = vec!["code-change".into()];
 
-    for style in [Style::Emoji, Style::Plain] {
-        let overfull = footer::render(&overfull, &Surround::default(), style);
+    for style in Style::ALL {
+        let rendered = footer::render(&overfull, &Surround::default(), style, ROOMY);
         assert!(
-            overfull.contains("(+2 more)"),
+            rendered.contains("2 more)"),
             "five messages over a tray of {} must say what was dropped \
-             ({style:?}):\n{overfull}",
+             ({style:?}):\n{rendered}",
             footer::TRAY_MAX
         );
-        let fits = footer::render(&fits, &Surround::default(), style);
+        // **And the tray actually truncated.** Asserting only the mark let a
+        // tray render ALL five items *and* claim `(+2 more)` — a tray that
+        // both overflows its bound and lies about the count — with this test
+        // passing. RQ-5's untested third state was "claims to truncate and
+        // does not".
+        let tray = rendered.lines().last().unwrap();
+        for dropped in ["a step was skipped", "design-doc"] {
+            assert!(
+                !tray.contains(dropped),
+                "the tray claims to have dropped items and still shows \
+                 {dropped:?} ({style:?}):\n{tray}"
+            );
+        }
+
+        let rendered = footer::render(&fits, &Surround::default(), style, ROOMY);
         assert!(
-            !fits.contains("more)"),
-            "a tray that fits must carry no truncation mark ({style:?}):\n{fits}"
+            !rendered.contains("more)"),
+            "a tray that fits must carry no truncation mark ({style:?}):\n{rendered}"
+        );
+    }
+}
+
+/// RQ-5's rule, generalised to the whole footer: **what is dropped for width
+/// is dropped visibly.** A segment silently missing because the terminal was
+/// narrow is indistinguishable from a segment day could not fill, and REQ-7
+/// makes that distinction load-bearing.
+#[test]
+fn width_elision_is_always_visible() {
+    let full = Surround {
+        context: Context {
+            repo: Some("kan-tools/day".into()),
+            branch: Some("build-harness-footer".into()),
+            sync: Some(Sync {
+                dirty: true,
+                ahead_behind: Some((2, 1)),
+            }),
+            checkout: Some(Checkout::UnderMain(".claude/worktrees/abcd".into())),
+        },
+        role: Some("director".into()),
+        withheld: 0,
+    };
+    let mut status = blank_status();
+    status.here = vec![here("build", 1, 2, &["review"])];
+
+    for style in Style::ALL {
+        let roomy = footer::render(&status, &full, style, ROOMY);
+        let narrow = footer::render(&status, &full, style, 40);
+        assert!(
+            day::footer::display_width(narrow.lines().nth(1).unwrap()) <= 40,
+            "the narrow rendering must fit its budget ({style:?}):\n{narrow}"
+        );
+        assert!(
+            narrow.len() < roomy.len(),
+            "a 40-column budget must actually drop something ({style:?}) — \
+             otherwise the assertion below is vacuous:\n{narrow}"
+        );
+        let marker = if style == Style::Emoji { "…+" } else { "+" };
+        assert!(
+            narrow.contains(marker),
+            "something was elided for width and the footer does not say so \
+             ({style:?}) — a silently missing segment reads as 'day has \
+             nothing to report':\n{narrow}"
         );
     }
 }
@@ -268,17 +596,19 @@ fn ac16_the_three_checkout_forms_render_distinguishably() {
         ..Surround::default()
     };
     let long = "/Users/m/code/worktrees/day-behaviour-0009e02f9dcb/tree";
-    for style in [Style::Emoji, Style::Plain] {
-        let main = footer::render(&blank_status(), &with(Checkout::Main), style);
+    for style in Style::ALL {
+        let main = footer::render(&blank_status(), &with(Checkout::Main), style, ROOMY);
         let under = footer::render(
             &blank_status(),
             &with(Checkout::UnderMain(".claude/worktrees/abcd".into())),
             style,
+            ROOMY,
         );
         let elsewhere = footer::render(
             &blank_status(),
             &with(Checkout::Elsewhere(long.into())),
             style,
+            ROOMY,
         );
         assert_ne!(main, under, "{style:?}");
         assert_ne!(main, elsewhere, "{style:?}");
@@ -297,6 +627,21 @@ fn ac16_the_three_checkout_forms_render_distinguishably() {
             !elsewhere.contains(long),
             "a path over the bound must not render whole ({style:?}): {elsewhere}"
         );
+        // AC-16's "no longer than the declared bound", which the first
+        // version stated and did not assert — and the rendering exceeded it,
+        // because the ellipsis was added *after* the bound was applied.
+        let segment = elsewhere
+            .lines()
+            .nth(1)
+            .expect("the context line renders")
+            .trim();
+        assert!(
+            day::footer::display_width(segment) <= footer::CHECKOUT_BOUND + 4,
+            "the checkout segment is {} wide, over its declared bound of {} \
+             (+ the glyph) ({style:?}): {segment}",
+            day::footer::display_width(segment),
+            footer::CHECKOUT_BOUND
+        );
     }
 }
 
@@ -312,6 +657,7 @@ fn ac17_each_negative_signal_independently_forces_plain() {
         lang: Some("en_US.UTF-8".into()),
         term: Some("xterm-256color".into()),
         no_color: None,
+        columns: None,
     };
     let cases: Vec<(&str, EnvSignals)> = vec![
         ("LANG=C", {
@@ -427,7 +773,7 @@ fn ac20_every_locale_renders_and_no_schema_loader_exists() {
     ];
     for signals in combos {
         let style = Style::resolve(&signals);
-        for (name, rendered) in nine_states(&Surround::default(), style) {
+        for (name, rendered) in render_all(&Surround::default(), style, signals.width()) {
             assert!(
                 !rendered.is_empty(),
                 "{name} rendered empty under {signals:?}"
@@ -445,23 +791,75 @@ fn ac20_every_locale_renders_and_no_schema_loader_exists() {
     // display text (the bar must name the subject that resolves it, day#108),
     // and reading a declaration requires a load through a client, which these
     // are the spellings of.
-    let footer_rs =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/footer.rs"))
-            .unwrap();
-    for loader in [
-        "::load",
-        "KanClient",
-        "InjectionSchema",
-        "BlockSchemas",
-        "blocks::",
-    ] {
-        assert!(
-            !footer_rs.contains(loader),
-            "src/footer.rs contains `{loader}` — reading a declaration here \
-             would be the seventh absent-means-default loader, and the \
-             declared preference layer is deliberately deferred (REQ-19)"
-        );
+    let renderer = renderer_sources();
+    for (path, text) in &renderer {
+        for loader in [
+            "::load",
+            "KanClient",
+            "InjectionSchema",
+            "BlockSchemas",
+            "blocks::",
+        ] {
+            assert!(
+                !text.contains(loader),
+                "{} contains `{loader}` — reading a declaration here would be \
+                 the seventh absent-means-default loader, and the declared \
+                 preference layer is deliberately deferred (REQ-19)",
+                path.display()
+            );
+        }
     }
+}
+
+/// Every source file the footer renderer lives in, **found rather than
+/// named**, with a positive control that the scan reached the real thing.
+///
+/// `read_to_string("src/footer.rs")` is what the first version of the two
+/// scans below did, and it fails open: split the renderer into
+/// `src/footer/render.rs` with `src/footer.rs` reduced to `pub mod render;`
+/// — a routine refactor — and both scans keep passing while the code they
+/// exist to constrain goes unscanned. A scan that reports clean by having
+/// found nothing is the defect class this repo has recorded repeatedly, so
+/// the list is derived and the control asserts it is non-empty *and*
+/// contains the renderer.
+/// **Comments are stripped**, and that is not a convenience. The rule these
+/// scans enforce is about what the renderer *does*; the module's own doc
+/// comment has to be able to explain why it may not touch `.day/` without
+/// tripping a scan looking for `.day`. `tests/fallbacks.rs`'s premise check
+/// strips comments for the mirror-image reason — there, prose must not
+/// satisfy an assertion; here, prose must not violate one.
+fn renderer_sources() -> Vec<(PathBuf, String)> {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let found: Vec<(PathBuf, String)> = walk(&src)
+        .into_iter()
+        .filter(|p| {
+            let name = p.to_string_lossy();
+            name.contains("/footer.rs") || name.contains("/footer/")
+        })
+        .map(|p| {
+            let text = std::fs::read_to_string(&p).unwrap();
+            let code = text
+                .lines()
+                .map(|l| match l.find("//") {
+                    Some(i) => &l[..i],
+                    None => l,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            (p, code)
+        })
+        .collect();
+    assert!(
+        !found.is_empty(),
+        "the renderer scan found no sources under src/ — it would report \
+         clean by having looked at nothing"
+    );
+    assert!(
+        found.iter().any(|(_, t)| t.contains("pub fn render")),
+        "the renderer scan found files but not the renderer itself, so it is \
+         scanning the wrong thing"
+    );
+    found
 }
 
 /// AC-13: the renderer is display-only — it reads neither kan, nor git, nor
@@ -470,23 +868,23 @@ fn ac20_every_locale_renders_and_no_schema_loader_exists() {
 /// boundary being crossed, whatever the surrounding code intends.
 #[test]
 fn ac13_the_renderer_reads_nothing() {
-    let footer_rs =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/footer.rs"))
-            .unwrap();
-    for forbidden in [
-        "crate::cache", // the render cache — display state, never an input
-        "cache::",
-        ".day",      // its directory
-        "Command::", // no subprocess of any kind
-        "kan_client",
-        "Git::",
-        "git::",
-    ] {
-        assert!(
-            !footer_rs.contains(forbidden),
-            "src/footer.rs references `{forbidden}` — the footer renderer is \
-             pure display and must not read or spawn anything (REQ-10/11)"
-        );
+    for (path, text) in renderer_sources() {
+        for forbidden in [
+            "crate::cache", // the render cache — display state, never an input
+            "cache::",
+            ".day",      // its directory
+            "Command::", // no subprocess of any kind
+            "kan_client",
+            "Git::",
+            "git::",
+        ] {
+            assert!(
+                !text.contains(forbidden),
+                "{} references `{forbidden}` — the footer renderer is pure \
+                 display and must not read or spawn anything (REQ-10/11)",
+                path.display()
+            );
+        }
     }
 }
 
@@ -552,10 +950,23 @@ fn ac4_branch_and_ahead_behind_come_from_one_status_read() {
     assert_eq!(sync.ahead_behind, Some((0, 0)));
     assert!(!sync.dirty);
 
-    // One commit here → ahead 1. One commit upstream, fetched → behind 1.
+    // One commit here → ahead 1. **Asserted before the upstream commit**,
+    // because every other state this test asserted — (0,0) and (1,1) — is
+    // symmetric under swapping the two counts, so exchanging ahead for
+    // behind in `sync_state` left it green. The asymmetric state was created
+    // and thrown away; this is the assertion that makes the fixture able to
+    // detect the mutation it exists to detect.
     std::fs::write(clone.join("b.txt"), "b\n").unwrap();
     git_in(&clone, &["add", "b.txt"]);
     git_in(&clone, &["commit", "-q", "-m", "local"]);
+    let sync = git.sync_state().unwrap();
+    assert_eq!(
+        sync.ahead_behind,
+        Some((1, 0)),
+        "one local commit is one AHEAD and zero behind — the direction is the \
+         whole point, since commit, push and pull are different remedies: {sync:?}"
+    );
+
     std::fs::write(upstream.join("c.txt"), "c\n").unwrap();
     git_in(&upstream, &["add", "c.txt"]);
     git_in(&upstream, &["commit", "-q", "-m", "upstream"]);
@@ -656,6 +1067,26 @@ fn ac15_an_unrecognised_remote_falls_back_to_the_directory_name() {
     let dir = tempfile::tempdir().unwrap();
     let root = fixture_repo(dir.path());
     git_in(&root, &["remote", "add", "origin", "/some/local/path"]);
+
+    // **The premise, read from git.** Deleting the `remote add` above left
+    // this test passing, because "unrecognised remote → directory name"
+    // (REQ-14) and "no remote at all → directory name" (REQ-12) have the same
+    // answer — so it could not tell the two requirements apart and was a
+    // duplicate of `fallback_no_remote`. Asserting the fixture's *state*, from
+    // the substrate rather than from the parser under test, is what separates
+    // them.
+    let configured = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&configured.stdout).trim(),
+        "/some/local/path",
+        "premise: a remote must be configured and be of an unrecognised shape \
+         — with none, this measures REQ-12's fallback instead of REQ-14's"
+    );
+
     let ctx = day::hooks::footer_context(&day::git::Git::new(&root));
     assert_eq!(
         ctx.repo.as_deref(),
@@ -764,4 +1195,253 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+/// REQ-7 / AC-9 **as delivered**, not as rendered.
+///
+/// The renderer-side test above drives ten states × two styles × four
+/// budgets and is still the wrong side of the boundary: the one line that
+/// supplies the count (`footer_surround`) could be hardcoded to `0` with the
+/// entire suite green. A narrowing day never *fetches* is a narrowing the
+/// renderer is never asked to show, and kan#121 — two identities on one
+/// workspace, each reading a complete-looking view, neither mentioning the
+/// other, exit 0 both times — is what that reproduces.
+///
+/// So this drives the shipped binary against a kan that withholds, and reads
+/// the cache the status line will print.
+#[test]
+fn the_narrowing_is_fetched_not_merely_renderable() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+    common::write_stub_withheld(dir.path(), 3);
+
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+    let cached = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        cached.contains("3 withheld"),
+        "the log-wide narrowing must reach the cache the bar prints — \
+         asserting it only inside the renderer leaves the fetch unguarded:\n{cached}"
+    );
+
+    // The other direction, so the assertion above is not satisfied by a
+    // footer that always says it: a log with nothing withheld says nothing.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+    let cached = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        !cached.contains("withheld"),
+        "a log with nothing withheld must not claim a narrowing:\n{cached}"
+    );
+}
+
+/// The partial-read report, **as delivered** — same argument as the test
+/// above. An unreadable declaration must reach the bar, not only the model
+/// channel it already reached (day#60).
+#[test]
+fn the_partial_read_report_is_fetched_not_merely_renderable() {
+    let dir = tempfile::tempdir().unwrap();
+    // An atom block from a newer day: readable as a claim, unreadable as a
+    // declaration, which is exactly `Status.unreadable`'s subject.
+    let mut claims = minimal_log();
+    claims.push(claim(
+        "atom/future",
+        "bafyfuture",
+        &format!(
+            "A future atom.\n\n```day-atom\n{}\n```\n",
+            common::too_new_atom_body()
+        ),
+    ));
+    let kan = write_kan_stub(dir.path(), &claims);
+
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+    let cached = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        cached.contains("unreadable"),
+        "a declaration day could not read must reach the bar — the position \
+         beside it was computed over an incomplete vocabulary:\n{cached}"
+    );
+
+    // And a fully-readable log says nothing.
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+    let cached = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        !cached.contains("unreadable"),
+        "a fully-readable log must not claim a partial read:\n{cached}"
+    );
+}
+
+/// The tenth state, **end to end**: with kan broken, the bar says so rather
+/// than keeping the previous session's confident position.
+///
+/// Its renderer had exactly one caller, reachable only after `client.probe()`
+/// and `client.subjects()` had both succeeded — so the two paths a broken kan
+/// actually takes never wrote it, and the protection its own comment claimed
+/// did not operate. Both tests covering it called the renderer by hand.
+#[test]
+fn a_broken_kan_replaces_the_bar_rather_than_leaving_it_stale() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+
+    // A good session first, so there is a confident position to go stale.
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+    let fresh = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        !fresh.contains("could not be read"),
+        "premise: the first session must produce an ordinary footer:\n{fresh}"
+    );
+
+    // Now kan breaks.
+    let broken = dir.path().join("broken-kan.sh");
+    std::fs::write(&broken, "#!/bin/sh\necho boom >&2\nexit 3\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&broken, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = day_cmd(dir.path(), &broken, &["hook", "session-start"]);
+    assert!(out.status.success(), "the hook must still exit zero");
+
+    let after = std::fs::read_to_string(dir.path().join(".day/statusline.variants")).unwrap();
+    assert!(
+        after.contains("could not be read"),
+        "with kan broken the bar must say so — leaving it holding the previous \
+         session's position displays confidently from a read that just \
+         failed:\n{after}"
+    );
+    // And the legacy single-rendering file too, since that is what an older
+    // day (or anything that just prints the file) shows.
+    let legacy = std::fs::read_to_string(dir.path().join(".day/statusline")).unwrap();
+    assert!(
+        legacy.contains("could not be read"),
+        "the single-rendering cache must be replaced too:\n{legacy}"
+    );
+}
+
+/// `DAY_FOOTER` where a person actually sets it: on the status line.
+///
+/// It resolved at hook time and was baked into the cache, so
+/// `DAY_FOOTER=plain day status-line` did nothing at all while README and
+/// CONVENTIONS both documented it as an override. The variants exist partly
+/// so this works.
+#[test]
+fn the_style_override_applies_where_the_status_line_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+    // The hook runs with NO override and an emoji-friendly environment.
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+
+    let plain = Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(["status-line"])
+        .current_dir(dir.path())
+        .env("DAY_KAN_BIN", &kan)
+        .env("DAY_FOOTER", "plain")
+        .env("COLUMNS", "100")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    let plain = String::from_utf8_lossy(&plain.stdout).to_string();
+    assert!(
+        plain.is_ascii() && !plain.is_empty(),
+        "DAY_FOOTER=plain must take effect at status-line time, not only in \
+         the hook's environment: {plain:?}"
+    );
+
+    let emoji = Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(["status-line"])
+        .current_dir(dir.path())
+        .env("DAY_KAN_BIN", &kan)
+        .env("DAY_FOOTER", "emoji")
+        .env("COLUMNS", "100")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    let emoji = String::from_utf8_lossy(&emoji.stdout).to_string();
+    assert!(
+        !emoji.is_ascii(),
+        "and emoji the other way, from the same cache: {emoji:?}"
+    );
+}
+
+/// The width the terminal reports is honoured, from the same cache.
+#[test]
+fn a_narrow_terminal_gets_a_narrower_footer_from_the_same_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(dir.path(), &minimal_log());
+    day_cmd(dir.path(), &kan, &["hook", "session-start"]);
+
+    let at = |columns: &str| {
+        let out = Command::new(env!("CARGO_BIN_EXE_day"))
+            .args(["status-line"])
+            .current_dir(dir.path())
+            .env("DAY_KAN_BIN", &kan)
+            .env("COLUMNS", columns)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+    for (columns, line) in [("100", at("100")), ("40", at("40"))] {
+        let width = line
+            .lines()
+            .map(day::footer::display_width)
+            .max()
+            .unwrap_or(0);
+        let budget: usize = columns.parse().unwrap();
+        assert!(
+            width <= budget,
+            "at COLUMNS={columns} the footer rendered {width} columns wide:\n{line}"
+        );
+    }
+}
+
+/// day must not report dirt **it created**.
+///
+/// Untracked entries count as dirty and day writes `.day/statusline` at every
+/// session start, so in any repo that has not gitignored the cache — every
+/// fresh `git init`, which is the population REQ-12 and `telos/v1.0` both
+/// name — the sync mark stuck on "dirty" from the second session onward with
+/// the user having done nothing. A display whose stated justification is
+/// "dirty means commit" must not be counting its own artifacts.
+#[test]
+fn the_cache_day_writes_is_not_reported_as_dirtiness() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = fixture_repo(dir.path());
+    let git = day::git::Git::new(&root);
+
+    assert!(
+        !git.sync_state().unwrap().dirty,
+        "premise: the fixture must start clean, or this cannot show the cache \
+         causing dirtiness"
+    );
+
+    // Exactly what a session start leaves behind.
+    std::fs::create_dir_all(root.join(day::cache::CACHE_DIR)).unwrap();
+    std::fs::write(
+        root.join(day::cache::CACHE_DIR).join("statusline"),
+        "day - build",
+    )
+    .unwrap();
+    let porcelain = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&porcelain.stdout).contains(".day"),
+        "premise: git must actually see the cache as untracked — if the \
+         fixture gitignores it, this measures nothing"
+    );
+
+    assert!(
+        !git.sync_state().unwrap().dirty,
+        "day reported dirtiness caused by its own render cache"
+    );
+
+    // And a real edit still reads dirty, so the exclusion did not blind it.
+    std::fs::write(root.join("real.txt"), "edited\n").unwrap();
+    assert!(
+        git.sync_state().unwrap().dirty,
+        "excluding the cache must not stop day seeing the user's own changes"
+    );
 }

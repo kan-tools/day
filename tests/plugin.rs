@@ -768,7 +768,20 @@ fn a_failed_kan_read_is_never_swallowed() {
         // why this does not stop at the line end.
         let signature = window.split('{').next().unwrap_or("");
         let name: String = window.chars().take_while(|c| ident_char(*c)).collect();
-        if signature.contains("&self") && signature.contains("-> Result<") && !name.is_empty() {
+        // **`Option` counts too, and that is the seventh instance.** This
+        // required `-> Result<`, so a kan read could opt OUT of the guard by
+        // choosing its own return type: `active_role` runs `kan identity role
+        // list --json`, swallows both the spawn failure and a parse failure
+        // with `.ok()?`, and was invisible here — demonstrated by flipping its
+        // signature to `Result` and watching the scan light up. A guard whose
+        // scope is selected by the code it guards is not a guard.
+        //
+        // An `Option`-returning read is a *deliberate* degradation by
+        // construction — it has no error to propagate — so it does not fail
+        // the scan by existing. It fails unless its body carries the marker
+        // and a reason, which is the same bargain every other site here makes.
+        let fallible = signature.contains("-> Result<") || signature.contains("-> Option<");
+        if signature.contains("&self") && fallible && !name.is_empty() {
             derived.push(format!(".{name}("));
         }
     }

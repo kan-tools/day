@@ -81,7 +81,8 @@ Deliberately small. The theory is ambitious; the tool is not.
   renders the **footer** the status line shows: position (`☀️ atom: build`),
   repo/branch/sync/checkout context, the signing role, and one message tray.
   Emoji unless a knowable negative (non-UTF-8 locale, `TERM=dumb`, `NO_COLOR`)
-  says otherwise; `DAY_FOOTER=plain|emoji` overrides either way.
+  says otherwise; `DAY_FOOTER=plain|emoji` overrides either way, and the
+  footer fits itself to `COLUMNS`, eliding visibly rather than silently.
 - **`day mcp`** — the checks over MCP, for agents without a shell.
 
 **Commands**

@@ -9,6 +9,17 @@ fitted to the result afterwards — the same preregistration discipline
 `telos/cross-harness-attained` uses, recorded in the witness interview on
 `telos/legible-surface-attained`.
 
+**Revised before any run, and that is why it is still v1.** A cold review
+found the first draft's fixture degenerate on five of these eight questions
+— it declared no atoms, had no upstream, was always the main checkout and
+rendered no tray, so a footer that could not have got them wrong scored five
+free points against a 7-of-8 bar. The fixture and this rubric were corrected
+**before any evaluation was run and with no attestation in existence**, so
+nothing was fitted to a result: there is no result. Preregistration forbids
+moving the band after seeing the outcome, not fixing a band that cannot be
+missed. Had a pass been attested against the first draft, this would be v2
+instead — that is what the version inside the anchored marker is for.
+
 ## What is being evidenced
 
 `telos/legible-surface-attained`: a person running a session sees where the
@@ -20,13 +31,25 @@ the harness surface alone, without invoking day.
 - A tmux pane, `80×24`, `LANG=en_US.UTF-8`, `TERM=xterm-256color`, no
   `NO_COLOR`, no `DAY_FOOTER` override — the detection path, not a forced
   style.
-- A fixture repository in a **known state** (the ground truth), prepared by
-  `scripts/capture-footer.sh`: a real git repo with a named branch, a dirty
-  working tree, a real kan log with a declared witness schema, and a declared
-  role whose DID is active.
+- **The same environment on the `day hook session-start` invocation**, which
+  is where the style is decided and cached. Setting it only on the pane
+  controlled nothing: a `TERM=dumb` ambient shell produced a plain capture
+  inside a pane declaring UTF-8, and the harness could not tell — so an
+  artifact attested as "the detection path" might have been a forced one.
+  The pane keeps the same values because the *width* is read there.
+- A fixture repository in a **known and adversarial state** (the ground
+  truth), prepared by `scripts/capture-footer.sh`: a real git repo with a
+  named branch, an upstream it is **3 ahead and 1 behind** (asymmetric and
+  non-zero, so a swapped mark is visible), an uncommitted file so the tree is
+  genuinely dirty, tooling workspaces gitignored the way a real repo has
+  them, a kan log declaring a witness schema and **two atoms** so the
+  position is genuinely ambiguous, and a declared role whose DID is active.
+  The script **exits 2 rather than capturing** if any of those degenerate —
+  no ambiguity, a clean tree, a field it could not derive.
 - `day hook session-start` runs in the fixture (this is where the footer is
   computed — REQ-10), then the footer is rendered into the pane and captured
-  with `tmux capture-pane`.
+  with `tmux capture-pane`. The script waits for the pane to render and exits
+  2 if it never does, rather than writing an empty capture at exit 0.
 
 v1 captures **the footer surface itself** rendered in the pane. It does not
 capture the surrounding harness chrome; a rubric version that drives the full
@@ -50,7 +73,14 @@ not this repository, not the fixture. It answers the operator questions:
 
 Each answer is marked against the fixture's ground truth
 (`ground-truth.json`, written by the capture script from the same state that
-produced the footer — derived, never hand-written).
+produced the footer). **Every field is derived from the substrate**, and a
+field the script cannot derive exits 2 rather than being written by hand —
+six of the first draft's nine were literals in a file whose own header
+forbade exactly that, including a repo name hand-copied from a URL set
+thirty-seven lines above it. The position is derived from the **kan log**,
+never from day's reading of it: scoring day against day's own answer would
+make the eval circular. Q7's `warnings` field exists so "none" is a markable
+answer rather than a question with nothing to mark against.
 
 ## Pass condition (preregistered)
 

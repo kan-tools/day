@@ -96,8 +96,21 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // addition widens what src/git.rs may reach, and an entry added without a
     // stated reason fails below. The reason lives here, at the whitelist,
     // rather than only in a design document that nothing re-checks.
+    // **Mode-bearing subcommands are whitelisted at two words, not one.**
+    // `git remote` reads with `get-url` and *writes* with `add`, `remove` and
+    // `set-url`; a one-word entry permits all four, and swapping
+    // `remote_url`'s body for `remote add evil <url>` left this test passing.
+    // The entry's own reason said "`get-url` is unambiguously a read" — a
+    // narrowing the check did not make, which is CLAUDE.md's "a justification
+    // that names a mechanism is a claim about the code" arriving in the
+    // guard's own table. `tag` has the same shape (`git tag v9` creates one),
+    // and had the same hole before this.
     const ALLOWED_READS: [(&str, &str); 8] = [
-        ("tag", "cycle boundaries: the last release and its date"),
+        (
+            "tag --list",
+            "cycle boundaries: the last release and its date. Two words: bare \
+             `git tag <name>` CREATES a tag",
+        ),
         ("diff", "files changed since the boundary, for path probes"),
         ("log", "commit history, read-only"),
         (
@@ -108,15 +121,16 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
         ("status", "branch, ahead/behind and dirtiness, in one read"),
         ("ls-files", "the tracked set, for unbounded path probes"),
         (
-            "remote",
+            "remote get-url",
             "the origin URL, so the footer names the repo as org/name \
-             (REQ-13); `get-url` is unambiguously a read",
+             (REQ-13). Two words: `git remote add`/`remove`/`set-url` all \
+             mutate, and a one-word entry would permit them",
         ),
     ];
     for (name, reason) in ALLOWED_READS {
         assert!(
             !reason.trim().is_empty(),
-            "the permitted git subcommand `{name}` states no reason — the \
+            "the permitted git invocation `{name}` states no reason — the \
              whitelist is deliberately narrow, and an unexplained entry is \
              how it silently widens"
         );
@@ -130,12 +144,24 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     let mut rest = git_rs.1.as_str();
     while let Some(at) = rest.find("self.run(&[\"") {
         let after = &rest[at + "self.run(&[\"".len()..];
-        let subcommand: String = after.chars().take_while(|c| *c != '"').collect();
+        // The first two argv elements as written, so a two-word entry can be
+        // matched against what the call actually says. Elements are `"a", "b"`
+        // in source, and a non-literal (a `&format!`) simply yields no second
+        // word, which then only matches a one-word entry.
+        let first: String = after.chars().take_while(|c| *c != '"').collect();
+        let second: String = after
+            .split_once("\",")
+            .and_then(|(_, tail)| tail.trim_start().strip_prefix('"'))
+            .map(|t| t.chars().take_while(|c| *c != '"').collect())
+            .unwrap_or_default();
+        let two_word = format!("{first} {second}");
         assert!(
-            ALLOWED_READS.iter().any(|(name, _)| *name == subcommand),
-            "src/git.rs invokes `git {subcommand}`, which is not one of the permitted \
-             read subcommands {:?}. day's git access is read-only, and a new read \
-             subcommand needs a stated reason at this whitelist.",
+            ALLOWED_READS
+                .iter()
+                .any(|(name, _)| *name == first || *name == two_word),
+            "src/git.rs invokes `git {first} {second}`, which is not one of the \
+             permitted read invocations {:?}. day's git access is read-only, and \
+             a new one needs a stated reason at this whitelist.",
             ALLOWED_READS.map(|(name, _)| name)
         );
         invocations += 1;

@@ -233,7 +233,26 @@ impl Git {
     /// source, so the counts can never disagree with the dirtiness the way
     /// two reads taken moments apart can.
     pub fn sync_state(&self) -> Result<SyncState, Error> {
-        let out = self.run(&["status", "--porcelain=v2", "--branch"])?;
+        // **day's own cache is excluded from the dirtiness read**, via a
+        // pathspec rather than by filtering the output — git owns what a
+        // pathspec means, and a matcher of day's own would disagree with it
+        // at the edges (the same argument `changed_files_matching` makes).
+        //
+        // Without this, day reports dirt it created: `.day/statusline` is
+        // written at every session start and is untracked in any repo that
+        // has not gitignored it, so from the second session onward a fresh
+        // `git init` — the population REQ-12 and `telos/v1.0` both name —
+        // shows a permanent "dirty" mark with the user having done nothing.
+        // A display whose stated justification is "dirty means commit" must
+        // not be counting its own artifacts.
+        let out = self.run(&[
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--",
+            ".",
+            &format!(":(exclude){}", crate::cache::CACHE_DIR),
+        ])?;
         let mut state = SyncState::default();
         for line in out.lines() {
             if let Some(head) = line.strip_prefix("# branch.head ") {
