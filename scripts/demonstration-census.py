@@ -42,6 +42,35 @@ TRAILER_RE = re.compile(
 )
 EXEMPTION_RE = re.compile(r"^No trailer:", re.MULTILINE)
 
+# **Accounting for an earlier commit by APPENDING, because that is how this
+# project supersedes anything.**
+#
+# A commit's message is immutable once pushed, and the only way to correct one
+# is to rewrite history — which is precisely what kan refuses to do to a claim
+# and what `CLAUDE.md` says day does not do to a subject: *"day never retracts
+# or rejects. Superseding is done by appending, the same way kan does it."* A
+# census that can only be satisfied by rebasing therefore demands, as its remedy,
+# the one operation this repo's whole model is built to avoid.
+#
+# It arrived the obvious way: an exemption paragraph opening `No trailer,` with
+# a comma instead of a colon. One character, a correct catch, and a remedy out
+# of proportion to it.
+#
+# So a LATER commit may account for an earlier one by naming its sha and giving
+# the reason. Deliberately narrow, because this is an escape hatch and an
+# unbounded one is just the rule switched off:
+#
+#   - the sha must be given and must resolve to a commit IN THE SPAN, so this
+#     cannot silently absolve something outside the range under review;
+#   - a reason must follow on the same line — the same bargain `No trailer:`
+#     and `kan-read-may-degrade:` make, and the reason is what review reads;
+#   - it accounts as `exempt`, never as `demonstrated`. Appending a sentence is
+#     not running the tool, and collapsing those two would let a commit claim a
+#     demonstration it never performed.
+ACCOUNTS_FOR_RE = re.compile(
+    r"^Accounts-for:\s+([0-9a-f]{7,40})\s+(\S.*)$", re.MULTILINE
+)
+
 # **There is no `prose` bucket, and that is the third answer to this question.**
 #
 # The first version exempted a commit whose files were all `.md` or `.tsv`. The
@@ -79,12 +108,38 @@ def git(*args: str) -> str:
     return r.stdout
 
 
-def classify(sha: str) -> tuple[str, str]:
+def accounted_elsewhere(commits: list[str]) -> dict[str, str]:
+    """sha -> the reason a later commit in the span gave for it.
+
+    Full shas, resolved from whatever abbreviation was written, so `cfa9247`
+    and its 40-character form are the same key. A sha naming something outside
+    the span is ignored rather than honoured: an `Accounts-for:` that reaches
+    past the range under review would let a branch absolve commits nobody is
+    looking at.
+    """
+    in_span = set(commits)
+    out: dict[str, str] = {}
+    for sha in commits:
+        for named, reason in ACCOUNTS_FOR_RE.findall(git("log", "-1", "--format=%B", sha)):
+            try:
+                full = git("rev-parse", f"{named}^{{commit}}").strip()
+            except CouldNotCheck:
+                continue
+            if full in in_span and full != sha:
+                out[full] = reason.strip()
+    return out
+
+
+def classify(sha: str, accounted: dict[str, str] | None = None) -> tuple[str, str]:
     body = git("log", "-1", "--format=%B", sha)
     subject = git("log", "-1", "--format=%s", sha).strip()
     if TRAILER_RE.search(body):
         return "demonstrated", subject
     if EXEMPTION_RE.search(body):
+        return "exempt", subject
+    # Accounted for by a later commit that named it. Never `demonstrated` —
+    # appending a sentence is not running the tool.
+    if accounted and sha in accounted:
         return "exempt", subject
     return "unaccounted", subject
 
@@ -137,9 +192,11 @@ def main() -> int:
         "unaccounted": [],
     }
     try:
+        accounted = accounted_elsewhere(shas)
         for sha in shas:
-            bucket, subject = classify(sha)
-            buckets[bucket].append(f"{sha[:7]} {subject}")
+            bucket, subject = classify(sha, accounted)
+            note = f"  [accounted later: {accounted[sha]}]" if sha in accounted else ""
+            buckets[bucket].append(f"{sha[:7]} {subject}{note}")
     except CouldNotCheck as e:
         print(f"COULD-NOT-CHECK: {e}")
         return COULD_NOT_CHECK

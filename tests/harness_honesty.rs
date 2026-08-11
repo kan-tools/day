@@ -1183,3 +1183,122 @@ fn the_release_workflow_creates_a_github_release_with_a_guard_that_can_fire() {
          no section, which is a check that cannot fail."
     );
 }
+
+/// **`Accounts-for:` accounts, and does not absolve.**
+///
+/// The census gained an append-shaped accounting path because its only other
+/// remedy was rewriting a pushed commit message — the operation kan refuses for
+/// a claim and day refuses for a subject. An escape hatch is the right shape
+/// here, and an unbounded one is the rule switched off, so this pins the three
+/// bounds against a scratch repository rather than against day's own history:
+/// an unaccounted commit is still unaccounted; naming a commit outside the span
+/// does not absolve anything; and accounting never counts as *demonstrated*,
+/// because appending a sentence is not running the tool.
+#[test]
+fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+            .output()
+            .expect("git should be runnable");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let census = |range: &str| {
+        let out = Command::new("python3")
+            .arg(repo_root().join("scripts/demonstration-census.py"))
+            .arg(range)
+            .current_dir(repo)
+            .output()
+            .expect("python3 should be runnable");
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout).to_string(),
+        )
+    };
+
+    git(&["init", "-q", "-b", "main"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "base"]);
+    let base = git(&["rev-parse", "HEAD"]);
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "outside the span, unaccounted",
+    ]);
+    let outside = git(&["rev-parse", "HEAD"]);
+    let span_start = git(&["rev-parse", "HEAD"]);
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "the one to be accounted for",
+    ]);
+    let target = git(&["rev-parse", "HEAD"]);
+    let _ = base;
+
+    // premise: unaccounted before anything accounts for it.
+    let (code, out) = census(&format!("{span_start}..HEAD"));
+    assert_eq!(
+        code,
+        Some(1),
+        "premise: an unaccounted commit must fail: {out}"
+    );
+
+    // Naming a commit OUTSIDE the span absolves nothing.
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        &format!("reaches past the range\n\nAccounts-for: {outside} a reason\n\nNo trailer: this commit itself"),
+    ]);
+    let (code, out) = census(&format!("{span_start}..HEAD"));
+    assert_eq!(
+        code,
+        Some(1),
+        "an Accounts-for naming a commit outside the span must not absolve \
+         anything inside it, and must not absolve the out-of-span commit \
+         either: {out}"
+    );
+
+    // Naming the in-span commit accounts for it — and as EXEMPT, not
+    // demonstrated.
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        &format!("accounts for it\n\nAccounts-for: {target} a stated reason\n\nNo trailer: this commit itself"),
+    ]);
+    let (code, out) = census(&format!("{span_start}..HEAD"));
+    assert_eq!(
+        code,
+        Some(0),
+        "the named in-span commit must now be accounted: {out}"
+    );
+    assert!(
+        out.contains("| demonstrated | 0 |"),
+        "accounting must never read as demonstrated — appending a sentence is \
+         not running the tool: {out}"
+    );
+    assert!(
+        out.contains("accounted later: a stated reason"),
+        "the reason must be surfaced for review, or the hatch is unauditable: {out}"
+    );
+}
