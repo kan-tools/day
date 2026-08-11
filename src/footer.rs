@@ -177,19 +177,20 @@ pub fn repo_from_remote(url: &str) -> Option<String> {
         userhost.contains('@') && !path.starts_with("//") && !userhost.contains('/')
     }) {
         path
-    } else if let Some(rest) = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .or_else(|| url.strip_prefix("ssh://"))
-        .or_else(|| url.strip_prefix("git://"))
-    {
+    } else {
+        // Everything else must carry a scheme day recognises; a local
+        // filesystem path or any other shape yields `None` here, so the
+        // caller falls back rather than guessing (REQ-14).
+        //
+        // fallback: unrecognised-remote
+        let rest = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))
+            .or_else(|| url.strip_prefix("ssh://"))
+            .or_else(|| url.strip_prefix("git://"))?;
         // host/org/name(.git) — drop the host, keep the path.
         let (_host, path) = rest.split_once('/')?;
         path
-    } else {
-        // A local filesystem path, or a shape day does not recognise: fall
-        // back rather than guess (REQ-14).
-        return None;
     };
     let path = path
         .trim_matches('/')
