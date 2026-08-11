@@ -67,6 +67,32 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+    /// The binary exists and the kernel refused to exec it because something
+    /// still holds it open for writing — `ETXTBSY`, after the bounded retry
+    /// below has already waited out the transient case.
+    ///
+    /// day#182. This arrived through `NotReachable`, whose remedy is
+    /// "Install it with `cargo install kan`" — actively misleading for a file
+    /// that is demonstrably present. The cause is real for any exec'd binary
+    /// (rust-lang/rust#39186: a `fork` taken by another thread inherits a
+    /// still-open write descriptor, and the exec races its close), which is
+    /// why the retry lives here at the exec site rather than in the test
+    /// harness that first surfaced it. A failure that outlives every retry is
+    /// no longer transient, and says so instead of guessing at installs.
+    #[error(
+        "`{bin}` exists but could not be executed: the kernel refused with ETXTBSY \
+         (text file busy) through {attempts} attempts over ~{waited_ms} ms.\n\n\
+         Something held the file open for writing the whole time — a copy or \
+         build still in flight, or another process rewriting it. This is NOT a \
+         missing kan install, and installing one will not help. Wait for the \
+         writer to finish, or replace the file atomically (write to a temp \
+         name, then rename)."
+    )]
+    ExecutableBusy {
+        bin: String,
+        attempts: u32,
+        waited_ms: u64,
+    },
     #[error(
         "could not read `{args}` output from kan: {detail}\n\nThis usually means kan's \
          --json shape changed. day pins to a shape version rather than parsing rendered \
@@ -332,18 +358,28 @@ impl KanClient {
     }
 
     fn run(&self, args: &[&str]) -> Result<String, Error> {
-        let output = Command::new(&self.bin)
-            .args(args)
-            .current_dir(&self.cwd)
-            .output()
-            .map_err(|source| {
-                let bin = self.bin.clone();
-                if self.bin_from_env {
-                    Error::OverrideNotReachable { bin, source }
-                } else {
-                    Error::NotReachable { bin, source }
-                }
-            })?;
+        let mut command = Command::new(&self.bin);
+        command.args(args).current_dir(&self.cwd);
+        let output = retry_etxtbsy(|| command.output()).map_err(|source| {
+            let bin = self.bin.clone();
+            // ETXTBSY surviving the whole retry window is its own condition
+            // with its own remedy — for both the PATH and the DAY_KAN_BIN
+            // case, because neither variant's advice (install kan / check the
+            // override) is true of a file that exists and is briefly
+            // unwritable-to-exec (day#182).
+            if source.kind() == std::io::ErrorKind::ExecutableFileBusy {
+                return Error::ExecutableBusy {
+                    bin,
+                    attempts: ETXTBSY_ATTEMPTS,
+                    waited_ms: ETXTBSY_TOTAL_WAIT_MS,
+                };
+            }
+            if self.bin_from_env {
+                Error::OverrideNotReachable { bin, source }
+            } else {
+                Error::NotReachable { bin, source }
+            }
+        })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -873,9 +909,124 @@ fn check_shape(v: u32, args: &[&str]) -> Result<(), Error> {
     })
 }
 
+/// How many times an `ETXTBSY` exec is attempted, and how long the doubling
+/// backoff waits in total. Eight attempts at 2·2^n ms is ~510 ms — long
+/// enough to outlive a writer closing its descriptor (the observed window is
+/// the gap between a `fork` and its `exec`, microseconds), short enough that
+/// a genuinely held-open file fails while the invocation is still
+/// attributable to its cause.
+const ETXTBSY_ATTEMPTS: u32 = 8;
+const ETXTBSY_TOTAL_WAIT_MS: u64 = (1 << ETXTBSY_ATTEMPTS) * 2 - 2;
+
+/// Retries `attempt` while it fails with `ETXTBSY`, bounded, backing off.
+///
+/// day#182: `ETXTBSY` on exec is the fork/exec descriptor race
+/// (rust-lang/rust#39186) — a `fork` taken by another thread inherits a
+/// still-open write handle on the file this thread is about to exec, and the
+/// kernel refuses. The condition is real for any exec'd binary, transient by
+/// nature, and the standard mitigation is a bounded retry **at the exec
+/// site** — putting it in the test harness would fix the fixture that
+/// surfaced it and leave every real `DAY_KAN_BIN` target exposed.
+///
+/// Every other error kind returns on the first attempt: retrying a missing
+/// file or a permission failure would only delay an accurate message.
+fn retry_etxtbsy<T>(mut attempt: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let mut delay = std::time::Duration::from_millis(2);
+    let mut tries = 0;
+    loop {
+        match attempt() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                tries += 1;
+                if tries >= ETXTBSY_ATTEMPTS {
+                    return Err(e);
+                }
+                std::thread::sleep(delay);
+                delay *= 2;
+            }
+            other => return other,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// day#182, the mechanism half. Driven with a synthetic closure rather
+    /// than a real busy file, because ETXTBSY is timing-dependent and
+    /// platform-dependent (macOS does not reliably enforce it) — a repro test
+    /// that only fires on loaded Linux CI would be a vacuous test everywhere
+    /// else, which is the class this repo documents.
+    #[test]
+    fn etxtbsy_is_retried_and_other_errors_are_not() {
+        use std::io::{Error as IoError, ErrorKind};
+
+        // Transient: busy twice, then fine — the retry absorbs it.
+        let mut calls = 0;
+        let out = retry_etxtbsy(|| {
+            calls += 1;
+            if calls < 3 {
+                Err(IoError::new(
+                    ErrorKind::ExecutableFileBusy,
+                    "text file busy",
+                ))
+            } else {
+                Ok(calls)
+            }
+        });
+        assert_eq!(out.unwrap(), 3, "the third attempt should have succeeded");
+
+        // Persistent: bounded, and the final error keeps its kind so the
+        // caller can name the condition.
+        let mut calls = 0;
+        let out: std::io::Result<()> = retry_etxtbsy(|| {
+            calls += 1;
+            Err(IoError::new(
+                ErrorKind::ExecutableFileBusy,
+                "text file busy",
+            ))
+        });
+        assert_eq!(calls, ETXTBSY_ATTEMPTS, "the retry must be bounded");
+        assert_eq!(out.unwrap_err().kind(), ErrorKind::ExecutableFileBusy);
+
+        // A missing file is not transient; retrying it only delays an
+        // accurate message.
+        let mut calls = 0;
+        let out: std::io::Result<()> = retry_etxtbsy(|| {
+            calls += 1;
+            Err(IoError::new(ErrorKind::NotFound, "no such file"))
+        });
+        assert_eq!(calls, 1, "only ETXTBSY retries");
+        assert_eq!(out.unwrap_err().kind(), ErrorKind::NotFound);
+    }
+
+    /// day#182, the message half. The failure used to render as
+    /// "kan is not reachable ... Install it with `cargo install kan`" — for a
+    /// file that is demonstrably present. The busy variant must name the
+    /// actual condition and must not contain the install remedy; keeping
+    /// `cargo install` out of the text is what lets a grep tell the two cases
+    /// apart at all (the same discipline OverrideNotReachable documents).
+    #[test]
+    fn the_busy_message_names_the_condition_and_never_advises_an_install() {
+        let msg = Error::ExecutableBusy {
+            bin: "/tmp/kan-stub.sh".into(),
+            attempts: ETXTBSY_ATTEMPTS,
+            waited_ms: ETXTBSY_TOTAL_WAIT_MS,
+        }
+        .to_string();
+        assert!(
+            msg.contains("ETXTBSY"),
+            "the errno is the searchable fact: {msg}"
+        );
+        assert!(
+            msg.contains("exists"),
+            "the file being present is the point: {msg}"
+        );
+        assert!(
+            !msg.contains("cargo install"),
+            "an install remedy for a present file is the day#182 defect: {msg}"
+        );
+    }
 
     /// The shape day reads, exactly as `kan show --json` emits it.
     const SHOW: &str = r#"{
