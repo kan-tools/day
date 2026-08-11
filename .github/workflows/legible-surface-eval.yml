@@ -1,0 +1,56 @@
+name: legible-surface eval capture
+
+# The triggered half of the `legible-surface-eval` witness (rubric v1,
+# eval/legible-surface.rubric.v1.md): produce the standardized capture and its
+# derived ground truth, as an artifact for scoring.
+#
+# What this job DELIBERATELY does not do: score, or attest. Scoring is an
+# agent's structured evaluation against the preregistered rubric, and the
+# attestation is a `kan result` on `eval/legible-surface` — which a workflow
+# cannot write, because `.kan/` is gitignored and this repo publishes no
+# `.claims/`, so CI cannot see (or reach) the log. The same judgement
+# `revert-demo.yml` records: better an artifact a person scores than a gate
+# that cannot fail. A green run here means "a capture exists", never "the
+# telos is met".
+#
+# workflow_dispatch only: an eval run is a deliberate act with a rubric
+# version in hand, not something every push should imply.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Install kan
+        run: cargo install kan --locked
+
+      - name: Build day
+        run: cargo build --release
+
+      - name: Capture the footer under the standardized setup
+        run: |
+          DAY_BIN="$PWD/target/release/day" scripts/capture-footer.sh eval-out
+          echo '--- capture ---'
+          cat eval-out/capture.txt
+          echo '--- ground truth ---'
+          cat eval-out/ground-truth.json
+
+      - name: Upload capture for scoring
+        uses: actions/upload-artifact@v4
+        with:
+          name: legible-surface-capture
+          path: eval-out/
+          if-no-files-found: error
+
+      - name: What this run is, and is not
+        run: |
+          echo "A capture exists. It has not been scored and nothing is attested."
+          echo "Next: score eval-out/ against eval/legible-surface.rubric.v1.md;"
+          echo "a pass is recorded as a kan result on eval/legible-surface, from a session."
