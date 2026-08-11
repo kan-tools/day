@@ -62,6 +62,32 @@ import subprocess
 import sys
 
 IDENTICAL = "IDENTICAL"
+# A changed source no fixture plausibly exercises: could-not-check, which
+# outranks checked-and-clean and therefore gets its own exit code rather than
+# being folded into IDENTICAL.
+COVERAGE_UNKNOWN = "COVERAGE-UNKNOWN"
+
+# Which verbs plausibly exercise which module. Deliberately coarse and
+# deliberately NOT a claim of coverage — it decides only whether printing a bare
+# IDENTICAL would overstate what ran. A module absent here is treated as
+# unreached by every verb, which fails toward saying "I did not check" rather
+# than toward silence.
+MODULE_VERB_HINTS = {
+    "src/footer.rs": ["status-line", "session-start", "user-prompt"],
+    "src/cache.rs": ["status-line", "session-start", "user-prompt"],
+    "src/git.rs": ["status", "assess", "session-start", "user-prompt", "status-line"],
+    "src/hooks.rs": ["session-start", "session-notice", "user-prompt"],
+    "src/status.rs": ["status", "session-start", "user-prompt"],
+    "src/kan_client.rs": ["status", "doctor", "assess", "session-start", "next", "bridge"],
+    "src/cli/mod.rs": ["status", "doctor", "assess", "next", "bridge", "init", "status-line"],
+    "src/telos.rs": ["assess", "doctor"],
+    "src/atoms.rs": ["doctor", "next", "status"],
+    "src/probe.rs": ["assess", "status"],
+    "src/position.rs": ["status", "session-start"],
+    "src/practice.rs": ["session-start"],
+    "src/docs.rs": ["assess"],
+    "src/blocks.rs": ["doctor", "status", "assess"],
+}
 CHANGED_AS_DECLARED = "CHANGED-AS-DECLARED"
 CHANGED_UNEXPLAINED = "CHANGED-UNEXPLAINED"
 BASE_DID_NOT_BUILD = "BASE-DID-NOT-BUILD"
@@ -218,6 +244,19 @@ def observe(binary: pathlib.Path, fixture: pathlib.Path, work: pathlib.Path) -> 
             raise Unrunnable(f"{fixture.name}:{verb} exited {r.returncode}: "
                              f"{detail[:200]}")
         out[verb] = f"exit={r.returncode}\n{r.stdout}"
+        # **Artifacts count as behaviour.** Comparing stdout alone made this
+        # harness structurally blind to every change whose output is a written
+        # file — which is the entire footer surface: `hook session-start`
+        # renders into `.day/` and prints nothing about it, so a rewrite of the
+        # status line compared byte-identical and the harness said IDENTICAL.
+        # A cold reviewer found a regression in that same commit by hand.
+        #
+        # Execution reached the changed module; OBSERVATION did not, and those
+        # are different questions. Recorded because a coverage table keyed on
+        # "which verb runs which module" would have said covered — the first
+        # attempt at this fix did exactly that and was wrong.
+        for artifact in sorted((work / ".day").glob("*")) if (work / ".day").is_dir() else []:
+            out[f"{verb} :: .day/{artifact.name}"] = artifact.read_text(errors="replace")
     return out
 
 
@@ -328,15 +367,64 @@ def main() -> int:
                   f"to itself, so this would otherwise have reported IDENTICAL "
                   f"while checking nothing.")
             return 2
-        for verb in before:
-            if before[verb] != after[verb]:
+        # **The UNION of keys, not the base's.** Iterating `before` alone made a
+        # key present on one side only either invisible (new on head) or a raw
+        # KeyError (gone from head) — and an artifact that one binary writes and
+        # the other does not is exactly the behaviour change this harness is for.
+        # `.day/statusline.variants` is that case: absent before, written after.
+        ABSENT = "<absent>"
+        for verb in sorted(set(before) | set(after)):
+            b, a = before.get(verb, ABSENT), after.get(verb, ABSENT)
+            if b != a:
                 key = f"{fx.name}:{verb}"
                 changed.append(key)
                 if key not in declared:
-                    unexplained.append((key, before[verb], after[verb]))
+                    unexplained.append((key, b, a))
 
     print(f"corpus: {len(cases)} fixture(s) against {args.since}")
+
+    # **What the corpus could not reach.** `--expect-fixtures` guards against a
+    # corpus reader that silently stopped matching; nothing guarded against a
+    # corpus that cannot reach the code under diff, and the two failure modes
+    # print the same word.
+    #
+    # Measured, on the run that prompted this: `IDENTICAL` over four fixtures
+    # invoking `assess telos`, `session-start`, `doctor` and `status`, against a
+    # change to `src/git.rs`, `src/footer.rs`, `src/cache.rs` and the
+    # `status-line` verb — none of which any fixture exercises. A cold reviewer
+    # built both binaries by hand and found a regression the same commit. So the
+    # harness reported checked-and-clean where it had checked nothing, which is
+    # the precedence rule its own header invokes.
+    #
+    # This does not decide coverage — it cannot, without knowing which verb
+    # exercises which module. It reports the changed sources and the verbs the
+    # corpus runs, and refuses to print a bare `IDENTICAL` when a changed source
+    # is plausibly unreached, so the reader is told what the verdict rests on.
+    changed_sources = [
+        p
+        for p in run(["git", "diff", "--name-only", f"{args.since}..HEAD"], cwd=ROOT)
+        .stdout.split()
+        if p.startswith("src/")
+    ]
+    verbs = sorted({
+        v
+        for c in cases
+        for v in json.loads((c / "case.json").read_text()).get("invocations", [])
+    })
+    unreached = [p for p in changed_sources
+                 if not any(hint in v for hint in MODULE_VERB_HINTS.get(p, []) for v in verbs)]
+
     if not changed:
+        if unreached:
+            print(f"{COVERAGE_UNKNOWN}: no fixture output differed, but the corpus "
+                  f"runs only {verbs} and these changed sources have no fixture "
+                  f"plausibly exercising them:")
+            for p in unreached:
+                print(f"  unreached: {p}")
+            print("A diff over code the corpus cannot reach is a could-not-check, "
+                  "not a clean bill. Add a fixture that invokes the affected verb, "
+                  "or say in the commit which change this run did not cover.")
+            return 3
         print(IDENTICAL)
         return 0
     for key in changed:
