@@ -116,7 +116,7 @@ day exists to avoid repeating.
 ## Install
 
 ```bash
-cargo install kan --version 0.11.0-beta.1   # the memory layer day reads
+cargo install kan --version 0.12.0-beta.4   # the memory layer day reads
 cargo install day --version 0.12.0-beta.3
 ```
 
