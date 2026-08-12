@@ -741,9 +741,19 @@ fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
             // census draws around whether an exemption is true. What it can do
             // is make the set of modules that touch the cache small, explicit,
             // and reviewable, so a new one is a decision rather than a diff.
-            let calls_api = cache_api
-                .iter()
-                .any(|name| code.contains(&format!("cache::{name}(")));
+            // **An IMPORT of the cache module counts as touching it**, not
+            // just a `cache::` call path. `use crate::cache::standing as s;`
+            // followed by `s(root)` spells the call nothing like `cache::` and
+            // walked through the first version of this allowlist — the same
+            // class of hole it was written to close (jurisdiction selected by
+            // how the caller happens to be written), found by probing my own
+            // fix rather than by review.
+            let imports_cache =
+                code.contains("use crate::cache") || code.contains("use super::cache");
+            let calls_api = imports_cache
+                || cache_api
+                    .iter()
+                    .any(|name| code.contains(&format!("cache::{name}(")));
             let names_path = code.contains(&cache_dir_literal)
                 || [
                     "CACHE_DIR",
