@@ -297,6 +297,56 @@ for that reason.
   an environment override exists for the case it gets wrong. The declared layer
   is specified and deferred, per REQ-19.
 
+## Corrections from the adversarial review
+
+Three cold reviews of the implementation returned BLOCK, and two findings were
+against **this document** rather than against the code. Recorded here, with the
+verdict on `harness-footer` (`bafyreiccsprqo…`), because a design doc that is
+wrong is a worse defect than an implementation that is — it will be built from
+again.
+
+- **REQ-1 conflates two states, so it names nine and there are ten.** "The
+  partial-read report from `Status::render_unreadable`" folds together a log day
+  read *partially* — `Status.unreadable` is non-empty, so the position rendered
+  beside it was computed over a vocabulary day knows is incomplete — and a log
+  day could not read *at all*. They call for different responses and get
+  different glyphs. Only the second was built first time round, and the
+  requirement's wording is why nobody noticed: the footer rendered a confident
+  `atom: build · 1/2 done` over an incomplete read while the *model* channel was
+  told the report was partial, which is the day#60 asymmetry `src/hooks.rs`
+  already records as mattering most in practice. Both render now, and the
+  partial-read report joins the narrowing in the never-elided class.
+
+- **AC-3 states a property of the output that is false in day's own repo.**
+  "The rendered footer contains the literal `day` at most once" passed only
+  because the test drove an empty context: with a repo name the plain footer
+  reads `day setup: …` / `kan-tools/day - on main - …`, twice, because the repo
+  is *named* `kan-tools/day`. REQ-3's actual requirement is that day does not
+  stamp its own name on every line — an anchor property — and that is what is
+  asserted now, against a fixture deliberately named `kan-tools/day` so the test
+  runs against the string that falsified its predecessor.
+
+- **AC-1's criterion invited the defect it was meant to prevent.** "Nine
+  distinct outputs" is satisfied by nine distinct *wrong* outputs, and three
+  mutations walked straight through it: off-sequence findings wearing the
+  unrecorded glyph, `behind` rendered as `ahead`, and the setup line naming a
+  subject that resolves nothing. Distinctness is cheap; the states are now
+  asserted by content, per style, with distinctness on top.
+
+Two requirements gained scope from the same review, and are built:
+
+- **The footer must fit the terminal.** Measured at ~112 columns against a
+  status bar Claude Code documents as width-limited, on a rubric that
+  standardizes an 80-column capture. `COLUMNS` is set for the status-line
+  command (v2.1.153+) and was read by nothing. The hook now renders several
+  width variants and the status line picks; elision is visible, and the two
+  caveats are pinned against it.
+
+- **`DAY_FOOTER` must work where a person sets it.** It resolved at hook time
+  and was baked into the cache, so `DAY_FOOTER=plain day status-line` did
+  nothing while README and CONVENTIONS both documented it as an override. Same
+  fix: the choice moves to where the status line runs.
+
 ## Out of Scope
 
 - **The session's signing identity being *set*.** This footer *reports* the

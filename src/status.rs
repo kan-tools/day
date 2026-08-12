@@ -5,8 +5,16 @@
 //! has: the atom graph (`atom/<slug>` subjects), the witness probe map
 //! (`schema/witness`), and git. It runs [`position::infer`], then for each
 //! current atom evaluates its `done` criteria. [`Status::render_long`] is
-//! `day status`; [`Status::render_line`] is the one-to-three-line form the
-//! status line shows.
+//! `day status`; [`Status::render_line`] is the terse form injected into the
+//! **model's** session-start context.
+//!
+//! **`render_line` is no longer what the status line shows** — `src/footer.rs`
+//! is, since day#179. The two renderings were forked rather than swapped, and
+//! this comment claimed the old arrangement for a while afterwards, which
+//! matters here more than usual: the tests under `render_line` pin strings a
+//! human never sees now, and a reader trusting this sentence would have
+//! changed the wrong one. Their audiences differ (a model reading injected
+//! context, a person glancing at a bar), which is why both survive.
 //!
 //! **Nothing here executes a command probe.** Status is a *display*, and a
 //! display that runs project-declared commands would be the same widening

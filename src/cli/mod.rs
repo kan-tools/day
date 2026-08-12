@@ -734,10 +734,28 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         // way to learn it is `workspace.current_dir` on stdin. So the root is
         // read from there, falling back to the process cwd (which is what a
         // person running this by hand, or a test, gets).
+        // **Reads the environment and the cache, and invokes nothing.** The
+        // style and the width are known here and nowhere else — Claude Code
+        // sets `COLUMNS` before running this command, and `DAY_FOOTER` lives
+        // in this command's environment rather than the hook's — so the hook
+        // caches every variant and this picks one. Choosing between
+        // pre-rendered strings is a display decision; nothing day reports is
+        // decided from the cache's content.
+        //
+        // A cache with no variant headers is printed verbatim: it was
+        // written by an older day, which is a stale rendering rather than an
+        // error.
+        //
+        // fallback: cache-without-variants
         Command::StatusLine => {
             let root = statusline_root(cwd);
-            if let Some(line) = crate::cache::read_status_line(&root) {
-                print!("{line}");
+            if let Some(cached) = crate::cache::read_status_line(&root) {
+                let signals = crate::footer::EnvSignals::from_env();
+                let style = crate::footer::Style::resolve(&signals);
+                match crate::footer::select(&cached, signals.width(), style) {
+                    Some(block) => print!("{block}"),
+                    None => print!("{cached}"),
+                }
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -1007,6 +1025,19 @@ pub fn init_instructions(log: Result<&(), &crate::kan_client::Error>) -> String 
     out.push_str("hook writes, so it never shells out and never lags:\n");
     out.push_str(&format!(
         "     {{\"statusLine\": {{\"type\": \"command\", \"command\": \"{exe} status-line\"}}}}\n\n"
+    ));
+    // **Where the override goes, not just that it exists.** It is read where
+    // `status-line` runs, so exporting it in a shell that never invokes the
+    // status line does nothing — and a control that silently does nothing is
+    // worse than no control. Named here because this is the one place a user
+    // is already editing the settings file it belongs in.
+    out.push_str(&format!(
+        "day picks emoji unless your environment says otherwise (a non-UTF-8 locale,\n\
+         TERM=dumb, NO_COLOR), and fits the footer to $COLUMNS. To force a rendering,\n\
+         set {} in the STATUS LINE's environment — the same settings file:\n     \
+         {{\"env\": {{\"{}\": \"plain\"}}}}\n\n",
+        crate::footer::STYLE_ENV,
+        crate::footer::STYLE_ENV
     ));
     // day#77 ask #2, answered as *offer* rather than *record*. The four
     // declarations below all have working defaults, so recording them at init

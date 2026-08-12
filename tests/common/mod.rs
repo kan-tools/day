@@ -170,6 +170,7 @@ pub fn write_kan_stub(dir: &Path, claims: &[StubClaim]) -> PathBuf {
     // "foreign" simply by declaring it with a different author.
     std::fs::write(data.join("identity"), STUB_AUTHOR).unwrap();
     let _ = std::fs::remove_file(data.join("append-count"));
+    let _ = std::fs::remove_file(data.join("roles.json"));
 
     let mut subjects: Vec<&str> = claims.iter().map(|c| c.subject.as_str()).collect();
     subjects.sort_unstable();
@@ -229,6 +230,16 @@ DATA="{data}"
 case "$1" in
   --help) echo "kan (test stub)"; exit 0 ;;
   identity)
+    # `kan identity role list --json` (kan#115): served from `roles.json`
+    # when a test wrote one (see `write_stub_roles`), else an envelope with
+    # no declared roles — the state day's footer must render by omitting the
+    # identity segment. A malformed `roles.json` models a kan whose output
+    # day cannot parse, which must also read as "nothing to report".
+    if [ "$2" = "role" ]; then
+      if [ -f "$DATA/roles.json" ]; then cat "$DATA/roles.json"; exit 0; fi
+      printf '{{"v":1,"active":"%s","roles":[]}}\n' "$(cat "$DATA/identity" 2>/dev/null)"
+      exit 0
+    fi
     # `kan identity did` prints the public identifier. A stub whose identity
     # file is absent models kan being unable to reach the keychain, which is
     # a real state day has to fail closed on rather than guess through.
@@ -302,6 +313,59 @@ esac
     }
 
     script
+}
+
+/// What the stub's `kan identity role list --json` serves. Write the raw
+/// JSON (or deliberately not-JSON, to model an unparseable kan) after
+/// [`write_kan_stub`], which clears any previous one.
+pub fn write_stub_roles(dir: &Path, json: &str) {
+    std::fs::write(dir.join("kan-stub-data").join("roles.json"), json).unwrap();
+}
+
+/// Makes the stub report `n` claims withheld from this view, log-wide — the
+/// `TrustBase::Solo` narrowing kan#121 reproduced, and what
+/// `KanClient::claims_withheld_from_view` returns.
+///
+/// Exists so a test can drive the *delivery* of the narrowing rather than
+/// only the renderer that formats it: REQ-7's "a narrowing is never omitted"
+/// was asserted over the pure renderer while the one line that supplies the
+/// count could be hardcoded to zero with the whole suite green.
+pub fn write_stub_withheld(dir: &Path, n: u64) {
+    std::fs::write(dir.join("kan-stub-data").join("withheld"), n.to_string()).unwrap();
+}
+
+/// A stub that counts how many times it was invoked, so a test can assert
+/// **zero** invocations rather than "it survived a missing binary".
+///
+/// The difference is the whole of AC-12: a command that shells out and
+/// discards the error passes a missing-binary test and fails this one.
+/// Returns the wrapper to use as `DAY_KAN_BIN`/`DAY_GIT_BIN` and the file
+/// whose length is the call count.
+pub fn write_counting_stub(dir: &Path, name: &str, inner: &Path) -> (PathBuf, PathBuf) {
+    let counter = dir.join(format!("{name}-calls"));
+    let wrapper = dir.join(format!("{name}-counting.sh"));
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nprintf 'x' >> {}\nexec {} \"$@\"\n",
+            counter.display(),
+            inner.display()
+        ),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    (wrapper, counter)
+}
+
+/// How many times a [`write_counting_stub`] wrapper was invoked.
+pub fn stub_calls(counter: &Path) -> usize {
+    std::fs::read_to_string(counter)
+        .map(|s| s.len())
+        .unwrap_or(0)
 }
 
 /// One claim in kan's `--json` shape. Which fields are present depends on
@@ -415,6 +479,12 @@ const STUB_SHOW_ALL_PY: &str = r#"
 import json, sys, pathlib
 
 data = pathlib.Path(sys.argv[1])
+# Claims kan withheld from this view, log-wide. Written by
+# `write_stub_withheld`; absent means none, which is the ordinary case.
+withheld = 0
+f = data / "withheld"
+if f.exists():
+    withheld = int(f.read_text().strip() or 0)
 entries = []
 for f in sorted(data.glob("show-*.json")):
     entry = json.loads(f.read_text())
@@ -424,7 +494,7 @@ for f in sorted(data.glob("show-*.json")):
 print(json.dumps({
     "v": 1,
     "trust": {"base": "Solo", "authors": []},
-    "excluded_by_trust": 0,
+    "excluded_by_trust": withheld,
     "subjects": entries,
 }))
 "#;
@@ -609,4 +679,80 @@ impl Default for ScratchCrate {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Strips `//` comments, **string-aware**, for the source scans.
+///
+/// The naive `line.find("//")` truncates at a `//` inside a string literal, so
+/// anything later on that line becomes invisible to the scan. Demonstrated
+/// against the shipped scans: a line reading
+/// `format!("https://example.com/{}", crate::cache::CACHE_DIR)` compiles, is
+/// fmt-clean, and passes the guard that exists to keep the renderer from
+/// touching the cache — while the same line without the URL is flagged. Three
+/// scans had it, one of them the `.day/` carve-out this repo calls load-bearing.
+///
+/// The reason for stripping at all is right and unchanged: a rule's own doc
+/// comment has to be able to name the thing it forbids. This only narrows
+/// *what counts as a comment* to what the compiler would agree is one.
+///
+/// Handles `"…"` and `'…'` with backslash escapes, and raw strings `r"…"` /
+/// `r#"…"#`. Not a Rust parser: a `//` inside a block comment is still treated
+/// as code, which fails toward scanning MORE than it should — the safe
+/// direction for a guard whose false positives are visible and whose false
+/// negatives are not.
+pub fn strip_line_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| {
+            let bytes = line.as_bytes();
+            let mut i = 0;
+            // Inside a normal string: the delimiter that ends it.
+            let mut quote: Option<u8> = None;
+            // Inside a raw string: how many `#` close it.
+            let mut raw_hashes: Option<usize> = None;
+            while i < bytes.len() {
+                let c = bytes[i];
+                if let Some(hashes) = raw_hashes {
+                    if c == b'"' && line[i + 1..].bytes().take(hashes).all(|b| b == b'#') {
+                        raw_hashes = None;
+                        i += 1 + hashes;
+                        continue;
+                    }
+                    i += 1;
+                    continue;
+                }
+                if let Some(q) = quote {
+                    if c == b'\\' {
+                        i += 2;
+                        continue;
+                    }
+                    if c == q {
+                        quote = None;
+                    }
+                    i += 1;
+                    continue;
+                }
+                // `r"`, `r#"`, `r##"` … open a raw string.
+                if c == b'r' {
+                    let hashes = line[i + 1..].bytes().take_while(|b| *b == b'#').count();
+                    if line.as_bytes().get(i + 1 + hashes) == Some(&b'"') {
+                        raw_hashes = Some(hashes);
+                        i += 2 + hashes;
+                        continue;
+                    }
+                }
+                if c == b'"' || c == b'\'' {
+                    quote = Some(c);
+                    i += 1;
+                    continue;
+                }
+                if c == b'/' && bytes.get(i + 1) == Some(&b'/') {
+                    return line[..i].to_string();
+                }
+                i += 1;
+            }
+            line.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

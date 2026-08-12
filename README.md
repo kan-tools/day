@@ -77,7 +77,12 @@ Deliberately small. The theory is ambitious; the tool is not.
 - **`day design record`** / **`day review record`** — append the claim chain
   for a design pass, or a four-value review verdict citing what it audits.
 - **`day hook session-start`** — the harness integration. Injects the teloi in
-  play, the declared atoms, what's still open, and any drift warnings.
+  play, the declared atoms, what's still open, and any drift warnings — and
+  renders the **footer** the status line shows: position (`☀️ atom: build`),
+  repo/branch/sync/checkout context, the signing role, and one message tray.
+  Emoji unless a knowable negative (non-UTF-8 locale, `TERM=dumb`, `NO_COLOR`)
+  says otherwise; `DAY_FOOTER=plain|emoji` overrides either way, and the
+  footer fits itself to `COLUMNS`, eliding visibly rather than silently.
 - **`day mcp`** — the checks over MCP, for agents without a shell.
 
 **Commands**

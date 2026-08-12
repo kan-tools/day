@@ -21,6 +21,7 @@ pub mod design;
 pub mod docs;
 pub mod doctor;
 pub mod fold;
+pub mod footer;
 pub mod git;
 pub mod hooks;
 pub mod kan_client;
