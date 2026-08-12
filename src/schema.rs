@@ -232,6 +232,9 @@ impl Schema {
     /// Loads the live schema for `slug` from kan.
     pub fn load(client: &KanClient, slug: &str) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{slug}");
+        // not-per-key: a design-doc schema has no shipped default either;
+        // see `src/docs.rs`. Absence is `NotDeclared`, and redeclaring
+        // replaces.
         match newest_fenced::<Self>(client, &subject)? {
             Some((_cid, schema)) => Ok(schema),
             None => Err(Error::NotDeclared {
@@ -243,6 +246,7 @@ impl Schema {
     /// Whether a schema is already declared for `slug`.
     pub fn is_declared(client: &KanClient, slug: &str) -> Result<bool, Error> {
         let subject = format!("{SCHEMA_PREFIX}{slug}");
+        // not-per-key: an existence check over the same declaration.
         Ok(newest_fenced::<Self>(client, &subject)?.is_some())
     }
 

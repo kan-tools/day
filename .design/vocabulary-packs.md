@@ -411,6 +411,31 @@ depend on the trust model landing.
   subjects are enumerated, and that a retracted subject *remains* carrying only
   a `Retraction` and must read as key-absent (REQ-21).
 
+- RQ-9: **RQ-7 scopes declarations out by the wrong property, and two `schema/*`
+  subjects fall through the gap.** RQ-7's table puts "a subject's own
+  declaration" out of scope and says it is "correctly out of scope by the
+  `schema/*` prefix, and by accident rather than by design" — which was a
+  prediction that the accident would hold. It does not. `schema/docs` and
+  `schema/design-doc` carry the prefix and are declarations: neither type has a
+  shipped default, absence is `NotDeclared` rather than a value, and redeclaring
+  must replace. Under a prefix rule they are configuration, and per-key
+  resolution would give them a layer 1 that does not exist.
+
+  The property that actually decides it is **whether the type has a default**,
+  and the type system already carries it: `layers::config` requires
+  `T: Default`, so a declaration cannot be routed there even deliberately. That
+  turns the scoping rule from a naming convention into a compile-time one, which
+  is what the prefix was standing in for.
+
+  Found while routing the second shape, by reading the types rather than the
+  requirement — the requirement reads fine, which is the same way RQ-4's remedy
+  read fine before all twelve call sites were looked at. REQ-17's scan is
+  written accordingly: it asks every direct fenced read to *state* why it is not
+  per-key, rather than asserting that none exists. The four categories that
+  legitimately remain — map, list, no-default declaration, subject's own
+  declaration — are named at their call sites, so a new loader on the direct
+  path is an offender until someone writes the reason down.
+
 ## Out of Scope
 
 - **Remote pack sources.** day#109 sketches `day pack kan-tools/day`. Fetching

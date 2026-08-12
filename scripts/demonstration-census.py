@@ -36,8 +36,16 @@ import re
 import subprocess
 import sys
 
+# `include=` is optional and names the revert scope the demonstration was taken
+# under. The census does not act on it — it counts trailers — but it must PARSE
+# it, or a correctly-scoped trailer reads as malformed and its commit falls into
+# `unaccounted`, which is the one verdict here. Kept in step with
+# `scripts/revert-demo.py`'s copy deliberately: two grammars for one trailer is
+# how a claim ends up accepted by the counter and unreadable to the verifier,
+# which is the defect that produced the field.
 TRAILER_RE = re.compile(
-    r"^Demonstrated-by:\s+revert=HEAD\s+tests=(\S+)\s+outcome=DEMONSTRATED\s*$",
+    r"^Demonstrated-by:\s+revert=HEAD\s+tests=(\S+)"
+    r"(?:\s+include=\S+)?\s+outcome=DEMONSTRATED\s*$",
     re.MULTILINE,
 )
 EXEMPTION_RE = re.compile(r"^No trailer:", re.MULTILINE)

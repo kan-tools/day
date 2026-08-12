@@ -32,6 +32,15 @@ pub enum Error {
         #[source]
         source: BlockError,
     },
+    /// A configuration subject whose assembled shape day cannot resolve per key.
+    ///
+    /// Separate from [`Error::Block`] because it is not a claim that failed to
+    /// parse — every layer parsed — it is the layers together not making a value
+    /// the type accepts, or a per-key subject naming a key its block does not
+    /// declare. Reporting that as a malformed block would point the reader at
+    /// one claim when the disagreement is between two.
+    #[error("{subject}: {reason}")]
+    ConfigShape { subject: String, reason: String },
 }
 
 /// The metadata key naming the reader version a block requires.
@@ -754,6 +763,16 @@ pub(crate) enum FenceScan<'a> {
     /// A `day-` fence was opened and never closed. Carries the info string, so
     /// the diagnostic can name what was left open.
     Unterminated(&'a str),
+    /// A closed `day-` fence whose info string is not `name`.
+    ///
+    /// Data rather than a verdict, because the right response differs by
+    /// caller and neither answer is safe everywhere. A general reader meets
+    /// these constantly — a claim carrying `day-atom` is not malformed because
+    /// something looked for `day-schema` — so [`extract_fenced`] treats it as
+    /// absence. A **per-key subject** exists only to carry one key's
+    /// declaration, so there anything else is a misspelling or a block from a
+    /// newer day, and `src/layers.rs` refuses it.
+    Foreign(&'a str),
     /// No `day-` block here. Prose, or a claim about something else.
     Absent,
 }
@@ -773,6 +792,7 @@ pub(crate) enum FenceScan<'a> {
 pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
     let mut pos = 0;
     let mut open: Option<(usize, usize, &str)> = None;
+    let mut foreign: Option<&str> = None;
     for line in text.split_inclusive('\n') {
         let line_start = pos;
         pos += line.len();
@@ -782,6 +802,9 @@ pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
                 if ticks >= open_ticks && info.is_empty() {
                     if open_info == name {
                         return FenceScan::Found(&text[body_start..line_start]);
+                    }
+                    if foreign.is_none() && open_info.starts_with("day-") {
+                        foreign = Some(open_info);
                     }
                     open = None;
                 }
@@ -795,7 +818,12 @@ pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
     }
 
     let Some((_, body_start, open_info)) = open else {
-        return FenceScan::Absent;
+        // Unterminated outranks foreign: a dangling open is the more specific
+        // and more actionable finding, and a claim can carry both.
+        return match foreign {
+            Some(info) => FenceScan::Foreign(info),
+            None => FenceScan::Absent,
+        };
     };
     if open_info.starts_with("day-") {
         return FenceScan::Unterminated(open_info);
@@ -808,7 +836,10 @@ pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
             return FenceScan::Unterminated(info);
         }
     }
-    FenceScan::Absent
+    match foreign {
+        Some(info) => FenceScan::Foreign(info),
+        None => FenceScan::Absent,
+    }
 }
 
 /// Pulls the first fenced block with the given info string out of a claim's
@@ -838,7 +869,10 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
     // fence. A guarantee wired at one reader when there are several is day#101,
     // and this is the entry point all of them share.
     match scan_fenced(text, T::FENCE) {
-        FenceScan::Absent => None,
+        // A claim carrying some OTHER day block is not malformed — most claims
+        // this is called on carry none of this type. Unchanged behaviour, now
+        // stated rather than implied by a scanner that could not see it.
+        FenceScan::Absent | FenceScan::Foreign(_) => None,
         FenceScan::Unterminated(info) => Some(Err(BlockError::Unterminated {
             fence: Fence::Owned(info.to_string()),
         })),
@@ -862,16 +896,37 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
 pub fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
     json: &str,
 ) -> Result<T, BlockError> {
+    parse_block_declared::<T>(json).map(|(_declared, parsed)| parsed)
+}
+
+/// [`parse_block`], additionally handing back the block's own object — the
+/// fields the claim **actually declared**, with `_version` already removed.
+///
+/// The typed value cannot answer that question. `serde(default)` fills every
+/// field a claim omitted, so a claim that never mentioned `cadence` and one that
+/// set it to exactly the shipped default produce identical `T`s. Provenance
+/// computed by comparing against the default would report the second as
+/// `(default)`, and a provenance column that cannot distinguish "nobody said" from
+/// "someone said this" is decoration rather than evidence — `.design/day-config.md`
+/// REQ-2 turns on exactly that distinction.
+///
+/// One parse, two views: [`parse_block`] is this function with the object
+/// dropped. Two implementations of the version gate that could disagree about
+/// what a block says is the shape day#101 records three instances of.
+pub fn parse_block_declared<T: serde::de::DeserializeOwned + Versioned>(
+    json: &str,
+) -> Result<(serde_json::Value, T), BlockError> {
     let value = version_gate(json, Fence::Borrowed(T::FENCE), T::SUPPORTED_VERSION)?;
-    let parsed: T = serde_json::from_value(value).map_err(|source| BlockError::Malformed {
-        fence: Fence::Borrowed(T::FENCE),
-        source,
-    })?;
+    let parsed: T =
+        serde_json::from_value(value.clone()).map_err(|source| BlockError::Malformed {
+            fence: Fence::Borrowed(T::FENCE),
+            source,
+        })?;
     parsed.validate().map_err(|reason| BlockError::Invalid {
         fence: Fence::Borrowed(T::FENCE),
         reason,
     })?;
-    Ok(parsed)
+    Ok((value, parsed))
 }
 
 /// Parses a block body, applies the version gate, and hands back the remainder
@@ -942,28 +997,55 @@ pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
     client: &KanClient,
     subject: &str,
 ) -> Result<Option<(String, T)>, Error> {
+    Ok(newest_fenced_declared::<T>(client, subject)?.map(|(cid, _declared, value)| (cid, value)))
+}
+
+/// [`newest_fenced`], additionally handing back which fields the winning claim
+/// declared — see [`parse_block_declared`] for why the typed value cannot say.
+///
+/// This is the reader `src/layers.rs` assembles provenance from, and it is the
+/// same function `newest_fenced` is, so the withheld-read guard below applies to
+/// both by construction. A second claim-walk carrying its own copy of that guard
+/// is how six hand-taught guards accumulated (day#160).
+pub fn newest_fenced_declared<T: serde::de::DeserializeOwned + Versioned>(
+    client: &KanClient,
+    subject: &str,
+) -> Result<Option<(String, serde_json::Value, T)>, Error> {
     let claims = client.show(subject)?;
     for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
-        // Unchanged: `extract_fenced` now reports an unterminated fence as a
-        // `BlockError` like any other unreadable block, so this path inherits it
-        // without a second copy of the rule.
-        match extract_fenced::<T>(text) {
-            Some(Ok(value)) => return Ok(Some((claim.cid.clone(), value))),
+        // Through `scan_fenced`, so this reader inherits the unterminated case
+        // rather than carrying a second copy of the rule. `extract_fenced` does
+        // the same one function up; both need the *declared object* here, which
+        // is the only reason this walk exists separately at all.
+        let body = match scan_fenced(text, T::FENCE) {
+            FenceScan::Absent | FenceScan::Foreign(_) => continue,
+            FenceScan::Unterminated(info) => {
+                return Err(Error::Block {
+                    subject: subject.to_string(),
+                    cid: claim.cid.clone(),
+                    source: BlockError::Unterminated {
+                        fence: Fence::Owned(info.to_string()),
+                    },
+                })
+            }
+            FenceScan::Found(body) => body,
+        };
+        match parse_block_declared::<T>(body.trim()) {
+            Ok((declared, value)) => return Ok(Some((claim.cid.clone(), declared, value))),
             // An unreadable block on the newest claim is not silently skipped
             // in favour of an older good one — that would hide the error, and
             // would silently resolve an *older* declaration as though it were
             // current, which is worse than failing.
-            Some(Err(source)) => {
+            Err(source) => {
                 return Err(Error::Block {
                     subject: subject.to_string(),
                     cid: claim.cid.clone(),
                     source,
                 })
             }
-            None => continue,
         }
     }
     // **Nothing parsed. Before reporting that as "nothing is declared", check

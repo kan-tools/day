@@ -272,6 +272,10 @@ impl BlockSchemas {
     /// is the common case, and day's built-ins are unaffected either way.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{BLOCKS_SLUG}");
+        // not-per-key: a `BTreeMap`, so resolution here is ENTRY-wise, not
+        // field-wise. It belongs on the witness path in `src/layers.rs`
+        // rather than this one — RQ-7's table separates the two shapes, and
+        // the map is the one whose restatement cost motivated the design.
         Ok(atoms::newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, schemas)| schemas)
             .unwrap_or_default())
@@ -386,11 +390,14 @@ impl Versioned for InjectionSchema {
 
 impl InjectionSchema {
     /// Reads the project's declaration, or day's default when none is recorded.
+    ///
+    /// **Through the one assembler** (REQ-17), so `schema/injection/cadence` and
+    /// `schema/injection/max_practice_items` resolve independently instead of
+    /// the newer claim resetting the other's field. A project with only a
+    /// whole-block claim, or none, gets byte-identical behaviour to before —
+    /// which is what REQ-12's "no migration" has to mean.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
-        let subject = format!("{SCHEMA_PREFIX}{INJECTION_SLUG}");
-        Ok(atoms::newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, schema)| schema)
-            .unwrap_or_default())
+        Ok(crate::layers::config::<Self>(client, INJECTION_SLUG)?.value)
     }
 
     pub fn starter_command() -> String {
@@ -467,11 +474,13 @@ impl Versioned for CycleSchema {
 impl CycleSchema {
     /// Reads the project's declaration, or release semantics when none is
     /// recorded.
+    ///
+    /// Through the one assembler (REQ-17), like `InjectionSchema` and for the
+    /// same reason: this is a config struct with a shipped default per field, so
+    /// `schema/cycle/<field>` resolves per key without the newer claim resetting
+    /// the rest of the block.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
-        let subject = format!("{SCHEMA_PREFIX}{CYCLE_SLUG}");
-        Ok(atoms::newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, c)| c)
-            .unwrap_or_default())
+        Ok(crate::layers::config::<Self>(client, CYCLE_SLUG)?.value)
     }
 
     pub fn starter_command() -> String {
@@ -925,6 +934,10 @@ impl VerdictVocabulary {
     /// Reads the project's declaration, or day's four when none is recorded.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{VERDICTS_SLUG}");
+        // not-per-key: a `Vec`, and RQ-7 records that "per key" is
+        // UNDEFINED for a list — a list has no keys. AC-19's answer is one
+        // subject per permitted verdict, which is a different mechanism
+        // from both the struct and the map, and is not built yet.
         Ok(atoms::newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, v)| v)
             .unwrap_or_default())

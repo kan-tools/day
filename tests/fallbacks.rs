@@ -1263,3 +1263,190 @@ fn fallback_no_columns_assume_80() {
     };
     assert_eq!(signals.width(), 133);
 }
+
+/// A `schema/injection` fixture: the whole-block legacy claim, and a per-key
+/// claim for one field.
+///
+/// Shared by the three tests below so the same log shape is read three ways —
+/// the layers only mean anything relative to each other.
+fn injection_client(
+    dir: &std::path::Path,
+    claims: &[common::StubClaim],
+) -> day::kan_client::KanClient {
+    let bin = write_kan_stub(dir, claims);
+    day::kan_client::KanClient::with_bin(dir, bin.to_string_lossy().to_string())
+}
+
+/// fallback: config-shipped-default
+///
+/// **Layer 1, and the mode a fresh clone is in.** With no claim anywhere, every
+/// field of a config struct resolves to day's shipped default and reports
+/// `Layer::Default`. Registered rather than hatched because the variant is
+/// reachable and reached: `Layer`'s own doc predicted it would arrive with the
+/// first loader that has defaults to fall back to, and this is that loader.
+///
+/// The premise is asserted rather than assumed — a fixture that accidentally
+/// carried an injection claim would observe the legacy layer and still pass.
+#[test]
+fn fallback_config_shipped_default() {
+    use day::blocks::InjectionSchema;
+    use day::layers::{self, Layer};
+
+    let dir = tempfile::tempdir().unwrap();
+    let unrelated = [common::claim(
+        "practice",
+        "bafyreiunrelated",
+        "An item that has nothing to do with injection.",
+    )];
+    assert!(
+        !unrelated
+            .iter()
+            .any(|c| c.subject.starts_with("schema/injection")),
+        "premise: the fixture must carry no `schema/injection` claim, or this \
+         observes a declared value and says nothing about the default layer"
+    );
+
+    let client = injection_client(dir.path(), &unrelated);
+    let effective = layers::config::<InjectionSchema>(&client, "injection").unwrap();
+
+    assert_eq!(
+        effective.value,
+        InjectionSchema::default(),
+        "with nothing declared, every field is day's shipped default"
+    );
+    assert_eq!(
+        effective.provenance.get("cadence"),
+        Some(&Layer::Default),
+        "and it says so, rather than reporting a claim that does not exist"
+    );
+    assert!(
+        !effective.declared,
+        "nothing declared it: `declared` is about whether a claim contributed, \
+         not about whether a value came out"
+    );
+}
+
+/// fallback: legacy-config-block
+///
+/// **Layer 2, and the mode day's own repo is in today.** A whole-block claim on
+/// `schema/injection` sets every field it carries, and a project that never
+/// adopts per-key subjects must see exactly today's behaviour — REQ-12's "no
+/// migration", which is a promise about every existing project rather than a
+/// nicety.
+///
+/// The premise is asserted **both ways round**, following
+/// `fallback_legacy_witness_block`: the same key resolves from the block when no
+/// per-key subject exists, and from the key's own subject when one does. Without
+/// the contrast this restates the fixture.
+#[test]
+fn fallback_legacy_config_block() {
+    use day::blocks::InjectionSchema;
+    use day::layers::{self, Layer};
+
+    let block = common::claim(
+        "schema/injection",
+        "bafyreilegacyinjection",
+        "Injection settings.\n\n```day-injection\n{\"cadence\": 7}\n```\n",
+    );
+    let key = common::claim(
+        "schema/injection/cadence",
+        "bafyreiperkeycadence",
+        "Cadence for this project.\n\n```day-injection\n{\"cadence\": 99}\n```\n",
+    );
+
+    let resolve = |claims: &[common::StubClaim]| {
+        let dir = tempfile::tempdir().unwrap();
+        let client = injection_client(dir.path(), claims);
+        layers::config::<InjectionSchema>(&client, "injection").unwrap()
+    };
+
+    let legacy_only = [block.clone()];
+    assert!(
+        !legacy_only
+            .iter()
+            .any(|c| c.subject.starts_with("schema/injection/")),
+        "premise: the fixture must declare no `schema/injection/<key>` subject. \
+         With one, this takes the per-key path and observes nothing about the \
+         fallback — which is the mode day's own repo is always in."
+    );
+
+    let from_block = resolve(&legacy_only);
+    assert_eq!(
+        from_block.value.cadence, 7,
+        "with no per-key subject the legacy block must decide — anything else \
+         is a silent migration for every project that has one"
+    );
+    assert_eq!(
+        from_block.provenance.get("cadence"),
+        Some(&Layer::LegacyBlock("bafyreilegacyinjection".into()))
+    );
+
+    // The other way round: the same block, now overlaid.
+    let with_key = resolve(&[block, key]);
+    assert_eq!(
+        with_key.value.cadence, 99,
+        "a per-key claim overrides the legacy block for its own key"
+    );
+    assert_eq!(
+        with_key.provenance.get("cadence"),
+        Some(&Layer::Key("bafyreiperkeycadence".into()))
+    );
+    assert_eq!(
+        with_key.value.max_practice_items,
+        InjectionSchema::default().max_practice_items,
+        "and leaves the block's other fields alone — the whole point of per-key \
+         subjects is that setting one does not reset the rest"
+    );
+}
+
+/// fallback: retracted-key-subject
+///
+/// **REQ-21's shape, which is what `kan retract` actually leaves behind.** The
+/// subject REMAINS after a retraction, carrying only a `Retraction` and no
+/// block. "Subject exists, no block" must read as *this key is absent* — so the
+/// key falls back through the layers below it — and never as a read failure.
+///
+/// This is the mechanism granular retraction turns on, and it is the one the
+/// design says the whole-block shape structurally cannot offer. A stub whose
+/// folded view omits the retracted claim is what day actually reads, so that is
+/// what this drives.
+#[test]
+fn fallback_retracted_key_subject() {
+    use day::blocks::InjectionSchema;
+    use day::layers::{self, Layer};
+
+    let dir = tempfile::tempdir().unwrap();
+    // The per-key subject exists and carries no `day-injection` block, which is
+    // the post-retraction state: kan folds the retracted claim out of the view
+    // and the subject stays.
+    let claims = [
+        common::claim(
+            "schema/injection",
+            "bafyreilegacyinjection",
+            "Injection settings.\n\n```day-injection\n{\"cadence\": 7}\n```\n",
+        ),
+        common::retraction_claim("schema/injection/cadence", "bafyreiretraction"),
+    ];
+    assert!(
+        claims
+            .iter()
+            .any(|c| c.subject == "schema/injection/cadence"),
+        "premise: the per-key SUBJECT must be present, or this measures the \
+         no-subject path instead of the retracted one"
+    );
+
+    let client = injection_client(dir.path(), &claims);
+    let effective = layers::config::<InjectionSchema>(&client, "injection").unwrap();
+
+    assert_eq!(
+        effective.value.cadence, 7,
+        "a retracted key falls back to the layer below it — here the legacy \
+         block. Reporting a read failure instead would make retraction \
+         unusable, which is the capability this design exists for."
+    );
+    assert_eq!(
+        effective.provenance.get("cadence"),
+        Some(&Layer::LegacyBlock("bafyreilegacyinjection".into())),
+        "and provenance names the layer that actually decided it"
+    );
+}

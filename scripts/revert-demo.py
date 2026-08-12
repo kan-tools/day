@@ -85,8 +85,22 @@ TRAILER = "Demonstrated-by:"
 # parsed and then discarded, so any string survived — a fabricable field that
 # nothing read. A trailer is always about the commit carrying it, so there is
 # nothing for it to vary over.
+#
+# **`include=` is optional and carries the revert's scope.** Without it a
+# demonstration that was only valid under `--include` recorded as though it had
+# been whole-commit, and `--verify` replayed the full revert — reporting
+# DID-NOT-COMPILE for a commit whose demonstration was real. Every commit that
+# ADDS an API reaches that state, because reverting it whole stops the tests
+# compiling, so this was not an edge case but the normal shape of a new-surface
+# commit. Found by a cold review, which ran `--verify` on a trailer the census
+# had already accepted: the census read the claim and the verifier could not
+# reproduce it, and only one of the two was consulted.
+#
+# Absent means whole-commit, so every trailer written before this field keeps
+# parsing and keeps meaning what it meant.
 TRAILER_RE = re.compile(
-    r"^Demonstrated-by:\s+revert=(?P<rev>HEAD)\s+tests=(?P<tests>\S+)\s+"
+    r"^Demonstrated-by:\s+revert=(?P<rev>HEAD)\s+tests=(?P<tests>\S+)"
+    r"(?:\s+include=(?P<include>\S+))?\s+"
     r"outcome=(?P<outcome>[A-Z-]+)\s*$",
     re.MULTILINE,
 )
@@ -503,7 +517,13 @@ def read_trailer(rev: str, cwd: pathlib.Path):
             f"always about the commit carrying it, and DEMONSTRATED is the only "
             f"outcome worth claiming. Run the harness and paste what it prints.",
         )
-    return m.group("rev"), [t for t in m.group("tests").split(",") if t], m.group("outcome")
+    include = [p for p in (m.group("include") or "").split(",") if p]
+    return (
+        m.group("rev"),
+        [t for t in m.group("tests").split(",") if t],
+        m.group("outcome"),
+        include,
+    )
 
 
 def verify(spec: str, root: pathlib.Path) -> int:
@@ -534,14 +554,17 @@ def verify(spec: str, root: pathlib.Path) -> int:
     if parsed is None:
         print(f"{spec}: no {TRAILER} trailer; nothing to verify")
         return 0
-    _, names, claimed = parsed
+    _, names, claimed, include = parsed
 
     work = pathlib.Path(tempfile.mkdtemp(prefix="revert-demo-"))
     tree = work / "tree"
     git("worktree", "add", "--detach", str(tree), rev, cwd=root)
     try:
         patch = patch_for_rev(rev, cwd=tree)
-        outcome, caught = demonstrate(tree, patch, names, rev, [], [], None)
+        # Replayed under the trailer's OWN scope. Passing `[]` here re-derived a
+        # different demonstration from the one the commit claims, which is how a
+        # scoped-but-real demonstration reported DID-NOT-COMPILE.
+        outcome, caught = demonstrate(tree, patch, names, rev, include, [], None)
         # A trailer names only the tests that caught it, so every one of them
         # must catch it again. Accepting "at least one" would let a trailer carry
         # passengers that never observed the finding.
@@ -632,8 +655,9 @@ def main() -> int:
     # produced a paste-ready line that misstated what had been inverted.
     if args_rev in (None, "HEAD"):
         print("\nPaste into the commit message:\n")
+        scope = f"include={','.join(args.include)} " if args.include else ""
         print(f"    {TRAILER} revert=HEAD "
-              f"tests={','.join(caught)} outcome={DEMONSTRATED}")
+              f"tests={','.join(caught)} {scope}outcome={DEMONSTRATED}")
     else:
         print(f"\nNo trailer printed: this demonstrated {args_rev}, which is not "
               f"the commit a trailer would land on.\nRe-run without `--rev` on the "

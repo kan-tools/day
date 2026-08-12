@@ -503,6 +503,9 @@ impl Report {
 /// Loads a bridge and its target telos, and checks realizability.
 pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     let subject = format!("{BRIDGE_PREFIX}{slug}");
+    // not-per-key: a bridge's plan is the subject's OWN DECLARATION, the
+    // fourth row of RQ-7's table. Redeclaring must REPLACE — merging a plan
+    // across claims would compose a route nobody planned.
     let plan = atoms::newest_fenced::<Plan>(client, &subject)?
         .map(|(_cid, plan)| plan)
         .ok_or_else(|| Error::NoSuchBridge(slug.to_string()))?;
@@ -523,6 +526,7 @@ pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     findings.extend(walk_findings);
 
     let telos_subject = format!("{}{}", atoms::TELOS_PREFIX, plan.telos);
+    // not-per-key: a telos's witnesses are its own declaration, as above.
     let witnesses = atoms::newest_fenced::<Witnesses>(client, &telos_subject)?
         .map(|(_cid, w)| w.witnesses)
         .unwrap_or_default();
