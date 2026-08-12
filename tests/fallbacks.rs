@@ -623,10 +623,7 @@ fn tests_without_a_premise_assertion(registry: &str) -> Vec<String> {
         let end = body.find("\n}\n").unwrap_or(body.len());
         let code: String = body[..end]
             .lines()
-            .map(|l| match l.find("//") {
-                Some(i) => &l[..i],
-                None => l,
-            })
+            .map(common::strip_line_comments)
             .collect::<Vec<_>>()
             .join("\n");
         if !code.contains("premise:") {
@@ -1065,4 +1062,204 @@ fn fallback_legacy_witness_block() {
         "with a per-key subject present it must win; if this reads `v*` the \
          per-key layer is inert and the fallback is the only path there is"
     );
+}
+
+/// The footer names the repo from the directory when there is no remote —
+/// the fresh `git init` state, which is the population `telos/v1.0` names
+/// (`.design/harness-footer.md` REQ-12).
+#[test]
+fn fallback_no_remote() {
+    let dir = tempfile::tempdir().unwrap();
+    repo_without_a_release(dir.path());
+
+    let out = Command::new("git")
+        .args(["remote"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+        "premise: the fixture must have no remote — with one configured this \
+         exercises the org/name path day's own repo is always on"
+    );
+
+    let git = day::git::Git::new(dir.path());
+    assert_eq!(
+        git.remote_url().unwrap(),
+        None,
+        "no remote must read as None, never as an error"
+    );
+    let ctx = day::hooks::footer_context(&git);
+    let dirname = std::fs::canonicalize(dir.path())
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        ctx.repo.as_deref(),
+        Some(dirname.as_str()),
+        "with no remote the footer names the main checkout's directory"
+    );
+}
+
+/// A remote URL of no recognised shape falls back to the directory name
+/// rather than a mangled `org/name` (`.design/harness-footer.md` REQ-14) —
+/// a wrong repo name is worse than a plain one.
+#[test]
+fn fallback_unrecognised_remote() {
+    let dir = tempfile::tempdir().unwrap();
+    repo_without_a_release(dir.path());
+    git(dir.path(), &["remote", "add", "origin", "/a/local/path"]);
+
+    // **The premise reads the FIXTURE, not the parser.** It used to assert
+    // `repo_from_remote("/a/local/path").is_none()` — a property of the code
+    // under test, true whatever the fixture does, so deleting the `remote add`
+    // above left this passing and the test measuring REQ-12's fallback
+    // instead of REQ-14's. A premise that inspects only its own side of the
+    // interface cannot notice when the scenario evaporates.
+    let configured = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(dir.path())
+        .output()
+        .expect("git should be runnable");
+    let url = String::from_utf8_lossy(&configured.stdout)
+        .trim()
+        .to_string();
+    assert_eq!(
+        url, "/a/local/path",
+        "premise: the fixture must have a remote configured, and of no \
+         recognised shape — with none, this exercises the no-remote fallback"
+    );
+    assert!(
+        day::footer::repo_from_remote(&url).is_none(),
+        "premise: and that configured URL must be unrecognised, or this reads \
+         the org/name path"
+    );
+
+    let ctx = day::hooks::footer_context(&day::git::Git::new(dir.path()));
+    let dirname = std::fs::canonicalize(dir.path())
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        ctx.repo.as_deref(),
+        Some(dirname.as_str()),
+        "an unrecognised remote must yield the directory name, never a \
+         mangled org/name"
+    );
+}
+
+/// Every footer read failing omits every segment — the footer's context
+/// assembly must not fail a hook over a decoration
+/// (`.design/harness-footer.md` REQ-7).
+#[test]
+fn fallback_footer_reads_degrade() {
+    let dir = tempfile::tempdir().unwrap();
+    let git = day::git::Git::with_bin(
+        dir.path(),
+        dir.path().join("no-such-git").display().to_string(),
+    );
+
+    assert!(
+        git.sync_state().is_err(),
+        "premise: every git read must fail — against a working repo this \
+         exercises the populated path instead"
+    );
+
+    let ctx = day::hooks::footer_context(&git);
+    assert!(
+        ctx.repo.is_none() && ctx.branch.is_none() && ctx.sync.is_none() && ctx.checkout.is_none(),
+        "every segment must be omitted, not defaulted: {ctx:?}"
+    );
+
+    // And what remains still renders: one line, no empty context line.
+    let rendered = day::footer::render_unreadable(
+        &day::footer::Surround {
+            context: ctx,
+            role: None,
+            withheld: 0,
+        },
+        day::footer::Style::Plain,
+        100,
+    );
+    assert_eq!(
+        rendered.lines().count(),
+        1,
+        "an all-absent context earns no line: {rendered:?}"
+    );
+}
+
+/// A cache written by an older day carries no variants file, and the status
+/// line must serve the single rendering it did write rather than a blank bar
+/// (`.design/harness-footer.md`, the width-variant change).
+///
+/// Found by dogfooding the *other* direction: a debug build's hook wrote the
+/// variants and the installed release printed every one of them at once,
+/// because a single file changed shape under two binaries that are the same
+/// program in principle and different builds in practice.
+#[test]
+fn fallback_cache_without_variants() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join(day::cache::CACHE_DIR);
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join(day::cache::STATUS_LINE_FILE), "day - build").unwrap();
+
+    assert!(
+        !cache.join(day::cache::VARIANTS_FILE).exists(),
+        "premise: the variants file must be absent — with one present this \
+         exercises the current-format path, which every other session is on"
+    );
+
+    assert_eq!(
+        day::cache::read_status_line(dir.path()).as_deref(),
+        Some("day - build"),
+        "an older day's cache must still serve"
+    );
+
+    // And what the status line does with it: no variant headers, so it is
+    // printed as it stands rather than dropped.
+    assert_eq!(
+        day::footer::select("day - build", 80, day::footer::Style::Emoji),
+        None,
+        "text with no variant headers must report that it has none, so the \
+         caller prints it verbatim"
+    );
+}
+
+/// `COLUMNS` unset — a Claude Code older than v2.1.153, or a hand-run
+/// `day status-line` — lays the footer out against an assumed 80 columns
+/// rather than against zero, which would elide everything.
+#[test]
+fn fallback_no_columns_assume_80() {
+    let signals = day::footer::EnvSignals::default();
+    assert!(
+        signals.columns.is_none(),
+        "premise: COLUMNS must be unset — with it set this measures the \
+         ordinary path Claude Code puts every session on"
+    );
+    assert_eq!(signals.width(), day::footer::ASSUMED_COLUMNS);
+
+    // An unparseable or zero value is the same state, not a zero-width
+    // terminal: laying out against 0 would drop every segment.
+    for bogus in ["", "   ", "not-a-number", "0"] {
+        let signals = day::footer::EnvSignals {
+            columns: Some(bogus.to_string()),
+            ..day::footer::EnvSignals::default()
+        };
+        assert_eq!(
+            signals.width(),
+            day::footer::ASSUMED_COLUMNS,
+            "COLUMNS={bogus:?} must read as unknown, never as a width"
+        );
+    }
+
+    // And a real value is honoured, or the assertions above pass vacuously.
+    let signals = day::footer::EnvSignals {
+        columns: Some("133".into()),
+        ..day::footer::EnvSignals::default()
+    };
+    assert_eq!(signals.width(), 133);
 }

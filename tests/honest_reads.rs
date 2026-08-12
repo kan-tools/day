@@ -1056,8 +1056,12 @@ fn user_prompt_rerenders_the_status_line_when_it_recomputes() {
          previous session's render — this is day#97: the bar shows session-start \
          state all session while `day status` disagrees. line was: {line:?}"
     );
+    // Style-agnostic: the emoji footer anchors on ☀️ and the plain one on
+    // `day`, and this test is about the re-render happening at all — every
+    // position state names its domain (`atom` or the setup line), so that is
+    // the property to pin rather than either style's anchor.
     assert!(
-        line.starts_with("day"),
+        line.contains("atom") || line.contains("setup:"),
         "the re-rendered line should be a real status line, not empty or garbage: {line:?}"
     );
 }

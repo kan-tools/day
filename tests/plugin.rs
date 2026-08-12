@@ -649,6 +649,49 @@ fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
     let src = repo_root().join("src");
     let cache_dir_literal = format!("\"{}\"", day::cache::CACHE_DIR);
 
+    // `cache.rs`'s public functions, read off the module rather than listed
+    // here — the list that must be derived, since a hand-written one cannot
+    // fail to omit the next reader somebody adds.
+    let cache_src = std::fs::read_to_string(repo_root().join("src/cache.rs")).unwrap();
+    let cache_api: Vec<String> = common::strip_line_comments(&cache_src)
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("pub fn ").map(|r| r.to_string()))
+        .filter_map(|r| r.split('(').next().map(|n| n.trim().to_string()))
+        .filter(|n| !n.is_empty())
+        .collect();
+    for core in ["standing", "read_status_line", "cadence_allows"] {
+        assert!(
+            cache_api.iter().any(|n| n == core),
+            "the cache-API derivation lost `{core}` — its parse of src/cache.rs \
+             has rotted, and a rotted derivation reports clean: {cache_api:?}"
+        );
+    }
+
+    // Modules permitted to call the cache's public API, each with its reason.
+    // Deliberately tiny: the carve-out that lets `.day/` exist at all is that
+    // nothing durable lives there and nothing decides from it, and the fewer
+    // modules that touch it, the more that claim can be reviewed by reading.
+    const CACHE_CALLERS: [(&str, &str); 2] = [
+        (
+            "src/hooks.rs",
+            "session-start and user-prompt render the footer and the standing \
+             notice into it; this is the writer",
+        ),
+        (
+            "src/cli/mod.rs",
+            "`day status-line` reads it back and prints it, and picks a variant \
+             from the environment; this is the reader, and it decides nothing \
+             day reports",
+        ),
+    ];
+    for (module, reason) in CACHE_CALLERS {
+        assert!(
+            !reason.trim().is_empty(),
+            "the permitted cache caller `{module}` states no reason"
+        );
+    }
+
+    let mut uninvited: Vec<String> = Vec::new();
     let mut offenders = Vec::new();
     let mut cache_rs_has_it = false;
     let mut stack = vec![src.clone()];
@@ -662,18 +705,95 @@ fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
             if path.extension().is_none_or(|e| e != "rs") {
                 continue;
             }
-            let text = std::fs::read_to_string(&path).unwrap();
-            if !text.contains(&cache_dir_literal) {
+            // **The constant counts as touching the cache, not just the
+            // literal.** This scanned only `".day"`, so a module reaching the
+            // cache through `crate::cache::CACHE_DIR` routed around the guard
+            // — and the harness-footer branch is the first code to do it
+            // (legitimately, in `src/git.rs`, to exclude the cache from a
+            // dirtiness read). A cold review then demonstrated the hole: a
+            // function added to `src/status.rs` that reads the cache *to
+            // decide* survived this test.
+            //
+            // `src/git.rs` is exempt for the one use that is not a touch:
+            // naming the directory in a pathspec so git ignores it. That is
+            // the cache being *excluded*, which is the opposite of reading it,
+            // and the exemption is narrow — the constant, in that file, only.
+            let code = common::strip_line_comments(&std::fs::read_to_string(&path).unwrap());
+
+            // **Two invariants, and only one of them is a name.**
+            //
+            // (1) `cache.rs` OWNS the path and the file-name constants. That is
+            // the original check and it stands.
+            //
+            // (2) Every module that CALLS the cache's public API is on the list
+            // below, with a reason. This is the half that was missing: the scan
+            // counted names, so a module could reach the cache through the
+            // public API without naming anything guarded — a cold review added
+            // a `status.rs` function branching on
+            // `cache::standing(root).is_some()` and it survived. And the
+            // name-only check passed for `hooks.rs` and `cli/mod.rs` only
+            // because they call functions rather than spelling the path, so it
+            // was working by accident.
+            //
+            // Note what this deliberately does NOT try to be: a test for
+            // whether a caller *decides* from the cache. That is a semantic
+            // judgement a scan cannot make — the same boundary the demonstration
+            // census draws around whether an exemption is true. What it can do
+            // is make the set of modules that touch the cache small, explicit,
+            // and reviewable, so a new one is a decision rather than a diff.
+            // **An IMPORT of the cache module counts as touching it**, not
+            // just a `cache::` call path. `use crate::cache::standing as s;`
+            // followed by `s(root)` spells the call nothing like `cache::` and
+            // walked through the first version of this allowlist — the same
+            // class of hole it was written to close (jurisdiction selected by
+            // how the caller happens to be written), found by probing my own
+            // fix rather than by review.
+            let imports_cache =
+                code.contains("use crate::cache") || code.contains("use super::cache");
+            let calls_api = imports_cache
+                || cache_api
+                    .iter()
+                    .any(|name| code.contains(&format!("cache::{name}(")));
+            let names_path = code.contains(&cache_dir_literal)
+                || [
+                    "CACHE_DIR",
+                    "VARIANTS_FILE",
+                    "STATUS_LINE_FILE",
+                    "STANDING_FILE",
+                ]
+                .iter()
+                .any(|c| code.contains(&format!("cache::{c}")));
+            if !calls_api && !names_path {
                 continue;
             }
-            if path.file_name().unwrap() == "cache.rs" {
+            let names_it = names_path;
+            let name = path.file_name().unwrap();
+            let rel = path
+                .strip_prefix(repo_root())
+                .unwrap_or(path.as_path())
+                .to_string_lossy()
+                .replace('\\', "/");
+            if name == "cache.rs" {
                 cache_rs_has_it = true;
-            } else {
+            } else if names_it && name == "git.rs" {
+                // exempt: excluding the cache from a git pathspec is the cache
+                // being kept OUT of a read, which is the opposite of touching it
+            } else if names_it {
                 offenders.push(path.display().to_string());
+            } else if !CACHE_CALLERS.iter().any(|(m, _)| rel.ends_with(m)) {
+                uninvited.push(rel);
             }
         }
     }
 
+    assert!(
+        uninvited.is_empty(),
+        "these modules call the render cache's public API and are not on the \
+         permitted-caller list ({uninvited:?}). The `.day/` carve-out holds only \
+         because the set of modules that touch the cache is small enough to \
+         review; add it to CACHE_CALLERS with a reason, or reach the state some \
+         other way."
+    );
     assert!(
         cache_rs_has_it,
         "src/cache.rs should own the cache path constant {cache_dir_literal}"
@@ -763,12 +883,67 @@ fn a_failed_kan_read_is_never_swallowed() {
     let kan_client_src = std::fs::read_to_string(repo_root().join("src").join("kan_client.rs"))
         .expect("src/kan_client.rs should exist");
     let mut derived: Vec<String> = Vec::new();
-    for window in kan_client_src.split("pub fn ").skip(1) {
+    // **Every visibility, not just `pub`.** The split was on the literal
+    // `"pub fn "`, so a `pub(crate) fn` returning `Result` was invisible to the
+    // derivation and its swallows escaped the guard entirely — the same
+    // "a guard whose scope is selected by the code it guards" that widening
+    // this scan to `-> Option<` was meant to end, with the selector moved from
+    // return type to visibility. Demonstrated by a cold review against the
+    // built scan.
+    let normalised = kan_client_src
+        .replace("pub(crate) fn ", "pub fn ")
+        .replace("pub(super) fn ", "pub fn ");
+    for window in normalised.split("pub fn ").skip(1) {
         // The signature runs to the opening brace; multi-line signatures are
         // why this does not stop at the line end.
         let signature = window.split('{').next().unwrap_or("");
         let name: String = window.chars().take_while(|c| ident_char(*c)).collect();
-        if signature.contains("&self") && signature.contains("-> Result<") && !name.is_empty() {
+        // **`Option` counts too, and that is the seventh instance.** This
+        // required `-> Result<`, so a kan read could opt OUT of the guard by
+        // choosing its own return type: `active_role` runs `kan identity role
+        // list --json`, swallows both the spawn failure and a parse failure
+        // with `.ok()?`, and was invisible here — demonstrated by flipping its
+        // signature to `Result` and watching the scan light up. A guard whose
+        // scope is selected by the code it guards is not a guard.
+        //
+        // An `Option`-returning read is a *deliberate* degradation by
+        // construction — it has no error to propagate — so it does not fail
+        // the scan by existing. It fails unless its body carries the marker
+        // and a reason, which is the same bargain every other site here makes.
+        // **Every `&self` method is a candidate; the return type only says
+        // whether it CAN be swallowed.**
+        //
+        // This recognised the literal spellings `-> Result<` and `-> Option<`,
+        // so `std::result::Result<String, Error>`, a type alias, or any other
+        // equivalent spelling escaped the guard entirely — the third time this
+        // scan's jurisdiction has been chosen by the code it guards (first the
+        // return type, then visibility, now how the type is written). A cold
+        // review demonstrated it with a public method swallowing
+        // `self.run(...).unwrap_or_default()`.
+        //
+        // Keying on `->` alone is the fix that cannot be spelled around: a
+        // method returning nothing has no error to discard, and every method
+        // that returns anything at all is worth watching for a swallow at its
+        // call sites. Over-inclusion is the safe direction here — a method
+        // whose result is genuinely infallible simply never appears next to
+        // one of the swallow shapes.
+        // The return type must MENTION `Result` or `Option`, in any path
+        // spelling — `std::result::Result` included, which is the escape the
+        // literal `-> Result<` missed.
+        //
+        // Not "returns anything", which was the previous attempt: every method
+        // contributes its BARE NAME to the search, so an unrelated type's
+        // `.version().unwrap_or_default()` was reported as a swallowed kan
+        // read. That refuted this scan's own "over-inclusion is the safe
+        // direction" rationale — a false positive pressures a caller into
+        // hatching non-kan code, and a hatch spent on the wrong site is a hatch
+        // that no longer means anything.
+        //
+        // A type ALIAS still escapes. Accepted, with the rest of the
+        // alternate-spelling class, on `harness-footer`.
+        let ret = signature.split("->").nth(1).unwrap_or("");
+        let fallible = ret.contains("Result") || ret.contains("Option");
+        if signature.contains("&self") && fallible && !name.is_empty() {
             derived.push(format!(".{name}("));
         }
     }
@@ -825,10 +1000,7 @@ fn a_failed_kan_read_is_never_swallowed() {
             let raw_lines: Vec<&str> = raw.lines().collect();
             let text: String = raw_lines
                 .iter()
-                .map(|l| match l.find("//") {
-                    Some(i) => l[..i].to_string(),
-                    None => (*l).to_string(),
-                })
+                .map(|l| common::strip_line_comments(l))
                 .collect::<Vec<_>>()
                 .join("\n");
 
@@ -839,14 +1011,61 @@ fn a_failed_kan_read_is_never_swallowed() {
                     let found = from + at;
                     let start = found + read.len();
                     from = start;
-                    // The expression ends at the next `;` or `?`.
+                    // **The expression ends at `;`, `?`, or a `,` OUTSIDE any
+                    // bracket — and the last of those was missing.**
+                    //
+                    // A read used as a struct-literal field ends at a comma, so
+                    // scanning to the next `;` ran past the end of the function
+                    // and into the next one. That is not hypothetical: the
+                    // `kan-read-may-degrade` marker on `footer_surround` was
+                    // flagging a `canonicalize(..).unwrap_or(p)` fifteen lines
+                    // later in a DIFFERENT function, so the hatch was spent on a
+                    // false positive, a real swallow at that site was
+                    // pre-exempted, and an innocuous refactor of the neighbour
+                    // would have silently removed the site from the guard. A
+                    // cold review demonstrated all three.
+                    //
+                    // Depth-aware, because a `,` inside `foo(a, b)` is an
+                    // argument separator and ends nothing.
+                    // **Depth starts at ONE**, because the matched pattern is
+                    // `.name(` and has already consumed the call's opening
+                    // paren. Starting at zero made a closing `)` — the very
+                    // next character of `client.read().unwrap_or_default()` —
+                    // truncate the expression to nothing, so every swallow in
+                    // the commonest shape of all became invisible. Caught by
+                    // probing the fix with the exact escape it was written to
+                    // close, which then survived.
                     let tail = &text[start..text.len().min(start + 240)];
-                    let end = tail
-                        .find(';')
-                        .into_iter()
-                        .chain(tail.find('?'))
-                        .min()
-                        .unwrap_or(tail.len());
+                    let mut depth = 1i32;
+                    let mut end = tail.len();
+                    for (i, c) in tail.char_indices() {
+                        match c {
+                            '(' | '[' | '{' => depth += 1,
+                            ')' | ']' | '}' => {
+                                depth -= 1;
+                                // Below zero means the enclosing expression
+                                // closed around us — a read that was the last
+                                // thing in an argument list or an initialiser.
+                                if depth < 0 {
+                                    end = i;
+                                    break;
+                                }
+                            }
+                            ';' | '?' => {
+                                end = i;
+                                break;
+                            }
+                            // Once the call itself has closed, a comma ends the
+                            // expression: a read used as a struct-literal field
+                            // ends there, and scanning past it ran into the
+                            // next function entirely.
+                            ',' if depth <= 0 => {
+                                end = i;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
                     let expr = &tail[..end];
                     // **The pattern shapes are checked on the prefix, not the
                     // expression.** A `let Ok(x) = read else { … }` swallows the
@@ -1010,10 +1229,7 @@ fn an_ordering_is_never_read_off_the_raw_next() {
             // matcher gets to see **across** lines.
             let code_lines: Vec<String> = lines
                 .iter()
-                .map(|l| match l.find("//") {
-                    Some(at) => l[..at].to_string(),
-                    None => (*l).to_string(),
-                })
+                .map(|l| common::strip_line_comments(l))
                 .collect();
             let code = code_lines.join("\n");
 
@@ -1396,10 +1612,7 @@ fn production_half(text: &str) -> String {
     let cut = cfg_test_module_line(&lines);
     lines[..cut]
         .iter()
-        .map(|l| match l.find("//") {
-            Some(i) => l[..i].to_string(),
-            None => (*l).to_string(),
-        })
+        .map(|l| common::strip_line_comments(l))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -2064,5 +2277,51 @@ fn every_witness_carrying_declaration_is_followed_by_a_caution() {
          skipped it for five of day's own nine atoms (day#146) and nothing said so. \
          If a new declare verb genuinely carries no witness types, raise \
          WITHOUT_WITNESSES and say which it is."
+    );
+}
+
+/// **The source scans strip comments string-aware, or a URL blinds them.**
+///
+/// `line.find("//")` truncates at a `//` inside a string literal, so anything
+/// later on that line is invisible to every scan that strips this way. Three
+/// did, including `ac13`'s renderer guard and this file's own kan-read guard —
+/// the build-failing invariant CLAUDE.md calls the shape a rule should want.
+/// Demonstrated by a cold review with a line that compiles and is fmt-clean:
+/// `format!("https://example.com/{}", crate::cache::CACHE_DIR)` passed, while
+/// the same line without the URL was flagged.
+///
+/// The reason for stripping at all is unchanged and right: a rule's own doc
+/// comment has to be able to name the thing it forbids. This pins the narrower
+/// definition — what the *compiler* would call a comment.
+#[test]
+fn the_comment_stripper_is_not_blinded_by_a_url_in_a_string() {
+    // The case that defeated the naive stripper: a `//` inside a literal,
+    // followed on the same line by the token a scan is looking for.
+    let line = r#"    let u = format!("https://example.com/{}", crate::cache::CACHE_DIR);"#;
+    let stripped = common::strip_line_comments(line);
+    assert!(
+        stripped.contains("crate::cache::CACHE_DIR"),
+        "a `//` inside a string literal must not truncate the line, or every \
+         scan that strips comments is blind after any URL: {stripped:?}"
+    );
+
+    // And it still does its actual job: a real trailing comment goes.
+    let commented = r#"    let x = 1; // crate::cache::CACHE_DIR mentioned in prose"#;
+    assert!(
+        !common::strip_line_comments(commented).contains("CACHE_DIR"),
+        "a genuine comment must still be stripped, or the rule's own doc \
+         comment trips the rule"
+    );
+
+    // Raw strings and escapes, the two shapes that would otherwise desync the
+    // quote tracking for the rest of the line.
+    assert!(
+        common::strip_line_comments(r##"    let r = r#"a // b"#; let y = TOKEN;"##)
+            .contains("TOKEN"),
+        "a raw string containing `//` must not truncate the line"
+    );
+    assert!(
+        common::strip_line_comments(r#"    let e = "a \" // b"; let y = TOKEN;"#).contains("TOKEN"),
+        "an escaped quote must not desync the string tracking"
     );
 }

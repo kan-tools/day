@@ -213,17 +213,41 @@ pub fn cadence_allows(root: &Path, cadence: u32) -> bool {
     fire
 }
 
+/// The file holding the width/style **variants** the status line picks from.
+///
+/// A second file rather than a new format in [`STATUS_LINE_FILE`], because
+/// the two are read by *different binaries in practice*. A person developing
+/// day runs a debug build's hook while Claude Code's status line runs the
+/// installed release — so an old reader met the new multi-variant file and
+/// printed every variant at once, which is what dogfooding this change
+/// surfaced within minutes. Splitting the files makes the skew a non-event
+/// in both directions: an old day reads the single rendering it has always
+/// read, a new day prefers the variants and degrades to the same file.
+///
+/// fallback: cache-without-variants
+pub const VARIANTS_FILE: &str = "statusline.variants";
+
+fn variants_path(root: &Path) -> PathBuf {
+    root.join(CACHE_DIR).join(VARIANTS_FILE)
+}
+
 /// Writes the rendered status line into the cache, creating `.day/` if
 /// needed. Called by `day hook session-start`.
+///
+/// `legacy` is the single rendering an older day — or anything that just
+/// prints the file — should show; `variants` is the tagged set a current day
+/// picks from. Both are rendered display state, and losing either costs a
+/// worse-looking line and never an answer.
 ///
 /// Errors are returned rather than swallowed so the caller can decide, but
 /// the caller in `session_start` deliberately ignores them: a cache that
 /// could not be written degrades the status line to showing nothing, which is
 /// its documented empty state, not a session failure.
-pub fn write_status_line(root: &Path, rendered: &str) -> io::Result<()> {
+pub fn write_status_line(root: &Path, legacy: &str, variants: &str) -> io::Result<()> {
     let dir = root.join(CACHE_DIR);
     std::fs::create_dir_all(&dir)?;
-    std::fs::write(status_line_path(root), rendered)
+    std::fs::write(status_line_path(root), legacy)?;
+    std::fs::write(variants_path(root), variants)
 }
 
 /// Reads the rendered status line back, or `None` if the cache is absent or
@@ -232,10 +256,22 @@ pub fn write_status_line(root: &Path, rendered: &str) -> io::Result<()> {
 /// and the status line simply shows nothing until the next session start
 /// regenerates it.
 ///
-/// The returned string is only ever printed. Nothing branches on it — that is
-/// the whole point of confining the cache to this module.
+/// Prefers the variants file and degrades to the single rendering, so a
+/// cache written by an older day still serves — a stale rendering, not an
+/// error.
+///
+/// fallback: cache-without-variants
+///
+/// The returned string is only ever printed, or picked from. Nothing branches
+/// on it in a way that changes what day *reports* — that is the whole point
+/// of confining the cache to this module.
+///
+/// fallback: cache-without-variants
 pub fn read_status_line(root: &Path) -> Option<String> {
-    std::fs::read_to_string(status_line_path(root)).ok()
+    std::fs::read_to_string(variants_path(root))
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::fs::read_to_string(status_line_path(root)).ok())
 }
 
 #[cfg(test)]
@@ -245,11 +281,8 @@ mod tests {
     #[test]
     fn a_written_line_reads_back_verbatim() {
         let dir = tempfile::tempdir().unwrap();
-        write_status_line(dir.path(), "day · build · next: review").unwrap();
-        assert_eq!(
-            read_status_line(dir.path()).as_deref(),
-            Some("day · build · next: review")
-        );
+        write_status_line(dir.path(), "fallback", "variants").unwrap();
+        assert_eq!(read_status_line(dir.path()).as_deref(), Some("variants"));
     }
 
     #[test]
@@ -262,7 +295,7 @@ mod tests {
     fn writing_creates_the_cache_dir_if_missing() {
         let dir = tempfile::tempdir().unwrap();
         assert!(!dir.path().join(CACHE_DIR).exists());
-        write_status_line(dir.path(), "x").unwrap();
+        write_status_line(dir.path(), "x", "y").unwrap();
         assert!(dir.path().join(CACHE_DIR).is_dir());
     }
 
@@ -271,8 +304,38 @@ mod tests {
     #[test]
     fn a_second_write_overwrites_the_first() {
         let dir = tempfile::tempdir().unwrap();
-        write_status_line(dir.path(), "old").unwrap();
-        write_status_line(dir.path(), "new").unwrap();
-        assert_eq!(read_status_line(dir.path()).as_deref(), Some("new"));
+        write_status_line(dir.path(), "old", "old-v").unwrap();
+        write_status_line(dir.path(), "new", "new-v").unwrap();
+        assert_eq!(read_status_line(dir.path()).as_deref(), Some("new-v"));
+    }
+
+    /// **A cache written by an older day still serves.** The variants file is
+    /// simply absent there, and the single rendering it did write is what a
+    /// current day must fall back to — a stale-looking line rather than a
+    /// blank bar. Found by dogfooding the other direction: a debug build's
+    /// hook wrote variants and the installed release printed all of them at
+    /// once, which is why these are two files.
+    ///
+    /// fallback: cache-without-variants
+    #[test]
+    fn fallback_a_cache_without_variants_still_serves() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(CACHE_DIR)).unwrap();
+        std::fs::write(status_line_path(dir.path()), "day · build").unwrap();
+        assert!(
+            !variants_path(dir.path()).exists(),
+            "premise: the variants file must be absent, or this exercises the \
+             current-format path instead of the older-day one"
+        );
+        assert_eq!(read_status_line(dir.path()).as_deref(), Some("day · build"));
+    }
+
+    /// An empty variants file is treated as absent rather than as "render
+    /// nothing" — a truncated write must not blank the bar.
+    #[test]
+    fn an_empty_variants_file_falls_back_rather_than_blanking() {
+        let dir = tempfile::tempdir().unwrap();
+        write_status_line(dir.path(), "day · build", "").unwrap();
+        assert_eq!(read_status_line(dir.path()).as_deref(), Some("day · build"));
     }
 }

@@ -982,6 +982,43 @@ does. Exactly one module (`src/cache.rs`) touches it, and a source scan keeps
 it that way — *if day ever read the cache to decide something rather than to
 display something, the line would have been crossed*.
 
+**The footer** is what the status line renders since day#179
+(`.design/harness-footer.md`): the position line anchored on one `☀️` (`atom:`
+one inferred, `atom?` several, the separator *is* the state), a context line —
+repo as `org/name` from the remote or the main checkout's directory otherwise,
+branch, distinct sync marks (dirty `✏️`, ahead `⇡n`, behind `⇣n`), which
+checkout (`🏠` the main one, `🌳` a worktree), the signing identity as the
+declared kan role whose DID is active (`🖋`), and a `⚠ n withheld` narrowing
+indicator — and one message tray that truncates visibly (`(+n more)`) or not
+at all. A segment day cannot fill is omitted; the narrowing indicator never
+is. Everything is read in the session-start hook; the status line still only
+prints the cache. Two new reads exist for it: `git remote get-url origin` (the
+eighth whitelisted read subcommand) and `kan identity role list --json`. A
+plain-ASCII rendering carries the same states, chosen by `DAY_FOOTER=plain`
+(or `emoji`) first, else by knowable negatives only — a non-UTF-8 locale,
+`TERM` dumb or unset, `NO_COLOR` — because font coverage is invisible to the
+environment: day can know whether emoji are *encodable*, never whether they
+are *renderable*, which is why the override exists. The declared preference
+layer (a `schema/*` claim) is specified and deliberately not built until `day
+config` lands.
+
+**The cache holds every variant and the status line picks one.** Width and
+`DAY_FOOTER` are knowable only where `day status-line` runs — Claude Code
+sets `COLUMNS` before invoking it, and a person exporting `DAY_FOOTER` is
+setting it in *that* environment, not the hook's — so rendering one string at
+hook time made both unreachable, and `DAY_FOOTER=plain day status-line` did
+nothing at all. The hook now writes `.day/statusline.variants` (tagged
+renderings, widest first) alongside `.day/statusline` (one rendering, for a
+reader that predates variants), and the status line prints the widest variant
+that fits. This stays inside the carve-out: the cache holds nothing but
+rendered display state, and choosing which pre-rendered string to show is a
+display decision, not day deciding anything it reports. Width is *estimated*
+— the same encodable-versus-renderable asymmetry — so budgets are
+conservative and anything dropped for width is marked (`…+2`), because a
+segment silently missing would be indistinguishable from one day could not
+fill, and that distinction is load-bearing. The narrowing indicator and the
+partial-read report are never elided for width at all.
+
 ## Declared block types — `schema/blocks`
 
 day owns seven fenced block types and, until v0.7, a project could invent

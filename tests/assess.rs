@@ -90,33 +90,161 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // mutating verbs is both leakier (git has many) and prone to false
     // positives — the first version of this test flagged `git tag --list`,
     // which is a read, because it matched a pattern meant for `git tag -d`.
-    const ALLOWED_READS: [&str; 7] = [
-        "tag",
-        "diff",
-        "log",
-        "rev-parse",
-        "show",
-        "status",
-        "ls-files",
+    //
+    // Every entry carries its reason (REQ-13/AC-5 of
+    // `.design/harness-footer.md`): the list is deliberately narrow, every
+    // addition widens what src/git.rs may reach, and an entry added without a
+    // stated reason fails below. The reason lives here, at the whitelist,
+    // rather than only in a design document that nothing re-checks.
+    // **Mode-bearing subcommands are whitelisted at two words, not one.**
+    // `git remote` reads with `get-url` and *writes* with `add`, `remove` and
+    // `set-url`; a one-word entry permits all four, and swapping
+    // `remote_url`'s body for `remote add evil <url>` left this test passing.
+    // The entry's own reason said "`get-url` is unambiguously a read" — a
+    // narrowing the check did not make, which is CLAUDE.md's "a justification
+    // that names a mechanism is a claim about the code" arriving in the
+    // guard's own table. `tag` has the same shape (`git tag v9` creates one),
+    // and had the same hole before this.
+    const ALLOWED_READS: [(&str, &str); 8] = [
+        (
+            "tag --list",
+            "cycle boundaries: the last release and its date. Two words: bare \
+             `git tag <name>` CREATES a tag",
+        ),
+        ("diff", "files changed since the boundary, for path probes"),
+        ("log", "commit history, read-only"),
+        (
+            "rev-parse",
+            "repo roots and the main checkout, for the footer",
+        ),
+        ("show", "committed file contents at a boundary"),
+        ("status", "branch, ahead/behind and dirtiness, in one read"),
+        ("ls-files", "the tracked set, for unbounded path probes"),
+        (
+            "remote get-url",
+            "the origin URL, so the footer names the repo as org/name \
+             (REQ-13). Two words: `git remote add`/`remove`/`set-url` all \
+             mutate, and a one-word entry would permit them",
+        ),
     ];
-    let git_rs = sources
-        .iter()
-        .find(|(p, _)| p.file_name().unwrap() == "git.rs")
-        .expect("src/git.rs should exist");
-
-    let mut invocations = 0;
-    let mut rest = git_rs.1.as_str();
-    while let Some(at) = rest.find("self.run(&[\"") {
-        let after = &rest[at + "self.run(&[\"".len()..];
-        let subcommand: String = after.chars().take_while(|c| *c != '"').collect();
+    for (name, reason) in ALLOWED_READS {
         assert!(
-            ALLOWED_READS.contains(&subcommand.as_str()),
-            "src/git.rs invokes `git {subcommand}`, which is not one of the permitted \
-             read subcommands {ALLOWED_READS:?}. day's git access is read-only."
+            !reason.trim().is_empty(),
+            "the permitted git invocation `{name}` states no reason — the \
+             whitelist is deliberately narrow, and an unexplained entry is \
+             how it silently widens"
         );
-        invocations += 1;
-        rest = after;
     }
+    // **Every source that calls `self.run(&[…])`, not the one named `git.rs`.**
+    //
+    // This selected the single source whose basename is `git.rs`, so the
+    // whitelist's jurisdiction was decided by a filename: a child module
+    // `src/git/extra.rs` containing `self.run(&["push", "--force"])`, wired
+    // with `mod extra;`, compiles and passes the whole suite. Demonstrated by a
+    // cold review, and it is the same vacuous-after-a-split pattern already
+    // fixed in `ac13`/`ac20` — the fragile form was left in the more important
+    // scan, and then edited twice without being noticed.
+    //
+    // Derived, and with a floor: a scan that stops finding the callers reports
+    // clean by having looked at nothing.
+    // The git MODULE — `src/git.rs` and anything under `src/git/` — derived by
+    // path rather than by basename. Not "every file containing `self.run(&[`":
+    // `KanClient` has a `run` too, and sweeping it in makes this scan complain
+    // about `kan --help`, which is not a git invocation at all.
+    let callers: Vec<&(std::path::PathBuf, String)> = sources
+        .iter()
+        .filter(|(p, _)| {
+            let path = p.to_string_lossy().replace('\\', "/");
+            path.ends_with("/git.rs") || path.contains("/git/")
+        })
+        .collect();
+    assert!(
+        !callers.is_empty(),
+        "no source calls `self.run(&[…])` — the whitelist scan has nothing to \
+         constrain, which means it would report clean having checked nothing"
+    );
+    assert!(
+        callers
+            .iter()
+            .any(|(p, _)| p.file_name().unwrap() == "git.rs"),
+        "src/git.rs should be among the callers; if it is not, this scan is \
+         looking at the wrong thing"
+    );
+
+    // **Whitespace-insensitive, because rustfmt decides the layout.** The scan
+    // matched the literal `self.run(&["`, so a multi-line argv was invisible —
+    // and TWO of this file's nine call sites are already written that way
+    // (`tags_with_dates`, and `sync_state`, added by the branch this scan was
+    // widened for). The invariant was therefore selected by line length: add an
+    // argument, watch the call wrap past 100 columns, and it silently leaves
+    // the whitelist's jurisdiction. Found by a cold review that added a
+    // multi-line `push --force` and watched it compile, pass, and stay
+    // fmt-clean.
+    let mut invocations = 0;
+    let mut expected = 0;
+    for (path, text) in &callers {
+        let normalised: String = {
+            // Collapse whitespace so `self.run(&[\n "push",` reads as one form.
+            // Comments are stripped first, or a commented-out call would count.
+            let code = common::strip_line_comments(text);
+            code.split_whitespace().collect::<Vec<_>>().join(" ")
+        };
+        expected += count_run_calls(text);
+        let mut rest = normalised.as_str();
+        // **The EARLIEST of the two openings, not the first that matches.**
+        // `find(A).or_else(|| find(B))` takes A's match even when B occurs sooner,
+        // so every call in the B form before the last A form is skipped — which is
+        // how the first attempt at this fix still saw 7 of 9 and said so only
+        // because the derived floor below made it say so.
+        loop {
+            let spaced = rest.find("self.run(&[ \"");
+            let tight = rest.find("self.run(&[\"");
+            let (at, open) = match (spaced, tight) {
+                (Some(s), Some(t)) if s < t => (s, "self.run(&[ \""),
+                (Some(_), Some(t)) => (t, "self.run(&[\""),
+                (Some(s), None) => (s, "self.run(&[ \""),
+                (None, Some(t)) => (t, "self.run(&[\""),
+                (None, None) => break,
+            };
+            let after = &rest[at + open.len()..];
+            // The first two argv elements as written, so a two-word entry can be
+            // matched against what the call actually says. Elements are `"a", "b"`
+            // in source, and a non-literal (a `&format!`) simply yields no second
+            // word, which then only matches a one-word entry.
+            let first: String = after.chars().take_while(|c| *c != '"').collect();
+            let second: String = after
+                .split_once("\",")
+                .and_then(|(_, tail)| tail.trim_start().strip_prefix('"'))
+                .map(|t| t.chars().take_while(|c| *c != '"').collect())
+                .unwrap_or_default();
+            let two_word = format!("{first} {second}");
+            assert!(
+                ALLOWED_READS
+                    .iter()
+                    .any(|(name, _)| *name == first || *name == two_word),
+                "{} invokes `git {first} {second}`, which is not one of the \
+             permitted read invocations {:?}. day's git access is read-only, and \
+             a new one needs a stated reason at this whitelist.",
+                path.display(),
+                ALLOWED_READS.map(|(name, _)| name),
+            );
+            invocations += 1;
+            rest = after;
+        }
+    }
+    // **A floor, not `> 0`.** The count is what catches a parser that stopped
+    // matching, and `> 0` cannot: the scan saw 7 of 9 call sites for as long as
+    // two of them were multi-line, and reported clean the whole time. Derived
+    // from the sources rather than hardcoded, so adding a call raises the floor
+    // with it and only a scan that stops *seeing* one fails.
+    assert_eq!(
+        invocations,
+        expected,
+        "the scan matched {invocations} of {expected} `self.run(&[…])` call sites \
+         across {} caller source(s) — a whitelist that cannot see a call cannot \
+         constrain it, and rustfmt and file layout both decide what it sees",
+        callers.len()
+    );
     assert!(
         invocations > 0,
         "the scan should have found git invocations"
@@ -126,11 +254,27 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // every git call day makes. Checked precisely: the env var naming the
     // git binary appears only in git.rs, and nothing spawns `git` directly.
     for (path, text) in &sources {
-        assert!(
-            !text.contains("Command::new(\"git\")"),
-            "{} spawns git directly; all git access belongs in src/git.rs",
-            path.display()
-        );
+        // **Any process spawn outside the three declared sites, not the one
+        // literal `Command::new("git")`.** That literal rejected exactly one
+        // spelling: `Command::new(String::from("git"))` compiled and passed,
+        // so the claim in this test's own name — git is reached from nowhere
+        // else — was unenforced. CLAUDE.md names three spawn sites and says do
+        // not add a fourth; this is that rule made checkable.
+        //
+        // Its limit, stated rather than implied: a scan cannot enumerate every
+        // way to spawn a process, so this raises the cost of an ACCIDENTAL
+        // fourth site and is not a defence against a determined author. See the
+        // acceptance recorded on `harness-footer`.
+        const SPAWN_SITES: [&str; 3] = ["git.rs", "probe.rs", "kan_client.rs"];
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !SPAWN_SITES.contains(&name.as_str()) {
+            assert!(
+                !common::strip_line_comments(text).contains("Command::new"),
+                "{} spawns a process; day has exactly three spawn sites \
+                 ({SPAWN_SITES:?}) and CLAUDE.md says not to add a fourth",
+                path.display()
+            );
+        }
         if path.file_name().unwrap() == "git.rs" {
             continue;
         }
@@ -426,4 +570,18 @@ fn ac8_the_mcp_surface_has_no_way_to_authorize_execution() {
         "src/mcp.rs must never construct Authorization::Run — an agent calling a \
          read-shaped tool cannot be allowed to execute project-declared commands"
     );
+}
+
+/// Every `self.run(&[…])` in a source, however rustfmt laid it out.
+///
+/// Deliberately a different mechanism from the whitelist scan's own parse: if
+/// both counted the same way, they would agree while both being wrong, which
+/// is the shape of a check that validates itself.
+pub fn count_run_calls(source: &str) -> usize {
+    common::strip_line_comments(source)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .matches("self.run(&[")
+        .count()
 }

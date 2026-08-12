@@ -228,6 +228,140 @@ impl Git {
         Ok(fingerprint_of(&boundary, &changed, &tracked))
     }
 
+    /// Branch, ahead/behind, and working-tree dirtiness, from **one**
+    /// `git status` read (REQ-4/AC-4 of `.design/harness-footer.md`): one
+    /// source, so the counts can never disagree with the dirtiness the way
+    /// two reads taken moments apart can.
+    pub fn sync_state(&self) -> Result<SyncState, Error> {
+        // **day's own cache is excluded from the dirtiness read**, via a
+        // pathspec rather than by filtering the output — git owns what a
+        // pathspec means, and a matcher of day's own would disagree with it
+        // at the edges (the same argument `changed_files_matching` makes).
+        //
+        // Without this, day reports dirt it created: `.day/statusline` is
+        // written at every session start and is untracked in any repo that
+        // has not gitignored it, so from the second session onward a fresh
+        // `git init` — the population REQ-12 and `telos/v1.0` both name —
+        // shows a permanent "dirty" mark with the user having done nothing.
+        // A display whose stated justification is "dirty means commit" must
+        // not be counting its own artifacts.
+        // **`:/` and `:(top,…)`, never `.`.** Both halves are anchored at the
+        // repository top, because a pathspec is resolved against the PROCESS
+        // working directory and day is routinely run from somewhere else —
+        // `statusline_root` takes the harness's `workspace.current_dir`, and
+        // Claude Code does not guarantee that is the project root.
+        //
+        // The first version wrote `-- . :(exclude).day` and had both failures
+        // at once, measured by two cold reviewers: from a subdirectory it
+        // reported a CLEAN tree over a dirty repo (which the pre-fix code got
+        // right, so the exclusion introduced it), and once day had run from a
+        // subdirectory the nested `pkg/app/.day/` was not excluded either — so
+        // it failed at its own job in exactly the fresh-`git init` population
+        // its own comment names. `glob` is what makes the exclusion reach a
+        // nested cache rather than only the one at the top.
+        let out = self.run(&[
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--",
+            ":/",
+            &format!(":(top,exclude,glob)**/{}/**", crate::cache::CACHE_DIR),
+        ])?;
+        let mut state = SyncState::default();
+        for line in out.lines() {
+            if let Some(head) = line.strip_prefix("# branch.head ") {
+                // `(detached)` is git's own rendering for a detached HEAD;
+                // passed through rather than translated, because inventing a
+                // second spelling for the same state helps nobody.
+                let head = head.trim();
+                if !head.is_empty() {
+                    state.branch = Some(head.to_string());
+                }
+            } else if let Some(ab) = line.strip_prefix("# branch.ab ") {
+                // `+A -B`. Absent entirely when there is no upstream, which
+                // stays `None` — no upstream is a real state, not zero-zero.
+                let mut parts = ab.split_whitespace();
+                if let (Some(a), Some(b)) = (parts.next(), parts.next()) {
+                    if let (Ok(ahead), Ok(behind)) = (
+                        a.trim_start_matches('+').parse(),
+                        b.trim_start_matches('-').parse(),
+                    ) {
+                        state.ahead_behind = Some((ahead, behind));
+                    }
+                }
+            } else if !line.starts_with('#') && !line.trim().is_empty() {
+                // Any non-header entry — changed, renamed, unmerged, or
+                // untracked — is work the footer should call dirty.
+                state.dirty = true;
+            }
+        }
+        Ok(state)
+    }
+
+    /// The `origin` remote's URL, or `None` when there is none. A repo with
+    /// no remote — a fresh `git init` — is a real state and not an error, so
+    /// a failed lookup degrades to `None` while an unreachable git binary
+    /// stays an error.
+    ///
+    /// fallback: no-remote
+    pub fn remote_url(&self) -> Result<Option<String>, Error> {
+        match self.run(&["remote", "get-url", "origin"]) {
+            Ok(out) => {
+                let url = out.trim().to_string();
+                Ok((!url.is_empty()).then_some(url))
+            }
+            Err(Error::Failed { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The main checkout's git directory, absolute. Its **parent** names the
+    /// repository when there is no remote (REQ-12) — deliberately not
+    /// `--show-toplevel`, which names the *current* directory and therefore
+    /// renders a worktree's own name precisely in the case the footer exists
+    /// to make visible (RQ-7, measured).
+    pub fn common_dir(&self) -> Result<PathBuf, Error> {
+        let out = self.run(&["rev-parse", "--git-common-dir"])?;
+        let trimmed = out.trim();
+        // An empty answer is a failed read, never a path: joining it onto the
+        // root would silently name the *current* directory, which is exactly
+        // the confusion this method exists to avoid.
+        if trimmed.is_empty() {
+            return Err(self.empty_output("rev-parse --git-common-dir"));
+        }
+        let path = PathBuf::from(trimmed);
+        Ok(if path.is_absolute() {
+            path
+        } else {
+            self.root.join(path)
+        })
+    }
+
+    /// The current checkout's working-tree root. For **relativising** a
+    /// worktree against the main checkout, never for naming the repo — that
+    /// is [`Self::common_dir`]'s job, per RQ-7.
+    pub fn toplevel(&self) -> Result<PathBuf, Error> {
+        let out = self.run(&["rev-parse", "--show-toplevel"])?;
+        let trimmed = out.trim();
+        if trimmed.is_empty() {
+            return Err(self.empty_output("rev-parse --show-toplevel"));
+        }
+        Ok(PathBuf::from(trimmed))
+    }
+
+    /// A read that exited zero and printed nothing where a value is
+    /// mandatory. Reported as a failure rather than defaulted: rendering
+    /// from output git would never produce is how a stubbed or broken git
+    /// turns into a confident wrong answer.
+    fn empty_output(&self, args: &str) -> Error {
+        Error::Failed {
+            bin: self.bin.clone(),
+            args: args.to_string(),
+            status: "exit 0 with empty output".to_string(),
+            stderr: String::new(),
+        }
+    }
+
     pub fn changed_files(&self, since: &str) -> Result<Vec<String>, Error> {
         let out = self.run(&["diff", "--name-only", since])?;
         Ok(out
@@ -260,6 +394,20 @@ impl Git {
             .map(str::to_string)
             .collect())
     }
+}
+
+/// What one `git status --porcelain=v2 --branch` read reports (REQ-4).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SyncState {
+    /// The branch name, or git's own `(detached)` marker. `None` when the
+    /// header was absent.
+    pub branch: Option<String>,
+    /// Commits ahead of and behind the upstream. `None` when there is no
+    /// upstream — a real state, distinct from `(0, 0)`.
+    pub ahead_behind: Option<(u64, u64)>,
+    /// Whether any entry — changed, renamed, unmerged, untracked — is in the
+    /// working tree.
+    pub dirty: bool,
 }
 
 /// The boundary of the current cycle: the last release.

@@ -19,3 +19,4 @@ target
 # Worktrees other sessions create here. `git add -A` swept one into a commit
 # once — as an embedded git repo, which a clone would silently not contain.
 .claude/worktrees/
+.DS_Store
