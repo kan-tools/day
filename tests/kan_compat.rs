@@ -15,7 +15,7 @@
 //! `FAILED`. Reading the constants through the crate cannot drift from the
 //! constants.
 
-use day::compat::{Version, NEWEST_MEASURED, OLDEST_SUPPORTED};
+use day::compat::{newest_measured, Version, OLDEST_SUPPORTED};
 
 /// The `ok` rows of the committed table, oldest first.
 fn measured_ok() -> Vec<Version> {
@@ -71,15 +71,26 @@ fn the_declared_range_matches_what_was_measured() {
          is {oldest}. day would print users a range it never measured. Move the \
          constant and the table together."
     );
+    // **The ceiling is compared WHOLE, pre-release included.** The floor above
+    // drops the pre-release on purpose: a stable release of a version whose beta
+    // day supports is supported. The ceiling cannot do the same, because every
+    // kan ever measured is a pre-release — dropping it made day report
+    // "measured through 0.12.0" when the newest artifact anyone ran was
+    // `0.12.0-beta.4`, so a future stable 0.12.0 would classify as Supported
+    // having never existed. day's own words are "the newest kan this day was
+    // measured against", which is a claim about an artifact.
+    let declared = newest_measured();
     assert_eq!(
-        (newest.major, newest.minor, newest.patch),
+        (newest.major, newest.minor, newest.patch, newest.pre.clone()),
         (
-            NEWEST_MEASURED.major,
-            NEWEST_MEASURED.minor,
-            NEWEST_MEASURED.patch
+            declared.major,
+            declared.minor,
+            declared.patch,
+            declared.pre.clone()
         ),
-        "NEWEST_MEASURED is {NEWEST_MEASURED} but the newest measured-ok kan is \
-         {newest}."
+        "newest_measured() is {declared} but the newest measured-ok kan is \
+         {newest}. The constant names the ARTIFACT that was run, so a \
+         pre-release row requires a pre-release bound."
     );
 }
 
@@ -282,4 +293,61 @@ mod rendered {
             );
         }
     }
+}
+
+/// **A stable release nobody has measured is `Newer`, not `Supported`.**
+///
+/// Every kan day has ever measured is a pre-release, so this is not a corner:
+/// it is what happens the day kan 0.12.0 ships. Comparing the ceiling on
+/// release order alone reported that unreleased artifact as inside the measured
+/// range, which is the overclaim a cold review found — `src/compat.rs` says
+/// "the newest kan this day was measured against", and nobody had run it.
+///
+/// Both directions, because the fix is only right if it still accepts what WAS
+/// measured.
+#[test]
+fn an_unmeasured_stable_release_is_not_reported_as_measured() {
+    use day::compat::{classify, newest_measured, Compat, Version};
+
+    let declared = newest_measured();
+    assert!(
+        declared.pre.is_some(),
+        "premise: the bound names a pre-release artifact. If day ever measures \
+         a stable kan this test stops observing anything, and the assertion \
+         below would pass for the wrong reason."
+    );
+
+    let stable = Version::parse(&format!(
+        "v{}.{}.{}",
+        declared.major, declared.minor, declared.patch
+    ))
+    .expect("a stable version parses");
+    assert_eq!(
+        classify(Some(&stable)),
+        Compat::Newer,
+        "kan {stable} has never been released or measured; reporting it as \
+         Supported is day making a factual claim about an artifact that does \
+         not exist"
+    );
+
+    // What was measured still reads as measured.
+    assert_eq!(classify(Some(&declared)), Compat::Supported);
+
+    // And an earlier pre-release of the same version, which IS in the table.
+    let earlier = Version::parse("v0.12.0-beta.1").expect("parses");
+    assert_eq!(
+        classify(Some(&earlier)),
+        Compat::Supported,
+        "beta.1 is a committed `ok` row; the tighter ceiling must not exclude \
+         rows the table actually contains"
+    );
+
+    // A later pre-release is past the edge.
+    let later = Version::parse("v0.12.0-beta.10").expect("parses");
+    assert_eq!(
+        classify(Some(&later)),
+        Compat::Newer,
+        "and `beta.10` sorts AFTER `beta.4` — numerically, not as a string, \
+         which is where a lexical comparison gets it backwards"
+    );
 }
