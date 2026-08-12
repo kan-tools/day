@@ -50,38 +50,33 @@ if [ ! -x "$kan_bin" ]; then
     exit 2
 fi
 
-# **The binary must actually be kan.** The only preflight used to be the
-# executable bit, so ANY executable was measured as though it were kan:
-# `run-kan-compat-cell.sh /bin/echo` returned `incompatible` at exit 0, on the
-# strength of a suite whose failures were JSON- and CLI-shape errors proving the
-# opposite. A wrong or substituted binary could move day's published floor.
-# **Identified by `--help`, NOT by `--version`**, and the difference is the
-# whole matrix. kan gained `--version` late: `v0.1.1-beta.1`'s clap is
-# `#[command(name = "kan", about = "...")]` with no `version` attribute, so
-# `kan --version` FAILS on the old tags. A preflight requiring it would report
-# could-not-run at exit 2 for every kan through the `incompatible` rows — that
-# is nine committed rows, and the cells asserting them would go red. Checked
-# against the tags rather than assumed.
+# **This script does NOT verify that the binary is kan, and that is a decision
+# rather than an omission.**
 #
-# `--help` is always present, because clap always provides it, and every kan
-# names itself in its usage line. One check, one mode: a fallback from
-# `--version` to `--help` would be the two-mode mechanism this repo's record
-# says is where defects hide.
-if ! kan_help="$("$kan_bin" --help 2>/dev/null)"; then
-    echo "$kan_bin does not answer \`--help\`, so it cannot be identified as" >&2
-    echo "kan. Refusing to measure day against an unknown program." >&2
-    echo "could-not-run"
-    exit 2
-fi
-case "$kan_help" in
-    *kan*) ;;
-    *)
-        echo "$kan_bin does not name itself kan in \`--help\`. Refusing to" >&2
-        echo "publish a compatibility fact measured against another program." >&2
-        echo "could-not-run"
-        exit 2
-        ;;
-esac
+# A cold review found that handing it a non-kan executable produced
+# `incompatible` at exit 0 — a durable fact about a pairing nobody measured. The
+# obvious remedy, a preflight, does not work and the reasons are worth keeping:
+#
+#   - Identity cannot be read from `--help`. clap derives the usage line from
+#     argv[0], so a real kan invoked as `kan-0.12.0` prints
+#     `Usage: kan-0.12.0`, and ANY binary placed at a path named `kan` prints
+#     `Usage: kan`. The check verifies the caller's filename, not the program.
+#   - Identity cannot be read from behaviour either, because for every kan
+#     before 0.9.1 "this is not kan" and "this is kan, too old to do anything
+#     day needs" are the SAME observation — which is exactly what those nine
+#     `incompatible` rows record. A check strong enough to catch an impostor
+#     rejects the genuine old versions the table exists to hold.
+#   - The tagline changes between releases, so matching it trades a false-fact
+#     risk for a guaranteed-red matrix on kan's next reword.
+#
+# So the guarantee lives where it already holds: `.github/workflows/kan-compat.yml`
+# installs kan from a PINNED GIT TAG in this repo's own matrix, which establishes
+# provenance before this script is ever invoked. `the_matrix_installs_kan_from_a_pinned_source`
+# asserts that, so the guarantee is checked where it is made rather than
+# re-derived here from evidence that cannot carry it.
+#
+# A caller supplying a binary by hand owns its identity. That is a narrower
+# promise than "the cell validates its input", and it is the true one.
 
 # A directory containing only this kan, prepended to PATH. Prepending the
 # binary's own directory would be wrong when it sits beside other tools.

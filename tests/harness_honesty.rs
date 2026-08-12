@@ -1536,40 +1536,28 @@ fn the_matrix_never_compares_or_caches_an_unmeasured_cell() {
     );
 }
 
-/// **The cell never publishes a fact about the wrong program.**
+/// **A path nothing was written to is a non-measurement, not a tag verdict.**
 ///
-/// Round 1 of this branch's review left three ways for a non-measurement to
-/// become a durable row, and all three reached the table through a single
-/// missing distinction: *what failed*. A `could not compile` in the cell is day
-/// failing to build, not the kan tag — the workflow builds kan separately,
-/// before this script runs — and any executable at all was measured as though
-/// it were kan.
+/// This test used to assert something wider — that a non-kan executable is
+/// refused — and that assertion is gone deliberately rather than quietly. Two
+/// preflights were tried and neither can carry the claim: `--help` reports
+/// argv[0] rather than the program, and behavioural identity is
+/// indistinguishable from "kan too old to do what day needs" for every tag
+/// before 0.9.1, which is what nine `incompatible` rows record.
 ///
-/// Measured before the fix: a cargo emitting cargo's ordinary "could not compile
-/// `day` (test kan_conformance)" produced `unbuildable` at exit 0, and
-/// `/bin/echo` produced `incompatible` at exit 0. Both are durable claims about
-/// a program that was never tested.
+/// So a non-kan executable supplied by hand now yields `incompatible`, and the
+/// guarantee that CI never supplies one lives in
+/// `the_matrix_installs_kan_from_a_pinned_source`. That is deliberately NOT
+/// asserted here: it is a behaviour this repo accepts, not one it wants, and
+/// pinning it with a test would read as an endorsement.
+///
+/// What survives is the half that is genuinely the cell's to know. A missing
+/// path means the caller did not build kan, which the cell cannot tell from a
+/// tag that will not build — so it refuses to guess.
 #[test]
-fn the_cell_refuses_to_measure_a_program_that_is_not_kan() {
+fn the_cell_reports_a_missing_binary_as_a_non_measurement() {
     let script = repo_root().join("scripts/run-kan-compat-cell.sh");
 
-    // An executable that is not kan.
-    let out = Command::new(&script)
-        .arg("/bin/echo")
-        .current_dir(repo_root())
-        .output()
-        .expect("sh should be runnable");
-    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    assert_ne!(
-        token, "incompatible",
-        "a program that is not kan cannot be incompatible WITH day — that is a \
-         claim about a pairing that was never measured, and it is transcribed \
-         into the table by hand"
-    );
-    assert_eq!(token, "could-not-run");
-    assert_eq!(out.status.code(), Some(2));
-
-    // A path nothing was ever written to.
     let out = Command::new(&script)
         .arg("/nonexistent/kan")
         .current_dir(repo_root())
@@ -1648,57 +1636,57 @@ fn the_matrix_does_not_publish_an_infrastructure_failure_as_a_tag_verdict() {
     );
 }
 
-/// **The preflight identifies kan without requiring a flag old kan lacks.**
+/// **The matrix establishes kan's identity by pinning the source, which is the
+/// only place that guarantee can hold.**
 ///
-/// The first version of this check asked the binary for `--version`. kan gained
-/// that late: `v0.1.1-beta.1`'s clap is `#[command(name = "kan", about = "...")]`
-/// with no `version` attribute, so `--version` FAILS on the old tags — and the
-/// committed table has nine rows measured against kans in that range. A
-/// preflight requiring it would have reported could-not-run at exit 2 for every
-/// one of them, turning those cells red on a table that is correct.
+/// A cold review found the cell publishing `incompatible` for a non-kan
+/// executable — a durable fact about a pairing nobody measured. Two preflights
+/// were tried and both failed, for reasons that are properties of the problem
+/// rather than of the attempts:
 ///
-/// Caught by checking the tags rather than assuming, before review. The check is
-/// `--help`, which clap always provides and every kan names itself in.
+/// - `--help` cannot identify a program. clap derives the usage line from
+///   argv[0], so a real kan invoked under another filename fails the check and
+///   any binary placed at a path named `kan` passes it. Measured: the same kan
+///   binary printed `Usage: kan-bin-v0.12.0-beta.4`.
+/// - Behaviour cannot identify it either. For every kan before 0.9.1, "not kan"
+///   and "kan too old to do what day needs" are the same observation — which is
+///   what the nine `incompatible` rows record. Any check strict enough to catch
+///   an impostor rejects the genuine old versions the table exists to hold.
+///
+/// So the guarantee is asserted where it is actually made. The matrix installs
+/// kan from a pinned git tag, which establishes provenance before the cell runs.
+/// Deleting the preflight without pinning this would have been removing a check
+/// and calling it a design decision.
 #[test]
-fn the_cell_identifies_kan_by_a_flag_every_version_has() {
-    let script = repo_root().join("scripts/run-kan-compat-cell.sh");
-    let dir = tempfile::tempdir().unwrap();
+fn the_matrix_installs_kan_from_a_pinned_source() {
+    let yaml = read(".github/workflows/kan-compat.yml");
+    let build_step = yaml
+        .split("- name: Build this kan")
+        .nth(1)
+        .expect("the workflow should still build kan")
+        .split("- name:")
+        .next()
+        .expect("delimited by the next step");
 
-    // A kan old enough to have no `--version`, which is what the early tags are.
-    let old_kan = dir.path().join("oldkan");
-    std::fs::write(
-        &old_kan,
-        "#!/bin/sh\ncase \"$1\" in\n  --help) echo 'Usage: kan <COMMAND>'; exit 0 ;;\n  \
-         --version) echo \"error: unexpected argument '--version'\" >&2; exit 2 ;;\n  \
-         *) exit 0 ;;\nesac\n",
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&old_kan, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-    let out = Command::new(&script)
-        .arg(&old_kan)
-        .current_dir(repo_root())
-        .output()
-        .expect("sh should be runnable");
-    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    assert_ne!(
-        token, "could-not-run",
-        "a kan without `--version` must still be measurable — nine committed \
-         `incompatible` rows were measured against kans in exactly that range, \
-         and refusing them turns a correct table red"
+    assert!(
+        build_step.contains("--git https://github.com/kan-tools/kan"),
+        "kan must come from its own repository, not from whatever is on the \
+         runner: this is the identity guarantee the cell deliberately does not \
+         re-derive.\n{build_step}"
+    );
+    assert!(
+        build_step.contains("--tag \"${{ matrix.kan }}\""),
+        "and pinned to the tag the row is about, so the binary measured is the \
+         one the row names.\n{build_step}"
     );
 
-    // And the refusal still works on something that is not kan at all.
-    let out = Command::new(&script)
-        .arg("/bin/echo")
-        .current_dir(repo_root())
-        .output()
-        .expect("sh should be runnable");
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout).trim(),
-        "could-not-run",
-        "the looser identity check must not have loosened it to nothing"
+    // And the cell must not have grown a preflight back, which would re-assert
+    // a guarantee it cannot make.
+    let cell = read("scripts/run-kan-compat-cell.sh");
+    assert!(
+        !cell.contains("does not name itself kan"),
+        "the cell must not claim to identify kan; that check was removed \
+         because neither `--help` nor behaviour can carry it"
     );
 }
 
