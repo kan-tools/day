@@ -654,3 +654,53 @@ fn day95_init_does_not_claim_a_log_it_could_not_read() {
     assert!(ok_out.contains("kan: reachable"), "{ok_out}");
     assert!(!ok_out.contains("could not be read"), "{ok_out}");
 }
+
+/// day#192 — **the `schema/witness` prompt carries the caveat the command it
+/// hands over actually needs.**
+///
+/// A `path` probe is meaningful only when the work CREATES the file. If the file
+/// exists before the atom runs — scaffolding, a template, a file the work
+/// appends to — the probe is satisfied from the start and can never be false.
+/// That is a witness which cannot fail, which day#86 holds is worse than none,
+/// and the failure is silent: the probe parses, matches, and reports the atom
+/// done before anything has happened.
+///
+/// This message is printed at exactly the moment someone is about to declare
+/// probes and has not yet, so it is where the wrong answer gets typed. The
+/// guidance shipped with no test, which is this repo's recorded pattern — a
+/// requirement whose artifact is prose fails nothing, so nothing catches its
+/// removal. Asserted on the rendered output rather than on the source string,
+/// because what matters is that a person reading the prompt sees it.
+#[test]
+fn the_witness_prompt_warns_that_a_path_probe_needs_the_work_to_create_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[atom(
+            "build",
+            "bafyreib",
+            &["design-doc"],
+            &["code-change"],
+            &[],
+            &[],
+        )],
+    );
+    let git = write_git_stub(dir.path(), &[], &[]);
+    let out = day(dir.path(), &kan, &git, &["status"]);
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+
+    assert!(
+        text.contains("No witness probes are declared"),
+        "premise: this is the prompt the caveat attaches to:\n{text}"
+    );
+    assert!(
+        text.contains("meaningful only when the work CREATES the file"),
+        "the caveat must reach the person about to type the command, not only \
+         docs/CONVENTIONS.md:\n{text}"
+    );
+    assert!(
+        text.contains("claim` probe"),
+        "and it must name the alternative, since a caveat with no remedy just \
+         makes the reader hesitate:\n{text}"
+    );
+}
