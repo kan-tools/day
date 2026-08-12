@@ -314,3 +314,98 @@ fn the_loader_and_the_assembler_are_the_same_read() {
          assembler were also wrong"
     );
 }
+
+// ---------------------------------------------------------------------------
+// REQ-17, in the form it can honestly take today.
+// ---------------------------------------------------------------------------
+
+/// **Every `newest_fenced` call outside the assembler states why it is not
+/// per-key.**
+///
+/// REQ-17 asks for a scan asserting that no `schema/*` loader calls
+/// `newest_fenced` directly. Written that way it cannot pass yet and — worse —
+/// it could be *made* to pass by matching nothing, which is this repo's most
+/// frequently recorded defect. Four subjects are legitimately still on the
+/// direct path, and the reasons differ:
+///
+/// - `schema/blocks` is a `BTreeMap` and belongs on the entry-wise witness path
+///   rather than this field-wise one.
+/// - `schema/verdicts` is a `Vec`, where RQ-7 records that "per key" is
+///   **undefined**; AC-19 wants one subject per permitted verdict.
+/// - `schema/docs` and `schema/design-doc` have **no shipped default**: absence
+///   is `NotDeclared`, so there is no layer 1 and nothing for a key to fall back
+///   to.
+/// - `telos/*` witnesses and `bridge/*` plans are a subject's own declaration,
+///   where redeclaring must replace.
+///
+/// **The last two categories are the same category, and RQ-7 separates them by
+/// the wrong property.** It scopes declarations out "by the `schema/*` prefix,
+/// and by accident rather than by design" — and two `schema/*` subjects are
+/// declarations. The property that actually decides it is whether the type has a
+/// default, which the type system already knows: `layers::config` requires
+/// `T: Default`, so a declaration type cannot be routed here even by mistake.
+///
+/// So this scan is detection-first and hatch-to-exempt, the same direction as
+/// `a_failed_kan_read_is_never_swallowed` and the fallback registry: a NEW
+/// loader written on the direct path is an offender until someone states why,
+/// and the statement sits at the call rather than in a document.
+#[test]
+fn every_direct_fenced_read_states_why_it_is_not_per_key() {
+    const MARKER: &str = "not-per-key:";
+    const LOOKBACK: usize = 15;
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    let mut stack = vec![root];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    assert!(!files.is_empty(), "could not check: no sources under src/");
+
+    let mut offenders = Vec::new();
+    let mut checked = 0;
+    for path in &files {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        // `atoms.rs` defines the reader; `layers.rs` IS the assembler.
+        if name == "atoms.rs" || name == "layers.rs" {
+            continue;
+        }
+        let text = std::fs::read_to_string(path).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        for (n, line) in lines.iter().enumerate() {
+            if !line.contains("newest_fenced::<") {
+                continue;
+            }
+            checked += 1;
+            let from = n.saturating_sub(LOOKBACK);
+            if !lines[from..n].iter().any(|l| l.contains(MARKER)) {
+                offenders.push(format!("{}:{}", path.display(), n + 1));
+            }
+        }
+    }
+
+    assert!(
+        checked > 0,
+        "could not check: no `newest_fenced::<` call sites found outside the \
+         assembler. Either the reader was renamed or this scan stopped matching \
+         — a scan that matches nothing reports clean by finding nothing, which \
+         is the failure this repo records most often."
+    );
+    assert!(
+        offenders.is_empty(),
+        "these read a fenced block directly without saying why it is not \
+         resolved per key: {offenders:?}\n\n\
+         Add `// {MARKER} <why>` within {LOOKBACK} lines above the call, or \
+         route the loader through `layers::config` / `layers::witness`. \
+         REQ-17: seven loaders reimplementing an overlay is the shape day#101 \
+         records three instances of."
+    );
+}

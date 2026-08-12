@@ -272,6 +272,10 @@ impl BlockSchemas {
     /// is the common case, and day's built-ins are unaffected either way.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{BLOCKS_SLUG}");
+        // not-per-key: a `BTreeMap`, so resolution here is ENTRY-wise, not
+        // field-wise. It belongs on the witness path in `src/layers.rs`
+        // rather than this one — RQ-7's table separates the two shapes, and
+        // the map is the one whose restatement cost motivated the design.
         Ok(atoms::newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, schemas)| schemas)
             .unwrap_or_default())
@@ -930,6 +934,10 @@ impl VerdictVocabulary {
     /// Reads the project's declaration, or day's four when none is recorded.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{VERDICTS_SLUG}");
+        // not-per-key: a `Vec`, and RQ-7 records that "per key" is
+        // UNDEFINED for a list — a list has no keys. AC-19's answer is one
+        // subject per permitted verdict, which is a different mechanism
+        // from both the struct and the map, and is not built yet.
         Ok(atoms::newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, v)| v)
             .unwrap_or_default())
