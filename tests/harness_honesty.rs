@@ -1438,3 +1438,71 @@ fn the_finding_census_separates_unaccounted_from_could_not_check() {
         "an unreadable kan is could-not-check, which outranks checked-and-clean"
     );
 }
+
+/// **One trailer, two parsers, and they must accept the same thing.**
+///
+/// `scripts/revert-demo.py` writes the `Demonstrated-by:` trailer and verifies
+/// it; `scripts/demonstration-census.py` counts it. Each carries its own
+/// `TRAILER_RE`, and a trailer the counter accepts but the verifier cannot read
+/// is exactly the state that produced the `include=` field: the census reported
+/// a commit demonstrated while `--verify` on the same commit reported
+/// DID-NOT-COMPILE.
+///
+/// Asserted by running both regexes over the same fixtures rather than by
+/// comparing the two source lines, because they are written differently on
+/// purpose — the census does not capture the scope it must nonetheless parse.
+#[test]
+fn both_trailer_grammars_accept_the_same_trailers() {
+    let root = repo_root();
+    let probe = format!(
+        r#"
+import re, sys
+sys.path.insert(0, {scripts:?})
+import importlib.util
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+demo = load("demo", {demo:?})
+census = load("census", {census:?})
+
+scoped = "Demonstrated-by: revert=HEAD tests=a::b include=src/lib.rs outcome=DEMONSTRATED"
+plain = "Demonstrated-by: revert=HEAD tests=a::b outcome=DEMONSTRATED"
+junk = "Demonstrated-by: I reverted it and it failed"
+
+for label, text, want in (("scoped", scoped, True), ("plain", plain, True), ("junk", junk, False)):
+    d = bool(demo.TRAILER_RE.search(text))
+    c = bool(census.TRAILER_RE.search(text))
+    print(f"{{label}} demo={{d}} census={{c}} want={{want}}")
+    assert d == want, f"revert-demo disagreed on {{label}}"
+    assert c == want, f"census disagreed on {{label}}"
+print("AGREED")
+"#,
+        scripts = root.join("scripts").display().to_string(),
+        demo = root.join("scripts/revert-demo.py").display().to_string(),
+        census = root
+            .join("scripts/demonstration-census.py")
+            .display()
+            .to_string(),
+    );
+
+    let out = Command::new("python3")
+        .arg("-c")
+        .arg(&probe)
+        .current_dir(&root)
+        .output()
+        .expect("python3 should be runnable");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("AGREED"),
+        "the two trailer grammars disagree, so a trailer one tool accepts the \
+         other cannot read:\n{text}"
+    );
+}
