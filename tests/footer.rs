@@ -389,6 +389,57 @@ fn ac6_the_five_sync_states_render_distinctly() {
                 );
             }
         }
+
+        // **WHICH mark means which direction, not merely that they differ.**
+        //
+        // Distinctness cannot see an EXCHANGE: swap ahead and behind in both
+        // glyph tables and all five outputs stay pairwise distinct while every
+        // directional answer is wrong — the footer says pull when you must
+        // push, which is the precise failure REQ-5 exists to prevent and the
+        // one this test's own doc comment names.
+        //
+        // It survived three rounds. Round 2 found it and diagnosed it exactly;
+        // the fix made the counts symmetric so "only the mark can differ" and
+        // left the assertion on `assert_ne!`, which is the same anti-pattern
+        // the same commit declared dead for the position states. Round 3, in a
+        // different harness and model, found it again.
+        let find = |name: &str| {
+            outputs
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, out)| out.clone())
+                .expect("every case renders")
+        };
+        let (ahead_mark, behind_mark) = match style {
+            Style::Emoji => ("⇡3", "⇣3"),
+            Style::Plain => ("ahead 3", "behind 3"),
+        };
+        let ahead = find("ahead");
+        assert!(
+            ahead.contains(ahead_mark),
+            "3 commits AHEAD must render {ahead_mark:?} in {style:?}:\n{ahead}"
+        );
+        assert!(
+            !ahead.contains(behind_mark),
+            "3 commits ahead must not wear the behind mark — commit, push and \
+             pull are different remedies ({style:?}):\n{ahead}"
+        );
+        let behind = find("behind");
+        assert!(
+            behind.contains(behind_mark),
+            "3 commits BEHIND must render {behind_mark:?} in {style:?}:\n{behind}"
+        );
+        assert!(
+            !behind.contains(ahead_mark),
+            "3 commits behind must not wear the ahead mark ({style:?}):\n{behind}"
+        );
+        // And both directions at once keep their own marks rather than
+        // collapsing to one.
+        let all = find("all");
+        assert!(
+            all.contains(ahead_mark) && all.contains(behind_mark),
+            "ahead-and-behind must show both marks ({style:?}):\n{all}"
+        );
     }
 }
 

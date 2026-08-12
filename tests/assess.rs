@@ -135,10 +135,41 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
              how it silently widens"
         );
     }
-    let git_rs = sources
+    // **Every source that calls `self.run(&[…])`, not the one named `git.rs`.**
+    //
+    // This selected the single source whose basename is `git.rs`, so the
+    // whitelist's jurisdiction was decided by a filename: a child module
+    // `src/git/extra.rs` containing `self.run(&["push", "--force"])`, wired
+    // with `mod extra;`, compiles and passes the whole suite. Demonstrated by a
+    // cold review, and it is the same vacuous-after-a-split pattern already
+    // fixed in `ac13`/`ac20` — the fragile form was left in the more important
+    // scan, and then edited twice without being noticed.
+    //
+    // Derived, and with a floor: a scan that stops finding the callers reports
+    // clean by having looked at nothing.
+    // The git MODULE — `src/git.rs` and anything under `src/git/` — derived by
+    // path rather than by basename. Not "every file containing `self.run(&[`":
+    // `KanClient` has a `run` too, and sweeping it in makes this scan complain
+    // about `kan --help`, which is not a git invocation at all.
+    let callers: Vec<&(std::path::PathBuf, String)> = sources
         .iter()
-        .find(|(p, _)| p.file_name().unwrap() == "git.rs")
-        .expect("src/git.rs should exist");
+        .filter(|(p, _)| {
+            let path = p.to_string_lossy().replace('\\', "/");
+            path.ends_with("/git.rs") || path.contains("/git/")
+        })
+        .collect();
+    assert!(
+        !callers.is_empty(),
+        "no source calls `self.run(&[…])` — the whitelist scan has nothing to \
+         constrain, which means it would report clean having checked nothing"
+    );
+    assert!(
+        callers
+            .iter()
+            .any(|(p, _)| p.file_name().unwrap() == "git.rs"),
+        "src/git.rs should be among the callers; if it is not, this scan is \
+         looking at the wrong thing"
+    );
 
     // **Whitespace-insensitive, because rustfmt decides the layout.** The scan
     // matched the literal `self.run(&["`, so a multi-line argv was invisible —
@@ -149,64 +180,70 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // the whitelist's jurisdiction. Found by a cold review that added a
     // multi-line `push --force` and watched it compile, pass, and stay
     // fmt-clean.
-    let normalised: String = {
-        // Collapse whitespace so `self.run(&[\n "push",` reads as one form.
-        // Comments are stripped first, or a commented-out call would count.
-        let code = common::strip_line_comments(&git_rs.1);
-        code.split_whitespace().collect::<Vec<_>>().join(" ")
-    };
     let mut invocations = 0;
-    let mut rest = normalised.as_str();
-    // **The EARLIEST of the two openings, not the first that matches.**
-    // `find(A).or_else(|| find(B))` takes A's match even when B occurs sooner,
-    // so every call in the B form before the last A form is skipped — which is
-    // how the first attempt at this fix still saw 7 of 9 and said so only
-    // because the derived floor below made it say so.
-    loop {
-        let spaced = rest.find("self.run(&[ \"");
-        let tight = rest.find("self.run(&[\"");
-        let (at, open) = match (spaced, tight) {
-            (Some(s), Some(t)) if s < t => (s, "self.run(&[ \""),
-            (Some(_), Some(t)) => (t, "self.run(&[\""),
-            (Some(s), None) => (s, "self.run(&[ \""),
-            (None, Some(t)) => (t, "self.run(&[\""),
-            (None, None) => break,
+    let mut expected = 0;
+    for (path, text) in &callers {
+        let normalised: String = {
+            // Collapse whitespace so `self.run(&[\n "push",` reads as one form.
+            // Comments are stripped first, or a commented-out call would count.
+            let code = common::strip_line_comments(text);
+            code.split_whitespace().collect::<Vec<_>>().join(" ")
         };
-        let after = &rest[at + open.len()..];
-        // The first two argv elements as written, so a two-word entry can be
-        // matched against what the call actually says. Elements are `"a", "b"`
-        // in source, and a non-literal (a `&format!`) simply yields no second
-        // word, which then only matches a one-word entry.
-        let first: String = after.chars().take_while(|c| *c != '"').collect();
-        let second: String = after
-            .split_once("\",")
-            .and_then(|(_, tail)| tail.trim_start().strip_prefix('"'))
-            .map(|t| t.chars().take_while(|c| *c != '"').collect())
-            .unwrap_or_default();
-        let two_word = format!("{first} {second}");
-        assert!(
-            ALLOWED_READS
-                .iter()
-                .any(|(name, _)| *name == first || *name == two_word),
-            "src/git.rs invokes `git {first} {second}`, which is not one of the \
+        expected += count_run_calls(text);
+        let mut rest = normalised.as_str();
+        // **The EARLIEST of the two openings, not the first that matches.**
+        // `find(A).or_else(|| find(B))` takes A's match even when B occurs sooner,
+        // so every call in the B form before the last A form is skipped — which is
+        // how the first attempt at this fix still saw 7 of 9 and said so only
+        // because the derived floor below made it say so.
+        loop {
+            let spaced = rest.find("self.run(&[ \"");
+            let tight = rest.find("self.run(&[\"");
+            let (at, open) = match (spaced, tight) {
+                (Some(s), Some(t)) if s < t => (s, "self.run(&[ \""),
+                (Some(_), Some(t)) => (t, "self.run(&[\""),
+                (Some(s), None) => (s, "self.run(&[ \""),
+                (None, Some(t)) => (t, "self.run(&[\""),
+                (None, None) => break,
+            };
+            let after = &rest[at + open.len()..];
+            // The first two argv elements as written, so a two-word entry can be
+            // matched against what the call actually says. Elements are `"a", "b"`
+            // in source, and a non-literal (a `&format!`) simply yields no second
+            // word, which then only matches a one-word entry.
+            let first: String = after.chars().take_while(|c| *c != '"').collect();
+            let second: String = after
+                .split_once("\",")
+                .and_then(|(_, tail)| tail.trim_start().strip_prefix('"'))
+                .map(|t| t.chars().take_while(|c| *c != '"').collect())
+                .unwrap_or_default();
+            let two_word = format!("{first} {second}");
+            assert!(
+                ALLOWED_READS
+                    .iter()
+                    .any(|(name, _)| *name == first || *name == two_word),
+                "{} invokes `git {first} {second}`, which is not one of the \
              permitted read invocations {:?}. day's git access is read-only, and \
              a new one needs a stated reason at this whitelist.",
-            ALLOWED_READS.map(|(name, _)| name)
-        );
-        invocations += 1;
-        rest = after;
+                path.display(),
+                ALLOWED_READS.map(|(name, _)| name),
+            );
+            invocations += 1;
+            rest = after;
+        }
     }
     // **A floor, not `> 0`.** The count is what catches a parser that stopped
     // matching, and `> 0` cannot: the scan saw 7 of 9 call sites for as long as
     // two of them were multi-line, and reported clean the whole time. Derived
-    // from the source rather than hardcoded, so adding a call raises the floor
+    // from the sources rather than hardcoded, so adding a call raises the floor
     // with it and only a scan that stops *seeing* one fails.
-    let actual = count_run_calls(&git_rs.1);
     assert_eq!(
-        invocations, actual,
-        "the scan matched {invocations} of {actual} `self.run(&[…])` call sites \
-         in src/git.rs — a whitelist that cannot see a call cannot constrain it, \
-         and rustfmt decides which calls are multi-line"
+        invocations,
+        expected,
+        "the scan matched {invocations} of {expected} `self.run(&[…])` call sites \
+         across {} caller source(s) — a whitelist that cannot see a call cannot \
+         constrain it, and rustfmt and file layout both decide what it sees",
+        callers.len()
     );
     assert!(
         invocations > 0,

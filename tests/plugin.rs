@@ -649,6 +649,49 @@ fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
     let src = repo_root().join("src");
     let cache_dir_literal = format!("\"{}\"", day::cache::CACHE_DIR);
 
+    // `cache.rs`'s public functions, read off the module rather than listed
+    // here — the list that must be derived, since a hand-written one cannot
+    // fail to omit the next reader somebody adds.
+    let cache_src = std::fs::read_to_string(repo_root().join("src/cache.rs")).unwrap();
+    let cache_api: Vec<String> = common::strip_line_comments(&cache_src)
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("pub fn ").map(|r| r.to_string()))
+        .filter_map(|r| r.split('(').next().map(|n| n.trim().to_string()))
+        .filter(|n| !n.is_empty())
+        .collect();
+    for core in ["standing", "read_status_line", "cadence_allows"] {
+        assert!(
+            cache_api.iter().any(|n| n == core),
+            "the cache-API derivation lost `{core}` — its parse of src/cache.rs \
+             has rotted, and a rotted derivation reports clean: {cache_api:?}"
+        );
+    }
+
+    // Modules permitted to call the cache's public API, each with its reason.
+    // Deliberately tiny: the carve-out that lets `.day/` exist at all is that
+    // nothing durable lives there and nothing decides from it, and the fewer
+    // modules that touch it, the more that claim can be reviewed by reading.
+    const CACHE_CALLERS: [(&str, &str); 2] = [
+        (
+            "src/hooks.rs",
+            "session-start and user-prompt render the footer and the standing \
+             notice into it; this is the writer",
+        ),
+        (
+            "src/cli/mod.rs",
+            "`day status-line` reads it back and prints it, and picks a variant \
+             from the environment; this is the reader, and it decides nothing \
+             day reports",
+        ),
+    ];
+    for (module, reason) in CACHE_CALLERS {
+        assert!(
+            !reason.trim().is_empty(),
+            "the permitted cache caller `{module}` states no reason"
+        );
+    }
+
+    let mut uninvited: Vec<String> = Vec::new();
     let mut offenders = Vec::new();
     let mut cache_rs_has_it = false;
     let mut stack = vec![src.clone()];
@@ -676,24 +719,71 @@ fn ac9_the_render_cache_is_touched_in_exactly_one_module() {
             // the cache being *excluded*, which is the opposite of reading it,
             // and the exemption is narrow — the constant, in that file, only.
             let code = common::strip_line_comments(&std::fs::read_to_string(&path).unwrap());
-            let names_it = code.contains(&cache_dir_literal)
-                || code.contains("cache::CACHE_DIR")
-                || code.contains("cache::VARIANTS_FILE")
-                || code.contains("cache::STATUS_LINE_FILE");
-            if !names_it {
+
+            // **Two invariants, and only one of them is a name.**
+            //
+            // (1) `cache.rs` OWNS the path and the file-name constants. That is
+            // the original check and it stands.
+            //
+            // (2) Every module that CALLS the cache's public API is on the list
+            // below, with a reason. This is the half that was missing: the scan
+            // counted names, so a module could reach the cache through the
+            // public API without naming anything guarded — a cold review added
+            // a `status.rs` function branching on
+            // `cache::standing(root).is_some()` and it survived. And the
+            // name-only check passed for `hooks.rs` and `cli/mod.rs` only
+            // because they call functions rather than spelling the path, so it
+            // was working by accident.
+            //
+            // Note what this deliberately does NOT try to be: a test for
+            // whether a caller *decides* from the cache. That is a semantic
+            // judgement a scan cannot make — the same boundary the demonstration
+            // census draws around whether an exemption is true. What it can do
+            // is make the set of modules that touch the cache small, explicit,
+            // and reviewable, so a new one is a decision rather than a diff.
+            let calls_api = cache_api
+                .iter()
+                .any(|name| code.contains(&format!("cache::{name}(")));
+            let names_path = code.contains(&cache_dir_literal)
+                || [
+                    "CACHE_DIR",
+                    "VARIANTS_FILE",
+                    "STATUS_LINE_FILE",
+                    "STANDING_FILE",
+                ]
+                .iter()
+                .any(|c| code.contains(&format!("cache::{c}")));
+            if !calls_api && !names_path {
                 continue;
             }
+            let names_it = names_path;
             let name = path.file_name().unwrap();
+            let rel = path
+                .strip_prefix(repo_root())
+                .unwrap_or(path.as_path())
+                .to_string_lossy()
+                .replace('\\', "/");
             if name == "cache.rs" {
                 cache_rs_has_it = true;
-            } else if name == "git.rs" && !code.contains(&cache_dir_literal) {
-                // exempt: excluding the cache from a git pathspec is not a read
-            } else {
+            } else if names_it && name == "git.rs" {
+                // exempt: excluding the cache from a git pathspec is the cache
+                // being kept OUT of a read, which is the opposite of touching it
+            } else if names_it {
                 offenders.push(path.display().to_string());
+            } else if !CACHE_CALLERS.iter().any(|(m, _)| rel.ends_with(m)) {
+                uninvited.push(rel);
             }
         }
     }
 
+    assert!(
+        uninvited.is_empty(),
+        "these modules call the render cache's public API and are not on the \
+         permitted-caller list ({uninvited:?}). The `.day/` carve-out holds only \
+         because the set of modules that touch the cache is small enough to \
+         review; add it to CACHE_CALLERS with a reason, or reach the state some \
+         other way."
+    );
     assert!(
         cache_rs_has_it,
         "src/cache.rs should own the cache path constant {cache_dir_literal}"
@@ -810,8 +900,25 @@ fn a_failed_kan_read_is_never_swallowed() {
         // construction — it has no error to propagate — so it does not fail
         // the scan by existing. It fails unless its body carries the marker
         // and a reason, which is the same bargain every other site here makes.
-        let fallible = signature.contains("-> Result<") || signature.contains("-> Option<");
-        if signature.contains("&self") && fallible && !name.is_empty() {
+        // **Every `&self` method is a candidate; the return type only says
+        // whether it CAN be swallowed.**
+        //
+        // This recognised the literal spellings `-> Result<` and `-> Option<`,
+        // so `std::result::Result<String, Error>`, a type alias, or any other
+        // equivalent spelling escaped the guard entirely — the third time this
+        // scan's jurisdiction has been chosen by the code it guards (first the
+        // return type, then visibility, now how the type is written). A cold
+        // review demonstrated it with a public method swallowing
+        // `self.run(...).unwrap_or_default()`.
+        //
+        // Keying on `->` alone is the fix that cannot be spelled around: a
+        // method returning nothing has no error to discard, and every method
+        // that returns anything at all is worth watching for a swallow at its
+        // call sites. Over-inclusion is the safe direction here — a method
+        // whose result is genuinely infallible simply never appears next to
+        // one of the swallow shapes.
+        let returns_something = signature.contains("->");
+        if signature.contains("&self") && returns_something && !name.is_empty() {
             derived.push(format!(".{name}("));
         }
     }
@@ -879,14 +986,61 @@ fn a_failed_kan_read_is_never_swallowed() {
                     let found = from + at;
                     let start = found + read.len();
                     from = start;
-                    // The expression ends at the next `;` or `?`.
+                    // **The expression ends at `;`, `?`, or a `,` OUTSIDE any
+                    // bracket — and the last of those was missing.**
+                    //
+                    // A read used as a struct-literal field ends at a comma, so
+                    // scanning to the next `;` ran past the end of the function
+                    // and into the next one. That is not hypothetical: the
+                    // `kan-read-may-degrade` marker on `footer_surround` was
+                    // flagging a `canonicalize(..).unwrap_or(p)` fifteen lines
+                    // later in a DIFFERENT function, so the hatch was spent on a
+                    // false positive, a real swallow at that site was
+                    // pre-exempted, and an innocuous refactor of the neighbour
+                    // would have silently removed the site from the guard. A
+                    // cold review demonstrated all three.
+                    //
+                    // Depth-aware, because a `,` inside `foo(a, b)` is an
+                    // argument separator and ends nothing.
+                    // **Depth starts at ONE**, because the matched pattern is
+                    // `.name(` and has already consumed the call's opening
+                    // paren. Starting at zero made a closing `)` — the very
+                    // next character of `client.read().unwrap_or_default()` —
+                    // truncate the expression to nothing, so every swallow in
+                    // the commonest shape of all became invisible. Caught by
+                    // probing the fix with the exact escape it was written to
+                    // close, which then survived.
                     let tail = &text[start..text.len().min(start + 240)];
-                    let end = tail
-                        .find(';')
-                        .into_iter()
-                        .chain(tail.find('?'))
-                        .min()
-                        .unwrap_or(tail.len());
+                    let mut depth = 1i32;
+                    let mut end = tail.len();
+                    for (i, c) in tail.char_indices() {
+                        match c {
+                            '(' | '[' | '{' => depth += 1,
+                            ')' | ']' | '}' => {
+                                depth -= 1;
+                                // Below zero means the enclosing expression
+                                // closed around us — a read that was the last
+                                // thing in an argument list or an initialiser.
+                                if depth < 0 {
+                                    end = i;
+                                    break;
+                                }
+                            }
+                            ';' | '?' => {
+                                end = i;
+                                break;
+                            }
+                            // Once the call itself has closed, a comma ends the
+                            // expression: a read used as a struct-literal field
+                            // ends there, and scanning past it ran into the
+                            // next function entirely.
+                            ',' if depth <= 0 => {
+                                end = i;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
                     let expr = &tail[..end];
                     // **The pattern shapes are checked on the prefix, not the
                     // expression.** A `let Ok(x) = read else { … }` swallows the
