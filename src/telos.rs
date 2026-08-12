@@ -990,6 +990,8 @@ fn record_tier(
         let Some(bridge_slug) = subject.strip_prefix(bridge::BRIDGE_PREFIX) else {
             continue;
         };
+        // not-per-key: a bridge's plan is its own declaration; see
+        // `src/bridge.rs`.
         let plan = newest_fenced::<bridge::Plan>(client, &subject)?;
         if plan.is_some_and(|(_cid, p)| p.telos == slug) {
             // Three states, never two. This was `.unwrap_or(false)`, which
@@ -1043,6 +1045,7 @@ pub fn assess(
         });
     }
 
+    // not-per-key: a telos's witnesses are its own declaration.
     let declared = newest_fenced::<Witnesses>(client, &subject)?
         .map(|(_cid, w)| w)
         .unwrap_or_default();

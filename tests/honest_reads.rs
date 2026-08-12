@@ -1239,3 +1239,81 @@ fn the_fingerprint_moves_on_a_repo_with_no_release_tag() {
          clone is in that state"
     );
 }
+
+/// **An unterminated `day-` fence is reported to the user, not swallowed.**
+///
+/// `fenced_body` returned `None` for an opened-and-never-closed fence, and the
+/// source said so deliberately: "a dangling open is quotation or prose, not a
+/// claim to blame." The premise — day never writes one — is true and does not
+/// support the conclusion, because people and agents do, and hand-written blocks
+/// are supported on purpose (`Versioned::validate`'s own doc calls that "a real
+/// path rather than a hypothetical one").
+///
+/// Measured through the built binary before it was changed: an unterminated
+/// `day-cycle` block on `schema/cycle` made `day assess docs` exit 0 with no
+/// cycle line at all, where the same body with its closing fence reported
+/// `[UNCHECKED] ... an empty tag pattern matches nothing` at exit 2. A
+/// declaration that is present and unread reported as no declaration is
+/// `telos/honest-reads` exactly.
+///
+/// Driven through the CLI rather than the loader, because the defect was never
+/// in what the loader returned — it was in what a person is told.
+#[test]
+fn an_unterminated_fence_is_reported_rather_than_read_as_absence() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "atom/dangling",
+            "bafyreidangling",
+            // Opened, never closed.
+            "The dangling atom.\n\n```day-atom\n{\"in\": [\"x\"], \"out\": [\"y\"]}\n",
+        )],
+    );
+
+    let out = day(dir.path(), &kan, &["doctor"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    assert!(
+        text.contains("never closed"),
+        "day must say the block was left open — the remedy is a closing fence, \
+         and a message about anything else sends the reader to the wrong \
+         place:\n{text}"
+    );
+    assert!(
+        !text.contains("composition: ok"),
+        "and it must not certify a vocabulary it read only part of, which is \
+         the same failure `ac2_an_atom_declaring_an_unknown_field_is_refused_not_dropped` \
+         closed one field over:\n{text}"
+    );
+}
+
+/// **And the hook still exits zero**, because an advisory channel that can fail
+/// a session is a blocking hook by another name.
+///
+/// This is the guarantee that made the change safe to make at all: `Command::Hook`
+/// catches every error and renders it as context. Asserted here rather than
+/// trusted, because the whole argument for widening what day refuses rested on
+/// it.
+#[test]
+fn a_read_that_now_fails_still_cannot_fail_a_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "atom/dangling",
+            "bafyreidangling",
+            "The dangling atom.\n\n```day-atom\n{\"in\": [\"x\"]}\n",
+        )],
+    );
+
+    let out = day(dir.path(), &kan, &["hook", "session-start"]);
+    assert!(
+        out.status.success(),
+        "session-start must exit 0 even when a claim it reads is unreadable"
+    );
+}

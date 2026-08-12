@@ -32,6 +32,15 @@ pub enum Error {
         #[source]
         source: BlockError,
     },
+    /// A configuration subject whose assembled shape day cannot resolve per key.
+    ///
+    /// Separate from [`Error::Block`] because it is not a claim that failed to
+    /// parse — every layer parsed — it is the layers together not making a value
+    /// the type accepts, or a per-key subject naming a key its block does not
+    /// declare. Reporting that as a malformed block would point the reader at
+    /// one claim when the disagreement is between two.
+    #[error("{subject}: {reason}")]
+    ConfigShape { subject: String, reason: String },
 }
 
 /// The metadata key naming the reader version a block requires.
@@ -125,6 +134,19 @@ pub enum BlockError {
     /// version skew.
     #[error("`{fence}` block is not a valid {fence}: {reason}")]
     Invalid { fence: Fence, reason: String },
+    /// A `day-` fence was opened and never closed, so there is no block to
+    /// read and the claim plainly meant there to be one.
+    ///
+    /// Its own variant rather than a `Malformed` with a hand-written message,
+    /// because the remedy is different and specific: nothing here is wrong with
+    /// the JSON — the closing fence is missing, and saying exactly that is the
+    /// difference between a reader that helps and one that reports a parse
+    /// error for text it never parsed.
+    #[error(
+        "`{fence}` block is opened and never closed, so day read no block \
+         where the claim declares one — add the closing fence"
+    )]
+    Unterminated { fence: Fence },
 }
 
 impl BlockError {
@@ -709,10 +731,115 @@ pub(crate) fn fenced_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
             }
         }
     }
-    // An opened fence that never closes is no block at all — the same answer
-    // the infix scanner gave, kept deliberately: day never writes one, so a
-    // dangling open is quotation or prose, not a claim to blame.
     None
+}
+
+/// What a scan for `name` found, distinguishing **"there is no block"** from
+/// **"there is a block day could not read"**.
+///
+/// [`fenced_body`] collapses those two into `None`, and that collapse used to be
+/// deliberate. The comment stating so read: *"An opened fence that never closes
+/// is no block at all … day never writes one, so a dangling open is quotation or
+/// prose, not a claim to blame."*
+///
+/// **The premise is true and does not support the conclusion.** day never writes
+/// an unterminated fence; people and agents do, and `docs/CONVENTIONS.md`
+/// supports hand-written blocks on purpose — [`Versioned::validate`]'s own doc
+/// says hand-written blocks are "a real path rather than a hypothetical one",
+/// which is the argument for the check one field over. A dangling open is
+/// evidence of an intent to declare, so reading it as prose resolves day's
+/// default while the project believes it declared a value. That is the exact
+/// shape of `telos/honest-reads`: a declaration day cannot read is an error,
+/// never a silent absence.
+///
+/// Measured before changing it, through the built binary: an unterminated
+/// `day-cycle` block on `schema/cycle` made `day assess docs` exit 0 with no
+/// cycle line at all, where the same body with its closing fence reported
+/// `[UNCHECKED] … an empty tag pattern matches nothing` and exit 2.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum FenceScan<'a> {
+    /// A closed fence whose info string is exactly `name`.
+    Found(&'a str),
+    /// A `day-` fence was opened and never closed. Carries the info string, so
+    /// the diagnostic can name what was left open.
+    Unterminated(&'a str),
+    /// A closed `day-` fence whose info string is not `name`.
+    ///
+    /// Data rather than a verdict, because the right response differs by
+    /// caller and neither answer is safe everywhere. A general reader meets
+    /// these constantly — a claim carrying `day-atom` is not malformed because
+    /// something looked for `day-schema` — so [`extract_fenced`] treats it as
+    /// absence. A **per-key subject** exists only to carry one key's
+    /// declaration, so there anything else is a misspelling or a block from a
+    /// newer day, and `src/layers.rs` refuses it.
+    Foreign(&'a str),
+    /// No `day-` block here. Prose, or a claim about something else.
+    Absent,
+}
+
+/// [`fenced_body`], keeping the distinction it throws away.
+///
+/// **Bounded to the `day-` namespace**, like every other fence judgement here: a
+/// dangling ```` ```bash ```` in prose is untidy markdown and not a failed
+/// declaration, and making prose a hazard would be a worse error than the one
+/// this fixes.
+///
+/// One exception, because it is silent otherwise: a dangling *non-day* fence
+/// swallows everything after it, including a `day-` fence that would otherwise
+/// have been found. That case reports the day fence it swallowed, since the
+/// observable effect on the reader is identical — a declaration that is present
+/// and unread.
+pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
+    let mut pos = 0;
+    let mut open: Option<(usize, usize, &str)> = None;
+    let mut foreign: Option<&str> = None;
+    for line in text.split_inclusive('\n') {
+        let line_start = pos;
+        pos += line.len();
+        let (ticks, info) = fence_line(line);
+        match open {
+            Some((open_ticks, body_start, open_info)) => {
+                if ticks >= open_ticks && info.is_empty() {
+                    if open_info == name {
+                        return FenceScan::Found(&text[body_start..line_start]);
+                    }
+                    if foreign.is_none() && open_info.starts_with("day-") {
+                        foreign = Some(open_info);
+                    }
+                    open = None;
+                }
+            }
+            None => {
+                if ticks >= 3 {
+                    open = Some((ticks, pos, info));
+                }
+            }
+        }
+    }
+
+    let Some((_, body_start, open_info)) = open else {
+        // Unterminated outranks foreign: a dangling open is the more specific
+        // and more actionable finding, and a claim can carry both.
+        return match foreign {
+            Some(info) => FenceScan::Foreign(info),
+            None => FenceScan::Absent,
+        };
+    };
+    if open_info.starts_with("day-") {
+        return FenceScan::Unterminated(open_info);
+    }
+    // The swallowed case: a non-day fence left open, with a day fence inside
+    // what it swallowed.
+    for line in text[body_start..].split_inclusive('\n') {
+        let (ticks, info) = fence_line(line);
+        if ticks >= 3 && info.starts_with("day-") {
+            return FenceScan::Unterminated(info);
+        }
+    }
+    match foreign {
+        Some(info) => FenceScan::Foreign(info),
+        None => FenceScan::Absent,
+    }
 }
 
 /// Pulls the first fenced block with the given info string out of a claim's
@@ -734,8 +861,23 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
     // the parameter makes that true by construction instead of by nine call
     // sites continuing to agree. Diagnostics naming the right cause is the whole
     // point of the error split.
-    let body = fenced_body(text, T::FENCE)?;
-    Some(parse_block::<T>(body.trim()))
+    // Through `scan_fenced`, so **every** reader of an embedded block inherits
+    // the unterminated case at once. Putting it in `newest_fenced` covered the
+    // `schema/*`, `telos/*` and `bridge/*` loaders and missed `atoms::load`,
+    // which reads claims through here directly — `day doctor` went on reporting
+    // "atoms: none declared yet" for a claim carrying a dangling `day-atom`
+    // fence. A guarantee wired at one reader when there are several is day#101,
+    // and this is the entry point all of them share.
+    match scan_fenced(text, T::FENCE) {
+        // A claim carrying some OTHER day block is not malformed — most claims
+        // this is called on carry none of this type. Unchanged behaviour, now
+        // stated rather than implied by a scanner that could not see it.
+        FenceScan::Absent | FenceScan::Foreign(_) => None,
+        FenceScan::Unterminated(info) => Some(Err(BlockError::Unterminated {
+            fence: Fence::Owned(info.to_string()),
+        })),
+        FenceScan::Found(body) => Some(parse_block::<T>(body.trim())),
+    }
 }
 
 /// The version gate, then the typed parse.
@@ -754,16 +896,37 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
 pub fn parse_block<T: serde::de::DeserializeOwned + Versioned>(
     json: &str,
 ) -> Result<T, BlockError> {
+    parse_block_declared::<T>(json).map(|(_declared, parsed)| parsed)
+}
+
+/// [`parse_block`], additionally handing back the block's own object — the
+/// fields the claim **actually declared**, with `_version` already removed.
+///
+/// The typed value cannot answer that question. `serde(default)` fills every
+/// field a claim omitted, so a claim that never mentioned `cadence` and one that
+/// set it to exactly the shipped default produce identical `T`s. Provenance
+/// computed by comparing against the default would report the second as
+/// `(default)`, and a provenance column that cannot distinguish "nobody said" from
+/// "someone said this" is decoration rather than evidence — `.design/day-config.md`
+/// REQ-2 turns on exactly that distinction.
+///
+/// One parse, two views: [`parse_block`] is this function with the object
+/// dropped. Two implementations of the version gate that could disagree about
+/// what a block says is the shape day#101 records three instances of.
+pub fn parse_block_declared<T: serde::de::DeserializeOwned + Versioned>(
+    json: &str,
+) -> Result<(serde_json::Value, T), BlockError> {
     let value = version_gate(json, Fence::Borrowed(T::FENCE), T::SUPPORTED_VERSION)?;
-    let parsed: T = serde_json::from_value(value).map_err(|source| BlockError::Malformed {
-        fence: Fence::Borrowed(T::FENCE),
-        source,
-    })?;
+    let parsed: T =
+        serde_json::from_value(value.clone()).map_err(|source| BlockError::Malformed {
+            fence: Fence::Borrowed(T::FENCE),
+            source,
+        })?;
     parsed.validate().map_err(|reason| BlockError::Invalid {
         fence: Fence::Borrowed(T::FENCE),
         reason,
     })?;
-    Ok(parsed)
+    Ok((value, parsed))
 }
 
 /// Parses a block body, applies the version gate, and hands back the remainder
@@ -834,25 +997,55 @@ pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
     client: &KanClient,
     subject: &str,
 ) -> Result<Option<(String, T)>, Error> {
+    Ok(newest_fenced_declared::<T>(client, subject)?.map(|(cid, _declared, value)| (cid, value)))
+}
+
+/// [`newest_fenced`], additionally handing back which fields the winning claim
+/// declared — see [`parse_block_declared`] for why the typed value cannot say.
+///
+/// This is the reader `src/layers.rs` assembles provenance from, and it is the
+/// same function `newest_fenced` is, so the withheld-read guard below applies to
+/// both by construction. A second claim-walk carrying its own copy of that guard
+/// is how six hand-taught guards accumulated (day#160).
+pub fn newest_fenced_declared<T: serde::de::DeserializeOwned + Versioned>(
+    client: &KanClient,
+    subject: &str,
+) -> Result<Option<(String, serde_json::Value, T)>, Error> {
     let claims = client.show(subject)?;
     for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
-        match extract_fenced::<T>(text) {
-            Some(Ok(value)) => return Ok(Some((claim.cid.clone(), value))),
+        // Through `scan_fenced`, so this reader inherits the unterminated case
+        // rather than carrying a second copy of the rule. `extract_fenced` does
+        // the same one function up; both need the *declared object* here, which
+        // is the only reason this walk exists separately at all.
+        let body = match scan_fenced(text, T::FENCE) {
+            FenceScan::Absent | FenceScan::Foreign(_) => continue,
+            FenceScan::Unterminated(info) => {
+                return Err(Error::Block {
+                    subject: subject.to_string(),
+                    cid: claim.cid.clone(),
+                    source: BlockError::Unterminated {
+                        fence: Fence::Owned(info.to_string()),
+                    },
+                })
+            }
+            FenceScan::Found(body) => body,
+        };
+        match parse_block_declared::<T>(body.trim()) {
+            Ok((declared, value)) => return Ok(Some((claim.cid.clone(), declared, value))),
             // An unreadable block on the newest claim is not silently skipped
             // in favour of an older good one — that would hide the error, and
             // would silently resolve an *older* declaration as though it were
             // current, which is worse than failing.
-            Some(Err(source)) => {
+            Err(source) => {
                 return Err(Error::Block {
                     subject: subject.to_string(),
                     cid: claim.cid.clone(),
                     source,
                 })
             }
-            None => continue,
         }
     }
     // **Nothing parsed. Before reporting that as "nothing is declared", check
@@ -1069,6 +1262,61 @@ fn declared_ancestors<'a>(atoms: &'a [Atom], name: &str) -> Vec<&'a Atom> {
 /// The gate is what has to hold for all seven.
 #[cfg(test)]
 mod version_gate {
+
+    /// **An opened-and-never-closed `day-` fence is a block day could not read,
+    /// not an absence.**
+    ///
+    /// This reverses a decision the source previously stated outright ("a
+    /// dangling open is quotation or prose, not a claim to blame"), so each
+    /// half is asserted rather than assumed — including the half that keeps
+    /// prose harmless.
+    #[test]
+    fn an_unterminated_day_fence_is_distinguished_from_absence() {
+        let closed = "x\n\n```day-cycle\n{\"tags\": \"v*\"}\n```\n";
+        assert_eq!(
+            scan_fenced(closed, "day-cycle"),
+            FenceScan::Found("{\"tags\": \"v*\"}\n")
+        );
+
+        let dangling = "x\n\n```day-cycle\n{\"tags\": \"v*\"}\n";
+        assert_eq!(
+            scan_fenced(dangling, "day-cycle"),
+            FenceScan::Unterminated("day-cycle"),
+            "the claim declares a cycle and day read none — reporting that as \
+             absence resolves the shipped default in silence"
+        );
+
+        // Prose stays harmless: a dangling non-day fence with nothing inside it.
+        let prose = "See:\n\n```bash\nkan observe x\n";
+        assert_eq!(
+            scan_fenced(prose, "day-cycle"),
+            FenceScan::Absent,
+            "an untidy shell example is not a failed declaration, and making \
+             prose a hazard would be a worse error than the one this fixes"
+        );
+
+        // ...unless it swallowed a real declaration, where the observable
+        // effect on the reader is identical.
+        let swallowed = "See:\n\n```bash\nkan observe x\n\n```day-cycle\n{}\n";
+        assert_eq!(
+            scan_fenced(swallowed, "day-cycle"),
+            FenceScan::Unterminated("day-cycle")
+        );
+
+        // A claim with no fences at all.
+        assert_eq!(scan_fenced("just prose", "day-cycle"), FenceScan::Absent);
+    }
+
+    /// `fenced_body` keeps its old answer, so every caller that only wants a
+    /// body is unchanged by the richer scan sitting beside it.
+    #[test]
+    fn fenced_body_is_unchanged_by_the_richer_scan() {
+        let dangling = "x\n\n```day-cycle\n{}\n";
+        assert_eq!(fenced_body(dangling, "day-cycle"), None);
+        let closed = "x\n\n```day-cycle\n{}\n```\n";
+        assert_eq!(fenced_body(closed, "day-cycle"), Some("{}\n"));
+    }
+
     use super::*;
     use crate::{bridge, docs, schema, telos, tension};
 
@@ -1416,13 +1664,36 @@ mod tests {
         assert_eq!(interface.inputs, vec!["first"]);
     }
 
+    /// **This test previously asserted the opposite, and the reversal is the
+    /// point of the change rather than a casualty of it.**
+    ///
+    /// It read: *"Pinned, not fixed: day never writes a dangling open, so one is
+    /// quotation or prose — the infix scanner answered None and so does the
+    /// line-anchored one."* The premise is true. day does not write dangling
+    /// opens; **people and agents do**, and `docs/CONVENTIONS.md` supports
+    /// hand-written blocks deliberately — [`Versioned::validate`]'s own doc calls
+    /// that "a real path rather than a hypothetical one" while arguing for a
+    /// check one field over.
+    ///
+    /// So the old answer resolved day's shipped default while a claim plainly
+    /// declared something, which `telos/honest-reads` forbids: a declaration day
+    /// cannot read is an error, never a silent absence. Found by a cold review
+    /// (round 2, finding F4) on the per-key path, and measured immediately after
+    /// on this one, which predates it.
+    ///
+    /// Kept as one test rather than deleted and replaced, so the reversal is
+    /// visible in the history of the assertion rather than only in a commit.
     #[test]
-    fn an_unterminated_fence_is_no_block_at_all() {
-        // Pinned, not fixed: day never writes a dangling open, so one is
-        // quotation or prose — the infix scanner answered None and so does the
-        // line-anchored one.
+    fn an_unterminated_fence_is_a_block_day_could_not_read() {
         let text = "```day-atom\n{\"in\": [], \"out\": []}\n";
-        assert!(extract_interface(text).is_none());
+        let err = extract_interface(text)
+            .expect("a dangling open is a declaration, not an absence")
+            .expect_err("and day cannot read it");
+        assert!(
+            matches!(err, BlockError::Unterminated { .. }),
+            "reported as its own kind, since the remedy is a closing fence and \
+             not a JSON edit: {err}"
+        );
     }
 
     #[test]

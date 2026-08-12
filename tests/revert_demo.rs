@@ -720,3 +720,67 @@ fn a_reverted_executable_file_comes_back_executable() {
     );
     executable("after the run");
 }
+
+/// **A scoped demonstration records its scope, and `--verify` replays it.**
+///
+/// The trailer had no field for revert scope, so a demonstration valid only
+/// under `--include` recorded as though it had been whole-commit. `--verify`
+/// then reverted everything and reported `DID-NOT-COMPILE` — could-not-check —
+/// for a commit whose demonstration was real and reproducible. A cold review
+/// found it by running `--verify` on a trailer `scripts/demonstration-census.py`
+/// had already counted as demonstrated: the counter read the claim and the
+/// verifier could not reproduce it, and only one of the two had been consulted.
+///
+/// This is not an edge case. Any commit that ADDS an API reaches it, because
+/// reverting such a commit whole stops the tests compiling — which is the normal
+/// shape of a new-surface commit, and was the shape of the one that exposed this.
+#[test]
+fn a_scoped_demonstration_round_trips_through_the_trailer() {
+    let s = Scratch::new(BUGGY, FIXED, ASSERTS_THE_FIX);
+
+    let (emitted, ok) = s.run(&["--tests", "t::demo_test", "--include", "src/lib.rs"]);
+    assert!(ok, "{emitted}");
+    assert!(
+        emitted.contains("include=src/lib.rs"),
+        "the pasted trailer must carry the scope it was demonstrated under, or \
+         the author records a claim their own verifier cannot reproduce:\n{emitted}"
+    );
+
+    // The trailer, as an author would paste it, on the commit it describes.
+    let trailer = emitted
+        .lines()
+        .find(|l| l.trim_start().starts_with("Demonstrated-by:"))
+        .expect("a trailer line")
+        .trim()
+        .to_string();
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", &format!("fix\n\n{trailer}")]);
+
+    let (verified, ok) = s.run(&["--verify", "HEAD"]);
+    assert!(
+        ok,
+        "a trailer carrying its own scope must re-derive under that scope:\n{verified}"
+    );
+    assert!(verified.contains("DEMONSTRATED"), "{verified}");
+}
+
+/// **A trailer without `include=` still parses, and still means whole-commit.**
+///
+/// Every trailer written before the field exists says nothing about scope, and
+/// must keep meaning what it meant. A grammar change that silently invalidated
+/// the existing record would turn `demonstration-census.py`'s only verdict —
+/// `unaccounted` — on for history that was fine.
+#[test]
+fn a_trailer_without_a_scope_is_still_whole_commit() {
+    let s = Scratch::new(BUGGY, FIXED, ASSERTS_THE_FIX);
+    s.git(&["add", "-A"]);
+    s.git(&[
+        "commit",
+        "-qm",
+        "fix\n\nDemonstrated-by: revert=HEAD tests=t::demo_test outcome=DEMONSTRATED",
+    ]);
+
+    let (text, ok) = s.run(&["--verify", "HEAD"]);
+    assert!(ok, "an unscoped trailer must still verify:\n{text}");
+    assert!(text.contains("DEMONSTRATED"), "{text}");
+}

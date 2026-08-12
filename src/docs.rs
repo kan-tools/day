@@ -114,6 +114,14 @@ impl DocsSchema {
 
     pub fn load(client: &KanClient) -> Result<Self, Error> {
         let subject = format!("{SCHEMA_PREFIX}{DOCS_SLUG}");
+        // not-per-key: `DocsSchema` has NO SHIPPED DEFAULT. Absence is
+        // `NotDeclared`, so layer 1 of the overlay does not exist and a key
+        // has nothing beneath it. That makes this a DECLARATION rather than
+        // configuration — RQ-7 scopes declarations out by the `schema/*`
+        // prefix, and therefore misses this one and `schema/design-doc`. The
+        // property that actually decides it is `T: Default`, which
+        // `layers::config` requires, so a declaration cannot be misrouted
+        // there even deliberately.
         newest_fenced::<Self>(client, &subject)?
             .map(|(_cid, schema)| schema)
             .ok_or_else(|| Error::NotDeclared {
