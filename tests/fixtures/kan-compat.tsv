@@ -20,8 +20,17 @@
 #   unbuildable   the tag does not build with the current toolchain; says
 #                 nothing about the pairing
 #
-# A tag with no row here fails the build. Whether a pairing is supported is a
-# decision, not a default.
+# A tag with no row here is WARNED about, not failed. Whether a pairing is
+# supported is still a decision rather than a default — but the decision is
+# expressed by the range being derived only from the rows that are present, so
+# an unmeasured kan leaves day's claim true and its user gets the `Newer`
+# verdict, which is the designed benign path.
+#
+# This line used to say "fails the build", which stopped being true when the
+# workflow was changed to warn: kan publishing a tag would otherwise turn DAY's
+# next release red, after the tag was already pushed, for an expected event in
+# another repo. Stale operative guidance in the file a maintainer edits to
+# adopt a version, found by a cold review.
 #
 # The floor is HARD, not incidental. Since day#71, `ClaimLog` makes exactly one
 # `kan show --all --json` call, so a kan without that flag cannot answer a

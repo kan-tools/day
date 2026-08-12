@@ -7,10 +7,20 @@
 #
 #   ok                     every conformance test passed against this kan   (exit 0)
 #   incompatible           at least one conformance test failed             (exit 0)
-#   unbuildable            this kan tag does not build with the current
-#                          toolchain                                        (exit 0)
 #   could-not-run          the measurement did not happen. NOT a fact about
 #                          the pairing, and never a table row               (exit 2)
+#
+# **`unbuildable` is deliberately NOT in this vocabulary**, and removing it is a
+# fix rather than a simplification. That outcome means "this kan tag does not
+# build", which `.github/workflows/kan-compat.yml` decides with its own `cargo
+# install` step BEFORE this script is invoked — by which point the kan binary
+# either exists or the workflow has already written the row. Everything this
+# script compiles afterwards is DAY'S OWN conformance suite, so a `could not
+# compile` here is a fact about day, and publishing it as `unbuildable` is a
+# durable claim about the wrong program. Measured: a cargo emitting cargo's
+# ordinary "could not compile `day` (test \"kan_conformance\")" produced
+# `unbuildable` at exit 0, cached and compared. Found by a cold review, in the
+# commit written to stop exactly this class of mislabelling.
 #
 # `could-not-run` exits non-zero because could-not-check outranks
 # checked-and-clean, and a caller that cannot tell the two apart will transcribe
@@ -33,9 +43,33 @@ set -euo pipefail
 kan_bin="${1:?usage: run-kan-compat-cell.sh <path-to-kan-binary>}"
 
 if [ ! -x "$kan_bin" ]; then
-    echo "unbuildable"
-    exit 0
+    echo "no executable at $kan_bin — the caller is responsible for building" >&2
+    echo "kan; this script cannot tell a tag that will not build from a path" >&2
+    echo "that was never written." >&2
+    echo "could-not-run"
+    exit 2
 fi
+
+# **The binary must actually be kan.** The only preflight used to be the
+# executable bit, so ANY executable was measured as though it were kan:
+# `run-kan-compat-cell.sh /bin/echo` returned `incompatible` at exit 0, on the
+# strength of a suite whose failures were JSON- and CLI-shape errors proving the
+# opposite. A wrong or substituted binary could move day's published floor.
+if ! kan_version="$("$kan_bin" --version 2>/dev/null)"; then
+    echo "$kan_bin does not answer \`--version\`, so it cannot be identified as" >&2
+    echo "kan. Refusing to measure day against an unknown program." >&2
+    echo "could-not-run"
+    exit 2
+fi
+case "$kan_version" in
+    kan\ *) ;;
+    *)
+        echo "$kan_bin reports '$kan_version', which is not kan. Refusing to" >&2
+        echo "publish a compatibility fact measured against another program." >&2
+        echo "could-not-run"
+        exit 2
+        ;;
+esac
 
 # A directory containing only this kan, prepended to PATH. Prepending the
 # binary's own directory would be wrong when it sits beside other tools.
@@ -62,23 +96,29 @@ unset DAY_KAN_BIN || true
 # manufactured. It is not hypothetical: an empty CARGO_TARGET_DIR in the
 # environment produced four `incompatible` cells against a kan day demonstrably
 # works with, and only prior knowledge of the answer caught it.
-if ! PATH="$shim:$PATH" cargo test --quiet --no-run --test kan_conformance \
+if ! PATH="$shim:$PATH" timeout "${CELL_TIMEOUT:-900}" \
+        cargo test --quiet --no-run --test kan_conformance \
         >/tmp/kan-compat.log 2>&1; then
-    if grep -q "could not compile" /tmp/kan-compat.log; then
-        echo "unbuildable"
-        exit 0
-    fi
-    echo "could-not-run" >&2
-    echo "cargo did not get as far as building the suite — this says NOTHING" >&2
-    echo "about the pairing. See /tmp/kan-compat.log." >&2
+    # Every failure here is could-not-run, including `could not compile`: what
+    # failed to compile is DAY, and day failing to build says nothing about the
+    # kan tag. See the header.
+    echo "day's conformance suite did not build, or cargo never ran. This is a" >&2
+    echo "fact about day or about this machine, NOT about the kan tag." >&2
+    echo "See /tmp/kan-compat.log." >&2
     echo "could-not-run"
     exit 2
 fi
 
 # `|| status=$?` rather than a bare call: `set -e` would take a failing suite —
 # the `incompatible` outcome this exists to report — as a reason to abort.
+# `timeout` bounds a hung compiler or suite, which otherwise never reaches any
+# outcome at all and consumes the job to GitHub's outer limit — a failure class
+# the four-state vocabulary named and did not handle. 124 is `timeout`'s own
+# exit code, and it lands in the could-not-run branch below because the harness
+# rendered no verdict.
 status=0
-PATH="$shim:$PATH" cargo test --quiet --test kan_conformance -- \
+PATH="$shim:$PATH" timeout "${CELL_TIMEOUT:-900}" \
+    cargo test --quiet --test kan_conformance -- \
     --skip conformance_kan_78 >/tmp/kan-compat.log 2>&1 || status=$?
 
 # Keyed on the POSITIVE signal — did the harness render a verdict — rather than

@@ -1535,3 +1535,115 @@ fn the_matrix_never_compares_or_caches_an_unmeasured_cell() {
          step.\n{run_step}"
     );
 }
+
+/// **The cell never publishes a fact about the wrong program.**
+///
+/// Round 1 of this branch's review left three ways for a non-measurement to
+/// become a durable row, and all three reached the table through a single
+/// missing distinction: *what failed*. A `could not compile` in the cell is day
+/// failing to build, not the kan tag — the workflow builds kan separately,
+/// before this script runs — and any executable at all was measured as though
+/// it were kan.
+///
+/// Measured before the fix: a cargo emitting cargo's ordinary "could not compile
+/// `day` (test kan_conformance)" produced `unbuildable` at exit 0, and
+/// `/bin/echo` produced `incompatible` at exit 0. Both are durable claims about
+/// a program that was never tested.
+#[test]
+fn the_cell_refuses_to_measure_a_program_that_is_not_kan() {
+    let script = repo_root().join("scripts/run-kan-compat-cell.sh");
+
+    // An executable that is not kan.
+    let out = Command::new(&script)
+        .arg("/bin/echo")
+        .current_dir(repo_root())
+        .output()
+        .expect("sh should be runnable");
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert_ne!(
+        token, "incompatible",
+        "a program that is not kan cannot be incompatible WITH day — that is a \
+         claim about a pairing that was never measured, and it is transcribed \
+         into the table by hand"
+    );
+    assert_eq!(token, "could-not-run");
+    assert_eq!(out.status.code(), Some(2));
+
+    // A path nothing was ever written to.
+    let out = Command::new(&script)
+        .arg("/nonexistent/kan")
+        .current_dir(repo_root())
+        .output()
+        .expect("sh should be runnable");
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert_ne!(
+        token, "unbuildable",
+        "a missing path is the caller not having built kan; this script cannot \
+         tell that from a tag that will not build, and must not guess"
+    );
+    assert_eq!(token, "could-not-run");
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// **`unbuildable` is not in the cell's vocabulary at all.**
+///
+/// The narrower guarantee behind the test above, asserted on the source because
+/// it is a property of what the script *can* say rather than of one input. That
+/// outcome belongs to the workflow's install step, which decides whether the
+/// TAG builds before the cell is invoked.
+#[test]
+fn the_cell_cannot_emit_a_verdict_about_whether_kan_builds() {
+    let text = read("scripts/run-kan-compat-cell.sh");
+    let emitting: Vec<&str> = text
+        .lines()
+        .filter(|l| l.contains("echo \"unbuildable\"") || l.trim() == "echo unbuildable")
+        .collect();
+    assert!(
+        emitting.is_empty(),
+        "the cell emits `unbuildable`, which is a claim about the kan tag it \
+         was handed rather than about the pairing it measured: {emitting:?}"
+    );
+}
+
+/// **The matrix distinguishes "kan did not build" from "kan could not be
+/// built here".**
+///
+/// The workflow mapped every nonzero `cargo install` — DNS failure, registry
+/// outage, killed process, full disk — to `unbuildable`, then wrote and cached
+/// it under a key naming an immutable tag. A cold review hit precisely that: its
+/// first attempt failed to resolve the host. Keyed on the positive signal, the
+/// same rule the cell uses.
+#[test]
+fn the_matrix_does_not_publish_an_infrastructure_failure_as_a_tag_verdict() {
+    let yaml = read(".github/workflows/kan-compat.yml");
+    let build_step = yaml
+        .split("- name: Build this kan")
+        .nth(1)
+        .expect("the workflow should still build kan")
+        .split("- name:")
+        .next()
+        .expect("delimited by the next step");
+
+    assert!(
+        build_step.contains("could not compile"),
+        "`unbuildable` must be keyed on cargo reaching compilation and failing, \
+         not on any nonzero exit:\n{build_step}"
+    );
+    assert!(
+        build_step.contains("could-not-run"),
+        "and everything else must be named as a non-measurement:\n{build_step}"
+    );
+
+    let run_step = yaml
+        .split("- name: Run the conformance suite against it")
+        .nth(1)
+        .expect("the workflow should still run the cell")
+        .split("- name:")
+        .next()
+        .expect("delimited by the next step");
+    assert!(
+        run_step.contains("could-not-run") && run_step.contains("exit 1"),
+        "and a could-not-run install must fail the cell rather than falling \
+         through to a row:\n{run_step}"
+    );
+}
