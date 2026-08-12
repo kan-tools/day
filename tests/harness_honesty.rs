@@ -1439,6 +1439,291 @@ fn the_finding_census_separates_unaccounted_from_could_not_check() {
     );
 }
 
+/// **A cell that could not run says so, and never manufactures a pairing fact.**
+///
+/// `scripts/run-kan-compat-cell.sh` sorted a failed `cargo test` by grepping the
+/// log for `could not compile`: one toolchain problem was distinguished as
+/// `unbuildable`, and every other one — cargo refusing to start, a killed
+/// process, a broken environment — fell through to `incompatible`. Its own
+/// comment says conflating those "would record a toolchain problem as a
+/// compatibility fact", so the rule was stated in the right place and enforced
+/// by nothing, which is the defect class `CLAUDE.md` records for prose in a doc
+/// comment.
+///
+/// It cost a real answer: an empty `CARGO_TARGET_DIR` in the environment
+/// produced `incompatible` for four consecutive kan releases that day
+/// demonstrably works with, and the only thing that caught it was already
+/// knowing the answer. Transcribed, it would have moved day's published floor.
+///
+/// The reproduction here is that exact environment, and it is hermetic: cargo
+/// refuses before it builds anything, so no kan and no toolchain work is
+/// needed. `/bin/echo` stands in for the binary only to clear the executable
+/// check the script makes first.
+#[test]
+fn the_compat_cell_reports_could_not_run_rather_than_a_pairing_fact() {
+    let script = repo_root().join("scripts/run-kan-compat-cell.sh");
+    assert!(script.is_file(), "the cell script should exist");
+
+    let out = Command::new(&script)
+        .arg("/bin/echo")
+        .current_dir(repo_root())
+        // The defect verbatim. Cargo rejects an empty target directory before
+        // it does any work, which is why this is fast and why the old
+        // classifier never saw `could not compile`.
+        .env("CARGO_TARGET_DIR", "")
+        .output()
+        .expect("sh should be runnable");
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    assert_ne!(
+        token, "incompatible",
+        "an environment that stopped cargo is not a fact about kan. This is the \
+         regression: could-not-check reported as checked-and-found-a-defect, \
+         and it is transcribed into tests/fixtures/kan-compat.tsv by hand.\n\
+         stderr: {stderr}"
+    );
+    assert_eq!(
+        token, "could-not-run",
+        "the cell must name the non-measurement.\nstderr: {stderr}"
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "and exit non-zero: could-not-check outranks checked-and-clean, and a \
+         caller reading only the token will otherwise write a row from it.\n\
+         stderr: {stderr}"
+    );
+}
+
+/// **The matrix refuses to compare or cache a non-measurement.**
+///
+/// The token is only half the guarantee. `kan-compat.yml` compares the cell's
+/// outcome against the committed row and fails with "a pairing changed" — an
+/// error it reserves for day having moved — so a `could-not-run` reaching that
+/// step reports the wrong defect against the wrong repo. Worse, the outcome
+/// file is the cache value under a key naming an immutable tag, so a
+/// non-answer cached once is served to every later run.
+///
+/// A guarantee wired at one call site is day#101, and this is the second call
+/// site.
+#[test]
+fn the_matrix_never_compares_or_caches_an_unmeasured_cell() {
+    let yaml = read(".github/workflows/kan-compat.yml");
+    let run_step = yaml
+        .split("- name: Run the conformance suite against it")
+        .nth(1)
+        .expect("the workflow should still have the step that runs the cell")
+        .split("- name:")
+        .next()
+        .expect("the step should be delimited by the next one");
+
+    assert!(
+        run_step.contains("if ! scripts/run-kan-compat-cell.sh"),
+        "the workflow must observe the cell's exit code; reading only its stdout \
+         is how a non-answer becomes a row.\n{run_step}"
+    );
+    assert!(
+        run_step.contains("rm -f kan-compat-outcome.txt"),
+        "and it must delete the outcome file before failing — a cache entry \
+         under an immutable tag key is a claim that the question was \
+         answered.\n{run_step}"
+    );
+    assert!(
+        run_step.contains("exit 1"),
+        "and fail the cell, rather than falling through to the comparison \
+         step.\n{run_step}"
+    );
+}
+
+/// **A path nothing was written to is a non-measurement, not a tag verdict.**
+///
+/// This test used to assert something wider — that a non-kan executable is
+/// refused — and that assertion is gone deliberately rather than quietly. Two
+/// preflights were tried and neither can carry the claim: `--help` reports
+/// argv[0] rather than the program, and behavioural identity is
+/// indistinguishable from "kan too old to do what day needs" for every tag
+/// before 0.9.1, which is what nine `incompatible` rows record.
+///
+/// So a non-kan executable supplied by hand now yields `incompatible`, and the
+/// guarantee that CI never supplies one lives in
+/// `the_matrix_installs_kan_from_a_pinned_source`. That is deliberately NOT
+/// asserted here: it is a behaviour this repo accepts, not one it wants, and
+/// pinning it with a test would read as an endorsement.
+///
+/// What survives is the half that is genuinely the cell's to know. A missing
+/// path means the caller did not build kan, which the cell cannot tell from a
+/// tag that will not build — so it refuses to guess.
+#[test]
+fn the_cell_reports_a_missing_binary_as_a_non_measurement() {
+    let script = repo_root().join("scripts/run-kan-compat-cell.sh");
+
+    let out = Command::new(&script)
+        .arg("/nonexistent/kan")
+        .current_dir(repo_root())
+        .output()
+        .expect("sh should be runnable");
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert_ne!(
+        token, "unbuildable",
+        "a missing path is the caller not having built kan; this script cannot \
+         tell that from a tag that will not build, and must not guess"
+    );
+    assert_eq!(token, "could-not-run");
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// **`unbuildable` is not in the cell's vocabulary at all.**
+///
+/// The narrower guarantee behind the test above, asserted on the source because
+/// it is a property of what the script *can* say rather than of one input. That
+/// outcome belongs to the workflow's install step, which decides whether the
+/// TAG builds before the cell is invoked.
+#[test]
+fn the_cell_cannot_emit_a_verdict_about_whether_kan_builds() {
+    let text = read("scripts/run-kan-compat-cell.sh");
+    let emitting: Vec<&str> = text
+        .lines()
+        .filter(|l| l.contains("echo \"unbuildable\"") || l.trim() == "echo unbuildable")
+        .collect();
+    assert!(
+        emitting.is_empty(),
+        "the cell emits `unbuildable`, which is a claim about the kan tag it \
+         was handed rather than about the pairing it measured: {emitting:?}"
+    );
+}
+
+/// **The matrix distinguishes "kan did not build" from "kan could not be
+/// built here".**
+///
+/// The workflow mapped every nonzero `cargo install` — DNS failure, registry
+/// outage, killed process, full disk — to `unbuildable`, then wrote and cached
+/// it under a key naming an immutable tag. A cold review hit precisely that: its
+/// first attempt failed to resolve the host. Keyed on the positive signal, the
+/// same rule the cell uses.
+#[test]
+fn the_matrix_does_not_publish_an_infrastructure_failure_as_a_tag_verdict() {
+    let yaml = read(".github/workflows/kan-compat.yml");
+    let build_step = yaml
+        .split("- name: Build this kan")
+        .nth(1)
+        .expect("the workflow should still build kan")
+        .split("- name:")
+        .next()
+        .expect("delimited by the next step");
+
+    assert!(
+        build_step.contains("could not compile"),
+        "`unbuildable` must be keyed on cargo reaching compilation and failing, \
+         not on any nonzero exit:\n{build_step}"
+    );
+    assert!(
+        build_step.contains("could-not-run"),
+        "and everything else must be named as a non-measurement:\n{build_step}"
+    );
+
+    let run_step = yaml
+        .split("- name: Run the conformance suite against it")
+        .nth(1)
+        .expect("the workflow should still run the cell")
+        .split("- name:")
+        .next()
+        .expect("delimited by the next step");
+    assert!(
+        run_step.contains("could-not-run") && run_step.contains("exit 1"),
+        "and a could-not-run install must fail the cell rather than falling \
+         through to a row:\n{run_step}"
+    );
+}
+
+/// **The matrix establishes kan's identity by pinning the source, which is the
+/// only place that guarantee can hold.**
+///
+/// A cold review found the cell publishing `incompatible` for a non-kan
+/// executable — a durable fact about a pairing nobody measured. Two preflights
+/// were tried and both failed, for reasons that are properties of the problem
+/// rather than of the attempts:
+///
+/// - `--help` cannot identify a program. clap derives the usage line from
+///   argv[0], so a real kan invoked under another filename fails the check and
+///   any binary placed at a path named `kan` passes it. Measured: the same kan
+///   binary printed `Usage: kan-bin-v0.12.0-beta.4`.
+/// - Behaviour cannot identify it either. For every kan before 0.9.1, "not kan"
+///   and "kan too old to do what day needs" are the same observation — which is
+///   what the nine `incompatible` rows record. Any check strict enough to catch
+///   an impostor rejects the genuine old versions the table exists to hold.
+///
+/// So the guarantee is asserted where it is actually made. The matrix installs
+/// kan from a pinned git tag, which establishes provenance before the cell runs.
+/// Deleting the preflight without pinning this would have been removing a check
+/// and calling it a design decision.
+#[test]
+fn the_matrix_installs_kan_from_a_pinned_source() {
+    let yaml = read(".github/workflows/kan-compat.yml");
+    let build_step = yaml
+        .split("- name: Build this kan")
+        .nth(1)
+        .expect("the workflow should still build kan")
+        .split("- name:")
+        .next()
+        .expect("delimited by the next step");
+
+    assert!(
+        build_step.contains("--git https://github.com/kan-tools/kan"),
+        "kan must come from its own repository, not from whatever is on the \
+         runner: this is the identity guarantee the cell deliberately does not \
+         re-derive.\n{build_step}"
+    );
+    assert!(
+        build_step.contains("--tag \"${{ matrix.kan }}\""),
+        "and pinned to the tag the row is about, so the binary measured is the \
+         one the row names.\n{build_step}"
+    );
+
+    // And the cell must not have grown a preflight back, which would re-assert
+    // a guarantee it cannot make.
+    let cell = read("scripts/run-kan-compat-cell.sh");
+    assert!(
+        !cell.contains("does not name itself kan"),
+        "the cell must not claim to identify kan; that check was removed \
+         because neither `--help` nor behaviour can carry it"
+    );
+}
+
+/// **The cell runs where `timeout` does not exist.**
+///
+/// `timeout` is GNU coreutils. Stock macOS does not ship it, and this repo is
+/// developed on macOS — so making it a hard dependency would mean the cell
+/// reports could-not-run on the maintainer's own machine, which is honest and
+/// useless. The bound degrades, and says so on stderr rather than silently,
+/// because an unannounced degrade removes the guarantee precisely where nobody
+/// is looking.
+#[test]
+fn the_cell_does_not_require_gnu_coreutils() {
+    let text = read("scripts/run-kan-compat-cell.sh");
+    // **The failure message quotes a line, not the file.** Dumping the whole
+    // script here made `scripts/revert-demo.py` report DID-NOT-COMPILE for a
+    // test that merely failed: the script's own comments contain the phrase
+    // `could not compile`, and the harness keys that outcome on finding it
+    // anywhere in the combined output. Filed as a harness defect; the fix here
+    // is that an assertion message should be readable anyway.
+    assert!(
+        text.contains("command -v timeout"),
+        "the cell must check for `timeout` rather than assuming it; no \
+         `command -v timeout` line found in scripts/run-kan-compat-cell.sh"
+    );
+    assert!(
+        text.contains("will NOT be bounded"),
+        "and must say so on stderr when it is absent — a silent degrade is the \
+         failure mode, not the missing binary"
+    );
+    assert!(
+        !text.contains("command -v timeout >/dev/null 2>&1 || die"),
+        "and must not make it fatal: stock macOS has no `timeout`, and this \
+         repo is developed there"
+    );
+}
+
 /// **One trailer, two parsers, and they must accept the same thing.**
 ///
 /// `scripts/revert-demo.py` writes the `Demonstrated-by:` trailer and verifies

@@ -107,26 +107,60 @@ jobs:
 
       - name: Build this kan
         if: steps.cached.outputs.cache-hit != 'true'
+        timeout-minutes: 30
         run: |
           # An old kan tag may not build with a current toolchain. That is a
           # real outcome rather than a CI failure: a version nobody can build
           # is a version nobody is running.
+          #
+          # **But only a COMPILE failure means that.** This mapped every nonzero
+          # exit to `unbuildable` — a DNS failure, a registry outage, a killed
+          # process, a full disk — and then wrote and cached it as a durable
+          # fact about the tag. A cold review hit exactly that: its first
+          # attempt failed to resolve the host, and under the old logic that
+          # output would have been published as "this kan tag does not build".
+          #
+          # Keyed on the positive signal, the same rule the cell uses: cargo
+          # says `could not compile` when it reached compilation and failed.
+          # Anything else did not get that far and is a fact about the machine.
           if cargo install --git https://github.com/kan-tools/kan \
                --tag "${{ matrix.kan }}" --root /tmp/kan kan 2>/tmp/kan-build.log; then
             echo built > /tmp/kan-status
-          else
+          elif grep -q "could not compile" /tmp/kan-build.log; then
             echo unbuildable > /tmp/kan-status
+            tail -20 /tmp/kan-build.log || true
+          else
+            echo could-not-run > /tmp/kan-status
             tail -20 /tmp/kan-build.log || true
           fi
 
       - name: Run the conformance suite against it
         if: steps.cached.outputs.cache-hit != 'true'
         run: |
+          if [ "$(cat /tmp/kan-status)" = "could-not-run" ]; then
+            # The install never reached compilation, so nothing is known about
+            # this tag. No row, no cache entry, and a loud failure — the same
+            # treatment the cell's own could-not-run gets below.
+            echo "::error title=${{ matrix.kan }} was not measured::kan could not be built for reasons unrelated to the tag (network, registry, or the runner). This is not a fact about the pairing and no row may be written from it."
+            exit 1
+          fi
           if [ "$(cat /tmp/kan-status)" = "unbuildable" ]; then
             echo unbuildable > kan-compat-outcome.txt
             exit 0
           fi
-          scripts/run-kan-compat-cell.sh /tmp/kan/bin/kan > kan-compat-outcome.txt
+          # A cell that could not run has measured NOTHING, and the two ways to
+          # get that wrong are both available here: comparing the non-answer
+          # against the committed row (which reads as "a pairing changed", the
+          # one error this workflow reserves for "day moved"), and caching it
+          # under an immutable key so the non-answer is served to every later
+          # run. So the file is removed before failing — a cache entry is a
+          # claim that the question was answered.
+          if ! scripts/run-kan-compat-cell.sh /tmp/kan/bin/kan > kan-compat-outcome.txt; then
+            outcome=$(cat kan-compat-outcome.txt || echo "no output")
+            rm -f kan-compat-outcome.txt
+            echo "::error title=${{ matrix.kan }} was not measured::The cell reported '$outcome' — the measurement did not happen, so this is not a fact about the pairing and no row may be written from it. See the step log."
+            exit 1
+          fi
           cat kan-compat-outcome.txt
 
       - name: Compare against the committed expectation

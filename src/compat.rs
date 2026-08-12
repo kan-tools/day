@@ -75,6 +75,59 @@ impl Version {
     fn release_order(&self) -> (u64, u64, u64) {
         (self.major, self.minor, self.patch)
     }
+
+    /// Full semver precedence, **including** the pre-release tag.
+    ///
+    /// [`Self::release_order`] deliberately orders `0.12.0-beta.4` and `0.12.0`
+    /// together, which is right for the FLOOR — a stable release of a version
+    /// whose beta day supports is supported — and wrong for the CEILING. Every
+    /// kan day has ever measured is a pre-release, so a ceiling compared on
+    /// release order alone reports a future stable `0.12.0` as measured when
+    /// the newest artifact anyone ran is `0.12.0-beta.4`. day's own wording is
+    /// "the newest kan this day was measured against", which is a claim about
+    /// an artifact rather than about a version family.
+    ///
+    /// Found by a cold review, which noted the design chose release-order
+    /// comparison on purpose and that the choice contradicts the sentence day
+    /// prints. Semver rules, not an approximation: a pre-release precedes its
+    /// release, numeric identifiers compare numerically and rank below
+    /// alphanumeric ones, and a shorter identifier list precedes a longer one
+    /// where all preceding identifiers are equal — so `beta.10` sorts after
+    /// `beta.4`, which a string comparison gets backwards.
+    fn cmp_precedence(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        self.release_order()
+            .cmp(&other.release_order())
+            .then_with(|| match (&self.pre, &other.pre) {
+                (None, None) => Ordering::Equal,
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (Some(a), Some(b)) => cmp_pre_release(a, b),
+            })
+    }
+}
+
+/// Semver pre-release precedence between two dot-separated identifier lists.
+fn cmp_pre_release(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let mut left = a.split('.');
+    let mut right = b.split('.');
+    loop {
+        let ord = match (left.next(), right.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) => match (x.parse::<u64>(), y.parse::<u64>()) {
+                (Ok(xn), Ok(yn)) => xn.cmp(&yn),
+                (Ok(_), Err(_)) => Ordering::Less,
+                (Err(_), Ok(_)) => Ordering::Greater,
+                (Err(_), Err(_)) => x.cmp(y),
+            },
+        };
+        if ord != Ordering::Equal {
+            return ord;
+        }
+    }
 }
 
 impl fmt::Display for Version {
@@ -100,12 +153,17 @@ pub const OLDEST_SUPPORTED: Version = Version {
 /// error — kan's read surface is additive, so a newer kan normally serves an
 /// older day fine. It is reported only so a user diagnosing something odd can
 /// see that they are past the tested edge.
-pub const NEWEST_MEASURED: Version = Version {
-    major: 0,
-    minor: 11,
-    patch: 0,
-    pre: None,
-};
+pub fn newest_measured() -> Version {
+    Version {
+        major: 0,
+        minor: 12,
+        patch: 0,
+        // The artifact, not the family. A `const` cannot hold an
+        // `Option<String>`, and carrying the pre-release is the whole point of
+        // this bound — so it is a function.
+        pre: Some("beta.4".to_string()),
+    }
+}
 
 /// The verdict on a kan/day pairing.
 ///
@@ -135,7 +193,7 @@ pub fn classify(kan: Option<&Version>) -> Compat {
     };
     if kan.release_order() < OLDEST_SUPPORTED.release_order() {
         Compat::TooOld
-    } else if kan.release_order() > NEWEST_MEASURED.release_order() {
+    } else if kan.cmp_precedence(&newest_measured()) == std::cmp::Ordering::Greater {
         Compat::Newer
     } else {
         Compat::Supported
@@ -152,7 +210,7 @@ pub fn render(kan: Option<&Version>) -> String {
             "kan: {} (supported: {}..={})\n",
             kan.expect("Supported implies a version"),
             OLDEST_SUPPORTED,
-            NEWEST_MEASURED,
+            newest_measured(),
         ),
         Compat::TooOld => format!(
             "kan: {} — OLDER than this day supports ({}..={}).\n     \
@@ -160,20 +218,21 @@ pub fn render(kan: Option<&Version>) -> String {
              be missing or shaped differently. Upgrade kan.\n",
             kan.expect("TooOld implies a version"),
             OLDEST_SUPPORTED,
-            NEWEST_MEASURED,
+            newest_measured(),
         ),
         Compat::Newer => format!(
             "kan: {} — newer than this day was measured against (through {}).\n     \
              Normally fine: kan's read surface is additive. Noted only so a\n     \
              surprise here is legible.\n",
             kan.expect("Newer implies a version"),
-            NEWEST_MEASURED,
+            newest_measured(),
         ),
         Compat::Unknown => format!(
             "kan: reachable, version unknown (supported: {}..={}).\n     \
              day could not read `kan --version`. This is not a mismatch — day\n     \
              cannot tell, and says so rather than guessing.\n",
-            OLDEST_SUPPORTED, NEWEST_MEASURED,
+            OLDEST_SUPPORTED,
+            newest_measured(),
         ),
     }
 }
@@ -215,7 +274,7 @@ mod tests {
         let new = Version::parse("9.0.0").unwrap();
         assert_eq!(classify(Some(&old)), Compat::TooOld);
         assert_eq!(classify(Some(&new)), Compat::Newer);
-        assert_eq!(classify(Some(&NEWEST_MEASURED)), Compat::Supported);
+        assert_eq!(classify(Some(&newest_measured())), Compat::Supported);
         assert_eq!(classify(Some(&OLDEST_SUPPORTED)), Compat::Supported);
     }
 
