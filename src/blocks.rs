@@ -386,11 +386,14 @@ impl Versioned for InjectionSchema {
 
 impl InjectionSchema {
     /// Reads the project's declaration, or day's default when none is recorded.
+    ///
+    /// **Through the one assembler** (REQ-17), so `schema/injection/cadence` and
+    /// `schema/injection/max_practice_items` resolve independently instead of
+    /// the newer claim resetting the other's field. A project with only a
+    /// whole-block claim, or none, gets byte-identical behaviour to before —
+    /// which is what REQ-12's "no migration" has to mean.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
-        let subject = format!("{SCHEMA_PREFIX}{INJECTION_SLUG}");
-        Ok(atoms::newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, schema)| schema)
-            .unwrap_or_default())
+        Ok(crate::layers::config::<Self>(client, INJECTION_SLUG)?.value)
     }
 
     pub fn starter_command() -> String {
@@ -467,11 +470,13 @@ impl Versioned for CycleSchema {
 impl CycleSchema {
     /// Reads the project's declaration, or release semantics when none is
     /// recorded.
+    ///
+    /// Through the one assembler (REQ-17), like `InjectionSchema` and for the
+    /// same reason: this is a config struct with a shipped default per field, so
+    /// `schema/cycle/<field>` resolves per key without the newer claim resetting
+    /// the rest of the block.
     pub fn load(client: &KanClient) -> Result<Self, Error> {
-        let subject = format!("{SCHEMA_PREFIX}{CYCLE_SLUG}");
-        Ok(atoms::newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, c)| c)
-            .unwrap_or_default())
+        Ok(crate::layers::config::<Self>(client, CYCLE_SLUG)?.value)
     }
 
     pub fn starter_command() -> String {

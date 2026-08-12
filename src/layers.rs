@@ -31,22 +31,23 @@ use crate::telos::{insert_entry, WitnessEntry, WitnessSchema, WITNESS_SLUG};
 /// Carries the CID for the two layers that have one, because that is what
 /// `.design/day-config.md` reports per key and what makes the value traceable
 /// to the claim that set it.
-/// **There is no `Default` variant, and that is not an oversight.** REQ-12's
-/// first layer is day's shipped default, which a *config struct* has per field —
-/// but the witness map has no fixed key set, so "no claim anywhere" means the
-/// key does not exist rather than that it falls back to something. A variant
-/// nothing can produce would be dead, and `pub` is exactly what stops the
-/// compiler from saying so: `Compat::is_notable` and `BlockSchemas::extract`
-/// both shipped that way, both `pub`, both called only by their own tests, with
-/// clippy silent for both. It arrives with the first loader that has defaults
-/// to fall back to.
+/// **`Default` arrives here with [`config`], exactly as this comment said it
+/// would.** It was deliberately absent while `witness` was the only assembler:
+/// the witness map has no fixed key set, so "no claim anywhere" means the key
+/// does not exist rather than that it falls back to something, and a variant
+/// nothing can produce is dead code that `pub` hides from the compiler —
+/// `Compat::is_notable` and `BlockSchemas::extract` both shipped that way. A
+/// config struct is the first shape with a per-field default to fall back to,
+/// so the variant is now producible and produced.
 ///
-/// fallback-untested: this block describes a variant that does not exist, not a
-/// degrade path — there is no state in which this code falls back, so there is
-/// nothing for a premise to assert. The real fallback in this module is the
-/// legacy-block layer, which is marked and registered at its own site below.
+/// fallback: config-shipped-default
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Layer {
+    /// day's shipped default: no claim anywhere set this key.
+    ///
+    /// Only a config struct can reach this — a map or list key that nothing
+    /// declared is absent rather than defaulted.
+    Default,
     /// A whole-block claim on the parent subject. Every key it sets shares this
     /// CID, which is precisely why per-key provenance needs per-key subjects.
     LegacyBlock(String),
@@ -55,6 +56,7 @@ pub enum Layer {
 }
 
 /// An assembled value, with where each key came from.
+#[derive(Debug)]
 pub struct Effective<T> {
     pub value: T,
     /// Per key, the layer that decided it.
@@ -85,6 +87,201 @@ pub struct Effective<T> {
 /// The parent subject a per-key subject hangs under.
 fn parent_of(slug: &str) -> String {
     format!("{SCHEMA_PREFIX}{slug}")
+}
+
+/// The effective value of a **config struct** subject: `Default` ← legacy whole
+/// block ← per-key subjects.
+///
+/// The second shape to go through this module, after the witness map, and the
+/// one REQ-11's own acceptance criterion is written against: claims on
+/// `schema/injection/cadence` and `schema/injection/max_practice_items` resolve
+/// to *both*, where two claims on the parent subject lose the first.
+///
+/// **The key vocabulary is derived from `T`, never written out.** Serialising
+/// `T::default()` yields exactly the field set serde will accept, so a field
+/// added to the struct is declarable the moment it compiles and a hand-kept
+/// list cannot drift from it — the defect class this repo has corrected in four
+/// separate places.
+///
+/// **A per-key claim carries the parent's own fence** (REQ-21, which asks for
+/// this to be declared rather than implied) holding an object with exactly the
+/// one field the subject names. A claim on `schema/injection/cadence` carries a
+/// `day-injection` fence whose body is `{"cadence": 25}` — nothing else.
+///
+/// Same fence as the parent, so a per-key claim inherits the version gate,
+/// `deny_unknown_fields`, and the `BlockError` diagnostics rather than growing a
+/// second grammar. The field name is checked against the subject's last segment
+/// because the two can disagree, and a claim on `.../cadence` that sets
+/// `max_practice_items` would otherwise write a key nothing named.
+///
+/// **An unreadable per-key claim is an error, not a skipped key.** This differs
+/// from [`witness`], which demotes a bad entry into `unsupported` because
+/// failing a whole schema over one probe took down every hook in a session. A
+/// config struct has no such bucket, and the parent-block path for the same type
+/// already errors — so silently dropping the key would resolve day's default
+/// while a project believes it declared something.
+pub fn config<T>(client: &KanClient, slug: &str) -> Result<Effective<T>, Error>
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + crate::atoms::Versioned + Default,
+{
+    let parent = parent_of(slug);
+    let mut provenance = BTreeMap::new();
+
+    // Layer 1. The field set and the shipped values in one step, from `T`
+    // itself.
+    let serde_json::Value::Object(mut fields) =
+        serde_json::to_value(T::default()).map_err(|source| Error::ConfigShape {
+            subject: parent.clone(),
+            reason: source.to_string(),
+        })?
+    else {
+        // A config subject whose type is not an object has no keys to resolve
+        // per key, and calling it one would report a provenance that cannot
+        // exist. `schema/verdicts` is a `Vec` and is deliberately not routed
+        // here — RQ-7 records that "per key" is undefined for a list.
+        return Err(Error::ConfigShape {
+            subject: parent,
+            reason: "not an object, so it has no keys to resolve per key".into(),
+        });
+    };
+    for key in fields.keys() {
+        provenance.insert(key.clone(), Layer::Default);
+    }
+
+    // Layer 2. The guard inside `newest_fenced_declared` stays on for the parent
+    // for the same reason it does in `witness`: an absent parent block is what
+    // makes day print a `kan observe` starter, and following that starter under
+    // a narrowed trust base forks the vocabulary silently.
+    //
+    // fallback: legacy-config-block
+    //
+    // A project that never adopts per-key subjects falls back to this layer for
+    // every key it set — REQ-12's "no migration", and the mode day's own repo is
+    // in today.
+    let mut declared = false;
+    if let Some((cid, block, _typed)) = crate::atoms::newest_fenced_declared::<T>(client, &parent)?
+    {
+        declared = true;
+        // Only the fields the claim ACTUALLY carried, which is why this reads
+        // the declared object rather than the typed value.
+        if let Some(object) = block.as_object() {
+            for (key, value) in object {
+                fields.insert(key.clone(), value.clone());
+                provenance.insert(key.clone(), Layer::LegacyBlock(cid.clone()));
+            }
+        }
+    }
+
+    // Layer 3. Enumerated from the memoised bulk read, so N subjects cost no
+    // extra kan invocation.
+    let prefix = format!("{parent}/");
+    let mut subjects: Vec<String> = client
+        .subjects()?
+        .into_iter()
+        .filter(|s| s.starts_with(&prefix))
+        .collect();
+    subjects.sort();
+
+    for subject in subjects {
+        let Some(key) = subject.strip_prefix(&prefix) else {
+            continue;
+        };
+        // A nested rkey below the key's own subject is not a key of this struct.
+        if key.is_empty() || key.contains('/') {
+            continue;
+        }
+        // **REQ-21.** After `kan retract` the subject REMAINS carrying only a
+        // `Retraction`, so "subject exists, no block" reads as *this key is
+        // absent* — it falls back through the layers below it rather than
+        // failing the read. Nothing is swallowed: the `show` error still
+        // propagates.
+        //
+        // fallback: retracted-key-subject
+        let Some((cid, block)) = newest_key_block::<T>(client, &subject, key)? else {
+            continue;
+        };
+
+        let Some(value) = block.as_object().and_then(|o| o.get(key)) else {
+            continue;
+        };
+        fields.insert(key.to_string(), value.clone());
+        provenance.insert(key.to_string(), Layer::Key(cid));
+        declared = true;
+    }
+
+    // One typed parse of the assembled object, so the result is validated the
+    // same way a whole block is: an out-of-range value assembled from three
+    // layers is refused exactly as it would be if one claim had carried it.
+    let value: T = serde_json::from_value(serde_json::Value::Object(fields)).map_err(|source| {
+        Error::ConfigShape {
+            subject: parent.clone(),
+            reason: source.to_string(),
+        }
+    })?;
+
+    Ok(Effective {
+        value,
+        provenance,
+        withheld: client.claims_withheld_from_view(),
+        declared,
+    })
+}
+
+/// The newest claim on a per-key subject carrying the parent's fence, checked
+/// to declare the key its subject names and nothing else.
+fn newest_key_block<T>(
+    client: &KanClient,
+    subject: &str,
+    key: &str,
+) -> Result<Option<(String, serde_json::Value)>, Error>
+where
+    T: crate::atoms::Versioned,
+{
+    for claim in client.show(subject)?.iter().rev() {
+        let Some(text) = claim.text.as_deref() else {
+            continue;
+        };
+        let Some(body) = crate::atoms::fenced_body(text, T::FENCE) else {
+            continue;
+        };
+        // Version-gated through the same path a whole block takes, so a per-key
+        // claim written by a newer day says "upgrade day" rather than reading as
+        // a typo — day#60's mistake, and `telos/honest-reads`.
+        let object = crate::atoms::version_gate(
+            body.trim(),
+            crate::atoms::Fence::Borrowed(T::FENCE),
+            T::SUPPORTED_VERSION,
+        )
+        .map_err(|source| Error::Block {
+            subject: subject.to_string(),
+            cid: claim.cid.clone(),
+            source,
+        })?;
+
+        let keys: Vec<&String> = match object.as_object() {
+            Some(o) => o.keys().collect(),
+            None => Vec::new(),
+        };
+        if keys.len() != 1 || keys[0] != key {
+            return Err(Error::ConfigShape {
+                subject: subject.to_string(),
+                reason: format!(
+                    "a per-key claim declares exactly the key its subject names. \
+                     This subject names `{key}` and the block declares {}.",
+                    if keys.is_empty() {
+                        "nothing".to_string()
+                    } else {
+                        keys.iter()
+                            .map(|k| format!("`{k}`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    }
+                ),
+            });
+        }
+        return Ok(Some((claim.cid.clone(), object)));
+    }
+    Ok(None)
 }
 
 /// The effective witness schema: `Default` ← legacy whole block ← per-key
