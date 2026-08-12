@@ -1778,6 +1778,12 @@ print("AGREED")
         .arg("-c")
         .arg(&probe)
         .current_dir(&root)
+        // **No `.pyc` litter.** This test imports both scripts as modules, and
+        // CPython writes `scripts/__pycache__/*.pyc` beside them when it does.
+        // Those files made the working tree dirty in CI, and `cargo publish`
+        // refuses a dirty tree — so the release workflow failed at the publish
+        // step for a byproduct of a test, after the tag was already pushed.
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .output()
         .expect("python3 should be runnable");
     let text = format!(

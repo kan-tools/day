@@ -20,3 +20,10 @@ target
 # once — as an embedded git repo, which a clone would silently not contain.
 .claude/worktrees/
 .DS_Store
+
+# CPython bytecode from tests that import scripts/ as modules. Belt and
+# braces: the test sets PYTHONDONTWRITEBYTECODE, and this keeps a stray run
+# from making the tree dirty — `cargo publish` refuses to publish a dirty tree,
+# which failed a release once.
+scripts/__pycache__/
+__pycache__/
