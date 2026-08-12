@@ -1647,3 +1647,91 @@ fn the_matrix_does_not_publish_an_infrastructure_failure_as_a_tag_verdict() {
          through to a row:\n{run_step}"
     );
 }
+
+/// **The preflight identifies kan without requiring a flag old kan lacks.**
+///
+/// The first version of this check asked the binary for `--version`. kan gained
+/// that late: `v0.1.1-beta.1`'s clap is `#[command(name = "kan", about = "...")]`
+/// with no `version` attribute, so `--version` FAILS on the old tags — and the
+/// committed table has nine rows measured against kans in that range. A
+/// preflight requiring it would have reported could-not-run at exit 2 for every
+/// one of them, turning those cells red on a table that is correct.
+///
+/// Caught by checking the tags rather than assuming, before review. The check is
+/// `--help`, which clap always provides and every kan names itself in.
+#[test]
+fn the_cell_identifies_kan_by_a_flag_every_version_has() {
+    let script = repo_root().join("scripts/run-kan-compat-cell.sh");
+    let dir = tempfile::tempdir().unwrap();
+
+    // A kan old enough to have no `--version`, which is what the early tags are.
+    let old_kan = dir.path().join("oldkan");
+    std::fs::write(
+        &old_kan,
+        "#!/bin/sh\ncase \"$1\" in\n  --help) echo 'Usage: kan <COMMAND>'; exit 0 ;;\n  \
+         --version) echo \"error: unexpected argument '--version'\" >&2; exit 2 ;;\n  \
+         *) exit 0 ;;\nesac\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&old_kan, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let out = Command::new(&script)
+        .arg(&old_kan)
+        .current_dir(repo_root())
+        .output()
+        .expect("sh should be runnable");
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    assert_ne!(
+        token, "could-not-run",
+        "a kan without `--version` must still be measurable — nine committed \
+         `incompatible` rows were measured against kans in exactly that range, \
+         and refusing them turns a correct table red"
+    );
+
+    // And the refusal still works on something that is not kan at all.
+    let out = Command::new(&script)
+        .arg("/bin/echo")
+        .current_dir(repo_root())
+        .output()
+        .expect("sh should be runnable");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "could-not-run",
+        "the looser identity check must not have loosened it to nothing"
+    );
+}
+
+/// **The cell runs where `timeout` does not exist.**
+///
+/// `timeout` is GNU coreutils. Stock macOS does not ship it, and this repo is
+/// developed on macOS — so making it a hard dependency would mean the cell
+/// reports could-not-run on the maintainer's own machine, which is honest and
+/// useless. The bound degrades, and says so on stderr rather than silently,
+/// because an unannounced degrade removes the guarantee precisely where nobody
+/// is looking.
+#[test]
+fn the_cell_does_not_require_gnu_coreutils() {
+    let text = read("scripts/run-kan-compat-cell.sh");
+    // **The failure message quotes a line, not the file.** Dumping the whole
+    // script here made `scripts/revert-demo.py` report DID-NOT-COMPILE for a
+    // test that merely failed: the script's own comments contain the phrase
+    // `could not compile`, and the harness keys that outcome on finding it
+    // anywhere in the combined output. Filed as a harness defect; the fix here
+    // is that an assertion message should be readable anyway.
+    assert!(
+        text.contains("command -v timeout"),
+        "the cell must check for `timeout` rather than assuming it; no \
+         `command -v timeout` line found in scripts/run-kan-compat-cell.sh"
+    );
+    assert!(
+        text.contains("will NOT be bounded"),
+        "and must say so on stderr when it is absent — a silent degrade is the \
+         failure mode, not the missing binary"
+    );
+    assert!(
+        !text.contains("command -v timeout >/dev/null 2>&1 || die"),
+        "and must not make it fatal: stock macOS has no `timeout`, and this \
+         repo is developed there"
+    );
+}

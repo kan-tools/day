@@ -55,16 +55,28 @@ fi
 # `run-kan-compat-cell.sh /bin/echo` returned `incompatible` at exit 0, on the
 # strength of a suite whose failures were JSON- and CLI-shape errors proving the
 # opposite. A wrong or substituted binary could move day's published floor.
-if ! kan_version="$("$kan_bin" --version 2>/dev/null)"; then
-    echo "$kan_bin does not answer \`--version\`, so it cannot be identified as" >&2
+# **Identified by `--help`, NOT by `--version`**, and the difference is the
+# whole matrix. kan gained `--version` late: `v0.1.1-beta.1`'s clap is
+# `#[command(name = "kan", about = "...")]` with no `version` attribute, so
+# `kan --version` FAILS on the old tags. A preflight requiring it would report
+# could-not-run at exit 2 for every kan through the `incompatible` rows — that
+# is nine committed rows, and the cells asserting them would go red. Checked
+# against the tags rather than assumed.
+#
+# `--help` is always present, because clap always provides it, and every kan
+# names itself in its usage line. One check, one mode: a fallback from
+# `--version` to `--help` would be the two-mode mechanism this repo's record
+# says is where defects hide.
+if ! kan_help="$("$kan_bin" --help 2>/dev/null)"; then
+    echo "$kan_bin does not answer \`--help\`, so it cannot be identified as" >&2
     echo "kan. Refusing to measure day against an unknown program." >&2
     echo "could-not-run"
     exit 2
 fi
-case "$kan_version" in
-    kan\ *) ;;
+case "$kan_help" in
+    *kan*) ;;
     *)
-        echo "$kan_bin reports '$kan_version', which is not kan. Refusing to" >&2
+        echo "$kan_bin does not name itself kan in \`--help\`. Refusing to" >&2
         echo "publish a compatibility fact measured against another program." >&2
         echo "could-not-run"
         exit 2
@@ -79,6 +91,23 @@ ln -sf "$(cd "$(dirname "$kan_bin")" && pwd)/$(basename "$kan_bin")" "$shim/kan"
 # Unset so a stray value in the environment cannot redirect a test that is
 # supposed to be talking to the real thing.
 unset DAY_KAN_BIN || true
+
+# **`timeout` is GNU coreutils and stock macOS does not ship it.** Bounding a
+# hung cargo is worth having and is not worth making the cell unrunnable on a
+# developer's machine, so its absence degrades — loudly, on stderr, because a
+# silent degrade would remove the guarantee exactly where nobody is looking.
+# CI runs on ubuntu, where it is present.
+#
+# (No `fallback:` marker: tests/fallbacks.rs scans `src/**.rs` only, so writing
+# one here would look registered and be read by nothing. The degrade is covered
+# by `the_cell_does_not_require_gnu_coreutils` instead.)
+if command -v timeout >/dev/null 2>&1; then
+    bound="timeout ${CELL_TIMEOUT:-900}"
+else
+    echo "note: \`timeout\` is not on PATH (GNU coreutils; stock macOS does not" >&2
+    echo "ship it), so a hung cargo will NOT be bounded in this run." >&2
+    bound=""
+fi
 
 # `--skip conformance_kan_78`: that test asserts a property of KAN, not a
 # dependency of DAY. day emits `kan result` with its subject positionally and
@@ -96,7 +125,7 @@ unset DAY_KAN_BIN || true
 # manufactured. It is not hypothetical: an empty CARGO_TARGET_DIR in the
 # environment produced four `incompatible` cells against a kan day demonstrably
 # works with, and only prior knowledge of the answer caught it.
-if ! PATH="$shim:$PATH" timeout "${CELL_TIMEOUT:-900}" \
+if ! PATH="$shim:$PATH" $bound \
         cargo test --quiet --no-run --test kan_conformance \
         >/tmp/kan-compat.log 2>&1; then
     # Every failure here is could-not-run, including `could not compile`: what
@@ -117,7 +146,7 @@ fi
 # exit code, and it lands in the could-not-run branch below because the harness
 # rendered no verdict.
 status=0
-PATH="$shim:$PATH" timeout "${CELL_TIMEOUT:-900}" \
+PATH="$shim:$PATH" $bound \
     cargo test --quiet --test kan_conformance -- \
     --skip conformance_kan_78 >/tmp/kan-compat.log 2>&1 || status=$?
 
