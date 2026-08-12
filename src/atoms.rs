@@ -698,45 +698,6 @@ fn fence_line(line: &str) -> (usize, &str) {
     (ticks, trimmed[ticks..].trim())
 }
 
-/// The info strings of every top-level fenced block in `text` that names a
-/// **day vocabulary** — one whose info string begins `day-`.
-///
-/// Exists so a reader that found none of *its* fence can tell "this claim
-/// declares nothing" from "this claim declares something I do not recognise".
-/// Those are different states and only the first is an absence: a per-key
-/// subject whose claim carries `day-injektion` is a typo, and reading it as
-/// absence resolves the layer below while the project believes it declared a
-/// value (`telos/honest-reads`).
-///
-/// **Bounded to the `day-` namespace deliberately.** Any fence at all would
-/// catch a ```` ```bash ```` example in a claim's prose, which is ordinary and
-/// not a declaration — refusing it would make prose a hazard. Within `day-`,
-/// however, an unrecognised name is either a misspelling or a block from a
-/// newer day, and both want saying out loud rather than silently skipping.
-pub(crate) fn day_fence_infos(text: &str) -> Vec<&str> {
-    let mut found = Vec::new();
-    let mut open: Option<(usize, &str)> = None;
-    for line in text.split_inclusive('\n') {
-        let (ticks, info) = fence_line(line);
-        match open {
-            Some((open_ticks, open_info)) => {
-                if ticks >= open_ticks && info.is_empty() {
-                    if open_info.starts_with("day-") {
-                        found.push(open_info);
-                    }
-                    open = None;
-                }
-            }
-            None => {
-                if ticks >= 3 {
-                    open = Some((ticks, info));
-                }
-            }
-        }
-    }
-    found
-}
-
 /// The body of the first fenced block whose info string is exactly `name`,
 /// as a slice of `text`. `None` when no such block is opened and closed.
 ///
@@ -802,6 +763,16 @@ pub(crate) enum FenceScan<'a> {
     /// A `day-` fence was opened and never closed. Carries the info string, so
     /// the diagnostic can name what was left open.
     Unterminated(&'a str),
+    /// A closed `day-` fence whose info string is not `name`.
+    ///
+    /// Data rather than a verdict, because the right response differs by
+    /// caller and neither answer is safe everywhere. A general reader meets
+    /// these constantly — a claim carrying `day-atom` is not malformed because
+    /// something looked for `day-schema` — so [`extract_fenced`] treats it as
+    /// absence. A **per-key subject** exists only to carry one key's
+    /// declaration, so there anything else is a misspelling or a block from a
+    /// newer day, and `src/layers.rs` refuses it.
+    Foreign(&'a str),
     /// No `day-` block here. Prose, or a claim about something else.
     Absent,
 }
@@ -821,6 +792,7 @@ pub(crate) enum FenceScan<'a> {
 pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
     let mut pos = 0;
     let mut open: Option<(usize, usize, &str)> = None;
+    let mut foreign: Option<&str> = None;
     for line in text.split_inclusive('\n') {
         let line_start = pos;
         pos += line.len();
@@ -830,6 +802,9 @@ pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
                 if ticks >= open_ticks && info.is_empty() {
                     if open_info == name {
                         return FenceScan::Found(&text[body_start..line_start]);
+                    }
+                    if foreign.is_none() && open_info.starts_with("day-") {
+                        foreign = Some(open_info);
                     }
                     open = None;
                 }
@@ -843,7 +818,12 @@ pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
     }
 
     let Some((_, body_start, open_info)) = open else {
-        return FenceScan::Absent;
+        // Unterminated outranks foreign: a dangling open is the more specific
+        // and more actionable finding, and a claim can carry both.
+        return match foreign {
+            Some(info) => FenceScan::Foreign(info),
+            None => FenceScan::Absent,
+        };
     };
     if open_info.starts_with("day-") {
         return FenceScan::Unterminated(open_info);
@@ -856,7 +836,10 @@ pub(crate) fn scan_fenced<'a>(text: &'a str, name: &str) -> FenceScan<'a> {
             return FenceScan::Unterminated(info);
         }
     }
-    FenceScan::Absent
+    match foreign {
+        Some(info) => FenceScan::Foreign(info),
+        None => FenceScan::Absent,
+    }
 }
 
 /// Pulls the first fenced block with the given info string out of a claim's
@@ -886,7 +869,10 @@ pub fn extract_fenced<T: serde::de::DeserializeOwned + Versioned>(
     // fence. A guarantee wired at one reader when there are several is day#101,
     // and this is the entry point all of them share.
     match scan_fenced(text, T::FENCE) {
-        FenceScan::Absent => None,
+        // A claim carrying some OTHER day block is not malformed — most claims
+        // this is called on carry none of this type. Unchanged behaviour, now
+        // stated rather than implied by a scanner that could not see it.
+        FenceScan::Absent | FenceScan::Foreign(_) => None,
         FenceScan::Unterminated(info) => Some(Err(BlockError::Unterminated {
             fence: Fence::Owned(info.to_string()),
         })),
@@ -1035,7 +1021,7 @@ pub fn newest_fenced_declared<T: serde::de::DeserializeOwned + Versioned>(
         // the same one function up; both need the *declared object* here, which
         // is the only reason this walk exists separately at all.
         let body = match scan_fenced(text, T::FENCE) {
-            FenceScan::Absent => continue,
+            FenceScan::Absent | FenceScan::Foreign(_) => continue,
             FenceScan::Unterminated(info) => {
                 return Err(Error::Block {
                     subject: subject.to_string(),

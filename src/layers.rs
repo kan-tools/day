@@ -258,37 +258,55 @@ where
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
-        let Some(body) = crate::atoms::fenced_body(text, T::FENCE) else {
-            // **AC-31.** Not finding this type's fence has two causes, and only
-            // one of them is an absence. A claim carrying no day vocabulary at
-            // all is prose — or what `kan retract` leaves behind — and falls
-            // through to the layer below (AC-30). A claim carrying a DIFFERENT
-            // `day-` fence is a misspelling or a block from a newer day, and
-            // skipping it resolved the layer below while the project believed it
-            // had declared a value: `day-injektion` on `schema/injection/cadence`
-            // resolved `cadence` to 10 from `Layer::Default`, silently. Reported
-            // as itself, naming the fence found and the one expected, because
-            // version skew is fixed by upgrading and a typo by editing — and
-            // telling someone the wrong one is worse than saying nothing
-            // (day#60, `telos/honest-reads`).
-            let unrecognised = crate::atoms::day_fence_infos(text);
-            if !unrecognised.is_empty() {
+        // **AC-30 and AC-31, from the one scanner.** Not finding this type's
+        // fence has three causes and only one is an absence, which is the
+        // distinction `FenceScan` exists to carry:
+        //
+        //   Absent        prose, or what `kan retract` leaves behind. Falls
+        //                 through to the layer below (AC-30).
+        //   Foreign       a closed `day-` block that is not ours. On a per-key
+        //                 subject — which exists ONLY to carry this key's
+        //                 declaration — that is a misspelling or a block from a
+        //                 newer day. Reading it as absence resolved the layer
+        //                 below while the project believed it had declared a
+        //                 value: `day-injektion` on `schema/injection/cadence`
+        //                 resolved `cadence` to 10 from `Layer::Default` (AC-31).
+        //   Unterminated  a `day-` fence opened and never closed. Reported by
+        //                 `scan_fenced` for every reader in day, not just here.
+        //
+        // The first fix for this carried its own fence scanner beside
+        // `fenced_body`, and the two disagreed about exactly the unterminated
+        // case — the cold review's F4. The remedy for a duplicated reader is
+        // deleting it, not making the pair agree, so the policy now lives at
+        // this call and the parsing lives in one place.
+        let body = match crate::atoms::scan_fenced(text, T::FENCE) {
+            crate::atoms::FenceScan::Absent => continue,
+            crate::atoms::FenceScan::Found(body) => body,
+            crate::atoms::FenceScan::Unterminated(info) => {
+                return Err(Error::Block {
+                    subject: subject.to_string(),
+                    cid: claim.cid.clone(),
+                    source: crate::atoms::BlockError::Unterminated {
+                        fence: crate::atoms::Fence::Owned(info.to_string()),
+                    },
+                })
+            }
+            crate::atoms::FenceScan::Foreign(info) => {
                 return Err(Error::ConfigShape {
                     subject: subject.to_string(),
+                    // Names both, because either could be the mistake: version
+                    // skew is fixed by upgrading and a typo by editing, and
+                    // telling someone the wrong one is worse than saying nothing
+                    // (day#60, `telos/honest-reads`).
                     reason: format!(
-                        "declares {} but this key is read from `{}`. A per-key \
-                         claim carries the same fence as its parent subject; if \
-                         that block came from a newer day, upgrade day.",
-                        unrecognised
-                            .iter()
-                            .map(|f| format!("`{f}`"))
-                            .collect::<Vec<_>>()
-                            .join(", "),
+                        "declares `{info}` but this key is read from `{}`. A \
+                         per-key claim carries the same fence as its parent \
+                         subject; if that block came from a newer day, upgrade \
+                         day.",
                         T::FENCE
                     ),
                 });
             }
-            continue;
         };
         // Version-gated through the same path a whole block takes, so a per-key
         // claim written by a newer day says "upgrade day" rather than reading as

@@ -532,3 +532,80 @@ fn a_non_day_fence_in_prose_is_not_a_declaration() {
         .expect("prose carrying a shell example declares nothing and must not refuse");
     assert_eq!(effective.value.cadence, 7);
 }
+
+/// **F4 — an unclosed `day-` fence on a per-key subject is refused, not read as
+/// absence.**
+///
+/// Round 2's finding, and the one the round-1 fix introduced. That fix carried
+/// its own fence scanner beside `fenced_body`, and the two disagreed on exactly
+/// this input: the scanner recorded a fence only on meeting its CLOSING line, so
+/// a dangling open scanned as empty and fell through to the same `None` that
+/// AC-30 defines as a retracted key.
+///
+/// Measured before the fix, through the built binary: an unterminated
+/// `day-cycle` block on `schema/cycle/tags` gave `day assess docs` exit 0 with
+/// no cycle line at all.
+///
+/// The remedy was deleting the second scanner rather than teaching it to agree
+/// with the first — the duplicated reader is the defect, which is day#101 and
+/// the fourth instance this repo has recorded.
+#[test]
+fn an_unterminated_fence_on_a_per_key_subject_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = write_kan_stub(
+        dir.path(),
+        &[
+            legacy_block("bafyreilegacy", r#"{"cadence": 7}"#),
+            claim(
+                "schema/injection/cadence",
+                "bafyreidangling",
+                // Opened, never closed.
+                "Cadence.\n\n```day-injection\n{\"cadence\": 25}\n",
+            ),
+        ],
+    );
+    let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+
+    let err = layers::config::<InjectionSchema>(&client, "injection").expect_err(
+        "a claim that opened a declaration and never closed it is a block day \
+         could not read, and resolving the layer below in silence is what \
+         `telos/honest-reads` forbids",
+    );
+    assert!(
+        err.to_string().contains("never closed"),
+        "and the message names the remedy — a closing fence, not a JSON \
+         edit: {err}"
+    );
+}
+
+/// **The three not-our-fence cases stay distinct**, since collapsing any two of
+/// them is how both F2 and F4 happened.
+#[test]
+fn absence_foreign_and_unterminated_are_three_different_answers() {
+    let with = |text: &str| {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_kan_stub(
+            dir.path(),
+            &[
+                legacy_block("bafyreilegacy", r#"{"cadence": 7}"#),
+                claim("schema/injection/cadence", "bafyreiprobe", text),
+            ],
+        );
+        let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+        layers::config::<InjectionSchema>(&client, "injection")
+    };
+
+    // Absent: prose, or what a retraction leaves. Falls through (AC-30).
+    let absent = with("Nothing declared here.").expect("prose is an absence");
+    assert_eq!(absent.value.cadence, 7);
+
+    // Foreign: a closed day block that is not ours (AC-31).
+    let foreign = with("Cadence.\n\n```day-injektion\n{\"cadence\": 25}\n```\n")
+        .expect_err("a misspelled fence is a declaration day cannot read");
+    assert!(foreign.to_string().contains("day-injektion"), "{foreign}");
+
+    // Unterminated: opened, never closed (F4).
+    let dangling = with("Cadence.\n\n```day-injection\n{\"cadence\": 25}\n")
+        .expect_err("a dangling open is a declaration day cannot read");
+    assert!(dangling.to_string().contains("never closed"), "{dangling}");
+}
