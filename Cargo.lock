@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "day"
-version = "0.12.0-beta.3"
+version = "0.12.0-beta.4"
 dependencies = [
  "clap",
  "rmcp",

@@ -117,7 +117,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.12.0-beta.4   # the memory layer day reads
-cargo install day --version 0.12.0-beta.3
+cargo install day --version 0.12.0-beta.4
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -163,19 +163,24 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.12.0-beta.3** is the follow-ups of a full external review pass —
-design, implementation, testing, UX/DX/AX, process — that returned
-APPROVE-WITH-FOLLOW-UPS. Its headline pattern is worth stating because it is
-a lesson about where defects now live in this codebase: every high finding
-sat where the typed honesty architecture does not reach. The bootstrap hook
-taught strangers the exact broken install day#50 documents; the block-compat
-corpus was stale by eleven releases (and regenerating it surfaced three
-fences silently missing from the capture for five releases); the mutation
-harness printed its taxonomy honestly and exited 0 for SURVIVED; and a
-`bridge check` error rendered as "its plan could not reach it". Each fix
-moved the guarantee into a mechanism — derived pins, a derived corpus with a
-monotone-coverage test and a release-time capture, an exit-code contract, a
-three-state rendering — rather than into attention.
+Early. **v0.12.0-beta.4** makes a configuration key its own kan subject, so
+`schema/injection/cadence` and `schema/injection/max_practice_items` resolve
+independently instead of the newer claim silently resetting the other. It also
+carries a round of honest-reads fixes, and their common shape is worth stating
+because it is where defects live in this codebase now: **every one was a reader
+reporting something it could not read as something that was not there.** A fence
+opened and never closed read as "nothing declared". A value assembled from three
+layers skipped the validation a single claim gets. A compatibility cell recorded
+a build failure in *day* as a fact about *kan*, and an unmeasurable environment
+as a pairing that does not work.
+
+Each fix moved the guarantee into a mechanism rather than into attention: one
+fenced-block scanner with four states instead of two readers that disagreed, the
+same validation on the assembled value as on the claim, and an outcome
+vocabulary in which a cell cannot express a verdict about a program it never
+ran. Four adversarial reviews across two branches found them, and each fix round
+introduced the next round's finding until the duplicate reader was deleted
+rather than repaired.
 
 **v0.12.0-beta.2** was a bugfix boundary, and what it fixed is mostly
 day's own advice. `day design check` told an author to name the requirement each

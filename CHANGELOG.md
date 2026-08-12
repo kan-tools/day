@@ -31,6 +31,54 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 Nothing yet.
 
+## [v0.12.0-beta.4] — 2026-08-12
+
+*Milestone: v0.12 — transportable.* A configuration release, and a round of
+honest-reads fixes found by four adversarial reviews across two branches. Its
+headline pattern: **every defect this cycle was a reader reporting something it
+could not read as something that was not there**, and each fix round introduced
+the next round's finding until the duplicate reader was deleted rather than
+repaired.
+
+### Added
+
+- **A configuration key can be its own subject.** `schema/injection/cadence` and
+  `schema/injection/max_practice_items` resolve independently, where two claims
+  on the parent subject previously left only the newer one — the older field
+  silently reverting to day's default. Resolution is `Default` ← a legacy
+  whole-block claim ← per-key claims, so a project that adopts nothing sees
+  exactly the previous behaviour. `schema/injection` and `schema/cycle` are
+  routed; the map (`schema/blocks`) and list (`schema/verdicts`) shapes are not
+  built, and each direct reader now states why it is not per-key.
+- **kan 0.12 is measured and adopted** — `v0.12.0-beta.1` through `beta.4`, all
+  `ok`.
+
+### Fixed
+
+- **An unterminated `day-` fence is a block day could not read, not an absence.**
+  A claim that opened a fence and never closed it read as "nothing declared",
+  so day resolved its own default while the project believed it had declared
+  something. This reverses a decision the source stated outright and a test
+  pinned; the premise ("day never writes one") was true and did not support the
+  conclusion, because people and agents do.
+- **An assembled configuration value is validated, not merely deserialized.**
+  `CycleSchema` refuses an empty tag pattern because "the failure would look
+  exactly like working" — and the per-key path reached one anyway.
+- **A per-key claim carrying an unrecognised `day-` fence is refused** rather
+  than read as a retracted key.
+- **The compatibility cell no longer publishes facts about the wrong program.**
+  It cannot say `unbuildable` at all — that is a claim about whether the kan tag
+  builds, which the workflow decides before the cell runs — and a day build
+  failure, a broken environment, or a hung compiler are reported as
+  `could-not-run` rather than as a pairing outcome. The matrix no longer caches
+  an infrastructure failure as a durable fact about a kan release.
+- **The measured ceiling names the artifact that was run.** `day doctor` reports
+  `0.9.1..=0.12.0-beta.4`, and an unreleased stable `0.12.0` classifies as
+  `Newer` rather than `Supported`.
+- **The `Demonstrated-by:` trailer carries its revert scope**, so a
+  demonstration valid only under `--include` can be replayed by its own
+  verifier instead of reporting could-not-check.
+
 ## [v0.12.0-beta.3] — 2026-08-10
 
 *Milestone: v0.12 — transportable.* A bugfix and verification round produced
@@ -467,7 +515,8 @@ The first published release.
 - Atom inputs are checked against the transitive upstream closure.
 
 <!-- Releases -->
-[Unreleased]: https://github.com/kan-tools/day/compare/v0.12.0-beta.3...HEAD
+[Unreleased]: https://github.com/kan-tools/day/compare/v0.12.0-beta.4...HEAD
+[v0.12.0-beta.4]: https://github.com/kan-tools/day/compare/v0.12.0-beta.3...v0.12.0-beta.4
 [v0.12.0-beta.3]: https://github.com/kan-tools/day/compare/v0.12.0-beta.2...v0.12.0-beta.3
 [v0.12.0-beta.2]: https://github.com/kan-tools/day/compare/v0.12.0-beta.1...v0.12.0-beta.2
 [v0.12.0-beta.1]: https://github.com/kan-tools/day/compare/v0.11.0-beta.2...v0.12.0-beta.1
