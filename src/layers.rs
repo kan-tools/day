@@ -209,14 +209,31 @@ where
         declared = true;
     }
 
-    // One typed parse of the assembled object, so the result is validated the
-    // same way a whole block is: an out-of-range value assembled from three
-    // layers is refused exactly as it would be if one claim had carried it.
+    // One typed parse of the assembled object, then `validate()` — the two
+    // halves `parse_block` runs, in the same order, so a value assembled from
+    // three layers is refused exactly where one claim carrying it would be.
+    //
+    // **The second half was missing, and a comment here asserted it was not.**
+    // `from_value` alone enforces types and `deny_unknown_fields`; it does not
+    // run the structural invariants serde cannot express. `CycleSchema::validate`
+    // refuses an empty tag pattern because "the failure would look exactly like
+    // working" — so `schema/cycle` carrying `{"tags":""}` was refused while
+    // `schema/cycle/tags` carrying the same body was accepted in silence, and
+    // cycle semantics feed position inference. Found by a cold review running the
+    // built binary against both shapes; every test here passed throughout, because
+    // they asserted resolution and none asserted refusal.
     let value: T = serde_json::from_value(serde_json::Value::Object(fields)).map_err(|source| {
         Error::ConfigShape {
             subject: parent.clone(),
             reason: source.to_string(),
         }
+    })?;
+    value.validate().map_err(|reason| Error::ConfigShape {
+        subject: parent.clone(),
+        // Named as assembled rather than as a bad claim: no single claim is
+        // necessarily wrong here — the layers together produce a value the type
+        // refuses, and pointing at one CID would blame a claim that may be fine.
+        reason: format!("the value assembled from the declared layers is invalid: {reason}"),
     })?;
 
     Ok(Effective {
@@ -242,6 +259,35 @@ where
             continue;
         };
         let Some(body) = crate::atoms::fenced_body(text, T::FENCE) else {
+            // **AC-31.** Not finding this type's fence has two causes, and only
+            // one of them is an absence. A claim carrying no day vocabulary at
+            // all is prose — or what `kan retract` leaves behind — and falls
+            // through to the layer below (AC-30). A claim carrying a DIFFERENT
+            // `day-` fence is a misspelling or a block from a newer day, and
+            // skipping it resolved the layer below while the project believed it
+            // had declared a value: `day-injektion` on `schema/injection/cadence`
+            // resolved `cadence` to 10 from `Layer::Default`, silently. Reported
+            // as itself, naming the fence found and the one expected, because
+            // version skew is fixed by upgrading and a typo by editing — and
+            // telling someone the wrong one is worse than saying nothing
+            // (day#60, `telos/honest-reads`).
+            let unrecognised = crate::atoms::day_fence_infos(text);
+            if !unrecognised.is_empty() {
+                return Err(Error::ConfigShape {
+                    subject: subject.to_string(),
+                    reason: format!(
+                        "declares {} but this key is read from `{}`. A per-key \
+                         claim carries the same fence as its parent subject; if \
+                         that block came from a newer day, upgrade day.",
+                        unrecognised
+                            .iter()
+                            .map(|f| format!("`{f}`"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        T::FENCE
+                    ),
+                });
+            }
             continue;
         };
         // Version-gated through the same path a whole block takes, so a per-key

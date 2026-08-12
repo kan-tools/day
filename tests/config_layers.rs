@@ -409,3 +409,126 @@ fn every_direct_fenced_read_states_why_it_is_not_per_key() {
          records three instances of."
     );
 }
+
+// ---------------------------------------------------------------------------
+// The fix round for the cold review's BLOCK (F1, F2). Both defects resolved a
+// value where the whole-block path refuses one, so both tests assert a REFUSAL
+// — which is the shape every test in this file lacked, and why a green suite
+// said nothing about either.
+// ---------------------------------------------------------------------------
+
+/// **F1 — the assembled value is validated, not merely deserialized.**
+///
+/// `CycleSchema::validate` refuses an empty tag pattern because "the failure
+/// would look exactly like working": position silently falls back to the
+/// cumulative reading day#60 replaced. The whole-block path enforced it and the
+/// per-key path did not, so routing `CycleSchema` through the assembler opened
+/// a way around a guard — while the commit doing the routing asserted it
+/// "changed no behaviour". It did, and no test asked.
+///
+/// Driven on `schema/cycle` specifically rather than on a struct with no
+/// invariant, because a type whose `validate` is the default `Ok` cannot
+/// observe this at all.
+#[test]
+fn an_invalid_assembled_value_is_refused_the_way_a_whole_block_is() {
+    use day::blocks::CycleSchema;
+
+    let empty_pattern = r#"{"tags": ""}"#;
+
+    // The control: as a whole block, this is refused today.
+    let dir = tempfile::tempdir().unwrap();
+    let bin = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/cycle",
+            "bafyreiwholeblock",
+            &format!("Cycle.\n\n```day-cycle\n{empty_pattern}\n```\n"),
+        )],
+    );
+    let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+    let whole_block = CycleSchema::load(&client);
+    assert!(
+        whole_block.is_err(),
+        "premise: an empty tag pattern must already be refused as a whole \
+         block, or this test measures nothing"
+    );
+
+    // The defect: the same body, per key.
+    let dir = tempfile::tempdir().unwrap();
+    let bin = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/cycle/tags",
+            "bafyreiperkey",
+            &format!("Cycle tags.\n\n```day-cycle\n{empty_pattern}\n```\n"),
+        )],
+    );
+    let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+    let err = CycleSchema::load(&client).expect_err(
+        "a per-key claim must not reach a value the whole-block path refuses — \
+         cycle semantics feed position inference, so this is not a diagnostic \
+         difference",
+    );
+    assert!(
+        err.to_string().contains("empty tag pattern"),
+        "and it is refused for the SAME stated reason, not a generic one: {err}"
+    );
+}
+
+/// **F2 — an unrecognised `day-` fence on a per-key subject is refused, not read
+/// as absence.**
+///
+/// AC-31. `newest_key_block` looked only for its own fence and treated anything
+/// else as "no block", which is the state AC-30 defines as a retracted key — so
+/// a misspelled fence resolved the layer below in silence. Measured before the
+/// fix: `day-injektion` on `schema/injection/cadence` resolved `cadence` to 10
+/// from `Layer::Default`.
+#[test]
+fn an_unrecognised_day_fence_is_refused_and_names_both_fences() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "schema/injection/cadence",
+            "bafyreitypo",
+            "Cadence.\n\n```day-injektion\n{\"cadence\": 25}\n```\n",
+        )],
+    );
+    let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+
+    let err = layers::config::<InjectionSchema>(&client, "injection")
+        .expect_err("a declaration day cannot read is an error, never an absence");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("day-injektion") && rendered.contains("day-injection"),
+        "naming only one of them leaves the reader guessing which is wrong: {rendered}"
+    );
+}
+
+/// **And the other side of it: prose that merely contains a fence is still
+/// absence.**
+///
+/// The refusal above is bounded to the `day-` namespace precisely so an ordinary
+/// shell example in a claim's prose does not become a hazard. Asserted, because
+/// "bounded to `day-`" is a claim about the code, and the whole reason this fix
+/// round exists is that a comment made such a claim and nothing checked it.
+#[test]
+fn a_non_day_fence_in_prose_is_not_a_declaration() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = write_kan_stub(
+        dir.path(),
+        &[
+            legacy_block("bafyreilegacy", r#"{"cadence": 7}"#),
+            claim(
+                "schema/injection/cadence",
+                "bafyreiprose",
+                "Retracted; see instead:\n\n```bash\nkan retract bafyreiold\n```\n",
+            ),
+        ],
+    );
+    let client = KanClient::with_bin(dir.path(), bin.to_string_lossy().to_string());
+
+    let effective = layers::config::<InjectionSchema>(&client, "injection")
+        .expect("prose carrying a shell example declares nothing and must not refuse");
+    assert_eq!(effective.value.cadence, 7);
+}

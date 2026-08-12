@@ -698,6 +698,45 @@ fn fence_line(line: &str) -> (usize, &str) {
     (ticks, trimmed[ticks..].trim())
 }
 
+/// The info strings of every top-level fenced block in `text` that names a
+/// **day vocabulary** — one whose info string begins `day-`.
+///
+/// Exists so a reader that found none of *its* fence can tell "this claim
+/// declares nothing" from "this claim declares something I do not recognise".
+/// Those are different states and only the first is an absence: a per-key
+/// subject whose claim carries `day-injektion` is a typo, and reading it as
+/// absence resolves the layer below while the project believes it declared a
+/// value (`telos/honest-reads`).
+///
+/// **Bounded to the `day-` namespace deliberately.** Any fence at all would
+/// catch a ```` ```bash ```` example in a claim's prose, which is ordinary and
+/// not a declaration — refusing it would make prose a hazard. Within `day-`,
+/// however, an unrecognised name is either a misspelling or a block from a
+/// newer day, and both want saying out loud rather than silently skipping.
+pub(crate) fn day_fence_infos(text: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut open: Option<(usize, &str)> = None;
+    for line in text.split_inclusive('\n') {
+        let (ticks, info) = fence_line(line);
+        match open {
+            Some((open_ticks, open_info)) => {
+                if ticks >= open_ticks && info.is_empty() {
+                    if open_info.starts_with("day-") {
+                        found.push(open_info);
+                    }
+                    open = None;
+                }
+            }
+            None => {
+                if ticks >= 3 {
+                    open = Some((ticks, info));
+                }
+            }
+        }
+    }
+    found
+}
+
 /// The body of the first fenced block whose info string is exactly `name`,
 /// as a slice of `text`. `None` when no such block is opened and closed.
 ///
