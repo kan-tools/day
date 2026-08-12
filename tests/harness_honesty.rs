@@ -1302,3 +1302,139 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         "the reason must be surfaced for review, or the hatch is unauditable: {out}"
     );
 }
+
+/// **The finding census: every review finding is disposed of, or it is the
+/// verdict.**
+///
+/// Findings were recorded as claims and their disposition written as prose,
+/// from memory, once per round. That cannot fail to omit a member — round 2
+/// found three severity-1 defects on `harness-footer`, the disposition claim
+/// written before round 3 opened "SEVERITY 1 — BOTH FIXED" and named two, and
+/// the third survived the full suite while being reported closed. A different
+/// model in a different harness found it again.
+///
+/// `CLAUDE.md`: *a list that can be derived must be derived, and a count and a
+/// list are different guarantees.* This repo derives its atom directory, its
+/// block corpus and its witness map, and had never derived the one list whose
+/// omissions carry ACROSS rounds.
+///
+/// Driven against synthetic logs rather than day's own, so the test does not
+/// change meaning as real findings are disposed of — and so the un-disposed
+/// case is reachable at all, which it will not be once the record is clean.
+#[test]
+fn the_finding_census_separates_unaccounted_from_could_not_check() {
+    let script = repo_root().join("scripts/finding-census.py");
+    assert!(script.is_file(), "scripts/finding-census.py should exist");
+
+    // The census reads kan, so a stub kan supplies the log. Written as the
+    // envelope kan actually emits, since that is the contract day depends on.
+    let dir = tempfile::tempdir().unwrap();
+    let log = |claims: &str| {
+        format!(
+            r#"{{"v":1,"trust":{{"base":"Solo","authors":[]}},"excluded_by_trust":0,
+                 "subjects":[{{"v":1,"subject":"s","subjects":["s"],
+                 "excluded_by_trust":0,"claims":[{claims}]}}]}}"#
+        )
+    };
+    let claim = |cid: &str, text: &str| {
+        format!(
+            r#"{{"cid":"{cid}","kind":"Observation","author":"did:key:zA","text":{}}}"#,
+            serde_json::Value::String(text.to_string())
+        )
+    };
+    let run = |body: &str| {
+        let kan = dir.path().join("kan");
+        std::fs::write(&kan, format!("#!/bin/sh\ncat <<'JSON'\n{body}\nJSON\n")).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&kan, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let out = Command::new("python3")
+            .arg(&script)
+            .arg("s")
+            .current_dir(dir.path())
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    dir.path().display(),
+                    std::env::var("PATH").unwrap()
+                ),
+            )
+            .output()
+            .expect("python3 should be runnable");
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout).to_string(),
+        )
+    };
+
+    let finding = claim(
+        "bafyfinding0000000000",
+        "FINDING (severity 1): a thing is wrong.",
+    );
+
+    // A finding with no disposition is THE verdict — exit 1.
+    let (code, out) = run(&log(&finding));
+    assert_eq!(
+        code,
+        Some(1),
+        "an undisposed finding must be the verdict: {out}"
+    );
+
+    // Disposed of: accounted, exit 0.
+    let disposed = format!(
+        "{finding},{}",
+        claim(
+            "bafydisposition000000",
+            "Disposition: bafyfinding0000000000 fixed",
+        )
+    );
+    let (code, out) = run(&log(&disposed));
+    assert_eq!(code, Some(0), "a disposed finding must be accounted: {out}");
+
+    // `accepted` without a reason is REFUSED rather than counted — the whole
+    // point is that an acceptance is reviewable.
+    let unreasoned = format!(
+        "{finding},{}",
+        claim(
+            "bafybad00000000000000",
+            "Disposition: bafyfinding0000000000 accepted"
+        )
+    );
+    let (code, out) = run(&log(&unreasoned));
+    assert_eq!(
+        code,
+        Some(1),
+        "an unreasoned acceptance must not account: {out}"
+    );
+    assert!(out.contains("MALFORMED"), "and must say why: {out}");
+
+    // A subject with no findings is NOT clean — it is a separate state, so a
+    // caller cannot read "nothing to account for" as "everything accounted".
+    let (code, _) = run(&log(&claim("bafyplain000000000000", "An ordinary claim.")));
+    assert_eq!(code, Some(3), "no findings is its own exit code");
+
+    // And a kan that cannot be read is could-not-check, never a finding.
+    let kan = dir.path().join("kan");
+    std::fs::write(&kan, "#!/bin/sh\necho boom >&2\nexit 3\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&kan, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let out = Command::new("python3")
+        .arg(&script)
+        .arg("s")
+        .current_dir(dir.path())
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                dir.path().display(),
+                std::env::var("PATH").unwrap()
+            ),
+        )
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "an unreadable kan is could-not-check, which outranks checked-and-clean"
+    );
+}
