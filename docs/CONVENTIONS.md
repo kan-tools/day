@@ -524,6 +524,21 @@ carrying a fenced `day-witness` block: a map from witness type to **probe**.
 | `claim` | a live claim exists satisfying **every** declared predicate | kan | always |
 | `command` | the command exits zero | — | only with `--run` |
 
+**A `path` probe is meaningful only when the work creates the file.** If the
+file exists before the atom runs — scaffolding, a template, a file the work
+*appends to* — the probe is satisfied from the start and can never be false,
+which is as uninformative as a stale field and reads just as authoritative. The
+failure is silent: such a probe parses, matches, and reports the atom done
+before anything has happened.
+
+The discriminator is not the substrate but the lifecycle. A project whose work
+*consumes* an artifact (a queue file removed once handled) can probe it by
+`path` honestly; a project whose work *accumulates into* one cannot. Anything
+whose product is content **inside** a file, a field, or an event that leaves no
+artifact at all wants a `claim` probe instead — completion evidenced by what the
+log says, not by what exists on disk.
+
+
 ### A witness may declare two halves: material and record
 
 A witness type may map to a **pair** instead of a single probe — what shows the

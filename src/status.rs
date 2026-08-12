@@ -360,7 +360,13 @@ impl Status {
                 "No witness probes are declared (`schema/witness`), so day cannot infer\n\
                  where the work sits from artifacts. Declare what would evidence each\n\
                  type and position becomes checkable:\n  \
-                 kan observe \"...\" --subject schema/witness   (see docs/CONVENTIONS.md)\n",
+                 kan observe \"...\" --subject schema/witness   (see docs/CONVENTIONS.md)\n\
+                 \n\
+                 A `path` probe is meaningful only when the work CREATES the file. If the\n\
+                 file exists before the atom runs -- scaffolding, a template, a file the\n\
+                 work appends to -- the probe is satisfied from the start and can never be\n\
+                 false. Prefer a `claim` probe for anything whose product is content\n\
+                 inside a file rather than the file itself.\n",
             );
             return out;
         }
