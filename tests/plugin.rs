@@ -927,8 +927,23 @@ fn a_failed_kan_read_is_never_swallowed() {
         // call sites. Over-inclusion is the safe direction here — a method
         // whose result is genuinely infallible simply never appears next to
         // one of the swallow shapes.
-        let returns_something = signature.contains("->");
-        if signature.contains("&self") && returns_something && !name.is_empty() {
+        // The return type must MENTION `Result` or `Option`, in any path
+        // spelling — `std::result::Result` included, which is the escape the
+        // literal `-> Result<` missed.
+        //
+        // Not "returns anything", which was the previous attempt: every method
+        // contributes its BARE NAME to the search, so an unrelated type's
+        // `.version().unwrap_or_default()` was reported as a swallowed kan
+        // read. That refuted this scan's own "over-inclusion is the safe
+        // direction" rationale — a false positive pressures a caller into
+        // hatching non-kan code, and a hatch spent on the wrong site is a hatch
+        // that no longer means anything.
+        //
+        // A type ALIAS still escapes. Accepted, with the rest of the
+        // alternate-spelling class, on `harness-footer`.
+        let ret = signature.split("->").nth(1).unwrap_or("");
+        let fallible = ret.contains("Result") || ret.contains("Option");
+        if signature.contains("&self") && fallible && !name.is_empty() {
             derived.push(format!(".{name}("));
         }
     }

@@ -254,11 +254,27 @@ fn ac1_day_never_invokes_a_mutating_git_subcommand() {
     // every git call day makes. Checked precisely: the env var naming the
     // git binary appears only in git.rs, and nothing spawns `git` directly.
     for (path, text) in &sources {
-        assert!(
-            !text.contains("Command::new(\"git\")"),
-            "{} spawns git directly; all git access belongs in src/git.rs",
-            path.display()
-        );
+        // **Any process spawn outside the three declared sites, not the one
+        // literal `Command::new("git")`.** That literal rejected exactly one
+        // spelling: `Command::new(String::from("git"))` compiled and passed,
+        // so the claim in this test's own name — git is reached from nowhere
+        // else — was unenforced. CLAUDE.md names three spawn sites and says do
+        // not add a fourth; this is that rule made checkable.
+        //
+        // Its limit, stated rather than implied: a scan cannot enumerate every
+        // way to spawn a process, so this raises the cost of an ACCIDENTAL
+        // fourth site and is not a defence against a determined author. See the
+        // acceptance recorded on `harness-footer`.
+        const SPAWN_SITES: [&str; 3] = ["git.rs", "probe.rs", "kan_client.rs"];
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !SPAWN_SITES.contains(&name.as_str()) {
+            assert!(
+                !common::strip_line_comments(text).contains("Command::new"),
+                "{} spawns a process; day has exactly three spawn sites \
+                 ({SPAWN_SITES:?}) and CLAUDE.md says not to add a fourth",
+                path.display()
+            );
+        }
         if path.file_name().unwrap() == "git.rs" {
             continue;
         }

@@ -403,43 +403,47 @@ fn ac6_the_five_sync_states_render_distinctly() {
         // left the assertion on `assert_ne!`, which is the same anti-pattern
         // the same commit declared dead for the position states. Round 3, in a
         // different harness and model, found it again.
-        let find = |name: &str| {
-            outputs
+        // **EXACT, not contains.** Requiring the right token and forbidding
+        // only the opposite token AT THE SAME COUNT let a contradictory
+        // rendering through: appending `⇣2` to an ahead-only state satisfies
+        // both halves while telling the operator to pull and push at once.
+        // Found by a cold review probing this very assertion. The sync segment
+        // is the whole of the context line for these fixtures, so equality is
+        // available and says exactly what REQ-5 means.
+        let expected: [(&str, &str); 5] = match style {
+            Style::Emoji => [
+                ("clean", "✔"),
+                ("dirty", "✏️"),
+                ("ahead", "✔ ⇡3"),
+                ("behind", "✔ ⇣3"),
+                ("all", "✏️ ⇡3 ⇣3"),
+            ],
+            Style::Plain => [
+                ("clean", "clean"),
+                ("dirty", "dirty"),
+                ("ahead", "clean ahead 3"),
+                ("behind", "clean behind 3"),
+                ("all", "dirty ahead 3 behind 3"),
+            ],
+        };
+        for (name, want) in expected {
+            let rendered = outputs
                 .iter()
                 .find(|(n, _)| *n == name)
                 .map(|(_, out)| out.clone())
-                .expect("every case renders")
-        };
-        let (ahead_mark, behind_mark) = match style {
-            Style::Emoji => ("⇡3", "⇣3"),
-            Style::Plain => ("ahead 3", "behind 3"),
-        };
-        let ahead = find("ahead");
-        assert!(
-            ahead.contains(ahead_mark),
-            "3 commits AHEAD must render {ahead_mark:?} in {style:?}:\n{ahead}"
-        );
-        assert!(
-            !ahead.contains(behind_mark),
-            "3 commits ahead must not wear the behind mark — commit, push and \
-             pull are different remedies ({style:?}):\n{ahead}"
-        );
-        let behind = find("behind");
-        assert!(
-            behind.contains(behind_mark),
-            "3 commits BEHIND must render {behind_mark:?} in {style:?}:\n{behind}"
-        );
-        assert!(
-            !behind.contains(ahead_mark),
-            "3 commits behind must not wear the ahead mark ({style:?}):\n{behind}"
-        );
-        // And both directions at once keep their own marks rather than
-        // collapsing to one.
-        let all = find("all");
-        assert!(
-            all.contains(ahead_mark) && all.contains(behind_mark),
-            "ahead-and-behind must show both marks ({style:?}):\n{all}"
-        );
+                .expect("every case renders");
+            let context = rendered
+                .lines()
+                .nth(1)
+                .expect("the context line renders")
+                .trim();
+            assert_eq!(
+                context, want,
+                "the {name} sync state must render EXACTLY {want:?} in \
+                 {style:?} — a substring assertion admits a contradictory \
+                 extra marker, which is how ⇡3 ⇣2 passed:\n{rendered}"
+            );
+        }
     }
 }
 

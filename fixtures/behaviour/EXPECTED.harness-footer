@@ -1,13 +1,25 @@
 # The behaviour changes the harness-footer branch intends, declared so any
-# OTHER difference surfaces as UNEXPLAINED. Regenerate the run with:
+# OTHER difference surfaces as UNEXPLAINED.
 #
-#   xargs -a fixtures/behaviour/EXPECTED.harness-footer python3 scripts/behaviour-diff.py \
-#     --since 9b8afa7 --expect-fixtures 4
+# Regenerate the run with (this command was RUN before being written here):
 #
-# Every entry is the footer's own surface: the cache files it writes. The
-# two assess-telos fixtures are absent on purpose — that verb does not touch
-# the cache, and they showed differences only while a shared work directory
-# was leaking one binary's artifacts into the other's observation.
+#   python3 - <<'PY'
+#   import subprocess
+#   args = [l.rstrip("\n") for l in open("fixtures/behaviour/EXPECTED.harness-footer")
+#           if l.strip() and not l.startswith("#")]
+#   raise SystemExit(subprocess.run(["python3", "scripts/behaviour-diff.py",
+#       "--since", "9b8afa7", "--expect-fixtures", "4"] + args).returncode)
+#   PY
+#
+# NOT `xargs -a`: that is a GNU option BSD/macOS xargs does not have, and the
+# line documenting it here never ran on the machine that wrote it — a
+# documented invocation that does not run, which is the class
+# tests/kan_conformance.rs exists for (day#27, kan#78).
+#
+# Every entry is the footer's own surface: the cache files it writes. The two
+# assess-telos fixtures are absent on purpose -- that verb does not touch the
+# cache, and they showed differences only while a shared work directory was
+# leaking one binary's artifacts into the other's observation.
 --expect
 trust-withheld-entirely:doctor :: .day/statusline
 --expect
