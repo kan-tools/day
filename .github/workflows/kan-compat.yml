@@ -126,7 +126,19 @@ jobs:
             echo unbuildable > kan-compat-outcome.txt
             exit 0
           fi
-          scripts/run-kan-compat-cell.sh /tmp/kan/bin/kan > kan-compat-outcome.txt
+          # A cell that could not run has measured NOTHING, and the two ways to
+          # get that wrong are both available here: comparing the non-answer
+          # against the committed row (which reads as "a pairing changed", the
+          # one error this workflow reserves for "day moved"), and caching it
+          # under an immutable key so the non-answer is served to every later
+          # run. So the file is removed before failing — a cache entry is a
+          # claim that the question was answered.
+          if ! scripts/run-kan-compat-cell.sh /tmp/kan/bin/kan > kan-compat-outcome.txt; then
+            outcome=$(cat kan-compat-outcome.txt || echo "no output")
+            rm -f kan-compat-outcome.txt
+            echo "::error title=${{ matrix.kan }} was not measured::The cell reported '$outcome' — the measurement did not happen, so this is not a fact about the pairing and no row may be written from it. See the step log."
+            exit 1
+          fi
           cat kan-compat-outcome.txt
 
       - name: Compare against the committed expectation

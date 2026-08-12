@@ -1438,3 +1438,100 @@ fn the_finding_census_separates_unaccounted_from_could_not_check() {
         "an unreadable kan is could-not-check, which outranks checked-and-clean"
     );
 }
+
+/// **A cell that could not run says so, and never manufactures a pairing fact.**
+///
+/// `scripts/run-kan-compat-cell.sh` sorted a failed `cargo test` by grepping the
+/// log for `could not compile`: one toolchain problem was distinguished as
+/// `unbuildable`, and every other one — cargo refusing to start, a killed
+/// process, a broken environment — fell through to `incompatible`. Its own
+/// comment says conflating those "would record a toolchain problem as a
+/// compatibility fact", so the rule was stated in the right place and enforced
+/// by nothing, which is the defect class `CLAUDE.md` records for prose in a doc
+/// comment.
+///
+/// It cost a real answer: an empty `CARGO_TARGET_DIR` in the environment
+/// produced `incompatible` for four consecutive kan releases that day
+/// demonstrably works with, and the only thing that caught it was already
+/// knowing the answer. Transcribed, it would have moved day's published floor.
+///
+/// The reproduction here is that exact environment, and it is hermetic: cargo
+/// refuses before it builds anything, so no kan and no toolchain work is
+/// needed. `/bin/echo` stands in for the binary only to clear the executable
+/// check the script makes first.
+#[test]
+fn the_compat_cell_reports_could_not_run_rather_than_a_pairing_fact() {
+    let script = repo_root().join("scripts/run-kan-compat-cell.sh");
+    assert!(script.is_file(), "the cell script should exist");
+
+    let out = Command::new(&script)
+        .arg("/bin/echo")
+        .current_dir(repo_root())
+        // The defect verbatim. Cargo rejects an empty target directory before
+        // it does any work, which is why this is fast and why the old
+        // classifier never saw `could not compile`.
+        .env("CARGO_TARGET_DIR", "")
+        .output()
+        .expect("sh should be runnable");
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    assert_ne!(
+        token, "incompatible",
+        "an environment that stopped cargo is not a fact about kan. This is the \
+         regression: could-not-check reported as checked-and-found-a-defect, \
+         and it is transcribed into tests/fixtures/kan-compat.tsv by hand.\n\
+         stderr: {stderr}"
+    );
+    assert_eq!(
+        token, "could-not-run",
+        "the cell must name the non-measurement.\nstderr: {stderr}"
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "and exit non-zero: could-not-check outranks checked-and-clean, and a \
+         caller reading only the token will otherwise write a row from it.\n\
+         stderr: {stderr}"
+    );
+}
+
+/// **The matrix refuses to compare or cache a non-measurement.**
+///
+/// The token is only half the guarantee. `kan-compat.yml` compares the cell's
+/// outcome against the committed row and fails with "a pairing changed" — an
+/// error it reserves for day having moved — so a `could-not-run` reaching that
+/// step reports the wrong defect against the wrong repo. Worse, the outcome
+/// file is the cache value under a key naming an immutable tag, so a
+/// non-answer cached once is served to every later run.
+///
+/// A guarantee wired at one call site is day#101, and this is the second call
+/// site.
+#[test]
+fn the_matrix_never_compares_or_caches_an_unmeasured_cell() {
+    let yaml = read(".github/workflows/kan-compat.yml");
+    let run_step = yaml
+        .split("- name: Run the conformance suite against it")
+        .nth(1)
+        .expect("the workflow should still have the step that runs the cell")
+        .split("- name:")
+        .next()
+        .expect("the step should be delimited by the next one");
+
+    assert!(
+        run_step.contains("if ! scripts/run-kan-compat-cell.sh"),
+        "the workflow must observe the cell's exit code; reading only its stdout \
+         is how a non-answer becomes a row.\n{run_step}"
+    );
+    assert!(
+        run_step.contains("rm -f kan-compat-outcome.txt"),
+        "and it must delete the outcome file before failing — a cache entry \
+         under an immutable tag key is a claim that the question was \
+         answered.\n{run_step}"
+    );
+    assert!(
+        run_step.contains("exit 1"),
+        "and fail the cell, rather than falling through to the comparison \
+         step.\n{run_step}"
+    );
+}

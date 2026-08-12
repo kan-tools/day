@@ -86,6 +86,11 @@ fn the_declared_range_matches_what_was_measured() {
 /// Every row must carry an outcome the matrix can actually produce. A typo'd
 /// outcome silently drops out of the `ok` set and would quietly narrow the
 /// range day reports.
+///
+/// The cell emits a fourth token, `could-not-run`, and it is deliberately **not**
+/// accepted here: it names a measurement that did not happen, which is the one
+/// thing this table must never hold. A row is a claim that day was run against
+/// that kan, and the outcome vocabulary is where that stays true.
 #[test]
 fn every_row_records_a_known_outcome() {
     let path =
