@@ -31,7 +31,14 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 Nothing yet.
 
-## [v0.12.1-beta.1] — 2026-08-12
+## [v0.12.1-beta.2] — 2026-08-13
+
+*Publication recovery.* The beta.1 tag passed the local release ceremony but
+its publication workflow caught a changelog/tag-date mismatch after midnight.
+beta.2 carries the same approved audit fixes with coherent release metadata;
+beta.1 was never published to crates.io or as a GitHub Release.
+
+## [v0.12.1-beta.1] — 2026-08-13
 
 *Bugfix audit release.* A full-repository adversarial review of
 `v0.12.0-beta.4` found that linked worktrees could be reported as empty,

@@ -120,7 +120,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.12.0-beta.4   # the memory layer day reads
-cargo install day --version 0.12.1-beta.1
+cargo install day --version 0.12.1-beta.2
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -166,7 +166,7 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.12.1-beta.1** makes narrowed reads and worktree/log mismatches explicit, while
+Early. **v0.12.1-beta.2** makes narrowed reads and worktree/log mismatches explicit, while
 `schema/injection/cadence` and `schema/injection/max_practice_items` resolve
 independently instead of the newer claim silently resetting the other. It also
 carries a round of honest-reads fixes, and their common shape is worth stating
