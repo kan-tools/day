@@ -199,7 +199,7 @@ fn the_status_section_leads_with_the_current_version() {
     );
 }
 
-/// **The bootstrap script's install advice carries the same derived pins.**
+/// **The portable install skill's advice carries the same derived pins.**
 ///
 /// The one surface whose entire job is teaching an uncontextualized user how
 /// to install printed the two commands the README documents as broken: a
@@ -212,24 +212,27 @@ fn the_status_section_leads_with_the_current_version() {
 /// tests derive — so the script cannot drift from the measurement any more
 /// than the README can.
 #[test]
-fn the_bootstrap_script_pins_the_versions_it_tells_a_stranger_to_install() {
-    let script = repo_root().join("hooks/bootstrap-check.js");
-    let out = std::process::Command::new("node")
-        .arg(&script)
-        .env("DAY_BOOTSTRAP_FORCE_MISSING", "day,kan")
-        .output()
-        .expect("bootstrap-check.js should run");
-    assert!(out.status.success(), "the script exits 0 unconditionally");
-    let msg = String::from_utf8_lossy(&out.stdout).to_string();
+fn the_install_skill_pins_the_versions_it_tells_a_stranger_to_install() {
+    let msg = std::fs::read_to_string(repo_root().join("skills/install/SKILL.md"))
+        .expect("the portable install skill should ship");
+    for required in [
+        "macOS, Linux, WSL",
+        "Native Windows",
+        "kan --version",
+        "day --version",
+        "day doctor",
+    ] {
+        assert!(msg.contains(required), "install skill omits {required:?}");
+    }
     assert!(
         msg.contains("cargo install day --version"),
-        "with day missing, the script should print a pinned day install; got: {msg}"
+        "the skill should teach a pinned day install; got: {msg}"
     );
 
     let day_pin = format!("cargo install day --version {}", crate_version());
     assert!(
         msg.contains(&day_pin),
-        "the script's day pin should be this crate's version — expected \
+        "the skill's day pin should be this crate's version — expected \
          `{day_pin}` in: {msg}"
     );
 
@@ -253,7 +256,7 @@ fn the_bootstrap_script_pins_the_versions_it_tells_a_stranger_to_install() {
     );
     assert!(
         msg.contains(&kan_pin),
-        "the script's kan pin should be the newest measured-ok kan — expected \
+        "the skill's kan pin should be the newest measured-ok kan — expected \
          `{kan_pin}` in: {msg}"
     );
 

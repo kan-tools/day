@@ -502,7 +502,7 @@ fn fallback_notice_degrades_when_kan_cannot_read() {
     let kan = unreadable_kan(dir.path());
 
     // premise: this kan RUNS, so the degraded-read path is reached rather than
-    // the absent-kan one — which is `hooks/bootstrap-check.sh`'s job, not this.
+    // the absent-kan one — which is the portable install skill's job, not this.
     let probe = common::run_stub(&kan, &["--help"], dir.path());
     assert!(
         probe.status.success(),

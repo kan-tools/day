@@ -332,15 +332,16 @@ fn ac3_every_skill_declares_the_name_of_its_directory() {
             "adversarial-review",
             "design",
             "handoff",
+            "install",
             "wakeup",
             "witness-interview"
         ],
-        "the five atoms day ships as skills"
+        "the five process atoms plus the portable installation skill"
     );
     assert_eq!(
         skills.len(),
-        5,
-        "expected exactly 5 skills; if this dropped to zero the SKILL.md \
+        6,
+        "expected exactly 6 skills; if this dropped to zero the SKILL.md \
          discovery broke and every assertion below was checking nothing"
     );
 
@@ -384,11 +385,18 @@ fn ac3_every_skill_declares_the_name_of_its_directory() {
             "{name}: description must be non-empty and at most 1024 characters"
         );
 
-        assert!(
-            body.contains("```day-atom"),
-            "skills/{name}/SKILL.md should still declare its atom interface — the \
-             packaging moved, the vocabulary did not"
-        );
+        if name != "install" {
+            assert!(
+                body.contains("```day-atom"),
+                "skills/{name}/SKILL.md should still declare its atom interface — the \
+                 packaging moved, the vocabulary did not"
+            );
+        } else {
+            assert!(
+                body.contains("Installation is portable plugin content"),
+                "the support skill must state its harness-neutral boundary"
+            );
+        }
     }
 }
 
@@ -428,8 +436,8 @@ fn ac4_no_skill_body_pre_executes_a_command() {
         }
     }
     assert_eq!(
-        scanned, 5,
-        "expected to scan 5 skill bodies; if this dropped the scan was asserting \
+        scanned, 6,
+        "expected to scan 6 skill bodies; if this dropped the scan was asserting \
          nothing"
     );
 }
@@ -509,8 +517,8 @@ fn ac5_every_instructed_read_names_its_failure_handling() {
     // of its job while looking like it was. The LIST is derived by
     // `shipped_skills()`; this is the other half.
     assert_eq!(
-        bullets_checked, 28,
-        "expected exactly 28 instructed reads across the five skills, found \
+        bullets_checked, 31,
+        "expected exactly 31 instructed reads across the six skills, found \
          {bullets_checked}. If a bullet was added or removed, update this number \
          — if it dropped sharply the bullet parse broke and every assertion above \
          was checking nothing."

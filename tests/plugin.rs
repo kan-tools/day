@@ -71,24 +71,12 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
     }
 }
 
-/// **Narrowed, not relaxed.** This used to read "every SessionStart command is
-/// a `day hook` invocation", which the bootstrap check cannot satisfy: it
-/// exists to report that `day` is *absent*, and a `day` the shell cannot find
-/// cannot report its own absence. The old rule would have been met by a
-/// `day hook missing-binaries` that never runs in the one case it is for.
-///
-/// So the guarantee is now stronger than "starts with `day hook`": **exactly
-/// one** non-day command is permitted, it must be the known bootstrap path, and
-/// that file must exist and be executable. A second bundled script — the way
-/// this widens by accident — fails here.
 #[test]
-fn ac5_the_session_start_hook_invokes_day_and_one_bootstrap() {
+fn ac5_every_session_start_hook_invokes_day_directly() {
     let hooks = read_json("hooks/hooks.json");
     let groups = hooks["hooks"]["SessionStart"]
         .as_array()
         .expect("SessionStart should be an array");
-
-    const BOOTSTRAP: &str = "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bootstrap-check.js\"";
 
     let commands: Vec<&str> = groups
         .iter()
@@ -97,43 +85,18 @@ fn ac5_the_session_start_hook_invokes_day_and_one_bootstrap() {
         .collect();
     assert!(!commands.is_empty(), "at least one SessionStart command");
 
-    let (bundled, day_hooks): (Vec<&&str>, Vec<&&str>) =
-        commands.iter().partition(|c| !c.starts_with("day hook "));
-
-    assert_eq!(
-        bundled.len(),
-        1,
-        "exactly one SessionStart command may be something other than `day hook …`, \
-         and it is the bootstrap check. Found {bundled:?}"
-    );
-    assert_eq!(
-        *bundled[0], BOOTSTRAP,
-        "the one non-day SessionStart command must be the bootstrap check"
-    );
-
-    // The command names a file the plugin ships; a rename that updates only one
-    // side would otherwise register a hook that silently never runs.
-    let script = repo_root().join("hooks/bootstrap-check.js");
-    assert!(script.is_file(), "{} should exist", script.display());
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(&script)
-            .expect("metadata")
-            .permissions()
-            .mode();
-        assert!(
-            mode & 0o111 != 0,
-            "hooks/bootstrap-check.js must be executable; mode is {mode:o}"
-        );
-    }
-
     assert!(
-        day_hooks.contains(&&"day hook session-start"),
-        "{commands:?}"
+        commands.iter().all(|c| c.starts_with("day hook ")),
+        "installation belongs to the portable install skill; Claude-specific \
+         SessionStart hooks may invoke only the installed day binary: {commands:?}"
     );
+    let raw = std::fs::read_to_string(repo_root().join("hooks/hooks.json")).unwrap();
+    assert!(!raw.contains("bootstrap-check"));
+    assert!(!raw.contains("node "));
+
+    assert!(commands.contains(&"day hook session-start"), "{commands:?}");
     assert!(
-        day_hooks.contains(&&"day hook session-notice"),
+        commands.contains(&"day hook session-notice"),
         "{commands:?}"
     );
 }
@@ -275,6 +238,10 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
             "skills/handoff/SKILL.md",
             "the claims the next `/wakeup` will check",
         ),
+        (
+            "skills/install/SKILL.md",
+            "Installation is portable plugin content",
+        ),
     ];
     for file in shipped_commands() {
         let file = file.as_str();
@@ -296,10 +263,12 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
             text.contains(must_contain),
             "{file} should contain {must_contain:?}"
         );
-        assert!(
-            text.contains("```day-atom"),
-            "{file} should declare its atom interface"
-        );
+        if file != "skills/install/SKILL.md" {
+            assert!(
+                text.contains("```day-atom"),
+                "{file} should declare its atom interface"
+            );
+        }
     }
 }
 
