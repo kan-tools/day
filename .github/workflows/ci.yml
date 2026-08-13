@@ -270,7 +270,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $out = (cmd /c "node hooks\bootstrap-check.js" 2>&1 | Out-String)
           $code = $LASTEXITCODE
-          if ($code -ne 0) { throw "registered bootstrap command exited $code: $out" }
+          if ($code -ne 0) { throw "registered bootstrap command exited ${code}: $out" }
           if ([string]::IsNullOrWhiteSpace($out)) { throw "registered bootstrap command was silently successful with tools deliberately absent" }
           $parsed = $out | ConvertFrom-Json
           if ([string]::IsNullOrWhiteSpace($parsed.systemMessage)) { throw "bootstrap output has no systemMessage: $out" }

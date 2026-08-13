@@ -20,6 +20,19 @@ fn read(rel: &str) -> String {
         .unwrap_or_else(|e| panic!("{} should be readable: {e}", path.display()))
 }
 
+/// PowerShell treats a colon immediately after an interpolated bare variable
+/// name as part of the variable reference. Keep the Windows bootstrap gate
+/// parseable so it can measure the command it exists to exercise (day#209).
+#[test]
+fn windows_ci_delimits_variables_before_colons() {
+    let ci = read(".github/workflows/ci.yml");
+    assert!(
+        !ci.contains("$code:"),
+        "PowerShell parses `$code:` as an invalid variable reference; use \
+         `${{code}}:` so the Windows bootstrap gate reaches its assertions"
+    );
+}
+
 /// A shell pipeline's stages, splitting on `|` **outside quotes** and joining
 /// `\`-continuations.
 ///
