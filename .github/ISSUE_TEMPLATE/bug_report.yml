@@ -52,7 +52,7 @@ body:
     attributes:
       label: day version
       description: "`day --version`"
-      placeholder: "day 0.12.0-beta.1"
+      placeholder: "day 0.12.1-beta.3"
     validations:
       required: true
 
@@ -63,7 +63,7 @@ body:
       description: >
         `kan --version`. The pair matters — day declares a measured range of
         supported kan versions.
-      placeholder: "kan 0.11.0-beta.1"
+      placeholder: "kan 0.13.0-beta.1"
     validations:
       required: true
 

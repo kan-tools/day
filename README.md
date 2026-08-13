@@ -1,7 +1,51 @@
 # day
 
-**Structured process for AI-assisted development.** day is the process layer
-that sits next to [kan](https://github.com/kan-tools/kan)'s memory layer.
+**A process layer for AI-assisted development.** day gives a coding agent a
+shared, inspectable account of what the project is trying to achieve, what
+step the work is in, and what evidence would count as done. It uses
+[kan](https://github.com/kan-tools/kan) as its memory layer, so the durable
+record remains signed, append-only, and usable outside any one agent harness.
+
+day is an early prerelease. It is useful today for design, handoff, adversarial
+review, process graphs, and evidence-based assessment; its vocabulary and
+installation experience are still evolving.
+
+## Quick start
+
+Install the currently tested pair explicitly—Cargo does not select prereleases
+unless a version is given:
+
+```bash
+cargo install kan --version 0.13.0-beta.1
+cargo install day --version 0.12.1-beta.3
+```
+
+Then, from a git repository:
+
+```bash
+day init       # records the baseline schema and prints integration steps
+day doctor     # checks that the declared process graph composes
+day config     # shows every effective setting and where it came from
+```
+
+For Claude Code, install this repository as a plugin to add the skills, hooks,
+and MCP server:
+
+```text
+/plugin install <path to this repository>
+```
+
+The fastest useful loop is:
+
+1. Run `/design` to turn intent into a checked design and record its decisions.
+2. Implement the design.
+3. Run `/adversarial-review` against the design's north star.
+4. Use `/handoff` before leaving and `/wakeup` when resuming.
+
+See [CONVENTIONS](docs/CONVENTIONS.md) for record shapes, [TELOS](docs/TELOS.md)
+for the model, and the [roadmap](docs/ROADMAP.md) for planned work.
+
+## Why day and kan are separate
 
 kan is a generalizable layer for structured *knowledge* that happens to work
 well for software development. day is a generalizable layer for structured
@@ -9,7 +53,7 @@ well for software development. day is a generalizable layer for structured
 separate on purpose — you can hold onto your memory substrate while throwing
 away every opinion in this repo.
 
-## The idea
+## The model, briefly
 
 When you write software you hold several plausible futures in mind at once.
 Each satisfies some purpose, each pulls the work forward, and they are
@@ -24,7 +68,7 @@ day's job is to keep track of those teloi as they drift, help decompose the
 gap between here and there into composable units of work, and make the
 assessment of where you actually are auditable rather than vibes-based.
 
-The model, including the parts not yet implemented (frames as internal
+The fuller model, including the parts not yet implemented (frames as internal
 toposes, cross-frame reconciliation, realizability as a sheaf condition, the
 polynomial-functor treatment of composition), is written up in
 [`docs/TELOS.md`](docs/TELOS.md). The grounding reference is David Spivak's
@@ -116,53 +160,10 @@ config contains no blocking construct. Agents act; the record is made
 legible; drift surfaces in the graph as data. This is the specific friction
 day exists to avoid repeating.
 
-## Install
+## Installation details
 
-```bash
-cargo install kan --version 0.12.0-beta.4   # the memory layer day reads
-cargo install day --version 0.12.1-beta.3
-```
-
-**The versions are not decoration.** Everything day has published is a
-pre-release, and cargo will not select one without `--version` — a plain
-`cargo install day` errors. kan does have one stable version, `0.1.0`, so a
-plain `cargo install kan` "succeeds" and hands you a kan ten minor versions
-old that day cannot talk to, which is the worse failure because it looks like
-it worked. day#50.
-
-Both pins are checked rather than remembered (`tests/install_docs.rs`): the
-day pin must be this crate's version, and the kan pin must be the newest kan
-`tests/fixtures/kan-compat.tsv` records as `ok` — so the line above cannot
-quietly name a kan nobody measured. `day assess docs` covers the first and has
-no opinion about the second, which is how the kan pin could have gone stale
-with every check green.
-
-**Between releases, `day doctor` may say the kan you just installed is "newer
-than this day was measured against".** That is this file being ahead of the
-crate, not a problem with the pair: the kan row is added on `main` as soon as
-it is measured, and the `NEWEST_MEASURED` constant that knows about it ships
-with the next day release. The warning is advisory, exit 0, and it clears when
-that release lands.
-
-**day requires kan >= 0.9.1**, and the requirement is measured rather than
-asserted: `tests/fixtures/kan-compat.tsv` records what every released kan
-actually does against this day, and `day doctor` prints the supported range
-next to the kan you have. Since day#71 every claim probe is answered from a
-single `kan show --all --json`, which landed in kan v0.9.1 — so an older kan
-cannot answer one at all. day says so rather than reading an empty log.
-
-Then, in a repo:
-
-```bash
-day init            # prints the wiring steps; writes nothing
-```
-
-Or install the whole thing — commands, session hook, and MCP server — as a
-Claude Code plugin:
-
-```
-/plugin install <path to this repo>
-```
+See [Getting started](docs/GETTING_STARTED.md) for direct and plugin setup,
+verification, version compatibility, worktrees, and common recovery paths.
 
 ## Status
 

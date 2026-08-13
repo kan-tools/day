@@ -35,9 +35,10 @@ use std::process::Command;
 /// omitted three of seven block types, twice, because its check was a number.
 /// [`the_corpus_covers_every_page_that_carries_a_shell_block`] asserts this list
 /// is still complete.
-const PAGES: [&str; 7] = [
+const PAGES: [&str; 8] = [
     "README.md",
     "docs/CONVENTIONS.md",
+    "docs/GETTING_STARTED.md",
     "skills/adversarial-review/SKILL.md",
     "skills/design/SKILL.md",
     "skills/handoff/SKILL.md",
@@ -249,7 +250,10 @@ fn every_documented_day_invocation_parses_and_runs() {
     // twice: a generator whose failure mode is less output needs an exhaustive
     // expectation. Changing this number is a decision about coverage, and the
     // message says so.
-    // 17/5. The `/wakeup` + `/handoff` pair contributes four: `/wakeup`'s
+    // 24/5. The onboarding pass added a quick-start loop to README.md and a
+    // dedicated getting-started page; their seven runnable day invocations are
+    // deliberately part of the executable documentation corpus.
+    // The `/wakeup` + `/handoff` pair contributes four: `/wakeup`'s
     // `kan show --all --json` and `day status`, and `/handoff`'s `git status
     // --porcelain` and `day doctor`. Both pages' `kan observe
     // agents/handoff/<thread>` lines are templates, so neither is run nor
@@ -266,7 +270,7 @@ fn every_documented_day_invocation_parses_and_runs() {
     // added with the flag. That it counts as a *run* rather than a skip is the
     // point of this check: the documented form of a brand-new flag is executed
     // against a stub rather than trusted to be right.
-    const EXPECTED_RUN: usize = 17;
+    const EXPECTED_RUN: usize = 24;
     const EXPECTED_SKIPPED: usize = 5;
     assert_eq!(
         (ran, skipped),

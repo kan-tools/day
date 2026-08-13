@@ -61,3 +61,5 @@ v0.12.0-beta.1	ok	measured locally against the tag's own build; read surface unc
 v0.12.0-beta.2	ok	measured locally against the tag's own build; read surface unchanged
 v0.12.0-beta.3	ok	measured locally against the tag's own build; read surface unchanged
 v0.12.0-beta.4	ok	measured locally against the tag's own build; kan owning its MST is not a read-surface change
+v0.12.0-beta.5	ok	measured locally against the tag's own build; read surface unchanged
+v0.13.0-beta.1	ok	measured locally against the tag's own build; day's public-CLI reads and writes remain compatible

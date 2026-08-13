@@ -75,8 +75,8 @@ fn the_declared_range_matches_what_was_measured() {
     // drops the pre-release on purpose: a stable release of a version whose beta
     // day supports is supported. The ceiling cannot do the same, because every
     // kan ever measured is a pre-release — dropping it made day report
-    // "measured through 0.12.0" when the newest artifact anyone ran was
-    // `0.12.0-beta.4`, so a future stable 0.12.0 would classify as Supported
+    // "measured through 0.13.0" when the newest artifact anyone ran was
+    // `0.13.0-beta.1`, so a future stable 0.13.0 would classify as Supported
     // having never existed. day's own words are "the newest kan this day was
     // measured against", which is a claim about an artifact.
     let declared = newest_measured();
@@ -343,11 +343,11 @@ fn an_unmeasured_stable_release_is_not_reported_as_measured() {
     );
 
     // A later pre-release is past the edge.
-    let later = Version::parse("v0.12.0-beta.10").expect("parses");
+    let later = Version::parse("v0.13.0-beta.10").expect("parses");
     assert_eq!(
         classify(Some(&later)),
         Compat::Newer,
-        "and `beta.10` sorts AFTER `beta.4` — numerically, not as a string, \
+        "and `beta.10` sorts AFTER `beta.1` — numerically, not as a string, \
          which is where a lexical comparison gets it backwards"
     );
 }

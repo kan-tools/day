@@ -12,7 +12,7 @@ const forced = new Set((process.env.DAY_BOOTSTRAP_FORCE_MISSING || "").split(","
 const missing = ["day", "kan"].filter((command) => forced.has(command) || !available(command));
 if (missing.length) {
   const installs = [];
-  if (missing.includes("kan")) installs.push("cargo install kan --version 0.12.0-beta.4");
+  if (missing.includes("kan")) installs.push("cargo install kan --version 0.13.0-beta.1");
   if (missing.includes("day")) installs.push("cargo install day --version 0.12.1-beta.3");
   process.stdout.write(JSON.stringify({
     systemMessage: `day bootstrap: missing ${missing.join(", ")}\n${installs.join("\n")}`,

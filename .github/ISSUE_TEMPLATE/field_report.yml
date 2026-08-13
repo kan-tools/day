@@ -5,11 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        **This is the highest-leverage thing you can send.** Every defect
-        found in day so far came from running it, not from testing it — not
-        most, every one. Reports like this produced the *v0.9 — position
-        honesty* milestone (#97, #98), *v0.10 — the graph tells the truth*
-        (#95), and *v0.7.0-beta.3 — the vocabulary substrate* (#74, #76, #77).
+        **This is the highest-leverage thing you can send.** Real-project use
+        has repeatedly exposed context and reporting failures that isolated
+        tests could not. You do not need to diagnose the cause.
 
         You do not need to diagnose anything. A report that is right about the
         symptom and wrong about the cause is still worth filing.
