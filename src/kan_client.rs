@@ -303,6 +303,11 @@ struct SubjectsEnvelope {
 #[derive(Debug, serde::Deserialize)]
 struct SubjectEntry {
     subject: String,
+    /// Claims withheld on this subject, when `status --json` can attribute
+    /// them. Keeping this evidence lets targeted reads distinguish an
+    /// unrelated narrowed subject from an absence that remains unexplained.
+    #[serde(default)]
+    excluded_by_trust: u64,
 }
 
 pub struct KanClient {
@@ -358,6 +363,25 @@ pub struct KanClient {
 }
 
 impl KanClient {
+    fn merge_withheld_total(&self, count: u64) {
+        self.trust_withheld_total
+            .set(self.trust_withheld_total.get().max(count));
+    }
+
+    fn merge_subject_withheld<I>(&self, entries: I)
+    where
+        I: IntoIterator<Item = (String, u64)>,
+    {
+        let mut known = self.trust_withheld.borrow_mut();
+        for (subject, count) in entries.into_iter().filter(|(_, count)| *count > 0) {
+            if let Some((_, seen)) = known.iter_mut().find(|(name, _)| name == &subject) {
+                *seen = (*seen).max(count);
+            } else {
+                known.push((subject, count));
+            }
+        }
+    }
+
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
         // Provenance is recorded, not re-derived at the point of failure: reading
         // the environment again when the error is built would report whatever the
@@ -644,18 +668,18 @@ impl KanClient {
         // PARTIAL: the entry is present, some claims visible, a count on the
         // entry. This is the dangerous one, because newest-wins means a
         // withheld newest claim promotes a superseded one.
-        *self.trust_withheld.borrow_mut() = envelope
-            .subjects
-            .iter()
-            .filter(|e| e.excluded_by_trust > 0)
-            .map(|e| (e.subject.clone(), e.excluded_by_trust))
-            .collect();
+        self.merge_subject_withheld(
+            envelope
+                .subjects
+                .iter()
+                .map(|e| (e.subject.clone(), e.excluded_by_trust)),
+        );
 
         // ABSENT: kan omits a fully-withheld subject from `show --all --json`
         // AND from `status --json`, so nothing names it and the accounting
         // guard cannot see it either. The envelope total is the only evidence
         // that any absence in this read is unreliable.
-        self.trust_withheld_total.set(envelope.excluded_by_trust);
+        self.merge_withheld_total(envelope.excluded_by_trust);
 
         // **The subjects kan RETURNED, taken from the entries rather than from
         // the claims.** The accounting guard's own words are "kan lists
@@ -799,11 +823,13 @@ impl KanClient {
         // and taking the larger makes the result independent of which happened
         // first rather than dependent on an ordering nobody would think to
         // preserve.
-        let seen = self
-            .trust_withheld_total
-            .get()
-            .max(envelope.excluded_by_trust);
-        self.trust_withheld_total.set(seen);
+        self.merge_withheld_total(envelope.excluded_by_trust);
+        self.merge_subject_withheld(
+            envelope
+                .subjects
+                .iter()
+                .map(|entry| (entry.subject.clone(), entry.excluded_by_trust)),
+        );
         Ok(envelope.subjects.into_iter().map(|s| s.subject).collect())
     }
 
@@ -880,9 +906,9 @@ impl KanClient {
         // the day#120 harm; an ordinary empty read is not.
         if self.returned_subjects.borrow().iter().any(|s| s == subject) {
             Ok(Read::Present(claims))
-        } else if self.claims_withheld_from_view() > 0 {
+        } else if self.unattributed_withheld_from_view() > 0 {
             Ok(Read::Indeterminate {
-                log_wide: self.claims_withheld_from_view(),
+                log_wide: self.unattributed_withheld_from_view(),
             })
         } else {
             Ok(Read::Absent)
@@ -899,6 +925,19 @@ impl KanClient {
     /// is not there and so can never be told by it.
     pub fn claims_withheld_from_view(&self) -> u64 {
         self.trust_withheld_total.get()
+    }
+
+    /// Withheld claims the status and bulk envelopes could not attribute to a
+    /// named subject. Only this remainder makes an unrelated targeted absence
+    /// indeterminate; attributed counts are handled on their own subjects.
+    pub fn unattributed_withheld_from_view(&self) -> u64 {
+        let attributed: u64 = self
+            .trust_withheld
+            .borrow()
+            .iter()
+            .map(|(_, count)| *count)
+            .sum();
+        self.claims_withheld_from_view().saturating_sub(attributed)
     }
 
     /// Appends a narrative claim through kan's own write verb and returns
@@ -1223,11 +1262,13 @@ mod tests {
 
     #[test]
     fn subject_lists_come_back_in_order() {
-        let json = r#"{"v":1,"subjects":[
-            {"subject":"atom/design","state":"Unclassified"},
+        let json = r#"{"v":1,"excluded_by_trust":3,"subjects":[
+            {"subject":"atom/design","state":"Unclassified","excluded_by_trust":3},
             {"subject":"telos/a","state":"Settled","value":"Open"}
         ]}"#;
         let envelope: SubjectsEnvelope = parse(json, &["status"]).expect("should parse");
+        assert_eq!(envelope.excluded_by_trust, 3);
+        assert_eq!(envelope.subjects[0].excluded_by_trust, 3);
         let names: Vec<String> = envelope.subjects.into_iter().map(|s| s.subject).collect();
         assert_eq!(names, vec!["atom/design", "telos/a"]);
     }

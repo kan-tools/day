@@ -670,6 +670,25 @@ fn a_subject_day_cannot_fully_read_is_not_reported_as_undeclared() {
          that is reporting a currency it did not establish: {check}"
     );
 
+    // --- shape 3: ATTRIBUTED ELSEWHERE. Both envelopes agree that the one
+    // withheld claim belongs to another named subject. That evidence must not
+    // turn a genuinely absent schema into an unreadable one.
+    let unrelated = stub(
+        "kan-unrelated.sh",
+        r#"{"v":1,"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1,"subjects":[{"v":1,"subject":"other","claims":[{"cid":"bafyvisible","kind":"Observation","text":"visible"}],"excluded_by_trust":1}]}"#,
+        r#"{"v":1,"subjects":[{"subject":"other","state":"Unclassified","excluded_by_trust":1}],"trust":{"base":"Solo","authors":[]},"excluded_by_trust":1}"#,
+    );
+    let check = text(&unrelated, &["design", "check", ".design/t.md"]);
+    assert!(
+        check.contains("no design-doc schema is declared"),
+        "an attributed withheld claim on another subject must not make this \
+         genuinely absent schema unreadable: {check}"
+    );
+    assert!(
+        !check.contains("not in this view"),
+        "the log-wide count is fully accounted for by `other`: {check}"
+    );
+
     // --- negative control: nothing withheld, and day behaves exactly as before.
     // Without this the assertions above would pass against a day that refuses
     // every read.
