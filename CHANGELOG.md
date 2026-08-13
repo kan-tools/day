@@ -31,6 +31,16 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 Nothing yet.
 
+## [v0.12.1-beta.3] — 2026-08-13
+
+### Fixed
+
+- The Windows CI bootstrap assertion now reaches the command it measures;
+  PowerShell previously rejected an undelimited variable followed by a colon
+  while parsing the workflow itself ([#209]).
+
+[#209]: https://github.com/kan-tools/day/issues/209
+
 ## [v0.12.1-beta.2] — 2026-08-13
 
 *Publication recovery.* The beta.1 tag passed the local release ceremony but
