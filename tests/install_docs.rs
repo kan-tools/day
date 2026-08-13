@@ -213,14 +213,12 @@ fn the_status_section_leads_with_the_current_version() {
 /// than the README can.
 #[test]
 fn the_bootstrap_script_pins_the_versions_it_tells_a_stranger_to_install() {
-    let script = repo_root().join("hooks/bootstrap-check.sh");
-    let out = std::process::Command::new("sh")
+    let script = repo_root().join("hooks/bootstrap-check.js");
+    let out = std::process::Command::new("node")
         .arg(&script)
-        // A PATH without ~/.cargo/bin hides day and kan while keeping the
-        // POSIX tools the script itself needs.
-        .env("PATH", "/usr/bin:/bin")
+        .env("DAY_BOOTSTRAP_FORCE_MISSING", "day,kan")
         .output()
-        .expect("bootstrap-check.sh should run");
+        .expect("bootstrap-check.js should run");
     assert!(out.status.success(), "the script exits 0 unconditionally");
     let msg = String::from_utf8_lossy(&out.stdout).to_string();
     assert!(

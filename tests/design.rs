@@ -675,16 +675,16 @@ fn an_intervening_claim_is_not_mistaken_for_the_previous_design_pass() {
 
     // A review finding, recorded exactly as `/adversarial-review` prescribes —
     // an `Observation`, on the design subject, newer than the pair.
-    let out = std::process::Command::new(&kan)
-        .args([
+    let out = common::run_stub(
+        &kan,
+        &[
             "observe",
             "BLOCK-1. The fix keys on a shape real kan never emits.",
             "--subject",
             "thing",
-        ])
-        .current_dir(dir.path())
-        .output()
-        .expect("the stub should accept a write");
+        ],
+        dir.path(),
+    );
     assert!(out.status.success(), "the fixture's own write must succeed");
 
     let third = run();

@@ -99,8 +99,27 @@ fn accepts(local: &str, claim: &Claim) -> bool {
 /// wrong.
 pub fn project(client: &KanClient) -> Projection {
     let claims = match client.show(PRACTICE_SUBJECT) {
-        Ok(claims) if claims.is_empty() => return Projection::default(),
-        Ok(claims) => claims,
+        Ok(crate::kan_client::Read::Absent) => return Projection::default(),
+        Ok(crate::kan_client::Read::Present(claims)) if claims.is_empty() => {
+            return Projection::default()
+        }
+        Ok(crate::kan_client::Read::Present(claims)) => claims,
+        Ok(crate::kan_client::Read::Withheld { count }) => {
+            return Projection {
+                notes: vec![format!(
+                    "`{PRACTICE_SUBJECT}` is unreadable: {count} claim(s) are withheld from this view"
+                )],
+                ..Projection::default()
+            };
+        }
+        Ok(crate::kan_client::Read::Indeterminate { log_wide }) => {
+            return Projection {
+                notes: vec![format!(
+                    "the log withholds {log_wide} claim(s) without subject attribution, so `{PRACTICE_SUBJECT}` may be absent or omitted"
+                )],
+                ..Projection::default()
+            };
+        }
         // **A read that failed is not an absence, and this arm used to say it
         // was.** The comment here read "No subject, or an unreadable one.
         // Absence is not an error" — true when the only `Err` meant kan was

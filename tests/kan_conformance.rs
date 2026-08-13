@@ -27,6 +27,13 @@ use std::process::Command;
 
 use day::kan_client::{KanClient, Write};
 
+fn present<T: std::fmt::Debug>(read: day::kan_client::Read<T>) -> T {
+    match read {
+        day::kan_client::Read::Present(value) => value,
+        other => panic!("expected a readable present subject, got {other:?}"),
+    }
+}
+
 /// The real `kan`, or `None` when it is not installed.
 ///
 /// Deliberately ignores `DAY_KAN_BIN`: that variable exists to point day at
@@ -160,7 +167,9 @@ fn conformance_append_shapes_are_accepted_by_real_kan() {
 
     // And the reads day depends on.
     assert!(
-        client.show("conformance").is_ok_and(|c| !c.is_empty()),
+        client
+            .show("conformance")
+            .is_ok_and(|c| matches!(c, day::kan_client::Read::Present(v) if !v.is_empty())),
         "real kan returned no claims for a subject day just wrote to"
     );
     client.subjects().expect("real kan rejected `kan status`");
@@ -195,7 +204,7 @@ fn conformance_day_reads_back_what_it_wrote_through_a_real_kan() {
         )
         .expect("append should succeed");
 
-    let claims = client.show("telos/roundtrip").expect("show should parse");
+    let claims = present(client.show("telos/roundtrip").expect("show should parse"));
     assert!(
         !claims.is_empty(),
         "day wrote a claim through a real kan and then read the subject as empty —          exactly the failure this test exists to catch"
@@ -275,8 +284,8 @@ fn conformance_relate_shape_is_accepted_by_real_kan() {
     // STRUCTURED?*, not *does it exist?*. A tripwire written against the
     // shape you know rather than the question you mean will answer the wrong
     // question confidently.
-    let from_source = client.show("telos/a").expect("show source");
-    let from_target = client.show("telos/b").expect("show target");
+    let from_source = present(client.show("telos/a").expect("show source"));
+    let from_target = present(client.show("telos/b").expect("show target"));
     assert!(
         from_source.iter().any(|c| c.kind == "Relation"),
         "the source subject should carry the edge"
@@ -424,12 +433,11 @@ fn conformance_bulk_read_is_available_and_agrees_with_per_subject_reads() {
     // path that returns a different answer is a different answer wearing the
     // same name, and `ClaimLog` would inherit the difference silently.
     for subject in ["telos/bulk-a", "telos/bulk-b"] {
-        let mut per_subject: Vec<String> = client
-            .show(subject)
-            .expect("show should succeed")
-            .into_iter()
-            .map(|c| c.cid)
-            .collect();
+        let mut per_subject: Vec<String> =
+            present(client.show(subject).expect("show should succeed"))
+                .into_iter()
+                .map(|c| c.cid)
+                .collect();
         let mut from_bulk: Vec<String> = bulk
             .iter()
             .filter(|(s, _)| s == subject)

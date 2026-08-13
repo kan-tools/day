@@ -307,10 +307,7 @@ fn fallback_hook_degrades_when_kan_cannot_read() {
 
     // premise: this kan RUNS. `--help` succeeds and every read verb fails, so
     // the fixture reaches the degraded-read path rather than the absent-kan one.
-    let probe = Command::new(&kan)
-        .arg("--help")
-        .output()
-        .expect("the stub should be runnable");
+    let probe = common::run_stub(&kan, &["--help"], dir.path());
     assert!(
         probe.status.success(),
         "premise: the stub kan must succeed on --help, or this exercises the \
@@ -331,7 +328,7 @@ fn fallback_hook_degrades_when_kan_cannot_read() {
     );
 }
 
-/// **fallback: unreadable-subject-records-the-pair** — day#119.
+/// An unreadable design subject refuses deduplication rather than guessing.
 ///
 /// `newest_of_kind` asks whether an identical observe/plan pair is already on
 /// the subject, so an unchanged design pass records nothing. `KanClient::show`
@@ -340,13 +337,11 @@ fn fallback_hook_degrades_when_kan_cannot_read() {
 /// question can fail to be answered, and the answer day assumes decides whether
 /// a claim is written.
 ///
-/// **The direction is the assertion.** Degrading to "records the pair" costs a
-/// duplicate claim on an append-only log. Degrading the other way — treating
-/// unreadable as unchanged — records NOTHING for a design pass that did happen,
-/// which is a silent loss and permanent. This test fixes the direction, because
-/// nothing else can: day is never in this mode.
+/// The visibility decision now lives before both deduplication helpers. They
+/// receive only a checked claim slice, so neither can turn unreadable into
+/// empty. A write may refuse; it must not guess whether a duplicate is safe.
 #[test]
-fn fallback_unreadable_subject_records_the_pair() {
+fn an_unreadable_subject_refuses_before_deduplication() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join("src")).unwrap();
     std::fs::write(dir.path().join("src/design.rs"), "// fixture\n").unwrap();
@@ -359,17 +354,23 @@ fn fallback_unreadable_subject_records_the_pair() {
 
     let honest = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafyreischema")]);
     let record = |kan: &Path| {
-        String::from_utf8_lossy(
-            &day(dir.path(), kan, &["design", "record", ".design/thing.md"]).stdout,
+        let output = day(dir.path(), kan, &["design", "record", ".design/thing.md"]);
+        (
+            output.status.success(),
+            format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ),
         )
-        .to_string()
     };
 
     // Premise, asserted rather than assumed: against a readable log the second
     // pass DOES skip. Without this the test passes on a day that never skips at
     // all, which would make the fallback assertion below meaningless.
-    record(&honest);
-    let readable_second = record(&honest);
+    assert!(record(&honest).0);
+    let (readable_ok, readable_second) = record(&honest);
+    assert!(readable_ok, "{readable_second}");
     assert!(
         readable_second.contains("(unchanged)"),
         "premise: the skip must work when the subject IS readable, or this test \
@@ -399,12 +400,11 @@ fn fallback_unreadable_subject_records_the_pair() {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&dropping, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    let degraded = record(&dropping);
+    let (degraded_ok, degraded) = record(&dropping);
+    assert!(!degraded_ok, "an unreadable write unexpectedly succeeded");
     assert!(
-        !degraded.contains("(unchanged)"),
-        "a subject day could not read must never be reported as unchanged — \
-         that records nothing for a design pass that happened, and an \
-         append-only log cannot get it back: {degraded}"
+        degraded.contains("did not return") || degraded.contains("unaccounted"),
+        "the refusal must name the failed read: {degraded}"
     );
 }
 
@@ -453,10 +453,7 @@ fn fallback_kan_omits_excluded_by_trust() {
     // premise: the payload really does omit the field. Asserted against the
     // stub's own output, so a later edit that adds it makes this test say so
     // instead of quietly exercising the path day is always on.
-    let payload = Command::new(&kan)
-        .args(["show", "--all", "--json"])
-        .output()
-        .expect("the stub should run");
+    let payload = common::run_stub(&kan, &["show", "--all", "--json"], dir.path());
     let payload = String::from_utf8_lossy(&payload.stdout);
     assert!(
         !payload.contains("excluded_by_trust"),
@@ -506,10 +503,7 @@ fn fallback_notice_degrades_when_kan_cannot_read() {
 
     // premise: this kan RUNS, so the degraded-read path is reached rather than
     // the absent-kan one — which is `hooks/bootstrap-check.sh`'s job, not this.
-    let probe = Command::new(&kan)
-        .arg("--help")
-        .output()
-        .expect("the stub should be runnable");
+    let probe = common::run_stub(&kan, &["--help"], dir.path());
     assert!(
         probe.status.success(),
         "premise: the stub kan must succeed on --help, or this exercises the \
@@ -545,10 +539,7 @@ fn fallback_uncheckable_without_witness_schema() {
     let kan = write_kan_stub(dir.path(), &[]);
 
     // premise: nothing in the log declares a witness schema.
-    let shown = Command::new(&kan)
-        .args(["show", "schema/witness", "--json"])
-        .output()
-        .expect("the stub should run");
+    let shown = common::run_stub(&kan, &["show", "schema/witness", "--json"], dir.path());
     let body = String::from_utf8_lossy(&shown.stdout);
     assert!(
         !body.contains("day-witness"),

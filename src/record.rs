@@ -246,9 +246,23 @@ pub fn design(
     // write verb may refuse — the never-blocking rule is about hooks, which
     // must always render — and refusing is the only option that does not
     // silently corrupt the record it exists to keep.
-    if let Err(e @ crate::kan_client::Error::PartiallyWithheld { .. }) = client.show(&subject) {
-        return Err(Error::Kan(e));
-    }
+    let existing_claims = match client.show(&subject)? {
+        crate::kan_client::Read::Present(claims) => claims,
+        crate::kan_client::Read::Absent => Vec::new(),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+            ))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                },
+            ))
+        }
+    };
 
     // The fingerprint is what makes "unchanged" mean unchanged. Without it both
     // texts this function compares are summaries, and the first version of
@@ -288,8 +302,8 @@ pub fn design(
     // writer and the reader cannot drift apart — which is the failure this is.
     let plan_opening = design_plan_opening(&subject);
     let previous_observe =
-        newest_written_by_design(client, &subject, "Observation", DESIGN_OBSERVE_OPENING);
-    let previous_plan = newest_written_by_design(client, &subject, "Plan", &plan_opening);
+        newest_written_by_design(&existing_claims, "Observation", DESIGN_OBSERVE_OPENING);
+    let previous_plan = newest_written_by_design(&existing_claims, "Plan", &plan_opening);
 
     let summary = doc
         .summary_line()
@@ -377,7 +391,7 @@ pub fn design(
     // sharpened wording would record twice, and a rewording that changed the
     // MEANING would record once and be silently wrong.
     let already: std::collections::BTreeSet<String> =
-        existing_resolution_ids(client, &subject, schema);
+        existing_resolution_ids(&existing_claims, schema);
 
     for bullet in doc.bullets(&schema.resolved_section) {
         match resolution_id(&bullet, &schema.resolution_prefix) {
@@ -436,24 +450,16 @@ pub fn resolution_id(bullet: &str, prefix: &str) -> Option<String> {
 /// order, which is the same ordering [`existing_resolution_ids`] relies on by
 /// not needing one.
 ///
-/// **The second `kan-read-may-degrade` site in this module, not the first.**
-/// [`existing_resolution_ids`] states the argument in full; both spend the hatch
-/// for the same reason and it is stated once, there.
+/// The caller performs the single visibility-checked subject read and passes
+/// the resulting claims here. This helper therefore cannot reinterpret an
+/// unreadable read as an empty record.
 ///
 /// [`existing_resolution_ids`]: fn@existing_resolution_ids
 fn newest_written_by_design(
-    client: &KanClient,
-    subject: &str,
+    claims: &[crate::kan_client::Claim],
     kind: &str,
     opening: &str,
 ) -> Option<(String, String)> {
-    // fallback: unreadable-subject-records-the-pair
-    // kan-read-may-degrade: a failed read here degrades to "append the pair",
-    // which is exactly the pre-day#119 behaviour — a duplicate claim, never a
-    // lost one. The opposite degradation (treat unreadable as unchanged) would
-    // silently record NOTHING for a design pass that did happen, so the
-    // direction is chosen rather than inherited.
-    let claims = client.show(subject).ok()?;
     claims
         .iter()
         .rev()
@@ -464,29 +470,13 @@ fn newest_written_by_design(
 
 /// Resolution ids already recorded as `decide` claims on a subject.
 ///
-/// A read failure yields an empty set, which means "record everything" — the
-/// safe direction: a duplicate decision is noise in an append-only log, while
-/// skipping one that was never recorded loses it. Stated because the opposite
-/// default would be the silent-loss failure that rule is about.
-///
-/// [`newest_of_kind`] spends the hatch on the same argument. This comment used
-/// to call itself the only site, and then drifted onto that function when it
-/// was added — so the sentence asserting uniqueness ended up on the thing that
-/// made it false. The argument lives here; the other site points at it.
-///
-/// [`newest_of_kind`]: fn@newest_of_kind
+/// Visibility is resolved once by `design` before either deduplication helper
+/// runs. Withheld and indeterminate reads refuse the write; an actual absent
+/// subject supplies an explicitly empty slice.
 fn existing_resolution_ids(
-    client: &KanClient,
-    subject: &str,
+    claims: &[crate::kan_client::Claim],
     schema: &crate::schema::Schema,
 ) -> std::collections::BTreeSet<String> {
-    // kan-read-may-degrade: failing toward "record everything" is the safe
-    // direction — see this function's doc comment. "and only here" was removed
-    // rather than reworded: `newest_of_kind` spends the hatch on the same
-    // argument, so the claim was false from the moment that function landed.
-    let Ok(claims) = client.show(subject) else {
-        return std::collections::BTreeSet::new();
-    };
     claims
         .iter()
         .filter(|c| c.kind == "Decision")

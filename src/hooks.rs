@@ -124,7 +124,9 @@ fn render_open(client: &KanClient) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Err(_) => String::new(),
+        Err(error) => format!(
+            "\nStill open: ⚠ could not read kan issues, so this list is unavailable ({error})\n"
+        ),
     }
 }
 
@@ -157,8 +159,8 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
             return format!(
                 "No teloi are visible in this view, and {withheld} claim(s) in this log are \
                  withheld from it — so day cannot tell whether none are recorded or none \
-                 are admitted by this trust base. Widen the view (`--trust me`, or \
-                 `--trust <did>`) before concluding this project declares no telos.\n"
+                 are admitted by this trust base. Use kan directly with a trust base that \
+                 admits the relevant authors; day has no trust-selection flag.\n"
             );
         }
         return "No teloi are recorded for this project yet. A telos is a desired state of \
@@ -179,7 +181,22 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
         // rather than put in a footer, because a footer is easy not to connect
         // to the list above it.
         let claims = match client.show(subject) {
-            Ok(claims) => claims,
+            Ok(crate::kan_client::Read::Present(claims)) => claims,
+            Ok(crate::kan_client::Read::Absent) => Vec::new(),
+            Ok(crate::kan_client::Read::Withheld { count }) => {
+                unreadable.push(subject.clone());
+                lines.push(format!(
+                    "- {subject}: ⚠ unreadable ({count} claim(s) withheld from this view)"
+                ));
+                continue;
+            }
+            Ok(crate::kan_client::Read::Indeterminate { log_wide }) => {
+                unreadable.push(subject.clone());
+                lines.push(format!(
+                    "- {subject}: ⚠ may be absent or omitted; {log_wide} claim(s) are withheld without subject attribution"
+                ));
+                continue;
+            }
             Err(e) => {
                 unreadable.push(subject.clone());
                 lines.push(format!(
@@ -256,6 +273,12 @@ fn render_teloi(client: &KanClient, subjects: &[String]) -> String {
             unreadable.len()
         ));
     }
+    let withheld = client.claims_withheld_from_view();
+    if withheld > 0 {
+        out.push_str(&format!(
+            "  (⚠ {withheld} additional claim(s) are withheld without subject attribution; visible teloi are not a complete inventory)\n"
+        ));
+    }
     for line in lines {
         out.push_str(&line);
         out.push('\n');
@@ -315,7 +338,8 @@ fn render_atoms(client: &KanClient) -> String {
             format!(
                 "No process atoms are visible in this view, and {} claim(s) in this log are \
                  withheld from it — so this is day unable to see the vocabulary, not a \
-                 project without one. Widen the view (`--trust me`, or `--trust <did>`).\n",
+                 project without one. Use kan directly with an admitting trust base; day \
+                 has no trust-selection flag.\n",
                 client.claims_withheld_from_view()
             )
         }
@@ -343,6 +367,12 @@ fn render_atoms(client: &KanClient) -> String {
                 for finding in &report.findings {
                     out.push_str(&format!("- {}\n", finding.message));
                 }
+            }
+            if report.withheld > 0 {
+                out.push_str(&format!(
+                    "⚠ {} additional claim(s) are withheld without subject attribution; visible atoms are not a complete inventory.\n",
+                    report.withheld
+                ));
             }
             out
         }
@@ -531,12 +561,12 @@ fn render_position(client: &KanClient, root: &Path) -> String {
     let git = Git::new(root);
     let status = match crate::status::compute(client, &git) {
         Ok(s) => s,
-        Err(_) => {
+        Err(error) => {
             // The bar still gets a truthful rendering: leaving the cache
             // holding an earlier session's position would display
             // confidently from a read that just failed.
             write_unreadable_footer(client, root);
-            return String::new();
+            return format!("day could not refresh its reading: {error}\n");
         }
     };
 
@@ -852,7 +882,7 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
     // once, and re-cache it so the next prompts are cheap again.
     let status = match crate::status::compute(client, &git) {
         Ok(status) => status,
-        Err(_) => {
+        Err(error) => {
             // **The bar is told here too, and this is the half that matters
             // most.** The first fix for the stale-confident-bar defect covered
             // `session_start`'s two early returns and left this one, which is
@@ -865,7 +895,9 @@ pub fn user_prompt(client: &KanClient, root: &Path) -> String {
             // Found by a cold review that drove all four kan-failure paths;
             // the test written for the first fix drove one of them.
             write_unreadable_footer(client, root);
-            return String::new();
+            return format!(
+                "day could not refresh its process reading: {error}. `day doctor` for detail.\n"
+            );
         }
     };
     let cadence = status.cadence;

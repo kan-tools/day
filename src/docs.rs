@@ -122,11 +122,21 @@ impl DocsSchema {
         // property that actually decides it is `T: Default`, which
         // `layers::config` requires, so a declaration cannot be misrouted
         // there even deliberately.
-        newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, schema)| schema)
-            .ok_or_else(|| Error::NotDeclared {
+        match newest_fenced::<Self>(client, &subject)? {
+            crate::kan_client::Read::Present((_cid, schema)) => Ok(schema),
+            crate::kan_client::Read::Absent => Err(Error::NotDeclared {
                 starter: Self::starter_command(),
-            })
+            }),
+            crate::kan_client::Read::Withheld { count } => Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+            ))),
+            crate::kan_client::Read::Indeterminate { log_wide } => Err(Error::Atoms(
+                atoms::Error::Kan(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                }),
+            )),
+        }
     }
 }
 
@@ -370,7 +380,24 @@ pub fn unrecorded_boundary(client: &KanClient, git: &Git) -> Result<Option<Strin
         return Ok(None);
     };
 
-    let claims = client.show(&schema.release_subject)?;
+    let claims = match client.show(&schema.release_subject)? {
+        crate::kan_client::Read::Present(claims) => claims,
+        crate::kan_client::Read::Absent => Vec::new(),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject: schema.release_subject.clone(),
+                count,
+            }
+            .into())
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject: schema.release_subject.clone(),
+                count: log_wide,
+            }
+            .into())
+        }
+    };
 
     // Correspondence, not mere existence: a `release` claim for the PREVIOUS tag
     // would satisfy "a claim exists" while the current one went unrecorded,
@@ -419,7 +446,26 @@ fn reconcile_boundary(
         // F5: every live claim, not the newest carrying text — see
         // `any_claim_names`. Shared with `unrecorded_boundary` so `day status`
         // and `day assess docs` cannot answer the same question differently.
-        Ok(claims) => Some(claims),
+        Ok(crate::kan_client::Read::Present(claims)) => Some(claims),
+        Ok(crate::kan_client::Read::Absent) => None,
+        Ok(crate::kan_client::Read::Withheld { count }) => {
+            findings.push(Finding {
+                level: Level::Unchecked,
+                message: format!(
+                    "`{subject}` is unreadable: {count} claim(s) are withheld, so the tag and record cannot be reconciled"
+                ),
+            });
+            return Ok(tag);
+        }
+        Ok(crate::kan_client::Read::Indeterminate { log_wide }) => {
+            findings.push(Finding {
+                level: Level::Unchecked,
+                message: format!(
+                    "the log withholds {log_wide} claim(s) without naming their subjects, so `{subject}` may be absent or omitted"
+                ),
+            });
+            return Ok(tag);
+        }
         Err(e) => {
             findings.push(Finding {
                 level: Level::Unchecked,

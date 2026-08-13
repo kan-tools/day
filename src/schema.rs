@@ -236,10 +236,19 @@ impl Schema {
         // see `src/docs.rs`. Absence is `NotDeclared`, and redeclaring
         // replaces.
         match newest_fenced::<Self>(client, &subject)? {
-            Some((_cid, schema)) => Ok(schema),
-            None => Err(Error::NotDeclared {
+            crate::kan_client::Read::Present((_cid, schema)) => Ok(schema),
+            crate::kan_client::Read::Absent => Err(Error::NotDeclared {
                 starter: Self::starter_command(slug),
             }),
+            crate::kan_client::Read::Withheld { count } => Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+            ))),
+            crate::kan_client::Read::Indeterminate { log_wide } => Err(Error::Atoms(
+                atoms::Error::Kan(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                }),
+            )),
         }
     }
 
@@ -247,7 +256,19 @@ impl Schema {
     pub fn is_declared(client: &KanClient, slug: &str) -> Result<bool, Error> {
         let subject = format!("{SCHEMA_PREFIX}{slug}");
         // not-per-key: an existence check over the same declaration.
-        Ok(newest_fenced::<Self>(client, &subject)?.is_some())
+        match newest_fenced::<Self>(client, &subject)? {
+            crate::kan_client::Read::Present(_) => Ok(true),
+            crate::kan_client::Read::Absent => Ok(false),
+            crate::kan_client::Read::Withheld { count } => Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+            ))),
+            crate::kan_client::Read::Indeterminate { log_wide } => Err(Error::Atoms(
+                atoms::Error::Kan(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                }),
+            )),
+        }
     }
 
     /// Records this schema as a claim. Used by `day init` so a fresh repo

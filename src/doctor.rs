@@ -54,7 +54,7 @@ impl Report {
     /// [`Compat::Newer`]: crate::compat::Compat::Newer
     /// [`Finding::unchecked`]: crate::atoms::Finding::unchecked
     pub fn is_healthy(&self) -> bool {
-        self.findings.iter().all(|f| f.unchecked)
+        self.withheld == 0 && self.findings.iter().all(|f| f.unchecked)
     }
 
     pub fn render(&self) -> String {
@@ -67,7 +67,7 @@ impl Report {
             // exit 0, in a plain clone of a repo publishing `.claims/`, over a
             // vocabulary day simply could not see.
             out.push_str(&format!(
-                "atoms: none VISIBLE — {} claim(s) in this log are withheld from this view's\n       trust base, so day cannot tell an empty vocabulary from an unreadable\n       one. Widen the view (`--trust me`, or `--trust <did>`).\n",
+                "atoms: none VISIBLE — {} claim(s) in this log are withheld from this view's\n       trust base, so day cannot tell an empty vocabulary from an unreadable\n       one. Use kan directly with an admitting trust base; day has no trust-selection flag.\n",
                 self.withheld
             ));
         } else if self.atoms.is_empty() {
@@ -85,6 +85,12 @@ impl Report {
                     edges(atom),
                 ));
             }
+            if self.withheld > 0 {
+                out.push_str(&format!(
+                    "  ⚠ {} additional claim(s) are withheld without subject attribution; this atom list and composition result are partial\n",
+                    self.withheld
+                ));
+            }
         }
 
         // Faults and could-not-checks are counted and rendered separately, and
@@ -96,8 +102,12 @@ impl Report {
         let (unchecked, faults): (Vec<&Finding>, Vec<&Finding>) =
             self.findings.iter().partition(|f| f.unchecked);
 
-        if faults.is_empty() {
+        if faults.is_empty() && self.withheld == 0 {
             out.push_str("composition: ok\n");
+        } else if faults.is_empty() {
+            out.push_str(
+                "composition: could not establish completeness under this narrowed view\n",
+            );
         } else {
             out.push_str(&format!("composition: {} finding(s)\n", faults.len()));
             for finding in &faults {

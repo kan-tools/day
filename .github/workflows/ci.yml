@@ -257,43 +257,23 @@ jobs:
       # straight through cmd.exe, which is the closest reachable stand-in for a
       # harness that does not route hook commands through Git Bash.
       #
-      # IT ASSERTS NOTHING ABOUT THE OUTCOME, on purpose. A test asserting "cmd
-      # cannot run this" goes red the day someone fixes it, which is a gate
-      # pointing the wrong way. What it does is RECORD the outcome in the job
-      # summary so the claim stops being a guess -- and it fails only if the
-      # measurement itself could not be taken.
+      # This is a gate: the registered, shell-free Node command must remain
+      # reachable through cmd.exe and must never turn missing tools into a
+      # silent success.
       #
       # What this still does not establish is how Claude Code dispatches a hook
       # command on Windows. That is the other side of the interface and belongs
       # in its docs, not in an inference drawn from this cell.
-      - name: bootstrap-check.sh, with no POSIX shell (measurement, not a gate)
+      - name: registered bootstrap command works through cmd.exe
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
-          $out = (cmd /c "hooks\bootstrap-check.sh" 2>&1 | Out-String)
+          $ErrorActionPreference = 'Stop'
+          $out = (cmd /c "node hooks\bootstrap-check.js" 2>&1 | Out-String)
           $code = $LASTEXITCODE
-          if ($null -eq $code) {
-            Write-Output "::error::the measurement did not complete -- no exit code was captured, so this cell established nothing"
-            exit 1
-          }
-          $emitted = if ([string]::IsNullOrWhiteSpace($out)) { "NOTHING (silent)" } else { $out.Trim() }
-          $summary = @"
-          ### ``hooks/bootstrap-check.sh`` invoked through ``cmd.exe``
-
-          Measured on ``windows-latest``, with no POSIX shell in the invocation path.
-
-          | | |
-          | --- | --- |
-          | exit code | ``$code`` |
-          | output | ``$emitted`` |
-
-          Recorded rather than asserted: this cell exists to replace a guess that
-          has been restated across three handoffs and measured none of them. It
-          does not establish how Claude Code dispatches hook commands on Windows.
-          "@
-          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          Write-Output "exit=$code"
-          Write-Output "output=$emitted"
+          if ($code -ne 0) { throw "registered bootstrap command exited $code: $out" }
+          if ([string]::IsNullOrWhiteSpace($out)) { throw "registered bootstrap command was silently successful with tools deliberately absent" }
+          $parsed = $out | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($parsed.systemMessage)) { throw "bootstrap output has no systemMessage: $out" }
 
   # THE DECLARED MSRV IS ONLY WORTH DECLARING IF SOMETHING CHECKS IT.
   # `rust-version` in Cargo.toml is a promise to consumers: cargo refuses to

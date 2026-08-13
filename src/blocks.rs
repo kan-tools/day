@@ -276,9 +276,19 @@ impl BlockSchemas {
         // field-wise. It belongs on the witness path in `src/layers.rs`
         // rather than this one — RQ-7's table separates the two shapes, and
         // the map is the one whose restatement cost motivated the design.
-        Ok(atoms::newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, schemas)| schemas)
-            .unwrap_or_default())
+        match atoms::newest_fenced::<Self>(client, &subject)? {
+            crate::kan_client::Read::Present((_cid, schemas)) => Ok(schemas),
+            crate::kan_client::Read::Absent => Ok(Self::default()),
+            crate::kan_client::Read::Withheld { count } => Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+            ))),
+            crate::kan_client::Read::Indeterminate { log_wide } => Err(Error::Atoms(
+                atoms::Error::Kan(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                }),
+            )),
+        }
     }
 
     /// Pulls a declared block of the named type out of a claim's text and
@@ -938,9 +948,15 @@ impl VerdictVocabulary {
         // UNDEFINED for a list — a list has no keys. AC-19's answer is one
         // subject per permitted verdict, which is a different mechanism
         // from both the struct and the map, and is not built yet.
-        Ok(atoms::newest_fenced::<Self>(client, &subject)?
-            .map(|(_cid, v)| v)
-            .unwrap_or_default())
+        match atoms::newest_fenced::<Self>(client, &subject)? {
+            crate::kan_client::Read::Present((_cid, value)) => Ok(value),
+            // This vocabulary is shipped by day and is never offered as a
+            // declaration, so narrowed visibility does not invalidate the
+            // built-in vocabulary used to validate a review verdict.
+            crate::kan_client::Read::Absent
+            | crate::kan_client::Read::Withheld { .. }
+            | crate::kan_client::Read::Indeterminate { .. } => Ok(Self::default()),
+        }
     }
 
     /// Whether a verdict is permitted, comparing in the normalized form

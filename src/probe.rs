@@ -70,8 +70,10 @@ pub enum Probe {
     Path(String),
     /// A git tag glob matching at least one tag.
     Tag(String),
-    /// A command whose exit status is the evidence: zero means satisfied.
-    Command(String),
+    /// A command whose exit status is the evidence. The released string form
+    /// remains valid; the object form can distinguish "found nothing" from a
+    /// broken check instead of treating every non-zero exit alike.
+    Command(CommandProbe),
     /// A claim in the kan log. The one probe kind whose evidence is the
     /// *record* rather than the world — which is what a witness like
     /// `verdict` or `assessment` actually is, and why neither was probeable
@@ -113,6 +115,57 @@ pub enum Probe {
     /// reused rather than duplicated.
     #[serde(rename = "absent")]
     Absent(Absence),
+}
+
+/// Backward-compatible command declaration.
+///
+/// `"cargo test"` retains the historical zero/non-zero semantics. New
+/// declarations may use `{ "argv": "...", "found_nothing_exit": 1 }`;
+/// then only that named non-zero status is MISSING and every other non-zero
+/// status is ERROR.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CommandProbe {
+    Legacy(String),
+    Structured {
+        argv: String,
+        found_nothing_exit: i32,
+    },
+}
+
+impl CommandProbe {
+    fn argv(&self) -> &str {
+        match self {
+            Self::Legacy(argv) | Self::Structured { argv, .. } => argv,
+        }
+    }
+
+    fn found_nothing_exit(&self) -> Option<i32> {
+        match self {
+            Self::Legacy(_) => None,
+            Self::Structured {
+                found_nothing_exit, ..
+            } => Some(*found_nothing_exit),
+        }
+    }
+}
+
+impl From<String> for CommandProbe {
+    fn from(value: String) -> Self {
+        Self::Legacy(value)
+    }
+}
+
+impl From<&str> for CommandProbe {
+    fn from(value: &str) -> Self {
+        Self::Legacy(value.to_string())
+    }
+}
+
+impl std::fmt::Display for CommandProbe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.argv())
+    }
 }
 
 /// An absence, and what makes claiming it meaningful.
@@ -705,6 +758,12 @@ impl<'a> ClaimLog<'a> {
                         missing.join(", ")
                     ));
                 }
+                let withheld = self.client.claims_withheld_from_view();
+                if withheld > 0 {
+                    return Err(format!(
+                        "kan reports {withheld} claim(s) outside this view, so a probe that scans the whole log cannot distinguish missing evidence from withheld evidence"
+                    ));
+                }
                 Ok(claims)
             })
             .as_ref()
@@ -816,8 +875,14 @@ fn evaluate_absence(
     // A forbidden command needs its exit code declared, or a mistyped pathspec
     // reads as "found nothing" (day#137). Refused before running, so the error
     // does not depend on what the command happened to do.
-    if let Probe::Command(argv) = absence.forbidden.as_ref() {
-        let Some(expected) = absence.found_nothing_exit else {
+    if let Probe::Command(command) = absence.forbidden.as_ref() {
+        let argv = command.argv();
+        if command.found_nothing_exit().is_some() && absence.found_nothing_exit.is_some() {
+            return Verdict::Error(format!(
+                "`{argv}` declares `found_nothing_exit` twice (inside the structured command and on the absence probe); keep exactly one declaration"
+            ));
+        }
+        let Some(expected) = command.found_nothing_exit().or(absence.found_nothing_exit) else {
             return Verdict::Error(format!(
                 "`{argv}` is forbidden but declares no `found_nothing_exit`, so day cannot \
                  tell \"ran and found nothing\" from \"failed for another reason\" -- and \
@@ -1258,11 +1323,31 @@ enum CommandOutcome {
     Failed(String),
 }
 
-fn run_command(argv: &str, cwd: &Path, timeout: Duration) -> Verdict {
+fn run_command(command: &CommandProbe, cwd: &Path, timeout: Duration) -> Verdict {
+    let argv = command.argv();
+    if let Some(code) = command.found_nothing_exit() {
+        if code <= 0 {
+            return Verdict::Error(format!(
+                "`{argv}` declares `found_nothing_exit` as {code}; it must be a positive non-zero exit status"
+            ));
+        }
+    }
     match run_command_status(argv, cwd, timeout) {
         CommandOutcome::Exited(0) => Verdict::Satisfied(format!("`{argv}` exited 0")),
+        CommandOutcome::Exited(code) if command.found_nothing_exit() == Some(code) => {
+            Verdict::Unsatisfied(format!("`{argv}` exited with status {code}"))
+        }
+        CommandOutcome::Exited(code) if command.found_nothing_exit().is_some() => {
+            Verdict::Error(format!(
+                "`{argv}` exited {code}, not its declared `found_nothing_exit` of {}",
+                command.found_nothing_exit().unwrap()
+            ))
+        }
         CommandOutcome::Exited(code) => {
             Verdict::Unsatisfied(format!("`{argv}` exited with status {code}"))
+        }
+        CommandOutcome::NoStatus if command.found_nothing_exit().is_some() => {
+            Verdict::Error(format!("`{argv}` was killed before it exited"))
         }
         CommandOutcome::NoStatus => {
             Verdict::Unsatisfied(format!("`{argv}` was killed before it exited"))
@@ -1402,6 +1487,94 @@ mod tests {
         assert!(failed.is_failure());
     }
 
+    #[test]
+    fn structured_positive_commands_distinguish_missing_from_broken() {
+        let run = Authorization::Run {
+            timeout: Duration::from_secs(10),
+        };
+        let git = Git::new(std::env::temp_dir());
+        let command = |argv: &str| {
+            Probe::Command(CommandProbe::Structured {
+                argv: argv.to_string(),
+                found_nothing_exit: 1,
+            })
+        };
+
+        assert!(matches!(
+            evaluate(&command("true"), &git, &ClaimLog::new(&no_kan()), run),
+            Verdict::Satisfied(_)
+        ));
+        assert!(matches!(
+            evaluate(&command("false"), &git, &ClaimLog::new(&no_kan()), run),
+            Verdict::Unsatisfied(_)
+        ));
+
+        // git is itself a direct executable and reserves a distinct status
+        // for invalid invocation, which gives the classifier a deterministic
+        // third state
+        // without introducing a shell into this safety-critical module.
+        let broken = command("git --definitely-not-a-real-option");
+        let verdict = evaluate(&broken, &git, &ClaimLog::new(&no_kan()), run);
+        assert!(matches!(verdict, Verdict::Error(_)), "{verdict:?}");
+    }
+
+    #[test]
+    fn structured_positive_commands_reject_nonpositive_missing_codes() {
+        let git = Git::new(std::env::temp_dir());
+        let run = Authorization::Run {
+            timeout: Duration::from_secs(10),
+        };
+        for code in [0, -1] {
+            let probe = Probe::Command(CommandProbe::Structured {
+                argv: "true".to_string(),
+                found_nothing_exit: code,
+            });
+            let verdict = evaluate(&probe, &git, &ClaimLog::new(&no_kan()), run);
+            assert!(matches!(verdict, Verdict::Error(_)), "{code}: {verdict:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_signalled_structured_positive_command_is_an_error() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("signal-self");
+        std::fs::write(&script, "#!/bin/sh\nkill -TERM $$\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let probe = Probe::Command(CommandProbe::Structured {
+            argv: script.display().to_string(),
+            found_nothing_exit: 3,
+        });
+        let verdict = evaluate(
+            &probe,
+            &Git::new(dir.path()),
+            &ClaimLog::new(&no_kan()),
+            Authorization::Run {
+                timeout: Duration::from_secs(10),
+            },
+        );
+        assert!(matches!(verdict, Verdict::Error(_)), "{verdict:?}");
+    }
+
+    #[test]
+    fn command_declarations_accept_legacy_strings_and_structured_objects() {
+        let legacy: Probe = serde_json::from_str(r#"{"command":"cargo test"}"#).unwrap();
+        assert!(matches!(legacy, Probe::Command(CommandProbe::Legacy(_))));
+
+        let structured: Probe =
+            serde_json::from_str(r#"{"command":{"argv":"rg needle src","found_nothing_exit":1}}"#)
+                .unwrap();
+        assert!(matches!(
+            structured,
+            Probe::Command(CommandProbe::Structured {
+                found_nothing_exit: 1,
+                ..
+            })
+        ));
+    }
+
     /// The guardrail that matters most. `sh -c "echo hi > marker"` would
     /// create a file; `Command::new("echo")` with those as literal arguments
     /// cannot. Asserting the file's absence is what distinguishes "we did not
@@ -1416,7 +1589,7 @@ mod tests {
         };
 
         let verdict = evaluate(
-            &Probe::Command(format!("echo hi > {}", marker.display())),
+            &Probe::Command(format!("echo hi > {}", marker.display()).into()),
             &git,
             &ClaimLog::new(&no_kan()),
             run,
@@ -1435,7 +1608,7 @@ mod tests {
             format!("true | touch {}", marker.display()),
         ] {
             let _ = evaluate(
-                &Probe::Command(argv.clone()),
+                &Probe::Command(argv.clone().into()),
                 &git,
                 &ClaimLog::new(&no_kan()),
                 run,

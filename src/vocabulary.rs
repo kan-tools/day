@@ -82,7 +82,24 @@ impl Outcome {
 
 /// The CID of the newest live claim on `subject`, if it has any.
 pub fn newest_claim(client: &KanClient, subject: &str) -> Result<Option<String>, Error> {
-    Ok(client.show(subject)?.last().map(|c| c.cid.clone()))
+    match client.show(subject)? {
+        crate::kan_client::Read::Present(claims) => Ok(claims.last().map(|c| c.cid.clone())),
+        crate::kan_client::Read::Absent => Ok(None),
+        crate::kan_client::Read::Withheld { count } => {
+            Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject: subject.to_string(),
+                count,
+            }
+            .into())
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject: subject.to_string(),
+                count: log_wide,
+            }
+            .into())
+        }
+    }
 }
 
 pub fn declare(client: &KanClient, d: Declaration<'_>) -> Result<Outcome, Error> {

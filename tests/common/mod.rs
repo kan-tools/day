@@ -409,6 +409,28 @@ pub fn missing_kan(dir: &Path) -> PathBuf {
     dir.join("definitely-not-installed-kan")
 }
 
+/// Execute a just-written fixture with the same bounded ETXTBSY policy as the
+/// production boundary. macOS can briefly retain the writable text mapping
+/// after chmod; that transient is not evidence that the fixture is broken.
+pub fn run_stub(path: &Path, args: &[&str], cwd: &Path) -> std::process::Output {
+    let mut delay = std::time::Duration::from_millis(2);
+    for attempt in 0..8 {
+        match std::process::Command::new(path)
+            .args(args)
+            .current_dir(cwd)
+            .output()
+        {
+            Ok(output) => return output,
+            Err(error) if error.kind() == std::io::ErrorKind::ExecutableFileBusy && attempt < 7 => {
+                std::thread::sleep(delay);
+                delay *= 2;
+            }
+            Err(error) => panic!("fixture {} could not run: {error}", path.display()),
+        }
+    }
+    unreachable!()
+}
+
 /// A kan that **runs but cannot read this repo's log**: `--help` succeeds, so
 /// `KanClient::probe` is satisfied, and every read verb fails.
 ///

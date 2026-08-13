@@ -17,6 +17,7 @@ pub mod bridge;
 pub mod cache;
 pub mod cli;
 pub mod compat;
+pub mod config;
 pub mod design;
 pub mod docs;
 pub mod doctor;

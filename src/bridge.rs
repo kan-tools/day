@@ -506,9 +506,23 @@ pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
     // not-per-key: a bridge's plan is the subject's OWN DECLARATION, the
     // fourth row of RQ-7's table. Redeclaring must REPLACE — merging a plan
     // across claims would compose a route nobody planned.
-    let plan = atoms::newest_fenced::<Plan>(client, &subject)?
-        .map(|(_cid, plan)| plan)
-        .ok_or_else(|| Error::NoSuchBridge(slug.to_string()))?;
+    let plan = match atoms::newest_fenced::<Plan>(client, &subject)? {
+        crate::kan_client::Read::Present((_cid, plan)) => plan,
+        crate::kan_client::Read::Absent => return Err(Error::NoSuchBridge(slug.to_string())),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+            )))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                },
+            )))
+        }
+    };
 
     let (atom_set, mut findings) = atoms::load(client)?;
 
@@ -527,9 +541,26 @@ pub fn check(client: &KanClient, slug: &str) -> Result<Report, Error> {
 
     let telos_subject = format!("{}{}", atoms::TELOS_PREFIX, plan.telos);
     // not-per-key: a telos's witnesses are its own declaration, as above.
-    let witnesses = atoms::newest_fenced::<Witnesses>(client, &telos_subject)?
-        .map(|(_cid, w)| w.witnesses)
-        .unwrap_or_default();
+    let witnesses = match atoms::newest_fenced::<Witnesses>(client, &telos_subject)? {
+        crate::kan_client::Read::Present((_cid, w)) => w.witnesses,
+        crate::kan_client::Read::Absent => Vec::new(),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: telos_subject,
+                    count,
+                },
+            )))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Atoms(atoms::Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: telos_subject,
+                    count: log_wide,
+                },
+            )))
+        }
+    };
 
     // Per group, not per type. A group is covered when the plan produces
     // **any** member; only a group with no member produced is uncovered.

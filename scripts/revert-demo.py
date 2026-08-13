@@ -299,6 +299,11 @@ def run_tests(specs: list[str], cwd: pathlib.Path, target_dir: str | None):
     results: dict[str, tuple[set[str], set[str]]] = {}
     for spec in specs:
         args, _ = cargo_args(spec)
+        build = subprocess.run(
+            [*args[:-1], "--no-run"], cwd=cwd, capture_output=True, text=True, env=env,
+        )
+        if build.returncode != 0:
+            return results, False
         r = subprocess.run(
             # No `--quiet`: it reaches libtest as terse output, which prints dots
             # instead of `test <name> ... ok` lines -- and those lines are the
@@ -308,8 +313,6 @@ def run_tests(specs: list[str], cwd: pathlib.Path, target_dir: str | None):
             args, cwd=cwd, capture_output=True, text=True, env=env,
         )
         out = r.stdout + r.stderr
-        if "could not compile" in out or "\nerror[" in out or out.startswith("error["):
-            return results, False
         ran, failed = set(), set()
         for m in RESULT_RE.finditer(out):
             ran.add(m.group("name"))

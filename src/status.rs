@@ -727,6 +727,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
                 // Inference has not run, so it cannot have failed a read.
                 &[],
                 &client.unaccounted_subjects(),
+                client.claims_withheld_from_view(),
             ),
         });
     }
@@ -798,6 +799,7 @@ pub fn compute(client: &KanClient, git: &Git) -> Result<Status, Error> {
             ],
             &report.read_failures,
             &client.unaccounted_subjects(),
+            client.claims_withheld_from_view(),
         ),
     })
 }
@@ -826,6 +828,7 @@ fn unreadable_from(
     read_failures: &[crate::probe::ReadFailure],
     // Subjects kan listed that the bulk read did not return (day#71).
     unaccounted: &[String],
+    withheld: u64,
 ) -> Vec<Unreadable> {
     let mut out: Vec<Unreadable> = declaration_errors.into_iter().flatten().collect();
     out.extend(
@@ -864,6 +867,14 @@ fn unreadable_from(
         ),
         cause: Cause::Unaccounted,
     }));
+    if withheld > 0 {
+        out.push(Unreadable {
+            message: format!(
+                "kan reports {withheld} claim(s) outside this trust view; lists and conclusions derived from the log are partial"
+            ),
+            cause: Cause::Unaccounted,
+        });
+    }
     // Position inference reduces a verdict to a `Presence`, so an instance it
     // could not check became `Presence::Unknown` and the reason was dropped on
     // the floor. day then reported a position built on a partial read without
@@ -914,7 +925,24 @@ fn unreadable_from(
 fn last_assessed_atom(client: &KanClient, atoms: &[Atom]) -> Result<Option<String>, Error> {
     let mut best: Option<(i64, String)> = None; // (recorded_at µs, atom slug)
     for atom in atoms {
-        for claim in client.show(&atom.subject())? {
+        let subject = atom.subject();
+        let claims = match client.show(&subject)? {
+            crate::kan_client::Read::Present(claims) => claims,
+            crate::kan_client::Read::Absent => Vec::new(),
+            crate::kan_client::Read::Withheld { count } => {
+                return Err(
+                    crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count }.into(),
+                )
+            }
+            crate::kan_client::Read::Indeterminate { log_wide } => {
+                return Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                }
+                .into())
+            }
+        };
+        for claim in claims {
             if claim.kind != "Result" {
                 continue;
             }

@@ -168,6 +168,28 @@ fn a_revert_that_does_not_build_is_inconclusive_and_still_restores() {
     assert_eq!(s.lib(), before, "the finally-block restore did not run");
 }
 
+/// AC-11 — compiler classification comes from the dedicated build, never from
+/// words an ordinary assertion happens to print.
+#[test]
+fn a_test_failure_quoting_could_not_compile_is_still_a_demonstration() {
+    let s = Scratch::new(
+        BUGGY,
+        FIXED,
+        "#[test]\nfn demo_test() { assert_eq!(scratch::answer(), 2, \"could not compile is only assertion prose\"); }\n",
+    );
+    let before = s.lib();
+    let (text, ok) = s.run(&["--tests", "t::demo_test"]);
+
+    assert!(text.contains("DEMONSTRATED"), "{text}");
+    assert!(!text.contains("DID-NOT-COMPILE"), "{text}");
+    assert!(ok, "{text}");
+    assert_eq!(
+        s.lib(),
+        before,
+        "the source was not restored byte-identically"
+    );
+}
+
 /// AC-1 — **REVERT-FAILED** when the change is test-only.
 ///
 /// There is nothing to demonstrate: taking away a test does not reintroduce a

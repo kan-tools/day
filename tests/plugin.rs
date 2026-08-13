@@ -88,7 +88,7 @@ fn ac5_the_session_start_hook_invokes_day_and_one_bootstrap() {
         .as_array()
         .expect("SessionStart should be an array");
 
-    const BOOTSTRAP: &str = "\"${CLAUDE_PLUGIN_ROOT}/hooks/bootstrap-check.sh\"";
+    const BOOTSTRAP: &str = "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bootstrap-check.js\"";
 
     let commands: Vec<&str> = groups
         .iter()
@@ -113,7 +113,7 @@ fn ac5_the_session_start_hook_invokes_day_and_one_bootstrap() {
 
     // The command names a file the plugin ships; a rename that updates only one
     // side would otherwise register a hook that silently never runs.
-    let script = repo_root().join("hooks/bootstrap-check.sh");
+    let script = repo_root().join("hooks/bootstrap-check.js");
     assert!(script.is_file(), "{} should exist", script.display());
     #[cfg(unix)]
     {
@@ -124,7 +124,7 @@ fn ac5_the_session_start_hook_invokes_day_and_one_bootstrap() {
             .mode();
         assert!(
             mode & 0o111 != 0,
-            "hooks/bootstrap-check.sh must be executable; mode is {mode:o}"
+            "hooks/bootstrap-check.js must be executable; mode is {mode:o}"
         );
     }
 

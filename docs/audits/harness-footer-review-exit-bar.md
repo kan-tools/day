@@ -1,4 +1,4 @@
-# The review exit bar for `harness-footer` — preregistered
+# Audit artifact: the review exit bar for `harness-footer` — preregistered
 
 **Written before round 3 runs, so it cannot be fitted to the result.** Same
 discipline as `eval/legible-surface.rubric.v1.md`, applied to the review loop

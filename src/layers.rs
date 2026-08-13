@@ -159,16 +159,32 @@ where
     // every key it set — REQ-12's "no migration", and the mode day's own repo is
     // in today.
     let mut declared = false;
-    if let Some((cid, block, _typed)) = crate::atoms::newest_fenced_declared::<T>(client, &parent)?
-    {
-        declared = true;
-        // Only the fields the claim ACTUALLY carried, which is why this reads
-        // the declared object rather than the typed value.
-        if let Some(object) = block.as_object() {
-            for (key, value) in object {
-                fields.insert(key.clone(), value.clone());
-                provenance.insert(key.clone(), Layer::LegacyBlock(cid.clone()));
+    match crate::atoms::newest_fenced_declared::<T>(client, &parent)? {
+        crate::kan_client::Read::Present((cid, block, _typed)) => {
+            declared = true;
+            if let Some(object) = block.as_object() {
+                for (key, value) in object {
+                    fields.insert(key.clone(), value.clone());
+                    provenance.insert(key.clone(), Layer::LegacyBlock(cid.clone()));
+                }
             }
+        }
+        crate::kan_client::Read::Absent => {}
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: parent,
+                    count,
+                },
+            ))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: parent,
+                    count: log_wide,
+                },
+            ))
         }
     }
 
@@ -254,7 +270,27 @@ fn newest_key_block<T>(
 where
     T: crate::atoms::Versioned,
 {
-    for claim in client.show(subject)?.iter().rev() {
+    let claims = match client.show(subject)? {
+        crate::kan_client::Read::Present(claims) => claims,
+        crate::kan_client::Read::Absent => return Ok(None),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: subject.to_string(),
+                    count,
+                },
+            ))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: subject.to_string(),
+                    count: log_wide,
+                },
+            ))
+        }
+    };
+    for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };
@@ -373,7 +409,7 @@ pub fn witness(client: &KanClient) -> Result<Effective<WitnessSchema>, Error> {
     // trusting that this repo exercises either.
     let mut declared = false;
     let mut schema = match newest_fenced::<WitnessSchema>(client, &parent)? {
-        Some((cid, schema)) => {
+        crate::kan_client::Read::Present((cid, schema)) => {
             declared = true;
             for key in schema
                 .probes
@@ -385,7 +421,23 @@ pub fn witness(client: &KanClient) -> Result<Effective<WitnessSchema>, Error> {
             }
             schema
         }
-        None => WitnessSchema::default(),
+        crate::kan_client::Read::Absent => WitnessSchema::default(),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: parent,
+                    count,
+                },
+            ))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: parent,
+                    count: log_wide,
+                },
+            ))
+        }
     };
 
     // Layer 3. Enumerated from the memoised bulk read, so N subjects cost no
@@ -476,7 +528,27 @@ fn newest_entry(
     client: &KanClient,
     subject: &str,
 ) -> Result<Option<(String, Result<WitnessEntry, crate::atoms::BlockError>)>, Error> {
-    for claim in client.show(subject)?.iter().rev() {
+    let claims = match client.show(subject)? {
+        crate::kan_client::Read::Present(claims) => claims,
+        crate::kan_client::Read::Absent => return Ok(None),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: subject.to_string(),
+                    count,
+                },
+            ))
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(Error::Kan(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject: subject.to_string(),
+                    count: log_wide,
+                },
+            ))
+        }
+    };
+    for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
         };

@@ -289,12 +289,7 @@ fn ac11_a_telos_without_witnesses_is_reported_as_not_checkable() {
     // along and the whole test means nothing. `tests/fallbacks.rs` states the
     // convention and ten tests there follow it; these two did not.
     let declared = String::from_utf8_lossy(
-        &std::process::Command::new(&kan)
-            .args(["show", "telos/vague"])
-            .current_dir(dir.path())
-            .output()
-            .expect("the stub should answer")
-            .stdout,
+        &common::run_stub(&kan, &["show", "telos/vague"], dir.path()).stdout,
     )
     .to_string();
     // Two assertions, and the first is what keeps the second honest: an empty

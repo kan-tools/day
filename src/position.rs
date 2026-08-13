@@ -856,7 +856,7 @@ mod tests {
         let schema = crate::telos::WitnessSchema {
             probes: [(
                 "verdict".to_string(),
-                Probe::Command(format!("touch {}", marker.display())),
+                Probe::Command(format!("touch {}", marker.display()).into()),
             )]
             .into_iter()
             .collect(),

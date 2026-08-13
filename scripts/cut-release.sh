@@ -181,9 +181,13 @@ fi
 # different run of a different tree.
 
 cargo build --workspace --all-targets
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --no-fail-fast
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
+DAY_BIN=target/debug/day scripts/check-design-corpus.sh
+scripts/process-census.sh
+target/debug/day doctor
+target/debug/day assess telos legible-configuration --run
 
 # --- 3. the docs match, per day's own assessment -----------------------------
 

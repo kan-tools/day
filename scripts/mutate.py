@@ -66,15 +66,13 @@ def main() -> int:
     # invocation, accepted deliberately: a mutation harness is not something you
     # run in a tight loop, and the alternative is an outcome vocabulary in which
     # "could not check" is spelled the same way as the strongest possible result.
+    base_build = subprocess.run(["cargo", "test", "--workspace", "--no-run"], capture_output=True, text=True)
+    if base_build.returncode != 0:
+        print(f"{name}: BASELINE-RED (the tree does not build; nothing was mutated)")
+        return 3
     base = subprocess.run(SUITE, capture_output=True, text=True)
     base_out = base.stdout + base.stderr
-    if ("could not compile" in base_out or "\nerror[" in base_out
-            or base_out.startswith("error[")):
-        print(f"{name}: BASELINE-RED (the tree does not build; nothing was mutated)")
-        for line in base_out.splitlines()[:4]:
-            print(f"    {line}")
-        return 3
-    if "FAILED" in base_out:
+    if base.returncode != 0:
         print(f"{name}: BASELINE-RED (the suite was already failing; nothing was mutated)")
         for line in failing_tests(base_out)[:4]:
             print(f"    {line}")
@@ -85,12 +83,13 @@ def main() -> int:
     shutil.copy2(p, backup)
     try:
         p.write_text(mutated)
+        build = subprocess.run(["cargo", "test", "--workspace", "--no-run"], capture_output=True, text=True)
+        if build.returncode != 0:
+            print(f"{name}: DID-NOT-COMPILE (inconclusive — says nothing about coverage)")
+            return 2
         r = subprocess.run(SUITE, capture_output=True, text=True)
         out = r.stdout + r.stderr
-        if "could not compile" in out or "\nerror[" in out or out.startswith("error["):
-            print(f"{name}: DID-NOT-COMPILE (inconclusive — says nothing about coverage)")
-            code = 2
-        elif "FAILED" in out:
+        if r.returncode != 0:
             print(f"{name}: CAUGHT")
             code = 0
             # `--no-fail-fast` above is what makes this list complete. Without it

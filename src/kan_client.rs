@@ -25,6 +25,11 @@ pub const KAN_BIN_ENV: &str = "DAY_KAN_BIN";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(
+        "day is running in a Git worktree whose checkout has no kan workspace, while the main checkout at `{main}` does.\n\n\
+         kan currently discovers its log from the process working directory, so an empty read here does not establish that this repository has no teloi, atoms, or practice. day will not redirect the read: that could anchor a write to the main checkout's HEAD instead of this worktree. Run from the main checkout, or wait for kan's explicit shared-workspace mechanism (day#168 / kan#197)."
+    )]
+    WorkspaceMismatch { main: PathBuf },
     #[error("kan is not reachable (tried to run `{bin}`): {source}\nInstall it with `cargo install kan`, or set {KAN_BIN_ENV} to its path.")]
     NotReachable {
         bin: String,
@@ -118,18 +123,20 @@ pub enum Error {
          so day is reading a partial history of it.\n\nday resolves \
          newest-wins, so a withheld newer claim would silently promote a \
          superseded one to current — reporting on it would assert a currency \
-         day cannot establish.\n\nWiden the view — `--trust me`, or \
-         `--trust <did>` for the author who recorded it."
+         day cannot establish.\n\nUse kan directly with a trust base that admits \
+         the relevant authors, then re-run day in that environment. day does not \
+         currently accept a trust-selection flag."
     )]
     PartiallyWithheld { subject: String, count: u64 },
     #[error(
-        "`{subject}` is not in this view, and {count} claim(s) elsewhere in the \
-         log are withheld from it — so day cannot tell whether it is undeclared \
-         or simply not admitted by this trust base.\n\nday will not offer to \
+        "day has only a partial history (or a wholly withheld one) for `{subject}`; \
+         its current value is not in this view in full: \
+         {count} claim(s) are outside this view, so day cannot establish its current \
+         value or absence.\n\nday will not offer to \
          declare it: appending under an unadmitted key adds a second, competing \
-         claim and forks the vocabulary silently.\n\nWiden the view to check \
-         whether it is already declared — `--trust me`, or `--trust <did>` for \
-         the author who would have recorded it."
+         claim and forks the vocabulary silently.\n\nUse kan directly with a trust base \
+         that admits the relevant authors, then re-run day in that environment. \
+         day does not currently accept a trust-selection flag."
     )]
     AbsentUnderNarrowedTrust { subject: String, count: u64 },
     #[error("`{bin} {args}` failed ({status}){stderr}")]
@@ -186,6 +193,36 @@ pub struct Claim {
     /// fallback: kan-omits-recorded-at
     #[serde(default)]
     pub recorded_at: Option<i64>,
+}
+
+/// A named read whose absence is only usable after visibility was considered.
+///
+/// The enum is deliberately exhaustive. A caller written for the old
+/// three-state contract cannot compile
+/// after the unattributed state is introduced:
+///
+/// ```compile_fail
+/// use day::kan_client::Read;
+/// let read: Read<Vec<day::kan_client::Claim>> = Read::Absent;
+/// match read {
+///     Read::Present(_) => {}
+///     Read::Absent => {}
+///     Read::Withheld { .. } => {}
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Read<T> {
+    Present(T),
+    Absent,
+    /// kan returned this subject and named claims withheld from it.
+    Withheld {
+        count: u64,
+    },
+    /// The log is narrowed but kan did not identify wholly withheld subjects.
+    /// This subject may be absent or omitted; neither is asserted.
+    Indeterminate {
+        log_wide: u64,
+    },
 }
 
 /// `kan show --all --json` (kan#123, ADR-71).
@@ -314,6 +351,10 @@ pub struct KanClient {
     /// which unreachable-message a reader gets, because the two have different
     /// remedies and the wrong one costs real time (day#178).
     bin_from_env: bool,
+    /// A linked worktree whose main checkout owns the kan log. Checked before
+    /// every kan subprocess, so reads cannot manufacture absence and writes
+    /// cannot be silently redirected to a different Git anchor.
+    workspace_mismatch: std::cell::RefCell<Option<Option<PathBuf>>>,
 }
 
 impl KanClient {
@@ -326,10 +367,11 @@ impl KanClient {
             Ok(v) => (v, true),
             Err(_) => ("kan".to_string(), false),
         };
+        let cwd = cwd.into();
         Self {
             bin,
             bin_from_env,
-            cwd: cwd.into(),
+            cwd,
             log: std::cell::RefCell::new(None),
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
@@ -337,16 +379,19 @@ impl KanClient {
             trust_withheld: std::cell::RefCell::new(Vec::new()),
             trust_withheld_total: std::cell::Cell::new(0),
             returned_subjects: std::cell::RefCell::new(Vec::new()),
+            workspace_mismatch: std::cell::RefCell::new(None),
         }
     }
 
     pub fn with_bin(cwd: impl Into<PathBuf>, bin: impl Into<String>) -> Self {
+        let cwd = cwd.into();
         Self {
             bin: bin.into(),
             // Chosen by the caller, not by the environment — so the remedy the
             // override message names would be wrong here.
             bin_from_env: false,
-            cwd: cwd.into(),
+            workspace_mismatch: std::cell::RefCell::new(None),
+            cwd,
             log: std::cell::RefCell::new(None),
             subject_memo: std::cell::RefCell::new(None),
             probed: std::cell::Cell::new(false),
@@ -358,6 +403,29 @@ impl KanClient {
     }
 
     fn run(&self, args: &[&str]) -> Result<String, Error> {
+        // Reachability/version probes do not consult a workspace.  Let them
+        // answer their own question even when workspace-backed operations
+        // must refuse a linked-worktree/main-checkout split.
+        let workspace_free = matches!(args, ["--help"] | ["--version"]);
+        if workspace_free {
+            return self.run_process(args);
+        }
+        if self.workspace_mismatch.borrow().is_none() {
+            let mismatch = crate::git::Git::new(&self.cwd).kan_workspace_mismatch();
+            *self.workspace_mismatch.borrow_mut() = Some(mismatch);
+        }
+        if let Some(main) = self
+            .workspace_mismatch
+            .borrow()
+            .as_ref()
+            .and_then(Clone::clone)
+        {
+            return Err(Error::WorkspaceMismatch { main });
+        }
+        self.run_process(args)
+    }
+
+    fn run_process(&self, args: &[&str]) -> Result<String, Error> {
         let mut command = Command::new(&self.bin);
         command.args(args).current_dir(&self.cwd);
         let output = retry_etxtbsy(|| command.output()).map_err(|source| {
@@ -746,7 +814,7 @@ impl KanClient {
     /// since day#71: a kan read costs fixed process startup, so N targeted reads
     /// are strictly worse than one bulk read plus a filter, and day made 39 of
     /// them per session start for subjects the bulk read already held.
-    pub fn show(&self, subject: &str) -> Result<Vec<Claim>, Error> {
+    pub fn show(&self, subject: &str) -> Result<Read<Vec<Claim>>, Error> {
         self.ensure_log()?;
         // Restores, exactly, what reading one subject at a time gave for free:
         // a subject day could not obtain is an error naming it, never an empty
@@ -785,10 +853,7 @@ impl KanClient {
             .iter()
             .find(|(s, _)| s == subject)
         {
-            return Err(Error::PartiallyWithheld {
-                subject: subject.to_string(),
-                count: *count,
-            });
+            return Ok(Read::Withheld { count: *count });
         }
 
         // **The absent case is NOT decided here**, and a first version deciding
@@ -813,7 +878,15 @@ impl KanClient {
         // `atoms::newest_fenced`, where a loader is about to conclude "nothing
         // is declared here" and print a runnable starter. That conclusion is
         // the day#120 harm; an ordinary empty read is not.
-        Ok(claims)
+        if self.returned_subjects.borrow().iter().any(|s| s == subject) {
+            Ok(Read::Present(claims))
+        } else if self.claims_withheld_from_view() > 0 {
+            Ok(Read::Indeterminate {
+                log_wide: self.claims_withheld_from_view(),
+            })
+        } else {
+            Ok(Read::Absent)
+        }
     }
 
     /// Claims withheld from this view across the whole log (day#120).
@@ -949,13 +1022,14 @@ fn check_shape(v: u32, args: &[&str]) -> Result<(), Error> {
 }
 
 /// How many times an `ETXTBSY` exec is attempted, and how long the doubling
-/// backoff waits in total. Eight attempts at 2·2^n ms is ~510 ms — long
+/// backoff waits in total. Eight attempts contain seven sleeps at 2·2^n ms,
+/// for 254 ms total — long
 /// enough to outlive a writer closing its descriptor (the observed window is
 /// the gap between a `fork` and its `exec`, microseconds), short enough that
 /// a genuinely held-open file fails while the invocation is still
 /// attributable to its cause.
 const ETXTBSY_ATTEMPTS: u32 = 8;
-const ETXTBSY_TOTAL_WAIT_MS: u64 = (1 << ETXTBSY_ATTEMPTS) * 2 - 2;
+const ETXTBSY_TOTAL_WAIT_MS: u64 = (1 << (ETXTBSY_ATTEMPTS - 1)) * 2 - 2;
 
 /// Retries `attempt` while it fails with `ETXTBSY`, bounded, backing off.
 ///

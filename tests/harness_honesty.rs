@@ -392,6 +392,15 @@ fn stub(bin: &Path, name: &str, body: &str) {
     }
 }
 
+fn stub_new_release_gates(repo: &Path) {
+    let scripts = repo.join("scripts");
+    stub(&scripts, "check-design-corpus.sh", "exit 0\n");
+    stub(&scripts, "process-census.sh", "exit 0\n");
+    let target = repo.join("target/debug");
+    std::fs::create_dir_all(&target).unwrap();
+    stub(&target, "day", "exit 0\n");
+}
+
 fn run_git(cwd: &Path, args: &[&str]) {
     let out = Command::new("git")
         .args(args)
@@ -632,6 +641,7 @@ fn cut_release_puts_the_measured_row_in_the_tagged_commit() {
     // The cell script is resolved relative to the working directory, so the
     // scratch repo needs one. It reports a real outcome token.
     std::fs::create_dir_all(repo.join("scripts")).unwrap();
+    stub_new_release_gates(repo);
     stub(
         &repo.join("scripts"),
         "run-migration-cell.sh",
@@ -749,6 +759,7 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
     )
     .unwrap();
     std::fs::create_dir_all(repo.join("scripts")).unwrap();
+    stub_new_release_gates(repo);
     stub(
         &repo.join("scripts"),
         "run-migration-cell.sh",

@@ -114,7 +114,22 @@ pub fn all(client: &KanClient) -> Result<Vec<Recorded>, Error> {
         // what this already has. Each read is a `kan` subprocess, and day
         // makes one per subject per command, so a duplicate here is a
         // duplicate in every surface that reports tensions.
-        let claims = client.show(&subject)?;
+        let claims = match client.show(&subject)? {
+            crate::kan_client::Read::Present(claims) => claims,
+            crate::kan_client::Read::Absent => continue,
+            crate::kan_client::Read::Withheld { count } => {
+                return Err(
+                    crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count }.into(),
+                )
+            }
+            crate::kan_client::Read::Indeterminate { log_wide } => {
+                return Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                    subject,
+                    count: log_wide,
+                }
+                .into())
+            }
+        };
         let Some(tension) = claims.iter().rev().find_map(|c| {
             c.text
                 .as_deref()

@@ -31,6 +31,42 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 Nothing yet.
 
+## [v0.12.1-beta.1] — 2026-08-12
+
+*Bugfix audit release.* A full-repository adversarial review of
+`v0.12.0-beta.4` found that linked worktrees could be reported as empty,
+narrowed reads were still represented as absence at typed boundaries, and
+positive command witnesses could mistake a broken check for missing evidence.
+
+### Added
+
+- A four-state read contract (`present`, `absent`, subject-specific `withheld`,
+  and log-wide `indeterminate`) for direct and fenced kan reads. Every
+  production consumer must decide both narrowed-visibility cases.
+- Structured command witnesses with `argv` and `found_nothing_exit`, while
+  retaining the released string form.
+- `day config` and `day config --json`, a read-only inventory of effective
+  configuration values, per-key provenance, unsupported declarations, and
+  narrowed-read caveats, derived through the production loaders.
+
+### Fixed
+
+- A linked Git worktree no longer gets a false empty process record when the
+  main checkout owns `.kan/`. day diagnoses the unsupported split and does not
+  redirect kan to a different Git anchor.
+- Write paths refuse both partial and wholly withheld histories; advisory hooks
+  continue to render and exit successfully.
+- Withheld-read guidance no longer recommends a trust flag day does not accept.
+- Review verdict recording continues to use day's shipped vocabulary when a
+  project override cannot be established under narrowed trust.
+- Structured command signal termination and unexpected exit statuses now
+  report could-not-check rather than missing evidence; invalid or duplicated
+  `found_nothing_exit` declarations are refused before execution.
+- Revert and mutation harnesses classify compilation with dedicated build
+  results. The Windows bootstrap uses a shell-free registered Node command,
+  and release verification now gates on the full design corpus, process census,
+  doctor, and the live configuration telos witnesses.
+
 ## [v0.12.0-beta.4] — 2026-08-12
 
 *Milestone: v0.12 — transportable.* A configuration release, and a round of

@@ -84,6 +84,9 @@ Deliberately small. The theory is ambitious; the tool is not.
   says otherwise; `DAY_FOOTER=plain|emoji` overrides either way, and the
   footer fits itself to `COLUMNS`, eliding visibly rather than silently.
 - **`day mcp`** — the checks over MCP, for agents without a shell.
+- **`day config [--json]`** — a read-only inventory of every configuration
+  value day consumes, including its effective layer, claim provenance, and any
+  declaration day could not interpret.
 
 **Commands**
 - **`/design`** — interactive, codebase-grounded design authoring that records
@@ -117,7 +120,7 @@ day exists to avoid repeating.
 
 ```bash
 cargo install kan --version 0.12.0-beta.4   # the memory layer day reads
-cargo install day --version 0.12.0-beta.4
+cargo install day --version 0.12.1-beta.1
 ```
 
 **The versions are not decoration.** Everything day has published is a
@@ -163,7 +166,7 @@ Claude Code plugin:
 
 ## Status
 
-Early. **v0.12.0-beta.4** makes a configuration key its own kan subject, so
+Early. **v0.12.1-beta.1** makes narrowed reads and worktree/log mismatches explicit, while
 `schema/injection/cadence` and `schema/injection/max_practice_items` resolve
 independently instead of the newer claim silently resetting the other. It also
 carries a round of honest-reads fixes, and their common shape is worth stating

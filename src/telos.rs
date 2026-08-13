@@ -993,7 +993,23 @@ fn record_tier(
         // not-per-key: a bridge's plan is its own declaration; see
         // `src/bridge.rs`.
         let plan = newest_fenced::<bridge::Plan>(client, &subject)?;
-        if plan.is_some_and(|(_cid, p)| p.telos == slug) {
+        let targets_this_telos = match plan {
+            crate::kan_client::Read::Present((_cid, ref p)) => p.telos == slug,
+            crate::kan_client::Read::Absent => false,
+            crate::kan_client::Read::Withheld { count } => {
+                prompts.push(format!(
+                    "{subject} has {count} withheld plan claim(s), so whether it targets this telos could not be checked"
+                ));
+                false
+            }
+            crate::kan_client::Read::Indeterminate { log_wide } => {
+                prompts.push(format!(
+                    "kan reports {log_wide} claim(s) outside this view, so whether {subject} has a plan targeting this telos could not be checked"
+                ));
+                false
+            }
+        };
+        if targets_this_telos {
             // Three states, never two. This was `.unwrap_or(false)`, which
             // rendered every error — an atom retracted after the bridge was
             // declared, an unreadable plan — as "its plan could not reach it":
@@ -1037,7 +1053,22 @@ pub fn assess(
     auth: Authorization,
 ) -> Result<Report, Error> {
     let subject = format!("{}{slug}", atoms::TELOS_PREFIX);
-    let claims = client.show(&subject)?;
+    let claims = match client.show(&subject)? {
+        crate::kan_client::Read::Present(claims) => claims,
+        crate::kan_client::Read::Absent => Vec::new(),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count }.into(),
+            )
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject,
+                count: log_wide,
+            }
+            .into())
+        }
+    };
     if claims.is_empty() {
         return Err(Error::NoSuchTelos {
             slug: slug.to_string(),
@@ -1046,9 +1077,22 @@ pub fn assess(
     }
 
     // not-per-key: a telos's witnesses are its own declaration.
-    let declared = newest_fenced::<Witnesses>(client, &subject)?
-        .map(|(_cid, w)| w)
-        .unwrap_or_default();
+    let declared = match newest_fenced::<Witnesses>(client, &subject)? {
+        crate::kan_client::Read::Present((_cid, witnesses)) => witnesses,
+        crate::kan_client::Read::Absent => Witnesses::default(),
+        crate::kan_client::Read::Withheld { count } => {
+            return Err(
+                crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count }.into(),
+            )
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Err(crate::kan_client::Error::AbsentUnderNarrowedTrust {
+                subject,
+                count: log_wide,
+            }
+            .into())
+        }
+    };
     // Two different lists, deliberately. `groups` carries the declared
     // structure and decides the verdict; `types` is the flattened, deduplicated
     // set that actually gets probed, because a type resolves to one probe and

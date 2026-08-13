@@ -349,6 +349,22 @@ impl Git {
         Ok(PathBuf::from(trimmed))
     }
 
+    /// Detects the worktree/log split behind day#168.
+    ///
+    /// kan currently discovers `.kan/` from its process cwd. In a linked
+    /// worktree that makes a successful read of a new, empty workspace look
+    /// like the repository has no process record, even when the main checkout
+    /// has one. day may diagnose that mismatch, but must not redirect kan to
+    /// the main checkout: doing so would also move kan's automatic Git anchor
+    /// away from the worktree's HEAD.
+    pub fn kan_workspace_mismatch(&self) -> Option<PathBuf> {
+        let canonical = |p: PathBuf| std::fs::canonicalize(&p).unwrap_or(p);
+        let top = canonical(self.toplevel().ok()?);
+        let common = canonical(self.common_dir().ok()?);
+        let main = common.parent()?.to_path_buf();
+        (top != main && !top.join(".kan").exists() && main.join(".kan").exists()).then_some(main)
+    }
+
     /// A read that exited zero and printed nothing where a value is
     /// mandatory. Reported as a failure rather than defaulted: rendering
     /// from output git would never produce is how a stubbed or broken git

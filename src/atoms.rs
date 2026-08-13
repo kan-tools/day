@@ -599,7 +599,24 @@ pub fn load(client: &KanClient) -> Result<(Vec<Atom>, Vec<Finding>), Error> {
 
     for subject in subjects {
         let name = subject[ATOM_PREFIX.len()..].to_string();
-        let claims = client.show(&subject)?;
+        let claims = match client.show(&subject)? {
+            crate::kan_client::Read::Present(claims) => claims,
+            crate::kan_client::Read::Absent => Vec::new(),
+            crate::kan_client::Read::Withheld { count } => {
+                return Err(Error::Kan(
+                    crate::kan_client::Error::AbsentUnderNarrowedTrust { subject, count },
+                ))
+            }
+            crate::kan_client::Read::Indeterminate { log_wide } => {
+                findings.push(Finding::unchecked(
+                    vec![name.clone()],
+                    format!(
+                        "{subject}: may be absent or omitted; {log_wide} claim(s) are withheld without subject attribution"
+                    ),
+                ));
+                continue;
+            }
+        };
         // Latest interface-bearing claim wins: `kan show` prints a
         // subject's live claims oldest-first, so the last match is current.
         let latest = claims.iter().rev().find_map(|c| {
@@ -996,8 +1013,17 @@ pub fn extract_interface(text: &str) -> Option<Result<Interface, BlockError>> {
 pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
     client: &KanClient,
     subject: &str,
-) -> Result<Option<(String, T)>, Error> {
-    Ok(newest_fenced_declared::<T>(client, subject)?.map(|(cid, _declared, value)| (cid, value)))
+) -> Result<crate::kan_client::Read<(String, T)>, Error> {
+    Ok(match newest_fenced_declared::<T>(client, subject)? {
+        crate::kan_client::Read::Present((cid, _declared, value)) => {
+            crate::kan_client::Read::Present((cid, value))
+        }
+        crate::kan_client::Read::Absent => crate::kan_client::Read::Absent,
+        crate::kan_client::Read::Withheld { count } => crate::kan_client::Read::Withheld { count },
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            crate::kan_client::Read::Indeterminate { log_wide }
+        }
+    })
 }
 
 /// [`newest_fenced`], additionally handing back which fields the winning claim
@@ -1010,8 +1036,17 @@ pub fn newest_fenced<T: serde::de::DeserializeOwned + Versioned>(
 pub fn newest_fenced_declared<T: serde::de::DeserializeOwned + Versioned>(
     client: &KanClient,
     subject: &str,
-) -> Result<Option<(String, serde_json::Value, T)>, Error> {
-    let claims = client.show(subject)?;
+) -> Result<crate::kan_client::Read<(String, serde_json::Value, T)>, Error> {
+    let claims = match client.show(subject)? {
+        crate::kan_client::Read::Present(claims) => claims,
+        crate::kan_client::Read::Absent => return Ok(crate::kan_client::Read::Absent),
+        crate::kan_client::Read::Withheld { count } => {
+            return Ok(crate::kan_client::Read::Withheld { count })
+        }
+        crate::kan_client::Read::Indeterminate { log_wide } => {
+            return Ok(crate::kan_client::Read::Indeterminate { log_wide })
+        }
+    };
     for claim in claims.iter().rev() {
         let Some(text) = claim.text.as_deref() else {
             continue;
@@ -1034,7 +1069,13 @@ pub fn newest_fenced_declared<T: serde::de::DeserializeOwned + Versioned>(
             FenceScan::Found(body) => body,
         };
         match parse_block_declared::<T>(body.trim()) {
-            Ok((declared, value)) => return Ok(Some((claim.cid.clone(), declared, value))),
+            Ok((declared, value)) => {
+                return Ok(crate::kan_client::Read::Present((
+                    claim.cid.clone(),
+                    declared,
+                    value,
+                )))
+            }
             // An unreadable block on the newest claim is not silently skipped
             // in favour of an older good one — that would hide the error, and
             // would silently resolve an *older* declaration as though it were
@@ -1064,16 +1105,7 @@ pub fn newest_fenced_declared<T: serde::de::DeserializeOwned + Versioned>(
     // used to do it and refused far too much: an ordinary absent subject is not
     // a fork risk, and `assess docs` exited 2 over a subject unrelated to the
     // withholding.
-    let withheld = client.claims_withheld_from_view();
-    if withheld > 0 {
-        return Err(Error::Kan(
-            crate::kan_client::Error::AbsentUnderNarrowedTrust {
-                subject: subject.to_string(),
-                count: withheld,
-            },
-        ));
-    }
-    Ok(None)
+    Ok(crate::kan_client::Read::Absent)
 }
 
 /// The composition check: every declared `next` edge must name an atom that

@@ -134,6 +134,12 @@ pub enum Command {
     Bridge(BridgeAction),
     /// Check kan reachability and verify the live atom vocabulary composes
     Doctor,
+    /// Print the effective schema-backed configuration and its provenance
+    Config {
+        /// Emit the versioned machine-readable shape
+        #[arg(long)]
+        json: bool,
+    },
     /// Assess whether what shipped matches what the record says
     #[command(subcommand)]
     Assess(AssessAction),
@@ -414,6 +420,15 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             print!("{}", init_instructions(log.as_ref()));
             Ok(ExitCode::SUCCESS)
         }
+        Command::Config { json } => {
+            let report = crate::config::read(&client);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report).unwrap());
+            } else {
+                print!("{}", crate::config::render(&report));
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Telos(TelosAction::Declare {
             slug,
             statement,
@@ -632,7 +647,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             // the rule `a_failed_kan_read_is_never_swallowed` now enforces.
             let subject = crate::record::slug_for(&path);
             match client.show(&subject) {
-                Ok(claims) => {
+                Ok(crate::kan_client::Read::Present(claims)) => {
                     let recorded: Vec<String> = claims
                         .iter()
                         .filter(|c| c.kind == "Decision")
@@ -641,6 +656,23 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     report.findings.extend(crate::design::check_against_record(
                         &doc, &schema, &recorded,
                     ));
+                }
+                Ok(crate::kan_client::Read::Absent) => {}
+                Ok(crate::kan_client::Read::Withheld { count }) => {
+                    report.findings.push(crate::design::Finding {
+                        verdict: crate::design::Verdict::Warn,
+                        message: format!(
+                            "`{subject}` is unreadable: {count} claim(s) are withheld from this view"
+                        ),
+                    });
+                }
+                Ok(crate::kan_client::Read::Indeterminate { log_wide }) => {
+                    report.findings.push(crate::design::Finding {
+                        verdict: crate::design::Verdict::Warn,
+                        message: format!(
+                            "the log withholds {log_wide} claim(s) without naming their subjects, so `{subject}` may be absent or omitted"
+                        ),
+                    });
                 }
                 Err(e) => report.findings.push(crate::design::Finding {
                     verdict: crate::design::Verdict::Warn,

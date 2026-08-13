@@ -8,7 +8,7 @@ mod common;
 
 use std::process::Command;
 
-use common::{atom_claim, claim, missing_kan, write_kan_stub};
+use common::{atom_claim, claim, missing_kan, write_kan_stub, write_stub_withheld};
 
 fn day(dir: &std::path::Path, kan: &std::path::Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_day"))
@@ -259,6 +259,37 @@ fn ac6_session_start_hook_lists_recorded_telos_subjects() {
 }
 
 #[test]
+fn visible_items_never_hide_that_the_log_is_narrowed() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[
+            claim("telos/visible", "bafyrei-visible", "A visible telos."),
+            atom_claim("visible", "bafyrei-atom", &[], &["done"], &[]),
+        ],
+    );
+    write_stub_withheld(dir.path(), 2);
+
+    let hook = day(dir.path(), &kan, &["hook", "session-start"]);
+    let hook_text = String::from_utf8_lossy(&hook.stdout);
+    assert!(hook.status.success(), "{hook_text}");
+    assert!(hook_text.contains("telos/visible"), "{hook_text}");
+    assert!(
+        hook_text.contains("2 claim(s)") && hook_text.contains("withheld"),
+        "{hook_text}"
+    );
+
+    let doctor = day(dir.path(), &kan, &["doctor"]);
+    let doctor_text = String::from_utf8_lossy(&doctor.stdout);
+    assert!(!doctor.status.success(), "{doctor_text}");
+    assert!(
+        doctor_text.contains("2 additional claim(s)") && doctor_text.contains("withheld"),
+        "{doctor_text}"
+    );
+    assert!(!doctor_text.contains("composition: ok"), "{doctor_text}");
+}
+
+#[test]
 fn a_telos_stays_identifiable_when_the_newest_claim_is_commentary_about_it() {
     // Found by dogfooding: recording a tension against a telos made the
     // hook show the tension instead of the telos, in the tool whose own
@@ -341,6 +372,111 @@ fn ac6_session_start_hook_exits_zero_with_no_teloi_recorded() {
     assert!(
         stdout.contains("No teloi are recorded"),
         "should say so plainly: {stdout}"
+    );
+}
+
+#[test]
+fn a_worktree_log_mismatch_is_not_reported_as_an_empty_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = dir.path().join("main");
+    std::fs::create_dir(&main).unwrap();
+    let git = |cwd: &std::path::Path, args: &[&str]| {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&main, &["init", "-q", "-b", "main"]);
+    git(&main, &["config", "user.email", "t@example.invalid"]);
+    git(&main, &["config", "user.name", "t"]);
+    std::fs::write(main.join("tracked"), "one\n").unwrap();
+    git(&main, &["add", "tracked"]);
+    git(&main, &["commit", "-qm", "one"]);
+    std::fs::create_dir(main.join(".kan")).unwrap();
+
+    let worktree = dir.path().join("worktree");
+    git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            worktree.to_str().unwrap(),
+        ],
+    );
+    let worktree_head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&worktree)
+        .output()
+        .unwrap()
+        .stdout;
+    std::fs::write(main.join("tracked"), "two\n").unwrap();
+    git(&main, &["add", "tracked"]);
+    git(&main, &["commit", "-qm", "two"]);
+    let main_head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&main)
+        .output()
+        .unwrap()
+        .stdout;
+    let kan = write_kan_stub(dir.path(), &[]);
+    let out = day(&worktree, &kan, &["hook", "session-start"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(out.status.success(), "hooks remain advisory: {stdout}");
+    assert!(stdout.contains("Git worktree"), "{stdout}");
+    assert!(stdout.contains(main.to_str().unwrap()), "{stdout}");
+    assert!(!stdout.contains("No teloi are recorded"), "{stdout}");
+    assert!(
+        !stdout.contains("No process atoms are declared"),
+        "{stdout}"
+    );
+    assert!(
+        !worktree.join(".kan").exists(),
+        "day must not create or redirect a workspace"
+    );
+
+    let write = day(
+        &worktree,
+        &kan,
+        &["telos", "declare", "must-refuse", "Must not be written."],
+    );
+    assert!(
+        !write.status.success(),
+        "a mismatched worktree write succeeded"
+    );
+    assert!(
+        !dir.path().join("kan-stub-data/appends.log").exists(),
+        "day invoked kan despite refusing the workspace mismatch"
+    );
+    let head = |cwd: &std::path::Path| {
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(cwd)
+            .output()
+            .unwrap()
+            .stdout
+    };
+    assert_eq!(head(&main), main_head, "the main checkout HEAD moved");
+    assert_eq!(head(&worktree), worktree_head, "the worktree HEAD moved");
+
+    let prompt = day(&worktree, &kan, &["hook", "user-prompt"]);
+    let prompt_text = String::from_utf8_lossy(&prompt.stdout);
+    assert!(
+        prompt.status.success(),
+        "hooks remain advisory: {prompt_text}"
+    );
+    assert!(prompt_text.contains("Git worktree"), "{prompt_text}");
+    assert!(
+        prompt_text.contains(main.to_str().unwrap()),
+        "{prompt_text}"
     );
 }
 
