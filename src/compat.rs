@@ -78,12 +78,12 @@ impl Version {
 
     /// Full semver precedence, **including** the pre-release tag.
     ///
-    /// [`Self::release_order`] deliberately orders `0.12.0-beta.4` and `0.12.0`
+    /// [`Self::release_order`] deliberately orders `0.13.0-beta.1` and `0.13.0`
     /// together, which is right for the FLOOR — a stable release of a version
     /// whose beta day supports is supported — and wrong for the CEILING. Every
     /// kan day has ever measured is a pre-release, so a ceiling compared on
-    /// release order alone reports a future stable `0.12.0` as measured when
-    /// the newest artifact anyone ran is `0.12.0-beta.4`. day's own wording is
+    /// release order alone reports a future stable `0.13.0` as measured when
+    /// the newest artifact anyone ran is `0.13.0-beta.1`. day's own wording is
     /// "the newest kan this day was measured against", which is a claim about
     /// an artifact rather than about a version family.
     ///
@@ -156,12 +156,12 @@ pub const OLDEST_SUPPORTED: Version = Version {
 pub fn newest_measured() -> Version {
     Version {
         major: 0,
-        minor: 12,
+        minor: 13,
         patch: 0,
         // The artifact, not the family. A `const` cannot hold an
         // `Option<String>`, and carrying the pre-release is the whole point of
         // this bound — so it is a function.
-        pre: Some("beta.4".to_string()),
+        pre: Some("beta.1".to_string()),
     }
 }
 

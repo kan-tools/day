@@ -141,14 +141,15 @@ jobs:
             exit 1
           fi
 
-          # The definitions make `([#165])` a link instead of literal text.
           # Release notes are standalone markdown — they do not inherit
-          # CHANGELOG.md's definitions, and the release cut by hand for
-          # v0.12.0-beta.2 rendered four bare `[#nnn]` because of exactly this.
-          # Definitions render as nothing, so carrying all of them is free.
+          # CHANGELOG.md's reference definitions. Append only definitions the
+          # section actually uses: carrying the entire changelog's reference
+          # catalog makes the API body noisy and obscures the user-facing notes.
           cp section.md notes.md
           printf '\n' >> notes.md
-          grep '^\[[^]]*\]: ' CHANGELOG.md >> notes.md
+          grep -o '\[[^]]*\]' section.md | sort -u | while IFS= read -r ref; do
+            grep -F "${ref}: " CHANGELOG.md || true
+          done >> notes.md
 
           # Every release so far is a prerelease, and that is a property of the
           # version rather than a policy: a tag carrying a `-` is pre-1.0 by

@@ -1,0 +1,49 @@
+name: Feature request
+description: A concrete improvement to using day.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lead with the workflow friction, not the proposed API. If several
+        designs are defensible, use the **Design question** template instead.
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: What is difficult today?
+      description: Describe the task, who is doing it, and where the current workflow breaks down.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What would a good outcome make possible?
+      description: State the user-visible result without requiring a particular implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Example or evidence
+      description: A command transcript, project example, or repeated manual workaround is especially useful.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation and onboarding
+        - Design and review
+        - Handoff and session continuity
+        - Process graph and position
+        - Evidence and assessment
+        - Output and readability
+        - Plugin, hooks, or MCP
+        - Other / not sure
+    validations:
+      required: true

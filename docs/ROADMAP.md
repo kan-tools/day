@@ -9,7 +9,7 @@ it always said something else.
 
 ## Where we are
 
-**Shipped: `v0.12.0-beta.1`.** day declares, reads,
+**Shipped: `v0.12.1-beta.3`.** day declares, reads,
 assesses and records: verbs, slash commands, three hooks, a status line, and
 three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
@@ -17,7 +17,28 @@ v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
 position reports that can represent their own failure (day#98/#97/#103/#105/#111)
 plus the material/record witness pair. `v0.10.0-beta.2` made `next` a guaranteed
 DAG; `v0.11.0-beta.2` is verification that can fail; `v0.12.0-beta.1` extends
-that to teloi and adds the `/handoff`-`/wakeup` pair.
+that to teloi and adds the `/handoff`-`/wakeup` pair. The `v0.12.1` betas are
+the repository-wide QA line: honest narrowed reads, worktree-aware kan
+routing, structured command probes, legible configuration, and the Windows
+bootstrap CI fix.
+
+### Planning horizon
+
+The near-term priority is **access before expansion**: make installation,
+first use, output, and recovery paths obvious enough that a person who did not
+author day can use it successfully. The medium-term sequence is:
+
+1. **Adoption and access** — close active correctness defects on ordinary
+   install, worktree, hook, output, and handoff paths; keep onboarding short.
+2. **Workflow ergonomics** — make active streams, human interventions,
+   review atoms, and session identities first-class and inspectable.
+3. **Transportable vocabularies** — finish packs only after the adoption path
+   they transport is dependable, with fresh-project degraded modes tested.
+4. **Legibility at the v1.0 bar** — validate the record with a non-author on a
+   third project, then address cross-design and cross-frame reconciliation.
+
+GitHub milestones carry the live issue assignments. This document explains
+the dependency order and deliberately avoids duplicating issue counts.
 
 **The verb and command counts are gone rather than corrected**, for the reason
 this file already gives about a different count below — see *"No count is given,
