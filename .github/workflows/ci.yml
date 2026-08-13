@@ -14,6 +14,21 @@ env:
   KAN_TAG: v0.9.1-beta.1
 
 jobs:
+  behaviour-diff:
+    name: behaviour-diff (dedicated, serialized)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # This target recursively builds HEAD and a worktree. Keeping it out of
+      # the ordinary Cargo scheduler prevents nested builds from contending
+      # with sibling test targets; one thread also serializes its own fixtures.
+      - name: Run every behaviour-diff integrity check
+        run: cargo test --test behaviour_diff -- --ignored --test-threads=1
+
   test:
     runs-on: ubuntu-latest
     steps:
