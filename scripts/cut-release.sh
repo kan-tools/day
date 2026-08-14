@@ -182,6 +182,9 @@ fi
 
 cargo build --workspace --all-targets
 cargo test --workspace --no-fail-fast
+# This target is ignored by the ordinary suite because it recursively builds
+# worktrees; release verification runs its isolated serialized gate explicitly.
+cargo test --test behaviour_diff -- --ignored --test-threads=1
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 DAY_BIN=target/debug/day scripts/check-design-corpus.sh
