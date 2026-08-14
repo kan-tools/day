@@ -75,6 +75,8 @@ jobs:
       # `--no-fail-fast`, 30 ran; **both exited 101**. The build still fails, it
       # just fails having actually looked.
       - run: cargo test --workspace --no-fail-fast
+      - name: Run every behaviour-diff integrity check serially
+        run: cargo test --test behaviour_diff -- --ignored --test-threads=1
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
 

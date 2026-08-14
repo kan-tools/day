@@ -85,6 +85,7 @@ fn diff_with_path(args: &[&str], path_prefix: Option<&Path>) -> (String, Option<
 /// is exactly how it happened: the corpus is the part that rots, and it rots
 /// toward silence.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn a_fixture_that_cannot_run_is_not_reported_as_identical() {
     let dir = tempfile::tempdir().unwrap();
     let corpus = corpus_with(dir.path(), r#"{"v":1,"subjects":"not-an-envelope"}"#);
@@ -126,6 +127,7 @@ fn a_fixture_that_cannot_run_is_not_reported_as_identical() {
 /// derived-list test checks membership by *name*. The corpus list is
 /// exhaustive; the corpus contents were not.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn a_fixture_that_invokes_nothing_is_not_reported_as_identical() {
     let dir = tempfile::tempdir().unwrap();
     let corpus = corpus_with_case(
@@ -189,6 +191,7 @@ fn a_fixture_that_invokes_nothing_is_not_reported_as_identical() {
 /// The fixture reaches it the way the issue did: an `also_carries` entry
 /// declaring its own `subject`, which `every` refuses by design.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn a_fixture_whose_verdict_is_an_error_is_not_reported_as_identical() {
     let dir = tempfile::tempdir().unwrap();
     // A witness day parses and then refuses on the merits — the log is
@@ -236,6 +239,7 @@ fn a_fixture_whose_verdict_is_an_error_is_not_reported_as_identical() {
 /// Fails toward could-not-check rather than toward clean, which is why it
 /// survived: it looked like a broken corpus, not a broken harness.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn a_relative_corpus_path_resolves_against_the_repo_not_the_work_dir() {
     let (text, code) = diff(&[
         "--since",
@@ -280,6 +284,7 @@ fn a_relative_corpus_path_resolves_against_the_repo_not_the_work_dir() {
 /// fixes the missing-member case; the exact count is what catches a reader that
 /// broke. Neither substitutes for the other, so both are asserted.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn a_corpus_whose_size_changed_is_refused_before_anything_is_compared() {
     let dir = tempfile::tempdir().unwrap();
     let corpus = corpus_with(dir.path(), r#"{"v":1,"subjects":[]}"#);
@@ -322,6 +327,7 @@ fn a_corpus_whose_size_changed_is_refused_before_anything_is_compared() {
 /// the same fixture, so the test observes the change rather than the feature
 /// around it.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn the_head_binary_is_rebuilt_rather_than_reused() {
     let dir = tempfile::tempdir().unwrap();
     let corpus = corpus_with(dir.path(), r#"{"v":1,"subjects":[]}"#);
@@ -368,6 +374,7 @@ fn the_head_binary_is_rebuilt_rather_than_reused() {
 /// only when someone remembered the flag. Every invocation in this file passes
 /// it, which is precisely why nothing here noticed.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn the_fixture_count_cannot_be_omitted() {
     let dir = tempfile::tempdir().unwrap();
     let corpus = corpus_with(dir.path(), r#"{"v":1,"subjects":[]}"#);
@@ -395,6 +402,7 @@ fn the_fixture_count_cannot_be_omitted() {
 /// silently lost a fixture, which is the state a passing `--expect-fixtures 2`
 /// elsewhere would hide by being wrong in the same direction.
 #[test]
+#[ignore = "runs nested Cargo builds; use the dedicated behaviour-diff gate"]
 fn the_shipped_corpus_has_the_fixtures_it_claims() {
     let corpus = repo_root().join("fixtures/behaviour");
     let mut found: Vec<String> = std::fs::read_dir(&corpus)

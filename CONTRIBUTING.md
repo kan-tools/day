@@ -143,6 +143,7 @@ to do.
 ```bash
 cargo build --workspace --all-targets
 cargo test --workspace
+cargo test --test behaviour_diff -- --ignored --test-threads=1
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
