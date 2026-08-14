@@ -621,6 +621,32 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
     // A claim by the workspace's primary identity, and a second identity that
     // does not admit it under `--trust me`.
     kan(&["observe", "primary claim", "--subject", "shared"], None);
+
+    // Every supported kan row can establish the numeric envelope contract,
+    // even releases too old to construct a second identity and a positive
+    // withholding fixture. Do this before that capability gate so those rows
+    // cannot report the strengthened cell green without running its shape
+    // assertions.
+    for (args, label) in [
+        (&["show", "--all", "--json"][..], "show --all --json"),
+        (&["status", "--json"][..], "status --json"),
+    ] {
+        let payload = kan(args, None);
+        let value: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
+        assert!(
+            value["excluded_by_trust"].is_u64(),
+            "{label} must carry a numeric top-level excluded_by_trust: {payload}"
+        );
+        let entry = value["subjects"]
+            .as_array()
+            .and_then(|subjects| subjects.iter().find(|entry| entry["subject"] == "shared"))
+            .unwrap_or_else(|| panic!("{label} must name the visible fixture subject: {payload}"));
+        assert!(
+            entry["excluded_by_trust"].is_u64(),
+            "{label} must carry numeric per-subject excluded_by_trust: {payload}"
+        );
+    }
+
     let role_added = Command::new(bin)
         .args(["identity", "role", "add", "conformance-role"])
         .current_dir(dir.path())

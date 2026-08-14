@@ -174,6 +174,33 @@ A row is measured, never assumed. For each one:
 and append '<tag><TAB><outcome>' to $expectations."
 fi
 
+# --- 1c. every issue in this release has a merged disposition ---------------
+#
+# A closed issue alone is not enough: it may have been closed manually, or by
+# a PR that was later closed without merging. Ask GitHub for the PRs that
+# actually closed each issue, then require at least one of those PRs to carry a
+# merge timestamp. Network/auth failure is could-not-check and therefore a
+# refusal, just like the origin comparison above.
+command -v gh >/dev/null 2>&1 || die "gh is not on PATH; merged issue dispositions cannot be verified"
+for issue in 177 167 162; do
+  if ! issue_json="$(gh issue view "$issue" --repo kan-tools/day --json state,closedByPullRequestsReferences)"; then
+    die "could not read issue #$issue; merged disposition cannot be verified"
+  fi
+  if ! printf '%s' "$issue_json" | jq -e '.state == "CLOSED"' >/dev/null; then
+    die "issue #$issue is not closed; v0.12.2 cannot be released"
+  fi
+  closing_prs="$(printf '%s' "$issue_json" | jq -r '.closedByPullRequestsReferences[]?.number')"
+  merged=""
+  for pr in $closing_prs; do
+    if pr_json="$(gh pr view "$pr" --repo kan-tools/day --json mergedAt)" &&
+       printf '%s' "$pr_json" | jq -e '.mergedAt != null' >/dev/null; then
+      merged="$pr"
+      break
+    fi
+  done
+  [ -n "$merged" ] || die "issue #$issue has no merged closing pull request; v0.12.2 cannot be released"
+done
+
 # --- 2. it builds and passes -------------------------------------------------
 #
 # Re-run here rather than trusting a green CI badge: the point of this script is
