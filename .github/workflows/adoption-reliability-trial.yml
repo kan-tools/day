@@ -268,7 +268,7 @@ jobs:
           cp Cargo.toml "$RUNNER_TEMP/Cargo.toml"
           printf '\nthis is not toml\n' >> Cargo.toml
           set +e
-          python3 scripts/behaviour-diff.py --since HEAD >trial-evidence/head-failure.txt 2>&1
+          python3 scripts/behaviour-diff.py --since HEAD --expect-fixtures 4 >trial-evidence/head-failure.txt 2>&1
           head_code=$?
           set -e
           mv "$RUNNER_TEMP/Cargo.toml" Cargo.toml
@@ -283,7 +283,7 @@ jobs:
           bad_base="$(git rev-parse HEAD)"
           git switch -q --detach "${{ inputs.rc_sha }}"
           set +e
-          python3 scripts/behaviour-diff.py --since "$bad_base" >trial-evidence/base-failure.txt 2>&1
+          python3 scripts/behaviour-diff.py --since "$bad_base" --expect-fixtures 4 >trial-evidence/base-failure.txt 2>&1
           base_code=$?
           set -e
           [ "$base_code" -ne 0 ]
