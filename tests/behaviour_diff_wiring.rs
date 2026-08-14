@@ -25,6 +25,15 @@ fn nested_cargo_checks_have_one_dedicated_gate() {
         1,
         "CI must run one dedicated gate"
     );
+    let job = ci
+        .split("  behaviour-diff:\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n  test:\n").next())
+        .expect("CI must retain the dedicated behaviour-diff job");
+    assert!(
+        !job.lines().any(|line| line.trim_start().starts_with("if:")),
+        "the dedicated CI job or one of its steps must not be conditionally skipped"
+    );
     let release = std::fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     assert_eq!(
         release.matches(command).count(),

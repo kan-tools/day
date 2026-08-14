@@ -392,13 +392,50 @@ fn stub(bin: &Path, name: &str, body: &str) {
     }
 }
 
-fn stub_new_release_gates(repo: &Path) {
+fn stub_new_release_gates(repo: &Path, bin: &Path) {
     let scripts = repo.join("scripts");
     stub(&scripts, "check-design-corpus.sh", "exit 0\n");
     stub(&scripts, "process-census.sh", "exit 0\n");
     let target = repo.join("target/debug");
     std::fs::create_dir_all(&target).unwrap();
     stub(&target, "day", "exit 0\n");
+    stub(
+        bin,
+        "gh",
+        "case \"$1\" in\n\
+         issue) echo '{\"state\":\"CLOSED\",\"closedByPullRequestsReferences\":[{\"number\":999}]}' ;;\n\
+         pr) echo '{\"mergedAt\":\"2026-08-14T00:00:00Z\"}' ;;\n\
+         *) exit 97 ;;\n\
+         esac\n",
+    );
+}
+
+#[test]
+fn release_dispositions_are_verified_before_any_build() {
+    let script = read("scripts/cut-release.sh");
+    let gate = script
+        .find("# --- 1c. every issue in this release has a merged disposition")
+        .expect("the release script must verify merged issue dispositions");
+    let build = script
+        .find("cargo build --workspace --all-targets")
+        .expect("the release script must retain its build gate");
+    assert!(
+        gate < build,
+        "issue dispositions must be checked before building"
+    );
+    assert!(
+        script.contains("for issue in 177 167 162"),
+        "the release disposition gate must cover issues #177, #167, and #162"
+    );
+    assert!(
+        script.contains(".state == \"CLOSED\"") && script.contains(".mergedAt != null"),
+        "a manual close or an unmerged closing PR must not satisfy the release gate"
+    );
+    assert!(
+        script.contains("could not read issue #$issue")
+            && script.contains("has no merged closing pull request"),
+        "unreadable and unsatisfied dispositions must both fail closed"
+    );
 }
 
 fn run_git(cwd: &Path, args: &[&str]) {
@@ -641,7 +678,7 @@ fn cut_release_puts_the_measured_row_in_the_tagged_commit() {
     // The cell script is resolved relative to the working directory, so the
     // scratch repo needs one. It reports a real outcome token.
     std::fs::create_dir_all(repo.join("scripts")).unwrap();
-    stub_new_release_gates(repo);
+    stub_new_release_gates(repo, &bin);
     stub(
         &repo.join("scripts"),
         "run-migration-cell.sh",
@@ -759,7 +796,7 @@ fn the_release_scripts_recovery_instruction_actually_recovers() {
     )
     .unwrap();
     std::fs::create_dir_all(repo.join("scripts")).unwrap();
-    stub_new_release_gates(repo);
+    stub_new_release_gates(repo, &bin);
     stub(
         &repo.join("scripts"),
         "run-migration-cell.sh",

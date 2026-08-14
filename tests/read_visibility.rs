@@ -81,6 +81,10 @@ fn withholding_merge_is_order_independent_and_snapshot_consistent() {
     ));
     assert_eq!(show_first.claims_withheld_from_view(), 5);
     assert_eq!(show_first.unattributed_withheld_from_view(), 4);
+    assert!(matches!(
+        show_first.show("schema/a").unwrap(),
+        Read::Withheld { count: 3 }
+    ));
 
     let (_dir, status_first) = client(show, status);
     status_first.subjects().unwrap();
@@ -90,6 +94,10 @@ fn withholding_merge_is_order_independent_and_snapshot_consistent() {
     ));
     assert_eq!(status_first.claims_withheld_from_view(), 5);
     assert_eq!(status_first.unattributed_withheld_from_view(), 4);
+    assert!(matches!(
+        status_first.show("schema/a").unwrap(),
+        Read::Withheld { count: 3 }
+    ));
 }
 
 #[test]
