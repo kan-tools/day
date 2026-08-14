@@ -39,6 +39,11 @@ fn the_actions_runner_covers_every_preregistered_row_and_retains_evidence() {
             && workflow.contains("cargo package --locked"),
         "the trial must package and exercise the caller's exact RC, not a source-tree binary"
     );
+    assert!(
+        workflow.contains("package_dir=\"$RUNNER_TEMP/trial-package\"")
+            && workflow.contains("evidence_dir=\"$RUNNER_TEMP/trial-evidence\""),
+        "packaging evidence must not dirty the exact checkout before cargo package"
+    );
 }
 
 #[test]
