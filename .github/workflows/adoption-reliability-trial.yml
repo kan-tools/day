@@ -33,23 +33,25 @@ jobs:
           set -euo pipefail
           [ "$(git rev-parse HEAD)" = "${{ inputs.rc_sha }}" ]
           [ "$(git status --porcelain)" = "" ]
-          mkdir trial-package trial-evidence
-          git rev-parse HEAD | tee trial-evidence/rc-sha.txt
-          rustc --version | tee trial-evidence/rustc.txt
-          cargo --version | tee trial-evidence/cargo.txt
+          package_dir="$RUNNER_TEMP/trial-package"
+          evidence_dir="$RUNNER_TEMP/trial-evidence"
+          mkdir "$package_dir" "$evidence_dir"
+          git rev-parse HEAD | tee "$evidence_dir/rc-sha.txt"
+          rustc --version | tee "$evidence_dir/rustc.txt"
+          cargo --version | tee "$evidence_dir/cargo.txt"
           cargo package --locked
-          cp "target/package/day-${RC_VERSION}.crate" trial-package/
-          git archive --format=tar.gz --output="trial-package/day-plugin-${RC_VERSION}.tar.gz" HEAD
-          sha256sum trial-package/* | tee trial-evidence/sha256.txt
+          cp "target/package/day-${RC_VERSION}.crate" "$package_dir/"
+          git archive --format=tar.gz --output="$package_dir/day-plugin-${RC_VERSION}.tar.gz" HEAD
+          sha256sum "$package_dir"/* | tee "$evidence_dir/sha256.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: rc-packages-${{ inputs.rc_sha }}
-          path: trial-package/*
+          path: ${{ runner.temp }}/trial-package/*
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: package-evidence-${{ inputs.rc_sha }}
-          path: trial-evidence/*
+          path: ${{ runner.temp }}/trial-evidence/*
           if-no-files-found: error
 
   agent-skills-unix:
