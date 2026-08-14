@@ -9,7 +9,7 @@ it always said something else.
 
 ## Where we are
 
-**Shipped: `v0.12.1-beta.3`.** day declares, reads,
+**Release candidate: `v0.12.2`.** day declares, reads,
 assesses and records: verbs, slash commands, three hooks, a status line, and
 three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
@@ -19,8 +19,9 @@ plus the material/record witness pair. `v0.10.0-beta.2` made `next` a guaranteed
 DAG; `v0.11.0-beta.2` is verification that can fail; `v0.12.0-beta.1` extends
 that to teloi and adds the `/handoff`-`/wakeup` pair. The `v0.12.1` betas are
 the repository-wide QA line: honest narrowed reads, worktree-aware kan
-routing, structured command probes, legible configuration, and the Windows
-bootstrap CI fix.
+routing, structured command probes, and legible configuration. `v0.12.2`
+removes the bootstrap runtime, adds portable install guidance, isolates the
+behaviour-diff gate, and consumes per-subject trust evidence.
 
 ### Planning horizon
 

@@ -17,7 +17,7 @@ unless a version is given:
 
 ```bash
 cargo install kan --version 0.13.0-beta.1
-cargo install day --version 0.12.1-beta.3
+cargo install day --version 0.12.2
 ```
 
 Then, from a git repository:
@@ -167,7 +167,10 @@ verification, version compatibility, worktrees, and common recovery paths.
 
 ## Status
 
-Early. **v0.12.1-beta.3** makes narrowed reads and worktree/log mismatches explicit, while
+Early. **v0.12.2** makes installation harness-neutral, isolates expensive behaviour-diff
+verification behind an explicit release-required gate, and consumes kan's per-subject
+trust-withholding evidence. It retains the narrowed-read and worktree/log honesty of
+v0.12.1, while
 `schema/injection/cadence` and `schema/injection/max_practice_items` resolve
 independently instead of the newer claim silently resetting the other. It also
 carries a round of honest-reads fixes, and their common shape is worth stating

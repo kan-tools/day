@@ -29,14 +29,34 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 ## [Unreleased]
 
+## [v0.12.2] — 2026-08-14
+
 ### Changed
 
+- Replaced the Node/bootstrap installation path with harness-neutral Agent
+  Skills guidance covering Cargo-present and Cargo-absent macOS, Linux, WSL,
+  and native Windows installations ([#177]).
+- Isolated nested-Cargo behaviour-diff checks from the ordinary suite and made
+  their serialized command an explicit pre-tag release gate ([#167]).
+- Consumed kan's per-subject trust-withholding counts and kept aggregation
+  conservative across disagreeing reader snapshots ([#162]).
 - Measured kan `v0.12.0-beta.5` and `v0.13.0-beta.1`, adopting the latter;
-  README and bootstrap install guidance now point to the newest verified pair.
+  README and portable install guidance point to the newest verified pair.
 - Reworked the README around installation and a first useful workflow, with
   theory and detailed contracts left to the supplemental documentation.
 - Refreshed the roadmap around adoption, workflow ergonomics, transportable
   vocabularies, and the v1.0 legibility bar.
+
+### Verification
+
+- Split the changes across three independently green PRs, ran every released
+  kan compatibility cell through v0.13.0-beta.1, and closed the cold-review
+  follow-ups in [#215].
+
+[#162]: https://github.com/kan-tools/day/issues/162
+[#167]: https://github.com/kan-tools/day/issues/167
+[#177]: https://github.com/kan-tools/day/issues/177
+[#215]: https://github.com/kan-tools/day/pull/215
 
 ## [v0.12.1-beta.3] — 2026-08-13
 

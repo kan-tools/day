@@ -1,0 +1,317 @@
+name: v0.12.2 adoption reliability trial
+
+# A green run means every preregistered row produced raw evidence. It does not
+# write the attestation: a human still reviews the artifacts and records the
+# Result in kan, whose workspace is intentionally unavailable to Actions.
+on:
+  workflow_dispatch:
+    inputs:
+      rc_sha:
+        description: Exact release-candidate commit to package and exercise
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RC_VERSION: 0.12.2
+  KAN_VERSION: 0.13.0-beta.1
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.rc_sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Prove and package the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "${{ inputs.rc_sha }}" ]
+          [ "$(git status --porcelain)" = "" ]
+          mkdir trial-package trial-evidence
+          git rev-parse HEAD | tee trial-evidence/rc-sha.txt
+          rustc --version | tee trial-evidence/rustc.txt
+          cargo --version | tee trial-evidence/cargo.txt
+          cargo package --locked
+          cp "target/package/day-${RC_VERSION}.crate" trial-package/
+          git archive --format=tar.gz --output="trial-package/day-plugin-${RC_VERSION}.tar.gz" HEAD
+          sha256sum trial-package/* | tee trial-evidence/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc-packages-${{ inputs.rc_sha }}
+          path: trial-package/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-evidence-${{ inputs.rc_sha }}
+          path: trial-evidence/*
+          if-no-files-found: error
+
+  agent-skills-unix:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rc-packages-${{ inputs.rc_sha }}
+          path: packages
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install packaged artifacts into a clean consumer root
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="trial-evidence/${{ matrix.os }}"
+          root="$RUNNER_TEMP/day-consumer"
+          mkdir -p "$evidence" "$root" unpack plugin
+          {
+            uname -a
+            sw_vers 2>/dev/null || true
+            command -v day && exit 31 || echo 'before: day absent'
+            command -v kan && exit 32 || echo 'before: kan absent'
+            cargo --version
+          } 2>&1 | tee "$evidence/before.txt"
+          tar -xzf "packages/day-${RC_VERSION}.crate" -C unpack
+          cargo install kan --version "$KAN_VERSION" --locked --root "$root" 2>&1 | tee "$evidence/install-kan.txt"
+          cargo install --path "unpack/day-${RC_VERSION}" --locked --root "$root" 2>&1 | tee "$evidence/install-day.txt"
+          tar -xzf "packages/day-plugin-${RC_VERSION}.tar.gz" -C plugin
+          test -f plugin/skills/install/SKILL.md
+          test "$(readlink plugin/.claude/skills/install)" = '../../skills/install'
+          npm install --global @openai/codex 2>&1 | tee "$evidence/install-harness.txt"
+          export CODEX_HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$CODEX_HOME/skills/day-install"
+          cp plugin/skills/install/SKILL.md "$CODEX_HOME/skills/day-install/SKILL.md"
+          codex --version 2>&1 | tee "$evidence/harness-version.txt"
+          export PATH="$root/bin:$PATH"
+          scratch="$RUNNER_TEMP/consumer-repo"
+          mkdir "$scratch"
+          git -C "$scratch" init -q
+          git -C "$scratch" config user.email trial@example.invalid
+          git -C "$scratch" config user.name trial
+          git -C "$scratch" commit -q --allow-empty -m scratch
+          {
+            kan --version
+            day --version
+            cd "$scratch"
+            day init
+            day doctor
+          } 2>&1 | tee "$evidence/verify.txt"
+          grep -F 'day 0.12.2' "$evidence/verify.txt"
+          grep -F 'composition: ok' "$evidence/verify.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-skills-${{ matrix.os }}-${{ inputs.rc_sha }}
+          path: trial-evidence/
+          if-no-files-found: error
+
+  agent-skills-windows:
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rc-packages-${{ inputs.rc_sha }}
+          path: packages
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install packaged artifacts in native PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force trial-evidence, unpack, plugin | Out-Null
+          "OS: $([System.Environment]::OSVersion.VersionString)" | Tee-Object trial-evidence/before.txt
+          if (Get-Command day -ErrorAction SilentlyContinue) { throw 'before: day unexpectedly present' }
+          if (Get-Command kan -ErrorAction SilentlyContinue) { throw 'before: kan unexpectedly present' }
+          cargo --version | Tee-Object -Append trial-evidence/before.txt
+          tar -xzf "packages/day-$env:RC_VERSION.crate" -C unpack
+          cargo install kan --version $env:KAN_VERSION --locked --root "$env:RUNNER_TEMP/day-consumer" 2>&1 | Tee-Object trial-evidence/install-kan.txt
+          cargo install --path "unpack/day-$env:RC_VERSION" --locked --root "$env:RUNNER_TEMP/day-consumer" 2>&1 | Tee-Object trial-evidence/install-day.txt
+          tar -xzf "packages/day-plugin-$env:RC_VERSION.tar.gz" -C plugin
+          if (-not (Test-Path plugin/skills/install/SKILL.md)) { throw 'portable install skill absent' }
+          npm install --global @openai/codex 2>&1 | Tee-Object trial-evidence/install-harness.txt
+          $env:CODEX_HOME = "$env:RUNNER_TEMP/codex-home"
+          New-Item -ItemType Directory -Force "$env:CODEX_HOME/skills/day-install" | Out-Null
+          Copy-Item plugin/skills/install/SKILL.md "$env:CODEX_HOME/skills/day-install/SKILL.md"
+          codex --version 2>&1 | Tee-Object trial-evidence/harness-version.txt
+          $env:PATH = "$env:RUNNER_TEMP/day-consumer/bin;$env:PATH"
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/consumer-repo" | Out-Null
+          Push-Location "$env:RUNNER_TEMP/consumer-repo"
+          git init -q
+          git config user.email trial@example.invalid
+          git config user.name trial
+          git commit -q --allow-empty -m scratch
+          kan --version 2>&1 | Tee-Object "$env:GITHUB_WORKSPACE/trial-evidence/verify.txt"
+          day --version 2>&1 | Tee-Object -Append "$env:GITHUB_WORKSPACE/trial-evidence/verify.txt"
+          day init 2>&1 | Tee-Object -Append "$env:GITHUB_WORKSPACE/trial-evidence/verify.txt"
+          day doctor 2>&1 | Tee-Object -Append "$env:GITHUB_WORKSPACE/trial-evidence/verify.txt"
+          Pop-Location
+          Select-String -Path trial-evidence/verify.txt -SimpleMatch 'day 0.12.2'
+          Select-String -Path trial-evidence/verify.txt -SimpleMatch 'composition: ok'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-skills-windows-${{ inputs.rc_sha }}
+          path: trial-evidence/
+          if-no-files-found: error
+
+  claude-node-free-adapter:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rc-packages-${{ inputs.rc_sha }}
+          path: packages
+      - name: Exercise the Claude adapter with Node excluded from PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir plugin trial-evidence no-node-bin
+          tar -xzf "packages/day-plugin-${RC_VERSION}.tar.gz" -C plugin
+          curl -fsSL https://claude.ai/install.sh | bash
+          claude_path="$(command -v claude)"
+          claude_real="$(readlink -f "$claude_path")"
+          for tool in bash dirname grep readlink sed tar test; do
+            path="$(command -v "$tool")"
+            ln -s "$path" "no-node-bin/$tool"
+          done
+          ln -s "$claude_real" no-node-bin/claude
+          /usr/bin/env PATH="$PWD/no-node-bin" bash -c '
+            command -v node && exit 41 || echo "node absent from adapter PATH"
+            claude --version
+            claude plugin validate plugin
+            test -f plugin/skills/install/SKILL.md
+            test "$(readlink plugin/.claude/skills/install)" = "../../skills/install"
+            ! grep -R "bootstrap-check\|node " plugin/hooks plugin/.claude-plugin plugin/plugin.json
+            grep -F "cargo install day --version 0.12.2" plugin/skills/install/SKILL.md
+          ' 2>&1 | tee trial-evidence/claude-node-free.txt
+          /usr/bin/env PATH="$PWD/no-node-bin" claude --version \
+            | tee trial-evidence/harness-version.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-node-free-${{ inputs.rc_sha }}
+          path: trial-evidence/
+          if-no-files-found: error
+
+  controls:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.rc_sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the tested kan
+        run: cargo install kan --version "$KAN_VERSION" --locked
+      - name: Behaviour and trust controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir trial-evidence
+          counter="$RUNNER_TEMP/behaviour-diff-invocations"
+          mv scripts/behaviour-diff.py scripts/behaviour-diff.real.py
+          printf '%s\n' '#!/bin/sh' \
+            ': "${DAY_BEHAVIOUR_DIFF_COUNTER:?}"' \
+            'printf "1\\n" >> "$DAY_BEHAVIOUR_DIFF_COUNTER"' \
+            'exec python3 "$(dirname "$0")/behaviour-diff.real.py" "$@"' \
+            > scripts/behaviour-diff.py
+          chmod +x scripts/behaviour-diff.py
+          export DAY_BEHAVIOUR_DIFF_COUNTER="$counter"
+          set +e
+          scripts/behaviour-diff.py --expect-fixtures 999 >/dev/null 2>&1
+          set -e
+          [ "$(wc -l < "$counter")" -eq 1 ]
+          rm "$counter"
+
+          mkdir "$RUNNER_TEMP/unrelated-cargo"
+          printf '%s\n' '[package]' 'name="unrelated"' 'version="0.1.0"' \
+            'edition="2021"' 'build="build.rs"' > "$RUNNER_TEMP/unrelated-cargo/Cargo.toml"
+          printf '%s\n' 'fn main() { std::thread::sleep(std::time::Duration::from_secs(300)); }' \
+            > "$RUNNER_TEMP/unrelated-cargo/build.rs"
+          mkdir "$RUNNER_TEMP/unrelated-cargo/src"
+          printf '%s\n' 'fn main() {}' > "$RUNNER_TEMP/unrelated-cargo/src/main.rs"
+          cargo build --manifest-path "$RUNNER_TEMP/unrelated-cargo/Cargo.toml" \
+            >trial-evidence/unrelated-cargo.txt 2>&1 &
+          unrelated_pid=$!
+          sleep 2
+          kill -0 "$unrelated_pid"
+          cargo test --workspace --no-fail-fast 2>&1 | tee trial-evidence/default-suite.txt
+          [ ! -e "$counter" ]
+          kill "$unrelated_pid" 2>/dev/null || true
+          wait "$unrelated_pid" 2>/dev/null || true
+          mv scripts/behaviour-diff.real.py scripts/behaviour-diff.py
+          grep -F 'test result: ok. 0 passed; 0 failed; 8 ignored' trial-evidence/default-suite.txt
+          cargo test --test behaviour_diff -- --ignored --test-threads=1 2>&1 | tee trial-evidence/behaviour-diff.txt
+          grep -F 'test result: ok. 8 passed; 0 failed; 0 ignored' trial-evidence/behaviour-diff.txt
+          DAY_TRIAL_EVIDENCE_DIR="$PWD/trial-evidence/trust-envelopes" \
+            cargo test --test kan_conformance conformance_trust_withholding_shapes_are_what_day_keys_on -- --nocapture \
+            2>&1 | tee trial-evidence/trust-real-kan.txt
+          cargo test --test read_visibility withholding_merge_is_order_independent_and_snapshot_consistent \
+            2>&1 | tee trial-evidence/trust-orders.txt
+          cargo test --test bulk_read -- --nocapture 2>&1 | tee trial-evidence/trust-states.txt
+      - name: Inject distinct HEAD and base build failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp Cargo.toml "$RUNNER_TEMP/Cargo.toml"
+          printf '\nthis is not toml\n' >> Cargo.toml
+          set +e
+          python3 scripts/behaviour-diff.py --since HEAD >trial-evidence/head-failure.txt 2>&1
+          head_code=$?
+          set -e
+          mv "$RUNNER_TEMP/Cargo.toml" Cargo.toml
+          [ "$head_code" -ne 0 ]
+          grep -F 'HEAD-DID-NOT-BUILD' trial-evidence/head-failure.txt
+          ! grep -x 'IDENTICAL' trial-evidence/head-failure.txt
+
+          git switch -q -c trial-bad-base
+          printf '\nthis is not toml\n' >> Cargo.toml
+          git add Cargo.toml
+          git -c user.email=trial@example.invalid -c user.name=trial commit -qm 'injected bad base'
+          bad_base="$(git rev-parse HEAD)"
+          git switch -q --detach "${{ inputs.rc_sha }}"
+          set +e
+          python3 scripts/behaviour-diff.py --since "$bad_base" >trial-evidence/base-failure.txt 2>&1
+          base_code=$?
+          set -e
+          [ "$base_code" -ne 0 ]
+          grep -F 'BASE-DID-NOT-BUILD' trial-evidence/base-failure.txt
+          ! grep -x 'IDENTICAL' trial-evidence/base-failure.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: controls-${{ inputs.rc_sha }}
+          path: trial-evidence/
+          if-no-files-found: error
+
+  evidence-complete:
+    if: always()
+    needs: [package, agent-skills-unix, agent-skills-windows, claude-node-free-adapter, controls]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse an incomplete matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'package=${{ needs.package.result }}' \
+            'agent-skills-unix=${{ needs.agent-skills-unix.result }}' \
+            'agent-skills-windows=${{ needs.agent-skills-windows.result }}' \
+            'claude-node-free-adapter=${{ needs.claude-node-free-adapter.result }}' \
+            'controls=${{ needs.controls.result }}' | tee trial-summary.txt
+          ! grep -Ev '=success$' trial-summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trial-summary-${{ inputs.rc_sha }}
+          path: trial-summary.txt
+          if-no-files-found: error

@@ -10,7 +10,7 @@ Use the pair measured by this repository:
 
 ```bash
 cargo install kan --version 0.13.0-beta.1
-cargo install day --version 0.12.1-beta.3
+cargo install day --version 0.12.2
 ```
 
 Do not omit the versions. A plain `cargo install day` will not select a
