@@ -1,20 +1,10 @@
 # A SHELL SCRIPT MUST ARRIVE WITH LF ENDINGS, OR IT DOES NOT RUN.
 #
-# `hooks/bootstrap-check.sh` is `#!/bin/sh` and `hooks/hooks.json` invokes it
-# directly, relying on that shebang. Git for Windows installs with
+# Shipped scripts are invoked directly and rely on their shebangs. Git for Windows installs with
 # `core.autocrlf=true` by default -- the installer's `CRLFAlways` option, which
 # `actions/checkout` does not override -- so without this file the script is
 # checked out with CRLF endings and the kernel reads the interpreter as
-# `/bin/sh\r`. Measured, not assumed: `./hooks/bootstrap-check.sh` on a
-# CRLF-converted copy fails with `bad interpreter: No such file or directory`,
-# exit 126 under Git Bash and 127 elsewhere.
-#
-# That is a defect for a real Windows user, not only for CI: the plugin installs,
-# the hook is registered, and the one check whose whole subject is telling a
-# human that day's binaries are missing cannot execute to say so. It is also
-# strictly worse than the "on Windows it likely does nothing, silently" worry
-# that three handoffs recorded -- it does not do nothing, it fails in a way whose
-# message points at the interpreter rather than at the line endings.
+# `/bin/sh\r`; a CRLF-converted script fails before its body can run.
 #
 # `eol=lf` rather than `-text`: these files ARE text, and marking them binary
 # would lose diffs and merges to fix a checkout artifact.

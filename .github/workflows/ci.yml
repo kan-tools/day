@@ -117,16 +117,9 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo fmt --all -- --check
 
-  # WINDOWS IS A MEASUREMENT BEFORE IT IS A GATE, and this job is deliberately
-  # narrower than `test` rather than a copy of it with `runs-on` changed.
-  #
-  # WHY IT EXISTS. `hooks/bootstrap-check.sh` is `#!/bin/sh`, and the claim that
-  # on Windows it "likely does nothing, silently" has now been written into three
-  # consecutive handoffs and measured zero times. A guess restated is still a
-  # guess, and this repo's rule is to measure before asserting -- an expectation
-  # table written from reasoning was eight rows and five wrong. So this job's
-  # subject is that one script, and the build cells are what make its result
-  # trustworthy rather than the point.
+  # Windows proves day's binary and harness-neutral Agent Plugins payload stay
+  # portable. Installation guidance is content in skills/install/SKILL.md, not
+  # an executable hook with an undeclared shell or Node dependency.
   #
   # WHAT IT CANNOT CHECK, named rather than silently omitted, because
   # could-not-check outranks checked-and-clean:
@@ -140,7 +133,7 @@ jobs:
   #   pretending this job covers it by running a command that cannot build would
   #   be the could-not-check-reported-as-clean failure one level up.
   #
-  #   `.claude/skills/` is five symlinks (mode 120000). A Windows checkout
+  #   `.claude/skills/` is six symlinks (mode 120000). A Windows checkout
   #   without `core.symlinks` turns them into text files holding their target
   #   path, so the local-reachability wiring is a known open question on Windows
   #   -- and it is `every_shipped_command_is_reachable_in_this_repo` that would
@@ -169,111 +162,6 @@ jobs:
       # excluded from the only cross-platform job. Four lines bought this.
       - name: Agent Plugins conformance suite
         run: cargo test --test agent_plugins
-
-      # THE ACTUAL QUESTION, cell 1: a Windows machine that HAS a POSIX shell.
-      #
-      # `windows-latest` ships Git for Windows, so `sh` is on PATH here. That
-      # makes this cell the with-bash mode, which is NOT the population the
-      # worry is about -- and saying so matters, because a green tick from a
-      # runner that happens to have bash would otherwise read as "Windows is
-      # fine". This asserts what day depends on: the hook exits 0 and says the
-      # words `cargo install day` when the binaries are absent. Neither binary is
-      # installed in this job, so the missing-binaries path is the one exercised.
-      - name: bootstrap-check.sh, with a POSIX shell present
-        shell: bash
-        run: |
-          # `set +e` EXPLICITLY, and it is load-bearing. GitHub Actions runs
-          # `shell: bash` as `bash --noprofile --norc -eo pipefail {0}`, so `-e`
-          # is ALREADY ON before this script starts and `set -uo pipefail` does
-          # not turn it off. An earlier version of this cell said "NOT `set -e`"
-          # and set only `-uo`, which left `-e` live: the capture below aborted
-          # the step on a non-zero hook and the diagnostic three lines down was
-          # unreachable, so the interesting case exited 3 having printed nothing
-          # about why. It failed toward red rather than toward a false pass, but
-          # it was a comment asserting a mechanism the mechanism contradicted —
-          # in the job whose stated subject is that could-not-check outranks
-          # checked-and-clean. Measured both ways before this line was written.
-          set +e
-          set -uo pipefail
-
-          # Invoked the way `hooks/hooks.json` invokes it — directly, via the
-          # shebang, mode 100755 — rather than as `sh <script>`. Those are not
-          # the same test: `sh <script>` runs under whatever `sh` is on PATH and
-          # would pass on a machine where the shipped invocation cannot execute
-          # at all, which is precisely the Windows question this job is here to
-          # answer.
-          out=$(./hooks/bootstrap-check.sh)
-          code=$?
-          echo "exit=$code"
-          echo "$out"
-
-          # 126 AND 127 ARE COULD-NOT-CHECK, NOT A VERDICT ON THE HOOK, and
-          # separating them is the point of this cell rather than a refinement of
-          # it. The shell returns 126 when a file exists and cannot be executed
-          # and 127 when the interpreter is not found — which is exactly what a
-          # CRLF shebang produces: the kernel looks for `/bin/sh` followed by a
-          # carriage return and reports `bad interpreter`. Folding that into the
-          # check below would emit a definite and FALSE finding, blaming the
-          # hook's advisory contract for a checkout artifact, in the job whose
-          # stated subject is that could-not-check outranks checked-and-clean.
-          # `.gitattributes` pins `*.sh` to `eol=lf` so this should not fire; if
-          # it does, that pin stopped working and the message must say so rather
-          # than sending the reader to the script.
-          if [ "$code" = "126" ] || [ "$code" = "127" ]; then
-            echo "::error::COULD NOT EXECUTE hooks/bootstrap-check.sh (exit $code) -- the hook never ran, so this cell establishes NOTHING about its behaviour. Almost certainly line endings or the exec bit rather than the script: a CRLF shebang makes the kernel look for /bin/sh followed by a carriage return. Check that .gitattributes still pins *.sh to eol=lf and that the file is mode 100755."
-            file hooks/bootstrap-check.sh || true
-            head -c 20 hooks/bootstrap-check.sh | od -c | head -2 || true
-            exit 1
-          fi
-
-          if [ "$code" != "0" ]; then
-            echo "::error::the hook RAN and exited $code. It is advisory and must exit 0 unconditionally -- a hook that fails a session because a dependency is missing is the gate telos/affordance-not-enforcement forbids."
-            exit 1
-          fi
-
-          # A missing interpreter must report could-not-check, never pass. This
-          # is the shape `scripts/mutate.py` exists to stop being reinvented
-          # badly: an absent tool that silently skips its own assertion is the
-          # failure mode this repo keeps recording.
-          command -v python >/dev/null 2>&1 || {
-            echo "::error::python is not on PATH, so the payload could not be validated. Reporting could-not-check rather than passing."
-            exit 1
-          }
-
-          printf '%s' "$out" | python -c '
-          import json, sys
-          d = json.load(sys.stdin)
-          assert list(d) == ["systemMessage"], f"a hook may emit only a systemMessage here; got {list(d)}"
-          m = d["systemMessage"]
-          for want in ("cargo install day", "cargo install kan"):
-              assert want in m, f"the notice must name {want!r}; got {m!r}"
-          print("OK: exits 0, emits only a systemMessage, names both install commands")
-          '
-
-      # THE ACTUAL QUESTION, cell 2: a Windows machine with NO POSIX shell.
-      #
-      # This is the mode the handoffs worry about and the one a default runner
-      # does not represent, so it is invoked the way a shell-less Windows would:
-      # straight through cmd.exe, which is the closest reachable stand-in for a
-      # harness that does not route hook commands through Git Bash.
-      #
-      # This is a gate: the registered, shell-free Node command must remain
-      # reachable through cmd.exe and must never turn missing tools into a
-      # silent success.
-      #
-      # What this still does not establish is how Claude Code dispatches a hook
-      # command on Windows. That is the other side of the interface and belongs
-      # in its docs, not in an inference drawn from this cell.
-      - name: registered bootstrap command works through cmd.exe
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = (cmd /c "node hooks\bootstrap-check.js" 2>&1 | Out-String)
-          $code = $LASTEXITCODE
-          if ($code -ne 0) { throw "registered bootstrap command exited ${code}: $out" }
-          if ([string]::IsNullOrWhiteSpace($out)) { throw "registered bootstrap command was silently successful with tools deliberately absent" }
-          $parsed = $out | ConvertFrom-Json
-          if ([string]::IsNullOrWhiteSpace($parsed.systemMessage)) { throw "bootstrap output has no systemMessage: $out" }
 
   # THE DECLARED MSRV IS ONLY WORTH DECLARING IF SOMETHING CHECKS IT.
   # `rust-version` in Cargo.toml is a promise to consumers: cargo refuses to

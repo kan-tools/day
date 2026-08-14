@@ -50,9 +50,10 @@ fn crate_version() -> String {
 ///
 /// Derived from the README rather than passed in, because a test that is told
 /// which version to expect asserts the tester's memory, not the document.
-fn documented_install_version(krate: &str) -> String {
+fn documented_install_version(path: &str, krate: &str) -> String {
     let needle = format!("cargo install {krate} --version ");
-    let text = readme();
+    let text =
+        std::fs::read_to_string(repo_root().join(path)).expect("install doc should be readable");
     let mut found: Vec<String> = text
         .lines()
         .filter_map(|l| l.trim().strip_prefix(&needle).map(str::to_string))
@@ -67,7 +68,7 @@ fn documented_install_version(krate: &str) -> String {
     assert_eq!(
         found.len(),
         1,
-        "README.md should document exactly one pinned `cargo install {krate}`, \
+        "{path} should document exactly one pinned `cargo install {krate}`, \
          found {found:?} — two pins disagree silently, and a reader takes \
          whichever they scroll to first"
     );
@@ -94,7 +95,19 @@ fn documented_install_version(krate: &str) -> String {
 /// becomes a build failure rather than something to remember.
 #[test]
 fn the_documented_kan_version_is_one_day_was_measured_against() {
-    let pinned = documented_install_version("kan");
+    let pins: Vec<_> = [
+        "README.md",
+        "docs/GETTING_STARTED.md",
+        "skills/install/SKILL.md",
+    ]
+    .map(|path| documented_install_version(path, "kan"))
+    .into_iter()
+    .collect();
+    assert!(
+        pins.windows(2).all(|pair| pair[0] == pair[1]),
+        "install surfaces disagree on the kan pin: {pins:?}"
+    );
+    let pinned = &pins[0];
     let tsv = std::fs::read_to_string(repo_root().join("tests/fixtures/kan-compat.tsv"))
         .expect("kan-compat.tsv should ship");
 
@@ -145,13 +158,36 @@ fn the_documented_kan_version_is_one_day_was_measured_against() {
 /// mechanism people can route around is one that eventually gets routed around.
 #[test]
 fn the_documented_day_version_is_the_current_release() {
-    assert_eq!(
-        documented_install_version("day"),
-        crate_version(),
-        "README.md pins a `cargo install day --version` that is not this crate's \
-         version, so the documented install produces a day older than the docs \
-         beside it"
-    );
+    for path in [
+        "README.md",
+        "docs/GETTING_STARTED.md",
+        "skills/install/SKILL.md",
+    ] {
+        assert_eq!(
+            documented_install_version(path, "day"),
+            crate_version(),
+            "{path} pins a day version that is not this crate's version"
+        );
+    }
+}
+
+#[test]
+fn getting_started_covers_cargo_absence_on_unix_and_native_windows() {
+    let text = std::fs::read_to_string(repo_root().join("docs/GETTING_STARTED.md")).unwrap();
+    for required in [
+        "cargo --version",
+        "macOS",
+        "Linux",
+        "WSL",
+        "native Windows",
+        "rustup-init.exe",
+        "Cargo is required",
+    ] {
+        assert!(
+            text.contains(required),
+            "GETTING_STARTED omits the Cargo-absent platform guidance `{required}`"
+        );
+    }
 }
 
 /// **`## Status` must lead with the current version.**
