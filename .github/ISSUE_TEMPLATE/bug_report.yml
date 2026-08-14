@@ -52,7 +52,7 @@ body:
     attributes:
       label: day version
       description: "`day --version`"
-      placeholder: "day 0.12.1-beta.3"
+      placeholder: "day 0.12.2"
     validations:
       required: true
 

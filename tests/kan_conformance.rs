@@ -602,6 +602,14 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
         return;
     };
     let dir = scratch_repo();
+    let preserve = |name: &str, payload: &str| {
+        if let Ok(root) = std::env::var("DAY_TRIAL_EVIDENCE_DIR") {
+            let root = std::path::Path::new(&root);
+            std::fs::create_dir_all(root).expect("trial evidence directory");
+            std::fs::write(root.join(format!("{name}.json")), payload)
+                .expect("trial evidence should be writable");
+        }
+    };
 
     let kan = |args: &[&str], identity: Option<&Path>| -> String {
         let mut cmd = Command::new(bin);
@@ -632,6 +640,7 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
         (&["status", "--json"][..], "status --json"),
     ] {
         let payload = kan(args, None);
+        preserve(&format!("baseline-{}", label.replace(' ', "-")), &payload);
         let value: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
         assert!(
             value["excluded_by_trust"].is_u64(),
@@ -664,6 +673,7 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
         &["show", "--all", "--json", "--trust", "me"],
         Some(role.as_path()),
     );
+    preserve("fully-withheld-show", &payload);
     let v: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
 
     // premise: something really was withheld, or the assertions below are
@@ -687,6 +697,7 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
         Some(role.as_path()),
     );
     let payload = kan(&["show", "--all", "--json", "--trust", "me"], None);
+    preserve("partially-withheld-show", &payload);
     let v: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
     let entry = v["subjects"]
         .as_array()
@@ -706,6 +717,7 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
     );
 
     let payload = kan(&["status", "--json", "--trust", "me"], None);
+    preserve("partially-withheld-status", &payload);
     let status: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
     assert!(
         status["excluded_by_trust"].as_u64().unwrap_or(0) > 0,

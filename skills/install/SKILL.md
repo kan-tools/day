@@ -37,7 +37,7 @@ and native Windows terminals:
 
 ```text
 cargo install kan --version 0.13.0-beta.1
-cargo install day --version 0.12.1-beta.3
+cargo install day --version 0.12.2
 ```
 
 Ask for approval before running them. Do not omit the versions: current day
