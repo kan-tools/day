@@ -349,6 +349,10 @@ pub struct KanClient {
     /// evidence that a subject missing from this read might be withheld rather
     /// than undeclared, because kan omits such a subject entirely.
     trust_withheld_total: std::cell::Cell<u64>,
+    /// Largest unattributed remainder observed in any single kan envelope.
+    /// Keeping this per snapshot avoids manufacturing certainty by subtracting
+    /// subject maxima accumulated across reads from a total from only one.
+    trust_withheld_unattributed: std::cell::Cell<u64>,
     /// Subjects the bulk read returned an ENTRY for, whether or not that entry
     /// carried visible claims. What `unaccounted` is computed against.
     returned_subjects: std::cell::RefCell<Vec<String>>,
@@ -363,15 +367,19 @@ pub struct KanClient {
 }
 
 impl KanClient {
-    fn merge_withheld_total(&self, count: u64) {
-        self.trust_withheld_total
-            .set(self.trust_withheld_total.get().max(count));
-    }
-
-    fn merge_subject_withheld<I>(&self, entries: I)
+    fn merge_withheld_snapshot<I>(&self, count: u64, entries: I)
     where
         I: IntoIterator<Item = (String, u64)>,
     {
+        self.trust_withheld_total
+            .set(self.trust_withheld_total.get().max(count));
+        let entries: Vec<_> = entries.into_iter().collect();
+        let attributed = entries.iter().map(|(_, count)| *count).sum::<u64>();
+        self.trust_withheld_unattributed.set(
+            self.trust_withheld_unattributed
+                .get()
+                .max(count.saturating_sub(attributed)),
+        );
         let mut known = self.trust_withheld.borrow_mut();
         for (subject, count) in entries.into_iter().filter(|(_, count)| *count > 0) {
             if let Some((_, seen)) = known.iter_mut().find(|(name, _)| name == &subject) {
@@ -402,6 +410,7 @@ impl KanClient {
             unaccounted: std::cell::RefCell::new(Vec::new()),
             trust_withheld: std::cell::RefCell::new(Vec::new()),
             trust_withheld_total: std::cell::Cell::new(0),
+            trust_withheld_unattributed: std::cell::Cell::new(0),
             returned_subjects: std::cell::RefCell::new(Vec::new()),
             workspace_mismatch: std::cell::RefCell::new(None),
         }
@@ -422,6 +431,7 @@ impl KanClient {
             unaccounted: std::cell::RefCell::new(Vec::new()),
             trust_withheld: std::cell::RefCell::new(Vec::new()),
             trust_withheld_total: std::cell::Cell::new(0),
+            trust_withheld_unattributed: std::cell::Cell::new(0),
             returned_subjects: std::cell::RefCell::new(Vec::new()),
         }
     }
@@ -554,6 +564,7 @@ impl KanClient {
         // degrades.
         self.trust_withheld.borrow_mut().clear();
         self.trust_withheld_total.set(0);
+        self.trust_withheld_unattributed.set(0);
         self.returned_subjects.borrow_mut().clear();
     }
 
@@ -668,7 +679,8 @@ impl KanClient {
         // PARTIAL: the entry is present, some claims visible, a count on the
         // entry. This is the dangerous one, because newest-wins means a
         // withheld newest claim promotes a superseded one.
-        self.merge_subject_withheld(
+        self.merge_withheld_snapshot(
+            envelope.excluded_by_trust,
             envelope
                 .subjects
                 .iter()
@@ -679,8 +691,6 @@ impl KanClient {
         // AND from `status --json`, so nothing names it and the accounting
         // guard cannot see it either. The envelope total is the only evidence
         // that any absence in this read is unreliable.
-        self.merge_withheld_total(envelope.excluded_by_trust);
-
         // **The subjects kan RETURNED, taken from the entries rather than from
         // the claims.** The accounting guard's own words are "kan lists
         // `{subject}` but did not return it in the bulk read" — and an entry
@@ -823,8 +833,8 @@ impl KanClient {
         // and taking the larger makes the result independent of which happened
         // first rather than dependent on an ordering nobody would think to
         // preserve.
-        self.merge_withheld_total(envelope.excluded_by_trust);
-        self.merge_subject_withheld(
+        self.merge_withheld_snapshot(
+            envelope.excluded_by_trust,
             envelope
                 .subjects
                 .iter()
@@ -931,13 +941,7 @@ impl KanClient {
     /// named subject. Only this remainder makes an unrelated targeted absence
     /// indeterminate; attributed counts are handled on their own subjects.
     pub fn unattributed_withheld_from_view(&self) -> u64 {
-        let attributed: u64 = self
-            .trust_withheld
-            .borrow()
-            .iter()
-            .map(|(_, count)| *count)
-            .sum();
-        self.claims_withheld_from_view().saturating_sub(attributed)
+        self.trust_withheld_unattributed.get()
     }
 
     /// Appends a narrative claim through kan's own write verb and returns
