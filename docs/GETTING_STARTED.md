@@ -17,6 +17,13 @@ Do not omit the versions. A plain `cargo install day` will not select a
 prerelease. A plain `cargo install kan` can select kan's old stable release,
 which installs successfully but is below day's supported range.
 
+The Cargo commands are the same in macOS, Linux, WSL, PowerShell, and Windows
+Command Prompt. If `cargo --version` fails, install Rust from
+[rustup.rs](https://rustup.rs/) first: use the shell installer on macOS, Linux,
+or WSL, and `rustup-init.exe` on native Windows. Do not switch a native Windows
+installation into WSL merely to install day. Matching prebuilt day and kan
+artifacts may be used when a release provides both; otherwise Cargo is required.
+
 Verify both binaries before integrating a harness:
 
 ```bash

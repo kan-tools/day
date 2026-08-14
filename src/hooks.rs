@@ -769,7 +769,7 @@ pub fn session_notice(client: &KanClient, root: &Path) -> String {
 /// direction that is easy to miss because the text sounds harmless.
 ///
 /// The absent-binary case is not day's to report at all: a `day` that cannot be
-/// found cannot say so. `hooks/bootstrap-check.sh` covers it, which is why that
+/// found cannot say so. The portable install skill covers recovery, which is why that
 /// one script is exempt from "every SessionStart command is a `day hook`".
 ///
 /// Wording comes from [`compat::render`] rather than being restated, so the
