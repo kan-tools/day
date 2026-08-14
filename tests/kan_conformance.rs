@@ -678,4 +678,19 @@ fn conformance_trust_withholding_shapes_are_what_day_keys_on() {
          `PartiallyWithheld` on, and a withheld NEWER claim is what makes it \
          matter, since day resolves newest-wins: {payload}"
     );
+
+    let payload = kan(&["status", "--json", "--trust", "me"], None);
+    let status: serde_json::Value = serde_json::from_str(&payload).expect("kan emits JSON");
+    assert!(
+        status["excluded_by_trust"].as_u64().unwrap_or(0) > 0,
+        "status --json must carry the log-wide withheld count: {payload}"
+    );
+    let entry = status["subjects"]
+        .as_array()
+        .and_then(|subjects| subjects.iter().find(|entry| entry["subject"] == "shared"))
+        .unwrap_or_else(|| panic!("status must name the partially visible subject: {payload}"));
+    assert!(
+        entry["excluded_by_trust"].as_u64().unwrap_or(0) > 0,
+        "status --json must attribute withheld claims to the partial subject: {payload}"
+    );
 }

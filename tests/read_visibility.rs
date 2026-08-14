@@ -63,6 +63,35 @@ fn real_reader_distinguishes_absent_partial_and_unattributed_withholding() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn withholding_merge_is_order_independent_and_snapshot_consistent() {
+    // The bulk snapshot attributes all three withheld claims. The status
+    // snapshot sees a larger total but attributes only one, leaving four whose
+    // subject is unknown. Maxima accumulated across snapshots must not be
+    // subtracted from one another.
+    let show = r#"{"v":1,"subjects":[{"v":1,"subject":"schema/a","claims":[],"excluded_by_trust":3}],"excluded_by_trust":3}"#;
+    let status = r#"{"v":1,"subjects":[{"subject":"schema/a","state":"Unclassified","excluded_by_trust":1}],"excluded_by_trust":5}"#;
+
+    let (_dir, show_first) = client(show, status);
+    // `show` drives the complete reader sequence itself.
+    assert!(matches!(
+        show_first.show("schema/missing").unwrap(),
+        Read::Indeterminate { log_wide: 4 }
+    ));
+    assert_eq!(show_first.claims_withheld_from_view(), 5);
+    assert_eq!(show_first.unattributed_withheld_from_view(), 4);
+
+    let (_dir, status_first) = client(show, status);
+    status_first.subjects().unwrap();
+    assert!(matches!(
+        status_first.show("schema/missing").unwrap(),
+        Read::Indeterminate { log_wide: 4 }
+    ));
+    assert_eq!(status_first.claims_withheld_from_view(), 5);
+    assert_eq!(status_first.unattributed_withheld_from_view(), 4);
+}
+
 #[test]
 fn migrated_read_site_census_is_pinned() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
