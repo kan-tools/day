@@ -11,7 +11,7 @@
   "cites": [],
   "rev": "223mt33hjfkur",
   "seq": 0,
-  "of": 31,
+  "of": 53,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkIWvXC3w=="
 }
@@ -34,7 +34,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt33hjsnxb",
   "seq": 1,
-  "of": 31,
+  "of": 53,
   "text_len": 659,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiDrel7Tl++W8/lObVDn87zTaJD6AQ8ZSY6MZbYHOS70mWZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDVkNmMwY2M4Zjg3MTA5ZTI1MWI5MTNiYzdmMmFhOGQzZTdmY2JlM2Zpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZCFr8Tzg="
 }
@@ -55,7 +55,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt33hk3tn5",
   "seq": 2,
-  "of": 31,
+  "of": 53,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXgiUmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljc2xzdWJqZWN0X2tpbmRkSWRlYWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbAOX4"
 }
 ---
@@ -75,7 +75,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt33hkrve2",
   "seq": 3,
-  "of": 31,
+  "of": 53,
   "text_len": 177,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbC+zO"
 }
@@ -98,7 +98,7 @@ RQ-1: The cycle ships both the complete workflow-visibility set—stream view, g
   ],
   "rev": "223mt33hl6t36",
   "seq": 4,
-  "of": 31,
+  "of": 53,
   "text_len": 111,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbEmOt"
 }
@@ -121,7 +121,7 @@ RQ-2: #196 and #152 are release blockers and land before the new recording affor
   ],
   "rev": "223mt33hllqag",
   "seq": 5,
-  "of": 31,
+  "of": 53,
   "text_len": 100,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbGNhV"
 }
@@ -144,7 +144,7 @@ RQ-3: Success requires a real-cycle dogfood and later reconstruction, not featur
   ],
   "rev": "223mt33hlyo75",
   "seq": 6,
-  "of": 31,
+  "of": 53,
   "text_len": 191,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbH1Ar"
 }
@@ -167,7 +167,7 @@ RQ-4: `/askme` is a general facility for convenient semi-structured information 
   ],
   "rev": "223mt33hmfm6r",
   "seq": 7,
-  "of": 31,
+  "of": 53,
   "text_len": 261,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbJcgd"
 }
@@ -190,7 +190,7 @@ RQ-5: Trigger-scoped practice injection (#198) and the design-integrity and voca
   ],
   "rev": "223mt3eidzgkh",
   "seq": 8,
-  "of": 31,
+  "of": 53,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg63pe05fvlvP5Tm1Q5/O802iQ+gEPGUmOjGW2Bzku9JlmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQqcn7GZ"
 }
@@ -214,7 +214,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt3eiefkye",
   "seq": 9,
-  "of": 31,
+  "of": 53,
   "text_len": 659,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiAKVSQtVlecO39p3DEYghO71WCxdBhONfkB+/CjO8Ejx9gqWCUAAXESIAaNnX6IDKSmWaCJl2T+oz6FIyAF3cWaxmmkmp0nDoshZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkKnKXDWw=="
 }
@@ -235,7 +235,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt3eieoimu",
   "seq": 10,
-  "of": 31,
+  "of": 53,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXgiUmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljc2xzdWJqZWN0X2tpbmRkSWRlYWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQqcqjnr"
 }
 ---
@@ -255,7 +255,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt3emmel4y",
   "seq": 11,
-  "of": 31,
+  "of": 53,
   "text_len": 23162,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiCq16tomK5GUG2txO1t9z+XcQbAUsiZuR++OtOYLRw5+mZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDVkNmMwY2M4Zjg3MTA5ZTI1MWI5MTNiYzdmMmFhOGQzZTdmY2JlM2Zpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZCqUlQ+I="
 }
@@ -711,7 +711,7 @@ None.
   ],
   "rev": "223mt3enkbclb",
   "seq": 12,
-  "of": 31,
+  "of": 53,
   "text_len": 338,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg9QlgWwb7G87rxSKNqh7EuqJGxgw1jcsCb41B9PYvcD5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQqnA6G4"
 }
@@ -734,7 +734,7 @@ The v0.13 roadmap source of truth is the GitHub milestone plus day/kan claims, n
   ],
   "rev": "223mt3lpdj32y",
   "seq": 13,
-  "of": 31,
+  "of": 53,
   "text_len": 338,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg9QlgWwb7G87rxSKNqh7EuqJGxgw1jcsCb41B9PYvcD5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxql4Ou"
 }
@@ -757,7 +757,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — The roadmap is pointe
   ],
   "rev": "223mt3lq2kcst",
   "seq": 14,
-  "of": 31,
+  "of": 53,
   "text_len": 503,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsCCKm"
 }
@@ -780,7 +780,7 @@ F1 BLOCKING — The kan/milestone-only roadmap is not a first-class design-doc s
   ],
   "rev": "223mt3lq2wfjg",
   "seq": 15,
-  "of": 31,
+  "of": 53,
   "text_len": 472,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsDi18"
 }
@@ -803,7 +803,7 @@ F2 BLOCKING — The exact-trialed-commit release boundary conflicts with scripts
   ],
   "rev": "223mt3lq3cmu3",
   "seq": 16,
-  "of": 31,
+  "of": 53,
   "text_len": 449,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsFErO"
 }
@@ -826,7 +826,7 @@ F3 BLOCKING — The telos requires a fresh session to reconstruct what /askme ac
   ],
   "rev": "223mt3lq3oy35",
   "seq": 17,
-  "of": 31,
+  "of": 53,
   "text_len": 441,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsGney"
 }
@@ -849,7 +849,7 @@ F4 BLOCKING — AC-3/4 and AC-7/8/9 require behavioral execution of Markdown ski
   ],
   "rev": "223mt3lq437pe",
   "seq": 18,
-  "of": 31,
+  "of": 53,
   "text_len": 369,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsIJY6"
 }
@@ -872,7 +872,7 @@ F5 BLOCKING — AC-2 contradicts the supported kan range. tests/fixtures/kan-com
   ],
   "rev": "223mt3lq4higv",
   "seq": 19,
-  "of": 31,
+  "of": 53,
   "text_len": 367,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsJrkt"
 }
@@ -895,7 +895,7 @@ F6 BLOCKING — REQ-3 promises every thread and newest timestamp although src/ka
   ],
   "rev": "223mt3lq4turq",
   "seq": 20,
-  "of": 31,
+  "of": 53,
   "text_len": 338,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsLOqI"
 }
@@ -918,7 +918,7 @@ F7 BLOCKING — REQ-8 asks who classified an intervention while AC-10 only prese
   ],
   "rev": "223mt3lq5ad7s",
   "seq": 21,
-  "of": 31,
+  "of": 53,
   "text_len": 420,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsMyRI"
 }
@@ -939,7 +939,7 @@ F8 BLOCKING — Issue and release-gate scope are incoherent. Issue #193 still sp
   "cites": [],
   "rev": "223mt3lqct6nu",
   "seq": 22,
-  "of": 31,
+  "of": 53,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkMbIySCw=="
 }
 ---
@@ -959,7 +959,7 @@ F8 BLOCKING — Issue and release-gate scope are incoherent. Issue #193 still sp
   ],
   "rev": "223mt3th2qyg7",
   "seq": 23,
-  "of": 31,
+  "of": 53,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgClUkLVZXnDt/adwxGIITu9VgsXQYTjX5AfvwozvBI8dmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aC3kY"
 }
@@ -983,7 +983,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt3th35exf",
   "seq": 24,
-  "of": 31,
+  "of": 53,
   "text_len": 731,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDshdaN5rV4tyVgYGUZVlyecDSQcCjyRrcUmFe3WVH7xtgqWCUAAXESIKrXq2iYrkZQba3E7W33P5dxBsBSyJm5H74605gtHDn6ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkOWhGrPA=="
 }
@@ -1004,7 +1004,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt3th3giux",
   "seq": 25,
-  "of": 31,
+  "of": 53,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCAxbHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDVkNmMwY2M4Zjg3MTA5ZTI1MWI5MTNiYzdmMmFhOGQzZTdmY2JlM2Zpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZDloWOvA="
 }
 ---
@@ -1024,7 +1024,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt3th42h25",
   "seq": 26,
-  "of": 31,
+  "of": 53,
   "text_len": 141,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwIMFzbcVltOtFlE4Mf08IrF0X0nEArDiGPC+ap44jTNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aIDOI"
 }
@@ -1047,7 +1047,7 @@ RQ-6: Stream listing promises visible live threads only and exposes unknown time
   ],
   "rev": "223mt3th4gqlq",
   "seq": 27,
-  "of": 31,
+  "of": 53,
   "text_len": 171,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwIMFzbcVltOtFlE4Mf08IrF0X0nEArDiGPC+ap44jTNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aJlnI"
 }
@@ -1070,7 +1070,7 @@ RQ-7: The claim signer is the intervention classifier. Human direction reported 
   ],
   "rev": "223mt3th4syej",
   "seq": 28,
-  "of": 31,
+  "of": 53,
   "text_len": 214,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwIMFzbcVltOtFlE4Mf08IrF0X0nEArDiGPC+ap44jTNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aLHjf"
 }
@@ -1094,7 +1094,7 @@ RQ-8: #193's declarable prompts remain #194; v0.13 ships fixed prompting and exp
   ],
   "rev": "223mt3tiijx44",
   "seq": 29,
-  "of": 31,
+  "of": 53,
   "text_len": 19515,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDAgwXNtxWW060WUTgx/TwisXRfScQCsOIY8L5qnjiNM9gqWCUAAXESIBOxDyZjly5pV/0a3KXuawrN+V/zys04ykMP6+SozpW4ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoYTZkNDBmY2UyMTQwMDBhYmU0MWExMDgwMzVjYzZmMjM3MDUyNGQzMqFmRmlsZUF0gngkLmRlc2lnbi92MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzLm1keChhNmQ0MGZjZTIxNDAwMGFiZTQxYTEwODAzNWNjNmYyMzcwNTI0ZDMyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5c5/PG"
 }
@@ -1469,7 +1469,950 @@ None.
   "cites": [],
   "rev": "223mt3tin7e47",
   "seq": 30,
-  "of": 31,
+  "of": 53,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChhNmQ0MGZjZTIxNDAwMGFiZTQxYTEwODAzNWNjNmYyMzcwNTI0ZDMyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5dMqfX"
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy",
+  "sig": "fa523092949b36dd3e1857391b92db2836896877ce20cf2cd8956c7ef2bd9e6d7e199d5d93bb414576ee3efb7bbddf0ce8d48b1f97898a20329d7a5f81beacd3",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreigvgfhlx6ev37o4o3syesmsb45qxalfy5k7z3vczxcm7hvf6zhb4a"
+  ],
+  "rev": "223mt3uumkwgk",
+  "seq": 31,
+  "of": 53,
+  "text_len": 354,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg1TFOu/iV393HblgkmSDzsLgWXHVfzuos3Ez56l9k4eBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ61KG6o"
+}
+---
+
+adversarial review of v0.13-workflow-ergonomics: BLOCK — Correction round 1 materially improves design identity, provenance, and RFC1 sequencing but remains unfalsifiable: its live trial witness is prefix-only, its behavioral trial precedes the final candidate, and publication, issue, workflow, read-surface, and admission contracts remain incomplete.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreicfzosprhmptdyuiw5fo2fti7zp3c4edlispgo3cmcpl7wr363zsm",
+  "sig": "62988c2a7be0ed3efe12696025e79391b6ee09120393eb2d4952ee4fc49270f703b875e978c22a42b64a128f574644cb1cb9af2ee68620fa108e377e22dfd05c",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uv7nmd4",
+  "seq": 32,
+  "of": 53,
+  "text_len": 453,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62Wci2"
+}
+---
+
+ROUND-1 F1 BLOCKING — AC-12/15/16 require verified behavioral and reconstruction evidence, but schema/witness/workflow-reconstruction-trial accepts only a Result subject plus starts_with marker; src/probe.rs string-matches the prefix and cannot verify success, candidate SHA, scenarios, controls, or artifact retention. Define a concrete runner, immutable artifact schema/address, verifier, and witness probe that fails on false or incomplete bundles.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreigfyfvn5duusxph6sr7nciiey5tlj6npz5sqdmt2vne6izneoxmfe",
+  "sig": "24ea66536d179d4afef3bc62e258f4a3d76263b696330a3b5ef48674a240e2ec032c1f19a72e2db94a178022e4615b6a39d763f410d711a1eb8606085bb52cfb",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uva2mly",
+  "seq": 33,
+  "of": 53,
+  "text_len": 309,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62YEnT"
+}
+---
+
+ROUND-1 F2 BLOCKING — REQ-12 requires every behavioral and reconstruction trial against the final prepared candidate, but Delivery order step 9 runs askme trials before step 10 prepares that candidate. Prepare first, then run every release-significant trial at that exact SHA, then publish without mutation.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiae3yfgwdjh4buuj5yneogto5bgnp6dogppzamja4qtyh3573cwga",
+  "sig": "0531314ac141aa2a88ad9d045cc1ffd4edb4d51fd5676b47688a436185ab6f522d14dc42dc06d6832943d7f56175f8268891bf34e6bece705d5ce34d42752060",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uvahnht",
+  "seq": 34,
+  "of": 53,
+  "text_len": 320,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62Zs1O"
+}
+---
+
+ROUND-1 F3 BLOCKING — REQ-16 and AC-16 make the intervention CID optional, while the live workflow-reconstruction witness rationale requires a genuine intervention and says a missing one leaves the witness absent. Continue real work until one occurs; never manufacture it, but do not permit a passing trial without it.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreigemhpbqssrtg3s3qj5cmizro6rnsxj6kuu47dwqvvroduok3eigq",
+  "sig": "6981357a8dd1c1d0c110833dfec73fa295a01bc515b317bdb27e199713bfde9f1be0b206d6ab42808dbe834f9c8b9e08fc3ea1bb0c17501742a1f344e2a1e134",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uvauurv",
+  "seq": 35,
+  "of": 53,
+  "text_len": 436,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62bWqR"
+}
+---
+
+ROUND-1 F4 BLOCKING — Plan-to-mirror bytes verify locally, but origin has no correction branch; milestone 15 still names the superseded Plan; and corrected RQ-1..RQ-5 reuse stable IDs already attached to different Decision texts, so day design record skipped them. Use new resolution IDs or explicit supersessions, update the milestone pointer, and make the published branch remotely retrievable before claiming fresh-clone authority.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreicl5zkrenrzvcoj75nbrmzeou22j3fbgithvyzvdtzfedkt4yf5lm",
+  "sig": "2fe67879c70c30c186d7b7427bd211dd4157b5c0c06107d5b574d7007ec8e1290871a10a842f08667c1d548352e116b97efffce23d905ba4429902008b143aab",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uvbbtca",
+  "seq": 36,
+  "of": 53,
+  "text_len": 381,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62c+Sb"
+}
+---
+
+ROUND-1 F5 BLOCKING — REQ-14 forbids an unspecified check set, but no authoritative release-manifest path/schema enumerates workflow names and required conclusions. Current issue bodies #196/#204/#193/#195 still contradict the correction Plan and milestone 15 carries 19 open issues plus the old Plan. Reconcile issue dispositions and define a fail-closed candidate-SHA manifest.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiaacnqkti6ywnn6i2r3trbk24ewlikh35phueeqgrk66swqozfzqm",
+  "sig": "72483e4e469e322fad88daf1a43f27fb1e89ec7dba45ca7d58cfa262497dbcfa4420c35c49685222fbf954a5c8a74826f1a576cd7d654028f9504c754c1a2796",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uvboxtv",
+  "seq": 37,
+  "of": 53,
+  "text_len": 392,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62enbP"
+}
+---
+
+ROUND-1 F6 BLOCKING — Stream honest-read design omits kan RFC1 published_read_error_count/published_read_errors, allowing damaged published claims to disappear while inventory looks complete. It also specifies only CLI and skills although src/mcp.rs and tests/mcp_server.rs require one-surface parity. Add published-read failures, visible-count wording, and MCP reuse of the same pure read.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreifk37k2wbc3yq5poqlnzcfn67qzo5o6amdipybrq5khen5qhsdo2i",
+  "sig": "3dd2aa6885cf17577d6da7ab95a4ed79b7ee5546a707dcd04ebcf5beb4efc00305a3061d796157e96bbc5f882d63bc18c71a18a3d9160474309181233414a8ad",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt3uvc436o",
+  "seq": 38,
+  "of": 53,
+  "text_len": 396,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62gQQt"
+}
+---
+
+ROUND-1 F7 BLOCKING — RFC1 concepts are separated correctly, but AC-3 merely reports validity, admission, and view inclusion; it does not require both human and session-agent claims to be valid, admitted through an explicit capability path, and included under a named view. Specify capability provisioning, human signing, positive outcomes, and failure rendering at src/record.rs orchestration.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreigsmx5y4dgrmixjpcvweytfb3azryhh3qflds32f3s46pqwksx7lm",
+  "sig": "7d8f8516e6ae39aa65d31b020b1cf5ca770ecf4ca55cf8c09729ec24f04bfddf32f1c491e0c59b66a150bc0a2bb84ec129edfcd1bd182d84038cb834f1f39b52",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "status",
+  "cites": [],
+  "rev": "223mt3uvcjbrv",
+  "seq": 39,
+  "of": 53,
+  "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoN2E2NjZhYjQ5NzE5MTE3NzNjMjM5M2ZlOTVhZDUwYTkwZWM5YjcxYWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkOtoeekQ=="
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreig5ocuphvwkuzq6a2bfugw2tnffbt6yzj4d265hzxkn7ekd35feji",
+  "sig": "b1e2862c5e765fdf6139b2057f3bf30ee6d8d1f22d8bb554987db39797c58daa2f45fff8acb3dd6ebd65b06d73613c463a18777455f450265cf0539672047233",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreihmqxli3zvvpc3skydamumvmxe6oa2ja4bi6jdlofeyk63vsup3yy"
+  ],
+  "rev": "223mt5ez6swyo",
+  "seq": 40,
+  "of": 53,
+  "text_len": 201,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg7IXWjea1eLclYGBlGVZcnnA0kHAo8ka3FJhXt1lR+8ZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+THKc"
+}
+---
+
+design doc .design/v0.13-workflow-ergonomics.md checked against the live design-doc schema: validation: 13 check(s), 0 failed, 4 warning(s), 0 unchecked, 0 open question(s) [doc 25831:afe0e0fee509b289]
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq",
+  "sig": "1075f9ad2e42967d8f3d1c9d6c8db1b77d15a692e97c3ab9cc4f68ba8beb8b8e0afa990aab1c0aebe0bfde8b2e66d127cced3212e3ca89f863524f2b46eaee38",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "plan",
+  "cites": [
+    "bafyreig5ocuphvwkuzq6a2bfugw2tnffbt6yzj4d265hzxkn7ekd35feji",
+    "bafyreigaqmc43nyvs3j22fsrhay72pbcwf2f6soeakyoeghqxzvj4oengm"
+  ],
+  "rev": "223mt5ez7act2",
+  "seq": 41,
+  "of": 53,
+  "text_len": 731,
+  "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDdcKjz1sqmYeBoJaGtqbSlDP2Mp4PXunzdTfkUPfSkStgqWCUAAXESIMCDBc23FZbTrRZRODH9PCKxdF9JxAKw4hjwvmqeOI0zZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoN2E2NjZhYjQ5NzE5MTE3NzNjMjM5M2ZlOTVhZDUwYTkwZWM5YjcxYWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkavlMirA=="
+}
+---
+
+v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13` makes active work and meaningful human direction reconstructable from published claims without turning day into a task tracker or transcript. The release first adopts claim-addressed design artifacts and kan RFC1 authorship, then repairs handoff scope, ships an honest stream view, adds general `/askme` with explicit acquired-input recording, and records interventions without conflating authentic speech, repository admission, or consumer trust. A preregistered real-work reconstruction trial runs against the exact commit that is subsequently tagged and published. [validation: 13 check(s), 0 failed, 4 warning(s), 0 unchecked, 0 open question(s)]
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreice3ubtzfw2ynnzjgeosa66bjua6j4oqhunsafnf5npafazkjprje",
+  "sig": "d691daae77b320f301bf61478cbabb2b03400def7ed04edfe029ad8c169f32943150233a185578e756779967d04dcaa35dc919c10e3594888c7ae00ee02a174b",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "subject",
+  "cites": [],
+  "rev": "223mt5ez7jld6",
+  "seq": 42,
+  "of": 53,
+  "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCAxbHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDdhNjY2YWI0OTcxOTExNzczYzIzOTNmZTk1YWQ1MGE5MGVjOWI3MWFpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZGr5XxLY="
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreielgp6i6oykke3nzadt6zcwa5jgq3fwaqasqxa7frrppxmpney3oq",
+  "sig": "49501bdd6dfcce59462ba6539dfd58cd37c73dcd5fb1f354f636a31131a2f5752ade237391bec91c242f7716b29aa1cc89e1f1e5c5f43dc445a176233713a557",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5eza7aoz",
+  "seq": 43,
+  "of": 53,
+  "text_len": 227,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+Ypoz"
+}
+---
+
+RQ-9: Supersedes the earlier RQ-1 wording: designs become published kan Plan claims. Until official kan claim-addressed content exists, each authoritative Plan points to a committed byte-verified `.design` compatibility mirror.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreifsycx5xvdzqqax5cvnng45s6mso5jcymqxqmttn5xhddrx6e6c5e",
+  "sig": "cd4478e5eae8ce13e109e2a31dd0559a5cc89b53aa7a7b9157513d1da70a42c456c22eb26b7997fe9197184d9222396e6c17af8a60c4fa8f256a55a8af660cdb",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezamgpv",
+  "seq": 44,
+  "of": 53,
+  "text_len": 199,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+aTJJ"
+}
+---
+
+RQ-10: Supersedes the earlier RQ-2 wording: releases use prepare, trial, and publish phases; the published tag names the exact trialed candidate commit and trial Results remain external kan evidence.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreig7zak7w4k4ihzvf7ig6io5go5swoqnr3xrin7lusw3zig4iea7vm",
+  "sig": "ca76e43e820ddbddc98dbb907bdbc95a32b14e12e2cb314ad54c285565eef905103b0c9b4319d0258f729fe396cc1617a00f7eecbfff75678bd91060cab51d89",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezazmkf",
+  "seq": 45,
+  "of": 53,
+  "text_len": 171,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+b8mX"
+}
+---
+
+RQ-11: Supersedes the earlier RQ-3 wording: `/askme` records nothing automatically. An explicit `day-acquired-input` Observation carries its durable effect when requested.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreieaw54k2cortdzupznm5vvxwjiyjpvyw6zlk57qipstydevhjsnhe",
+  "sig": "d6619459e2c0d89f0ae1c53b935e1ca017a57a57e1de96c693f5054f392b237c26ecc874856ae7334230dec34cbf11529829118b79eda789a9e3ed1f4a96e101",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezbgsr5",
+  "seq": 46,
+  "of": 53,
+  "text_len": 165,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+dmJ3"
+}
+---
+
+RQ-12: Supersedes the earlier RQ-4 wording: deterministic tests cover executable contracts; preregistered real harness trials cover adaptive conversational behavior.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreidbka7fpxx2bxl7wkyvivj7dhuem6rltj4mmtm4cntllctvtjbbra",
+  "sig": "85f5315102a098c6191ceaa3cb148471605bd39335d9e16de0207ea7e23798a91d8404397868f61b36744b972b519c01cc6bb9af95af5a66d53cc80a8855f0e7",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezbtwkf",
+  "seq": 47,
+  "of": 53,
+  "text_len": 183,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+fPGf"
+}
+---
+
+RQ-13: Supersedes the earlier RQ-5 wording: #196 targets accepted kan RFC1 and waits for its implementation. day does not standardize the legacy role registry as its authorship model.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiasd5guk2i5lnxo3cb643mxrakalv6twhdor5lpb5tp56xkvvbeyq",
+  "sig": "38fe615c7c7847e23e2a6a2c3b42607119db250a3f0de0f4a32dd54518bd16d618244b31c359c190bb32127ff060b5a0db94682bf789427f8db1ae36a5ea14c6",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezcbax2",
+  "seq": 48,
+  "of": 53,
+  "text_len": 188,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+g5s1"
+}
+---
+
+RQ-14: Supersedes the correction-round RQ-6 wording: stream listing promises visible live threads only and exposes unknown timestamps, withheld claims, and incomplete inventory explicitly.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreift2bcwgg447icfqkbiv6yyftm5knvt2yjtvxrumykgecswxnobbe",
+  "sig": "3f54e64c72a3dd29fda5e57a3d37c45b816541e256841d0e9bba3517c3eddab704ff971a8594a78cf17ac20b5d06acd37a8d31eb94bcea9342c5fe968ce9b727",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezcoo2s",
+  "seq": 49,
+  "of": 53,
+  "text_len": 218,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+ik+l"
+}
+---
+
+RQ-15: Supersedes the correction-round RQ-7 wording: the claim signer is the intervention classifier. Human direction reported by an agent remains agent-authored unless separately authenticated human material is cited.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreie2xjaqwnpge3lvgpijm7aeyitjv34mtkbofqa2lnaybdbqyio5ee",
+  "sig": "a7c05ffab15f715d48ac87b24f98a6d3ea8be7615e62c743148ed98683e7506f7a4b07feafbd9fb21468e33db453d148359c2fafa90156872b6693bbae5cebd4",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq"
+  ],
+  "rev": "223mt5ezd3ypk",
+  "seq": 50,
+  "of": 53,
+  "text_len": 261,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+kPpE"
+}
+---
+
+RQ-16: Supersedes the correction-round RQ-8 wording: #193's declarable prompts remain #194; v0.13 ships fixed prompting and explicit acquired-input recording. Initial intervention kinds are fixed; project-additive vocabulary waits for the shared declared layer.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiadnh5jip6qzt3z5kg4ja247csuzkjczcjricjsexx42xako7ho7q",
+  "sig": "08b26b159fbdca2017f378e070638d9f3846293f57c0e2c6c57068cc3db5f2ac4c5151b0af5a1e4a44f101f2637a10ed83673d8aa7b8e9562bb9e38845698e4f",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "plan",
+  "cites": [
+    "bafyreibsng4rgxqt235xr3bgr677anagqymlzxbdw6ewpq2vjpsbwphhtq",
+    "bafyreie4m2hm743vjbr5vso42l3lhqyxbk5r34svqxup3l3ffdb7dkkvwy"
+  ],
+  "rev": "223mt5f24euvf",
+  "seq": 51,
+  "of": 53,
+  "text_len": 25831,
+  "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiAyabkTXhPW+3jsJo+/8DQGhhi83CO3iWfDVUvkGzznnNgqWCUAAXESIJxmjs/zdUhj2snc0vazwxcKux3yVYXo/a9lKMPxqVW2ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoYTU1YjIwOThiMjdjNGRmM2Q2YjI3MGQ1MmIxYjM2Mzk3MmU3ZjJlMKFmRmlsZUF0gngkLmRlc2lnbi92MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzLm1keChhNTViMjA5OGIyN2M0ZGYzZDZiMjcwZDUyYjFiMzYzOTcyZTdmMmUwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRrAJWrv"
+}
+---
+
+# Release: v0.13 workflow ergonomics, correction round 1
+
+## Summary
+
+`v0.13` makes active work and meaningful human direction reconstructable from
+published claims without turning day into a task tracker or transcript. The
+release first adopts claim-addressed design artifacts and kan RFC1 authorship,
+then repairs handoff scope, ships an honest stream view, adds general `/askme`
+with explicit acquired-input recording, and records interventions without
+conflating authentic speech, repository admission, or consumer trust. A
+preregistered real-work reconstruction trial runs against the exact commit that
+is subsequently tagged and published.
+
+This work serves `telos/legible-process`, `telos/honest-reads`,
+`telos/affordance-not-enforcement`, and `telos/v1.0`. Its release target remains
+`telos/v0.13-workflow-ergonomics`, requiring both the scoped `v0.13*`
+`published-artifact` and `workflow-reconstruction-trial` witnesses.
+
+## Requirements
+
+- REQ-1: A v0.13 design is authoritative as a published kan `Plan` claim whose
+  artifact address names an exact committed `.design/<slug>.md` mirror. The
+  mirror supplies content to current validation, status, review, and git
+  history; the Plan CID supplies identity, authority, and unambiguous review
+  selection until kan's official claim-addressed content flow replaces the
+  compatibility mirror.
+
+- REQ-2: The v0.13 roadmap subject must publish through `kan publish` into the
+  tracked `.claims/` tree. A reviewer given its Plan CID must recover the exact
+  subject, artifact address, commit anchor, and byte-identical mirror without
+  inferring the newest unrelated `.design` file.
+
+- REQ-3: #196 must target kan RFC1 rather than legacy repository roles. Agent
+  exploration and Plans are authentic speech of a disposable session-agent
+  principal; human Decisions are first-hand only when signed by a verification
+  method controlled by the human principal. Repository capability permits
+  reach but never changes who spoke, and view trust remains a separate read
+  result.
+
+- REQ-4: RFC1-capable kan is a hard implementation prerequisite for #196. day
+  must neither raise its compatibility floor merely to standardize the
+  superseded `identity role add` surface nor ship disclosure as though it fixed
+  actual authorship. Existing legacy claims remain readable under kan's
+  compatibility projection.
+
+- REQ-5: `/handoff` must record immutable coordinates for every time-relative
+  verification: commit SHA for local suite results, explicit base and head for
+  range censuses, and CI provider run identifier plus head SHA. `/wakeup`
+  rechecks that scope; legacy unscoped measurements remain readable but are
+  `UNCHECKABLE` rather than silently evaluated against the current tree (#152).
+
+- REQ-6: `day stream list` must derive every visible live
+  `agents/handoff/*` subject from one bulk kan read and report its name, live
+  claim count, bounded preview, and newest timestamp when known (#204). If
+  claims are withheld or unaccounted, or timestamps are absent, output must
+  state that the inventory or recency is incomplete and must not say “every,”
+  “newest,” or “stale” beyond what the view establishes. Kan
+  `published_read_error_count` and `published_read_errors` are completeness
+  inputs alongside withheld and unaccounted state; a visible row count must be
+  labelled visible rather than total whenever any narrowing is present.
+
+- REQ-7: `skills/handoff/SKILL.md` and `skills/wakeup/SKILL.md` must call the
+  shared stream verb for list operations. Neither skill may retain an
+  independent prose implementation of the fold or infer process position,
+  worktree, or branch state for another stream. The same pure stream report
+  must back CLI and MCP reads; shell availability cannot determine whether an
+  agent can inspect streams.
+
+- REQ-8: `/askme` is a general, non-atom driver affordance for adaptive
+  one-question-at-a-time acquisition of semi-structured human input (#193).
+  It establishes a topic, gathers available context, distinguishes supplied
+  facts, decisions, and unresolved items, permits skip and stop, and writes no
+  claim merely because a conversation occurred. Declarable prompts remain
+  deferred to #194.
+
+- REQ-9: After `/askme`, an explicit opt-in recording action may append an
+  ordinary Observation carrying a `day-acquired-input` block. It must identify
+  the work subject, topic, providing principal when authenticated or state that
+  provenance is reported, recording author, facts, decisions, unresolved
+  items, material effect, and cited basis. The skill summarizes and asks; it
+  never treats silence or completion as consent to record.
+
+- REQ-10: Intervention recording remains explicitly invoked and
+  non-exhaustive (#195). The Observation author is the principal that actually
+  classifies and records the event. An agent reporting human direction records
+  agent-authored reported provenance unless separately authenticated human
+  input can be cited; it must not certify a `classified_by` principal merely
+  from prose. Reads expose the signer and reported or authenticated source
+  without collapsing validity, repository admission, or view trust.
+
+- REQ-11: Stream, `/askme`, acquired-input, and intervention semantics must be
+  harness-agnostic. Deterministic tests cover parsing, packaging, prompt
+  invariants, explicit write boundaries, log non-mutation, and serialization;
+  preregistered real-harness protocols cover adaptive conversation behavior.
+  Static keyword checks must not claim to test model behavior. Raw trial
+  bundles are committed to the remote `evidence/v0.13` branch; their immutable
+  commit, manifest path, file digests, candidate SHA, and protocol digest are
+  named by the signed Result.
+
+- REQ-12: Release preparation and publication must be separate operations.
+  Preparation performs version and documentation changes, captures migration
+  and block-corpus rows, runs verification, and commits the final candidate.
+  After preregistration, all behavioral and reconstruction trials run against
+  that exact SHA. Publication re-verifies immutable evidence and tags that SHA
+  without modifying the tree.
+
+- REQ-13: The release boundary consists of claim-addressed design support,
+  RFC1 authorship (#196), immutable handoffs (#152), honest streams (#204),
+  general `/askme` plus acquired-input recording (#193), and interventions
+  (#195), each as a separately reviewed disposition. #193 must record that its
+  original declarable/auto-recording proposal was split to #194 and the
+  acquired-input convention.
+
+- REQ-14: Release gating must fail closed on the exact required issue
+  dispositions and exact required workflow runs for the prepared candidate
+  SHA. A closed issue, a green run for another SHA, an unreadable GitHub
+  response, or an unspecified check set cannot satisfy the gate. The sole
+  source is `.release/v0.13.json`, which enumerates issues 196, 152, 204, 193,
+  and 195 and workflows `.github/workflows/ci.yml`,
+  `.github/workflows/agent-plugins.yml`, `.github/workflows/kan-compat.yml`,
+  `.github/workflows/migration-matrix.yml`,
+  `.github/workflows/askme-behavioral-trial.yml`, and
+  `.github/workflows/workflow-reconstruction-trial.yml`; every listed workflow
+  must conclude success at the candidate SHA.
+
+- REQ-15: A preregistered `/askme` behavioral protocol must cover a decision
+  request, factual request, unknown topic, skip, early stop, context-free repo,
+  and explicit record/decline branches. Raw transcripts are trial evidence,
+  not durable claim content; they live in the immutable evidence commit. A
+  structured `day-trial` Result reports the protocol, candidate, evidence
+  address, scenario outcomes, and negative controls. `day trial verify` fetches
+  and hashes the evidence, evaluates the manifest, and is the witness probe;
+  no pass-marker string alone can satisfy it.
+
+- REQ-16: The final real-work trial must select a visible stream, use `/askme`
+  for a genuine need, explicitly record acquired input, continue genuine work
+  until a qualifying intervention occurs, record that intervention, and write
+  a scoped handoff. It must never manufacture an intervention, but it cannot
+  pass without one. A fresh session
+  without the transcript must reconstruct the selected stream, acquired
+  input's effect, intervention provenance, and verification scopes. Removing
+  each required claim or coordinate must make its corresponding negative
+  control fail.
+
+## Acceptance Criteria
+
+- [ ] AC-1: (REQ-1, REQ-2) A published Plan fixture points to a committed
+      `.design` mirror at an exact commit. Validation and review by CID recover
+      byte-identical content; changing the mirror, commit, subject, or CID makes
+      the check fail rather than selecting another design.
+
+- [ ] AC-2: (REQ-1, REQ-2) `kan publish v0.13-workflow-ergonomics` produces a
+      tracked `.claims/` representation containing the authoritative Plan, and
+      a fresh clone can resolve its artifact address without local `.kan/`
+      state.
+
+- [ ] AC-3: (REQ-3, REQ-4) An RFC1 integration fixture records agent
+      Observation/Plan claims under a session-agent principal and human
+      Decision claims under a human-controlled verification method. It reports
+      cryptographic validity, repository admission, and view inclusion
+      separately. Both claims must be cryptographically valid, admitted through
+      an explicit governance-rooted capability path covering their operation
+      and subject, and included under a named view. The fixture fails if either
+      actor's speech is attributed to the other, if lineage or role substitutes
+      for capability, or if an authentic but unadmitted claim is rounded up to
+      success.
+
+- [ ] AC-4: (REQ-3, REQ-4) Compatibility tests preserve legacy claim bytes and
+      authorship while new writes use RFC1 principal and verification-method
+      fields. If the required RFC1 write surface is unavailable, #196 and the
+      v0.13 release gate remain blocked rather than falling back to roles or
+      disclosure.
+
+- [ ] AC-5: (REQ-5) A round-trip handoff fixture records suite, census, and CI
+      scopes, advances and merges HEAD, then proves wakeup rechecks the original
+      coordinates. A legacy unscoped fixture can never render `CONFIRMED`.
+
+- [ ] AC-6: (REQ-6, REQ-7) Bulk-read fixtures cover live and superseded
+      handoffs, retractions, unrelated subjects, missing timestamps, partially
+      withheld claims, fully withheld subjects, and status/show unaccounted
+      mismatches, nonzero `published_read_error_count`, and per-file published
+      read errors. Output returns visible rows plus explicit unknown/incomplete
+      state; both skills, CLI, and MCP invoke the same report function.
+
+- [ ] AC-7: (REQ-8) Static skill tests require topic establishment,
+      one-question-at-a-time wording, fact/decision/unresolved separation,
+      skip, stop, and explicit consent before recording. The skill remains
+      useful with no issue, open kan subject, or active day atom.
+
+- [ ] AC-8: (REQ-8, REQ-9) A scratch-log test runs every deterministic
+      `/askme`-adjacent operation and proves the claim count is unchanged until
+      the explicit acquired-input command is invoked. Decline and early stop
+      append nothing.
+
+- [ ] AC-9: (REQ-9) Acquired-input fixtures round-trip authenticated and
+      reported providers, signer, facts, decisions, unresolved items, effect,
+      subject, and citations. Empty effect, ambiguous provider provenance, or
+      an attempt to encode a conversation transcript is rejected.
+
+- [ ] AC-10: (REQ-10) Intervention fixtures cover same-actor classification,
+      agent-authored reporting of human direction, and separately
+      authenticated human input. Tests fail if reported provenance is rendered
+      as first-hand human authorship or if an empty result is called proof that
+      no intervention occurred.
+
+- [ ] AC-11: (REQ-10, REQ-11) Hooks, prompts, sessions, and `/askme` cannot
+      automatically emit acquired-input or intervention claims. Agent Skills
+      and Claude-facing packaging expose the same semantics without creating a
+      second durable store or Claude-only source of truth. MCP and CLI stream
+      results are byte-equivalent after transport framing.
+
+- [ ] AC-12: (REQ-11, REQ-15) Protocol fixtures and rubrics are committed
+      on the final candidate before execution and name observable pass/fail
+      conditions for every scenario. Static tests describe only contracts they
+      execute. `day trial verify` rejects a failed scenario, missing control,
+      candidate or protocol mismatch, absent evidence commit, digest mismatch,
+      malformed manifest, and a Result whose prose mentions a pass marker
+      without a valid `day-trial` block.
+
+- [ ] AC-13: (REQ-12) In a scratch release repo, preparation creates the sole
+      candidate commit containing version, documentation, migration row, and
+      block corpus. Trial evidence is recorded externally; publication tags
+      that exact SHA with a clean tree and creates no commit. Reverting the
+      split reproduces a tag/candidate mismatch.
+
+- [ ] AC-14: (REQ-13, REQ-14) The release gate names the complete required
+      issue and workflow set, verifies merged dispositions and successful runs
+      at the candidate SHA, and fails on a missing issue, manual closure,
+      absent merge, wrong SHA, skipped check, unlisted extra release dependency,
+      malformed manifest, or unreadable API response. Mutation tests removing
+      each issue and workflow from `.release/v0.13.json` make the gate fail.
+
+- [ ] AC-15: (REQ-15) Real-harness trials demonstrate adaptive follow-ups,
+      one-question pacing, unknown-topic narrowing, skip, stop, context-free
+      usefulness, and explicit record/decline behavior. The rubric fails a
+      transcript that merely contains required words without exhibiting the
+      behavior. The evidence manifest names the real harness and model version,
+      every transcript digest, scenario verdict, deviation, and rubric version;
+      a fresh verifier reproduces the aggregate verdict from that bundle.
+
+- [ ] AC-16: (REQ-16) A fresh-session reconstruction Result names the exact
+      candidate SHA, kan/RFC version, stream, acquired-input CID, genuine
+      intervention CID, scoped handoff claim, behavioral Result, and
+      later wakeup evidence. Each preregistered removal control fails, and the
+      Result plus `v0.13*` published artifact are both required for telos
+      attainment.
+
+## Architecture
+
+### Published design with a committed compatibility mirror
+
+The authoritative design is a kan `Plan` published into `.claims/`, not a file
+chosen by modification time. During the transition to kan's official
+claim-addressed content flow, the Plan carries an exact artifact address for
+`.design/v0.13-workflow-ergonomics.md` at a commit. The committed mirror is
+therefore not a competing source of truth: its bytes are content addressed by
+the claim and exist so current `src/design.rs`, `src/record.rs`, `day status`,
+`schema/witness/design-doc`, and `skills/adversarial-review/SKILL.md` can
+operate. Review receives the Plan CID first and verifies the mirror before
+reading requirements.
+
+This correction round supersedes blocked verdict
+`bafyreiatwehsmy4xfzuvp7i23ss642ykzx4v746kzu4muqyp5pskrtuvxa`. The old Plan
+remains append-only history. The new Plan is recorded with `--file` and
+published through `kan publish`; neither claim nor mirror is rewritten in
+place after review.
+
+### RFC1 identity rather than legacy roles
+
+Kan RFC1 is the architecture boundary. `src/record.rs` orchestrates per-claim
+signing, `src/design.rs` supplies the parsed claim chain, and
+`src/kan_client.rs` consumes
+RFC1's public principal, verification-method,
+session-agent, governance, capability, admission, and view-result surfaces once
+implemented. day does not interpret `.kan/roles`, mint principals, infer that
+lineage grants authority, or turn a delegated agent into human speech.
+
+If an interface allows the agent to submit a human-signed Decision, the human
+verification method provides the proof. Otherwise the agent may authentically
+report what it observed, but the record and UI label it reported provenance.
+The same rule governs acquired input and interventions. Legacy records remain
+visible through kan's compatibility projection without being re-signed.
+
+The integration fixture creates repository inception and governance, delegates
+the minimum subject-and-operation capability to the disposable session agent,
+and supplies the human verification method separately for each first-hand
+Decision. It asserts positive `valid`, `admitted`, and named-view `included`
+outcomes, then removes the capability and proves the same authentic agent claim
+becomes explicitly unadmitted rather than disappearing or becoming invalid.
+
+### Honest scoped reads
+
+Handoff coordinates remain prose claims whose required fields are mechanically
+checked by the paired skills. Stream listing belongs in a reusable model near
+the three-state read handling in `src/kan_client.rs`; rendering cannot outrun
+`recorded_at: Option<_>`, withheld counts, or unaccounted-subject diagnostics.
+RFC1's published-read error count and per-file diagnostics participate in the
+same completeness state. The CLI under `src/cli/mod.rs`, MCP under `src/mcp.rs`,
+and both skill list paths consume that one model.
+
+### Explicit acquired input and interventions
+
+`skills/askme/SKILL.md` owns interaction policy and is deliberately not an
+atom. A small explicit recording surface writes the `day-acquired-input` block
+through kan's public CLI boundary. Parsing and rendering live with the existing
+block and record modules in `src/blocks.rs` and `src/record.rs`; day stores no
+conversation or private state.
+
+Interventions use a separate ordinary Observation convention because their
+meaning is different: acquired input says what was learned, while an
+intervention says work materially changed or became possible. Both preserve
+the actual signer. Authenticated provider material is cited; otherwise source
+attribution is explicitly reported rather than cryptographically certified.
+
+Initial intervention kinds are fixed semantic labels. Project-additive kinds
+wait for the shared declared-preference and vocabulary-pack layer, avoiding a
+new absent-means-default loader in v0.13.
+
+### Two evidence planes for skills
+
+`tests/plugin.rs`, `tests/agent_plugins.rs`, and
+`tests/documented_invocations.rs` enforce deterministic structure, packaging,
+commands, and non-mutation. They do not claim to run a model conversation.
+Preregistered protocols exercise real Agent Skills consumers. A runner writes
+one manifest plus raw transcripts and command output, hashes every file, and
+commits the bundle on `evidence/v0.13` without merging it into the candidate.
+The branch remains remotely reachable; the Result names its immutable commit
+and manifest path. `day trial verify` re-fetches that commit, refuses paths
+outside it, verifies every digest and protocol/candidate coordinate, recomputes
+scenario and control outcomes, and reports one of passed, failed, or
+uncheckable. The telos witness invokes this verifier rather than matching Result
+prose. Transcripts remain evidence, not imported claims or release-tree state.
+
+The `day-trial` block is versioned and contains: protocol identifier and digest,
+candidate SHA, harness/model versions, evidence repository and commit, manifest
+path and digest, ordered scenario outcomes, ordered negative-control outcomes,
+deviations, and aggregate verdict. Missing and unknown fields are refused by
+the verifier. The signed Result authenticates this statement; the evidence
+commit makes its referenced bytes independently retrievable.
+
+### Prepare, trial, publish
+
+Refactor `scripts/cut-release.sh` into explicit preparation and publication
+phases, with shared validation rather than duplicated shell. Preparation
+performs every tree mutation—including Cargo/plugin versions, docs, migration
+expectations, and block-corpus capture—and commits the sole candidate. The
+candidate is pushed so GitHub workflows and real harness trials can name it.
+
+Publication accepts the candidate SHA, requires a clean synchronized `main`,
+reads `.release/v0.13.json`, re-reads the exact issue dispositions and listed
+workflow conclusions, behavioral Result, and reconstruction Result, and then
+records the release and
+tags the candidate without a new commit. The append-only kan Results are
+external evidence and therefore do not perturb the git identity they assess.
+
+### Delivery order
+
+1. Publish this correction-round Plan and committed mirror; cold-review both.
+2. Wait for and verify kan RFC1's required public write/read surfaces.
+3. Implement #196 against RFC1.
+4. Implement #152 and its moving-HEAD round trip.
+5. Implement #204 with incomplete-view semantics.
+6. Update #193's split; implement `/askme` and acquired-input recording.
+7. Implement #195 with authentic versus reported provenance.
+8. Implement the prepare/publish split and fail-closed release manifest.
+9. Reconcile #196, #204, #193, and #195 with this Plan; update milestone 15 to
+   this Plan CID; prepare, commit, and push the final candidate containing both
+   trial protocols and `.release/v0.13.json`.
+10. Run every listed CI and behavioral workflow at that exact candidate SHA.
+11. Continue real work at the same candidate until a genuine intervention is
+    available, then run and verify the reconstruction trial and all removal
+    controls.
+12. Publish the exact candidate SHA without a tree mutation.
+13. Assess the published artifact and telos, then hand off exact coordinates.
+
+Every implementation or correction round receives a fresh cold adversarial
+review. BLOCK or REDIRECT findings are separately dispositioned before the next
+phase; a previous review is never stretched to cover its fix.
+
+## Resolved Questions
+
+- RQ-1: The cycle ships the complete workflow-visibility set—stream view,
+  general `/askme`, and intervention events—and the two evidence-correctness
+  fixes they depend on. RQ-9 supersedes only its design-artifact storage model.
+- RQ-2: #196 and #152 are release blockers and land before the new recording
+  affordances or their adoption proof. RQ-10 adds the corrected release
+  chronology without reversing this ordering.
+- RQ-3: Success requires a real-cycle dogfood and later reconstruction, not
+  feature-level tests alone. RQ-11 and RQ-12 specify its durable input and
+  behavioral evidence.
+- RQ-4: `/askme` is a general facility for convenient semi-structured human
+  input, not issue resolution or a process atom. RQ-11 preserves this while
+  adding explicit opt-in recording.
+- RQ-5: Trigger-scoped practice injection and the design-integrity/vocabulary
+  cluster remain deferred pending kan identity and data-model changes. RQ-13
+  narrows the identity dependency to RFC1.
+- RQ-6: Stream listing promises visible live threads only and exposes unknown
+  timestamps, withheld claims, and incomplete inventory. RQ-14 extends the
+  same decision to published-read errors and MCP parity.
+- RQ-7: The claim signer is the intervention classifier; human direction
+  reported by an agent remains agent-authored unless authenticated material is
+  cited. RQ-15 retains and clarifies this decision.
+- RQ-8: #193's declarable prompts remain #194; v0.13 ships fixed prompting and
+  explicit acquired-input recording with fixed initial intervention kinds.
+  RQ-16 retains this split.
+- RQ-9: Supersedes the earlier RQ-1 wording: designs become published kan Plan
+  claims. Until official kan claim-addressed content exists, each authoritative
+  Plan points to a committed
+  byte-verified `.design` compatibility mirror.
+- RQ-10: Supersedes the earlier RQ-2 wording: releases use prepare, trial, and
+  publish phases; the published tag names
+  the exact trialed candidate commit and trial Results remain external kan
+  evidence.
+- RQ-11: Supersedes the earlier RQ-3 wording: `/askme` records nothing
+  automatically. An explicit
+  `day-acquired-input` Observation carries its durable effect when requested.
+- RQ-12: Supersedes the earlier RQ-4 wording: deterministic tests cover
+  executable contracts; preregistered real
+  harness trials cover adaptive conversational behavior.
+- RQ-13: Supersedes the earlier RQ-5 wording: #196 targets accepted kan RFC1
+  and waits for its implementation. day
+  does not standardize the legacy role registry as its authorship model.
+- RQ-14: Supersedes the correction-round RQ-6 wording: stream listing promises
+  visible live threads only and exposes unknown
+  timestamps, withheld claims, and incomplete inventory explicitly.
+- RQ-15: Supersedes the correction-round RQ-7 wording: the claim signer is the
+  intervention classifier. Human direction
+  reported by an agent remains agent-authored unless separately authenticated
+  human material is cited.
+- RQ-16: Supersedes the correction-round RQ-8 wording: #193's declarable prompts
+  remain #194; v0.13 ships fixed prompting and
+  explicit acquired-input recording. Initial intervention kinds are fixed;
+  project-additive vocabulary waits for the shared declared layer.
+
+## Open Questions
+
+None.
+
+## Out of Scope
+
+- Implementing or modifying kan RFC1 inside the day repository.
+- Treating legacy role names as principals, capabilities, or proof of human
+  authorship.
+- Declarable `/askme` prompts (#194) or project-defined intervention kinds.
+- Automatic recording of conversations, interventions, inferred process
+  position, or human turns.
+- Retaining raw transcripts as durable kan claims.
+- Trigger-scoped practice injection (#198), design-integrity work (#200–203),
+  vocabulary packs, and other v0.14 work.
+- Making the non-author reconstruction trial a v0.13 release blocker.
+
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiderigpb42753xvlxbeqzvsymroexbqpgv6stmq66kk5p56bas724",
+  "sig": "df35e07cadca9240d9e100a585b190dcd27136d4f48359fbd00e5567bab3460064be2e04eb76f4fd977dfd590f008844f7db1c329f450899e5dcf8ecef677f08",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "publication",
+  "cites": [],
+  "rev": "223mt5f2egm6j",
+  "seq": 52,
+  "of": 53,
+  "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChhNTViMjA5OGIyN2M0ZGYzZDZiMjcwZDUyYjFiMzYzOTcyZTdmMmUwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRrApkgg"
 }
 ---
