@@ -69,7 +69,7 @@ jobs:
         if: steps.kan-cache.outputs.cache-hit != 'true'
         run: |
           cargo install --git https://github.com/kan-tools/kan \
-            --tag "${KAN_TAG}" kan
+            --tag "${KAN_TAG}" --force kan
 
       - name: Confirm the conformance suite can actually see kan
         run: |

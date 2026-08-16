@@ -1191,6 +1191,10 @@ fn ordinary_ci_uses_the_newest_measured_kan() {
         ci.contains(&format!("KAN_TAG: {newest}")),
         "ordinary CI must use newest measured kan {newest}; the compatibility matrix owns the older floor"
     );
+    assert!(
+        ci.contains("--tag \"${KAN_TAG}\" --force kan"),
+        "a dedicated kan-cache miss must replace any stale kan binary restored by the general Rust cache"
+    );
 }
 
 /// RFC lifecycle mutation tests must continue to mutate after a proposal moves
