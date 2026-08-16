@@ -1,4 +1,4 @@
-# Feature: Day RFC foundations and process-model specification, correction round 1
+# Feature: Day RFC foundations and process-model specification, correction round 2
 
 ## Summary
 
@@ -309,6 +309,10 @@ connected to day through general atom and witness contracts.
 - RQ-13: Draft readiness, formal review and acceptance, and post-acceptance
   rollout are separate delivery stages. AC-12 through AC-14 are lifecycle
   gates, not claims that a Draft build has already been accepted.
+- RQ-14: RQ-10 directly supersedes the earlier RQ-9 decision claim
+  `bafyreiaafsq7dnugfdc5qyldwlrylug6ms2moz7rnolsrj5otj5gdhpxqq` on this
+  subject. Legacy witness lists are flat component reports and are not
+  sufficient systems without an explicit versioned relationship.
 
 ## Open Questions
 

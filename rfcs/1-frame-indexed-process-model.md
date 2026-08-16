@@ -195,6 +195,13 @@ A sufficient witness system has the displayed soundness direction. A necessary
 system has the reverse direction. An exact observational presentation has an
 equivalence. Missing a sufficient certificate does not refute the telos.
 
+The three relationships are discriminated by finite truth-value examples. If
+$\lVert W\rVert=\{s_1\}$ and $\operatorname{Obs}(T)=\{s_1,s_2\}$, inclusion
+$\lVert W\rVert\hookrightarrow\operatorname{Obs}(T)$ is sufficient but not
+necessary. Reversing those sets gives a necessary but not sufficient system.
+Equal sets with mutually inverse inclusions give an exact system. These
+examples select directionality only; profile v1 implements the sufficient case.
+
 Candidate assembly operations include Day convolution for juxtaposed witness
 semantics and relative or promonoidal convolution for components constrained to
 glue along a shared boundary. The exact construction depends on the unresolved
@@ -539,32 +546,31 @@ and are validated by `scripts/check-rfc1-vectors.py`. They cover:
 5. A sufficient witness absent while the telos remains `NOT CERTIFIED`, not
    false.
 6. Necessary and exact declarations refused as unsupported by profile v1.
-7. A correctly typed realization composite and rejection of its reversed form.
-8. Lossless frame reindexing, lossy migration, unsupported procedure,
+7. Identity and present-predicate boundaries, local intermediate-telos cells,
+   their pasted global cell, and a typeable bridge whose designated local cell
+   is absent so no realization exists.
+8. A correctly typed realization composite and rejection of its reversed form.
+9. Lossless frame reindexing, lossy migration, unsupported procedure,
    forgotten gluing coordinate, and incomparable frames.
-9. A legacy `day-telos` block rendered as a flat component report rather than
+10. A legacy `day-telos` block rendered as a flat component report rather than
    silently strengthened.
 
-The denotational examples of a typeable bridge without a realization cell and
-local intermediate-telos cells pasting to a global cell remain proof-oriented
-Review obligations. They are not claimed as profile-v1 executable algorithms.
+Every migration vector names both what transported and what was lost. The
+checker derives composition boundaries, pasting compatibility, witness
+coherence, and migration classification from vector data rather than accepting
+precomputed labels.
 
 ## Unresolved questions
 
-- What are the objects and morphisms of the frame-local evidence category
-  $\mathcal E_f$?
-- Is its tensor cartesian, cocartesian, resource-sensitive, a disjoint-union
-  tensor on open diagrams, or part of a duoidal structure separating reuse from
-  independence?
-- What is the enrichment category $\mathcal V_f$?
-- Is witness-bearing merely an enriched profunctor or representable as a hom?
-- Does shared-coordinate witness assembly use constrained Day convolution,
-  promonoidal convolution, structured-cospan composition, or an equivalent
-  presentation?
-- Which exact double-category or equipment presentation best models predicates
-  and open processes?
-- Which frame morphisms, adjoints, and coherence laws are required rather than
-  aspirational?
+| Choice | Required law before selection | Discriminating example |
+|---|---|---|
+| Objects and morphisms of $\mathcal E_f$ | identities/composition preserve artifact coordinates and evidential roles | two claims about one artifact versus one claim reused twice |
+| Evidence tensor | associativity/unit plus an explicit diagonal or its absence | independent test runs versus reuse of one run |
+| Enrichment $\mathcal V_f$ | complete/cocomplete enough for the stated coends and invariant under selected weak equivalences | Boolean pass/fail versus ordered unavailable/material information |
+| Representability of $\mathsf{Bear}_f$ | a natural representing isomorphism, not only pointwise matching | two probes for one witness that agree on current evidence but diverge after extension |
+| Witness convolution | associativity, unit, and exact shared-boundary gluing | two material components with equal versus unequal candidate coordinates |
+| Equipment presentation | typed companions/conjoints and horizontal/vertical interchange for predicates and processes | local realization squares pasting to the global bridge square |
+| Frame morphisms and adjoints | functorial reindexing, monoidal comparison, and the displayed Beck--Chevalley mate where applicable | invertible transport, unsupported procedure, forgotten coordinate, and incomparable frames |
 
 These questions block claims about the full denotational model. They do not
 block acceptance of profile v1 once reviewers verify that no profile-v1 rule

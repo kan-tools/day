@@ -37,8 +37,15 @@ check_rfc_shape() {
     Accepted|Implemented|Superseded)
       discussion=$(field_value "$file" Discussion)
       review_end=$(field_value "$file" Review-period-ends)
-      [[ "$discussion" != 'Not opened' ]] || fail "$file is $status but has no discussion"
-      [[ "$review_end" != 'Not scheduled' ]] || fail "$file is $status but has no completed review schedule"
+      [[ "$discussion" =~ ^https://[^[:space:]]+$ ]] || fail "$file is $status but Discussion is not an https address"
+      [[ "$review_end" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "$file is $status but Review-period-ends is not RFC3339 UTC"
+      python3 - "$review_end" <<'PY' || fail "$file is $status before its review period ended"
+import datetime, sys
+end = datetime.datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+raise SystemExit(0 if end <= datetime.datetime.now(datetime.timezone.utc) else 1)
+PY
+      override=$(field_value "$file" Review-override)
+      [[ "$override" == None || "$override" =~ ^unanimous:https://github\.com/[^[:space:]]+/pull/[0-9]+@[0-9a-f]{40}$ ]] || fail "$file is $status but Review-override is malformed"
       ;;
   esac
 }
@@ -80,6 +87,18 @@ for file in rfcs/[0-9]*-*.md; do
 done
 registry_count=$(awk -F '\t' 'NR > 1 && $1 != "" { count++ } END { print count+0 }' rfcs/numbers.tsv)
 [[ "$registry_count" -eq "$rfc_count" ]] || fail 'rfcs/numbers.tsv contains stale or missing allocations'
+baseline_registry=${DAY_RFC_BASE_REGISTRY:-}
+if [[ -n "$baseline_registry" ]]; then
+  baseline_contents=$(cat "$baseline_registry")
+elif git cat-file -e main:rfcs/numbers.tsv 2>/dev/null; then
+  baseline_contents=$(git show main:rfcs/numbers.tsv)
+else
+  baseline_contents=''
+fi
+while IFS=$'\t' read -r old_number old_file old_title; do
+  [[ "$old_number" == number || -z "$old_number" ]] && continue
+  [[ $(awk -F '\t' -v n="$old_number" -v f="$old_file" -v t="$old_title" '$1 == n && $2 == f && $3 == t { count++ } END { print count+0 }' rfcs/numbers.tsv) -eq 1 ]] || fail "historical RFC allocation changed: $old_number -> $old_file"
+done <<< "$baseline_contents"
 index_count=$(grep -Ec '^- \[RFC [0-9]+: .+\]\([0-9]+-[^)]+\.md\) — .+$' rfcs/README.md || true)
 [[ "$index_count" -eq "$rfc_count" ]] || fail 'rfcs/README.md contains stale or missing RFC rows'
 
@@ -102,10 +121,10 @@ adr_index_count=$(grep -Ec '^- \[ADR [0-9]+: .+\]\([0-9]+-[^)]+\.md\) — .+$' a
 
 if [[ ${1:-} == --self-test ]]; then
   fixture=$(mktemp -d "${TMPDIR:-/tmp}/day-rfc-check.XXXXXX"); trap 'rm -rf "$fixture"' EXIT
-  reset_fixture() { rm -rf "$fixture/rfcs" "$fixture/adrs" "$fixture/scripts"; cp -R rfcs adrs scripts "$fixture/"; }
+  reset_fixture() { rm -rf "$fixture/rfcs" "$fixture/adrs" "$fixture/scripts"; cp -R rfcs adrs scripts "$fixture/"; cp rfcs/numbers.tsv "$fixture/base-numbers.tsv"; }
   expect_rejected() {
     local label=$1 expected=$2
-    if DAY_RFC_ROOT="$fixture" "$fixture/scripts/check-rfcs-adrs.sh" >"$fixture/output" 2>&1; then fail "self-test accepted $label mutation"; fi
+    if DAY_RFC_ROOT="$fixture" DAY_RFC_BASE_REGISTRY="$fixture/base-numbers.tsv" "$fixture/scripts/check-rfcs-adrs.sh" >"$fixture/output" 2>&1; then fail "self-test accepted $label mutation"; fi
     grep -Fq "$expected" "$fixture/output" || fail "self-test $label failed for the wrong reason"
     echo "RFC/ADR self-test: $label mutation rejected"
   }
@@ -116,7 +135,9 @@ if [[ ${1:-} == --self-test ]]; then
   reset_fixture; perl -0pi -e 's/1-frame-indexed-process-model.md\) — Draft/1-frame-indexed-process-model.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected status-mismatch 'index row is missing or disagrees with title/status'
   reset_fixture; perl -0pi -e 's/# RFC 1: Frame-indexed/# RFC 2: Frame-indexed/' "$fixture/rfcs/1-frame-indexed-process-model.md"; expect_rejected heading-number 'heading number differs from filename'
   reset_fixture; perl -0pi -e 's/Frame-indexed process model/Unrelated replacement/' "$fixture/rfcs/numbers.tsv"; expect_rejected allocation-reuse 'disagrees with rfcs/numbers.tsv allocation'
-  reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected accepted-metadata 'is Accepted but has no discussion'
+  reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected accepted-metadata 'Discussion is not an https address'
+  reset_fixture; mv "$fixture/rfcs/1-frame-indexed-process-model.md" "$fixture/rfcs/2-frame-indexed-process-model.md"; perl -0pi -e 's/# RFC 1:/# RFC 2:/' "$fixture/rfcs/2-frame-indexed-process-model.md"; perl -0pi -e 's/RFC 1: Frame-indexed process model\]\(1-frame-indexed-process-model\.md\)/RFC 2: Frame-indexed process model](2-frame-indexed-process-model.md)/' "$fixture/rfcs/README.md"; perl -0pi -e 's/^1\t1-frame-indexed-process-model\.md/2\t2-frame-indexed-process-model.md/m' "$fixture/rfcs/numbers.tsv"; expect_rejected historical-renumber 'historical RFC allocation changed: 1 -> 1-frame-indexed-process-model.md'
+  reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/; s/- Discussion: Not opened/- Discussion: x/; s/- Review-period-ends: Not scheduled/- Review-period-ends: not-a-date/; s/- Review-override: None/- Review-override: forged/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected forged-review 'Discussion is not an https address'
   reset_fixture; perl -0pi -e 's/- Profile-relationship: approximation/- Profile-relationship: full-implementation/' "$fixture/rfcs/1-frame-indexed-process-model.md"; expect_rejected profile-relationship 'unrecognized Profile-relationship: full-implementation'
   reset_fixture; perl -0pi -e 's/"expected": "not-certified"/"expected": "certified"/' "$fixture/rfcs/vectors/1-process-model.json"; expect_rejected coherence-vector 'wrong witness result: coordinate-mismatch'
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Kan-claim: bafyrecursive\n- Status: Draft/' "$fixture/rfcs/0-rfc-and-adr-process.md"; expect_rejected recursive-publication 'normative RFC bytes contain a claim-CID backlink'

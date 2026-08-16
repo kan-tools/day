@@ -6,4 +6,3 @@ relationship to forward-looking RFCs and working `.design/` documents.
 ## Index
 
 No ADRs have been recorded under this process yet.
-
