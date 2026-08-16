@@ -73,7 +73,7 @@ if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then
   scripts/check-rfc1-denotational-publication.py
 fi
 scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json
-if rg -q '^- Kan-claim:' rfcs/*.md adrs/*.md; then fail 'normative RFC bytes contain a claim-CID backlink'; fi
+if grep -Eq '^- Kan-claim:' rfcs/*.md adrs/*.md; then fail 'normative RFC bytes contain a claim-CID backlink'; fi
 
 rfc_numbers=''; rfc_count=0
 for file in rfcs/[0-9]*-*.md; do

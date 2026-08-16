@@ -1222,8 +1222,9 @@ fn rfc_acceptance_self_tests_survive_the_review_transition() {
     let checker = read("scripts/check-rfcs-adrs.sh");
     assert!(
         checker.contains("s/- Authors:/- Kan-claim: bafyrecursive\\n- Authors:/")
+            && checker.contains("grep -Eq '^- Kan-claim:'")
             && checker.contains("self-test could not construct recursive-publication mutation"),
-        "the recursive-publication mutation must be capture-free and prove that it was constructed"
+        "the recursive-publication guard must be portable, and its mutation must be capture-free and prove that it was constructed"
     );
     let out = Command::new("bash")
         .args(["scripts/check-rfcs-adrs.sh", "--self-test"])
