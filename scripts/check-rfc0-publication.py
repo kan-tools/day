@@ -19,6 +19,19 @@ def require(condition, message):
         raise InvalidPublication(message)
 
 
+def canonical_origin(checkout):
+    origin = subprocess.run(["git", "remote", "get-url", "origin"], cwd=checkout, check=True, capture_output=True, text=True).stdout.strip()
+    seen = set()
+    while not origin.startswith(("https://", "ssh://", "git@")):
+        candidate = pathlib.Path(origin)
+        if not candidate.is_absolute():
+            candidate = (pathlib.Path(checkout) / candidate).resolve()
+        require(candidate not in seen and candidate.is_dir(), "repository origin chain is invalid")
+        seen.add(candidate)
+        origin = subprocess.run(["git", "remote", "get-url", "origin"], cwd=candidate, check=True, capture_output=True, text=True).stdout.strip()
+    return origin
+
+
 def validate(vector, checkout, claims, repository_origin):
     require(vector.get("version") == 2, "publication vector version changed")
     require(vector.get("claim_location") == "external", "claim is not external")
@@ -44,7 +57,7 @@ def main():
     vector = json.loads((root / "rfcs/vectors/0-publication.json").read_text())
     with tempfile.TemporaryDirectory(prefix="day-rfc0-fresh-clone-") as temp:
         checkout = pathlib.Path(temp) / "clone"
-        origin = subprocess.run(["git", "remote", "get-url", "origin"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+        origin = canonical_origin(root)
         subprocess.run(["git", "clone", "--quiet", "--no-local", str(root), str(checkout)], check=True)
         projection = checkout / vector["projection_path"]
         require(projection.is_dir() and any(projection.glob("*.md")), "published claim projection is absent from fresh clone")
