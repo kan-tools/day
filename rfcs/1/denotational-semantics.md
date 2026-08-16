@@ -390,16 +390,18 @@ states an interface; it does not claim current day computes the coend.
 
 ### Definition 6.3 — Witness system and assembly
 
-A witness system for $T$ is a diagram
+A witness system for $T$ is a diagram indexed by a category $\mathcal I_T$ of
+witness components and their declared relations:
 
 $$
-W_T:J_T\longrightarrow
+W_T:\mathcal I_T\longrightarrow
 [\mathcal E_f^{op},\mathcal V_f].
 $$
 
 Its assembly $\lVert W_T\rVert$ is a specified weighted colimit, convolution,
-or relative gluing preserving the coordinates declared shared by $J_T$. The
-choice of assembly is part of the witness-system declaration.
+or relative gluing preserving the coordinates declared shared by
+$\mathcal I_T$. The choice of assembly is part of the witness-system
+declaration.
 
 ### Definition 6.4 — Sufficient, necessary, and exact systems
 

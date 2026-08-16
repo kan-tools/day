@@ -1114,6 +1114,33 @@ fn denotational_publication_resolves_and_rejects_hostile_mutations() {
     );
 }
 
+/// RFC 1 AC-10 — incorporated notation must remain type-distinct, and every
+/// unresolved formal choice introduced by the companion must remain visible in
+/// RFC 1's authoritative unresolved-question census.
+#[test]
+fn rfc1_formal_vocabulary_and_obligation_census_are_consistent() {
+    let out = Command::new(repo_root().join("scripts/check-rfc1-formal-obligations.py"))
+        .arg("--self-test")
+        .current_dir(repo_root())
+        .output()
+        .expect("the RFC 1 formal-obligation checker should run");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success()
+            && text.contains("witness-topology-collision mutation rejected")
+            && text
+                .contains("missing-epistemic-site-and-telos-relative-topology mutation rejected")
+            && text.contains(
+                "missing-effective-realization-fragment-and-provability-ledger mutation rejected"
+            ),
+        "notation collisions and missing unresolved choices must be rejected:\n{text}"
+    );
+}
+
 /// **An empty range is its own outcome, distinct from could-not-check.**
 ///
 /// A census over no commits is vacuously complete, which is the failure class

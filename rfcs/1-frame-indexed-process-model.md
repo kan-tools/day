@@ -186,10 +186,11 @@ an object of $[\mathcal E_f^{op},\mathcal V_f]$. This choice is explicitly
 provisional: it states the types required of a future construction without
 selecting the final equipment or tensor.
 
-A telos $T$ has a witness diagram
+A telos $T$ has a witness diagram indexed by a category $\mathcal I_T$ of
+witness components and their declared relations:
 
 $$
-W_T:J_T\to[\mathcal E_f^{op},\mathcal V_f]
+W_T:\mathcal I_T\to[\mathcal E_f^{op},\mathcal V_f]
 $$
 
 whose assembly $\lVert W_T\rVert$ retains shared coordinates and coherence.
@@ -579,6 +580,10 @@ precomputed labels.
 | Witness convolution | associativity, unit, and exact shared-boundary gluing | two material components with equal versus unequal candidate coordinates |
 | Equipment presentation | typed companions/conjoints and horizontal/vertical interchange for predicates and processes | local realization squares pasting to the global bridge square |
 | Frame morphisms and adjoints | functorial reindexing, monoidal comparison, and the displayed Beck--Chevalley mate where applicable | invertible transport, unsupported procedure, forgotten coordinate, and incomparable frames |
+| Epistemic site and telos-relative topology | coverage axioms, reindexing stability, and proof that local equivalence preserves distinctions material to $T$ | a commit-preserving cover versus a topology that unsoundly identifies releases at different commits |
+| Realization prestack, descent, and model structure | pseudofunctorial reindexing, effective descent for declared covers, and coherent weak equivalences | local test and review realizations that agree pairwise but fail or satisfy higher overlap coherence |
+| Obstruction coefficients and cohomology theory | a named coefficient object and sound obstruction/vanishing theorem for each claimed degree or generalized theory | a missing local realizer versus incompatible gluing versus higher path coherence |
+| Effective realization fragment and provability ledger | computable presentations plus explicit soundness, completeness, termination, and `unknown` boundaries for every algorithmic judgment | bounded bridge search that returns `unknown` rather than a false impossibility certificate |
 
 These questions block claims about the full denotational model. They do not
 block acceptance of profile v1 once reviewers verify that no profile-v1 rule
