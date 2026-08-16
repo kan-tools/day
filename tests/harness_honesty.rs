@@ -491,7 +491,7 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
             let tag = fields.next()?;
             (fields.next()? == "ok").then_some(tag)
         })
-        .last()
+        .next_back()
         .expect("the compatibility matrix must contain an ok row");
     assert!(
         yaml.contains("scripts/revert-demo.py --verify"),
@@ -1201,7 +1201,7 @@ fn ordinary_ci_uses_the_newest_measured_kan() {
             let tag = fields.next()?;
             (fields.next()? == "ok").then_some(tag)
         })
-        .last()
+        .next_back()
         .expect("the compatibility matrix must contain an ok row");
     let ci = read(".github/workflows/ci.yml");
     assert!(
