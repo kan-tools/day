@@ -356,7 +356,8 @@ def require_ran(specs: list[str], results: dict, when: str) -> None:
 
 
 def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str,
-                include: list[str], exclude: list[str], target_dir: str | None):
+                include: list[str], exclude: list[str], target_dir: str | None,
+                allow_rejects: bool = False):
     filtered, report = filter_patch(patch, root, include, exclude)
     print(f"What would be reverted ({rev_label}):")
     for line in report:
@@ -412,13 +413,22 @@ def demonstrate(root: pathlib.Path, patch: str, names: list[str], rev_label: str
 
     before = digest()
     try:
+        apply_args = ["git", "apply", "-R", "--unidiff-zero"]
+        if allow_rejects:
+            apply_args.append("--reject")
         r = subprocess.run(
-            ["git", "apply", "-R", "--unidiff-zero", "-"],
+            [*apply_args, "-"],
             cwd=root, input=filtered, capture_output=True, text=True,
         )
-        if r.returncode != 0:
+        after_apply = digest()
+        if r.returncode != 0 and (not allow_rejects or after_apply == before):
             raise CouldNotCheck(
                 REVERT_FAILED, f"the reverse patch did not apply: {r.stderr.strip()}"
+            )
+        if r.returncode != 0:
+            print(
+                "current-head fallback: rejected overlapping historical hunks; "
+                "checking every still-applicable hunk"
             )
         results, compiled = run_tests(names, root, target_dir)
         if not compiled:
@@ -561,12 +571,15 @@ def verify(spec: str, root: pathlib.Path) -> int:
 
     patch = patch_for_rev(rev, cwd=root)
 
-    def attempt(at: str):
+    def attempt(at: str, allow_rejects: bool = False):
         work = pathlib.Path(tempfile.mkdtemp(prefix="revert-demo-"))
         tree = work / "tree"
         git("worktree", "add", "--detach", str(tree), at, cwd=root)
         try:
-            return demonstrate(tree, patch, names, rev, include, [], None)
+            return demonstrate(
+                tree, patch, names, rev, include, [], None,
+                allow_rejects=allow_rejects,
+            )
         finally:
             subprocess.run(["git", "worktree", "remove", "--force", str(tree)],
                            cwd=root, capture_output=True, text=True)
@@ -582,7 +595,7 @@ def verify(spec: str, root: pathlib.Path) -> int:
             f"{rev}: historical baseline is red; retrying the same reversion "
             f"against audited HEAD {head}"
         )
-        outcome, caught = attempt(head)
+        outcome, caught = attempt(head, allow_rejects=True)
     # A trailer names only the tests that caught it, so every one of them must
     # catch it again. Accepting "at least one" would let a trailer carry
     # passengers that never observed the finding.

@@ -111,6 +111,9 @@ fn a_failing_baseline_is_reported_and_nothing_is_reverted() {
         FIXED,
         "#[test]\nfn demo_test() { assert_eq!(scratch::answer(), 3); }\n",
     );
+    let manifest = s.crate_.read("Cargo.toml");
+    s.crate_
+        .write("Cargo.toml", &format!("{manifest}\n# fixed\n"));
     let (text, ok) = s.run(&["--tests", "t::demo_test"]);
 
     assert!(text.contains("BASELINE-RED"), "{text}");
@@ -322,9 +325,13 @@ fn verify_refutes_a_trailer_that_does_not_hold_and_touches_nothing() {
 /// for BASELINE-RED; every other could-not-check outcome still fails closed.
 #[test]
 fn verify_retries_a_historically_red_baseline_against_audited_head() {
+    let historical_bug = "pub fn answer() -> i32 { 1 }\n\n\n\n\n\n\n\n\
+                          pub fn marker() -> i32 { 1 }\n";
+    let historical_fix = "pub fn answer() -> i32 { 2 }\n\n\n\n\n\n\n\n\
+                          pub fn marker() -> i32 { 2 }\n";
     let s = Scratch::new(
-        BUGGY,
-        FIXED,
+        historical_bug,
+        historical_fix,
         "#[test]\nfn demo_test() { assert_eq!(scratch::answer(), 3); }\n",
     );
     s.git(&["add", "-A"]);
@@ -336,14 +343,27 @@ fn verify_retries_a_historically_red_baseline_against_audited_head() {
     ]);
     let demonstrated = s.git(&["rev-parse", "HEAD"]);
 
-    std::fs::write(s.root().join("tests/t.rs"), ASSERTS_THE_FIX).unwrap();
+    s.crate_.write(
+        "src/lib.rs",
+        "pub fn answer() -> i32 { 1 + 1 }\n\n\n\n\n\n\n\n\
+         pub fn marker() -> i32 { 2 }\n",
+    );
+    std::fs::write(
+        s.root().join("tests/t.rs"),
+        "#[test]\nfn demo_test() {\n\
+             assert_eq!(scratch::answer(), 2);\n\
+             assert_eq!(scratch::marker(), 2);\n}\n",
+    )
+    .unwrap();
     s.git(&["add", "-A"]);
     s.git(&["commit", "-qm", "repair the historical test baseline"]);
 
     let (text, ok) = s.run(&["--verify", demonstrated.trim()]);
     assert!(ok, "the repaired current baseline must re-derive: {text}");
     assert!(
-        text.contains("historical baseline is red") && text.contains("DEMONSTRATED"),
+        text.contains("historical baseline is red")
+            && text.contains("rejected overlapping historical hunks")
+            && text.contains("DEMONSTRATED"),
         "the verifier must disclose the fallback and still prove the reversion: {text}"
     );
 }
