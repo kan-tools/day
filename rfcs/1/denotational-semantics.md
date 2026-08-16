@@ -19,12 +19,13 @@ bridge and a target telos.
 The essential picture in a frame $f$ is
 
 $$
-\begin{array}{c}
-X_0 \overset{\;B\;}{\rightsquigarrow} X_n\\[-2pt]
-P_0\Downarrow\eta\qquad\Downarrow T
+\begin{array}{ccccc}
+X_0 & \overset{\;B\;}{\rightsquigarrow} & X_n
+  & \qquad & \eta:P_0\Longrightarrow T\odot B\\[4pt]
+{\scriptstyle P_0}\Downarrow & \underset{\eta}{\Rightarrow} &
+  \Downarrow{\scriptstyle T} & & \\[2pt]
+I & = & I & &
 \end{array}
-\qquad
-\eta:P_0\Longrightarrow T\odot B.
 $$
 
 Here $P_0:X_0\rightsquigarrow I$ describes the presently inhabited region,
