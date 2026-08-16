@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import html
 import re
+import sys
 from pathlib import Path
 
 
@@ -156,7 +157,19 @@ def page(body: str) -> str:
 
 
 def main() -> None:
-    OUTPUT.write_text(page(render(SOURCE.read_text())), encoding="utf-8")
+    expected = page(render(SOURCE.read_text()))
+    if "--check" in sys.argv[1:]:
+        if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != expected:
+            print(
+                "RFC 1 DENOTATIONAL HTML CHECK FAILED: "
+                "rfcs/1/denotational-semantics.html is out of date; "
+                "run python3 scripts/render-denotational-semantics.py",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        print("RFC 1 denotational HTML: current")
+        return
+    OUTPUT.write_text(expected, encoding="utf-8")
 
 
 if __name__ == "__main__":

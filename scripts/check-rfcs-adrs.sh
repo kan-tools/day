@@ -64,9 +64,13 @@ check_rfc_shape rfcs/template.md
 check_adr_shape adrs/template.md
 [[ -x scripts/check-rfc1-vectors.py ]] || fail 'scripts/check-rfc1-vectors.py is not executable'
 [[ -x scripts/check-rfc0-publication.py ]] || fail 'scripts/check-rfc0-publication.py is not executable'
+[[ -x scripts/check-rfc1-denotational-publication.py ]] || fail 'scripts/check-rfc1-denotational-publication.py is not executable'
 [[ -x scripts/check-rfc-review.py ]] || fail 'scripts/check-rfc-review.py is not executable'
 [[ -s rfcs/maintainers.txt ]] || fail 'rfcs/maintainers.txt is absent or empty'
-if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then scripts/check-rfc0-publication.py; fi
+if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then
+  scripts/check-rfc0-publication.py
+  scripts/check-rfc1-denotational-publication.py
+fi
 scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json
 if rg -q '^- Kan-claim:' rfcs/*.md adrs/*.md; then fail 'normative RFC bytes contain a claim-CID backlink'; fi
 
@@ -126,6 +130,7 @@ adr_index_count=$(grep -Ec '^- \[ADR [0-9]+: .+\]\([0-9]+-[^)]+\.md\) — .+$' a
 grep -Fq '[`rfcs/1/denotational-semantics.md`](1/denotational-semantics.md)' rfcs/1-frame-indexed-process-model.md || fail 'RFC 1 does not incorporate its denotational companion'
 grep -Fq 'Canonical source: <a href="denotational-semantics.md">' rfcs/1/denotational-semantics.html || fail 'denotational HTML does not link its canonical source'
 grep -Fq 'mathjax@3/es5/tex-svg.js' rfcs/1/denotational-semantics.html || fail 'denotational HTML lacks MathJax rendering'
+python3 scripts/render-denotational-semantics.py --check || fail 'denotational HTML is not the current rendering of its source'
 
 if [[ ${1:-} == --self-test ]]; then
   fixture=$(mktemp -d "${TMPDIR:-/tmp}/day-rfc-check.XXXXXX"); trap 'rm -rf "$fixture"' EXIT
@@ -152,7 +157,11 @@ if [[ ${1:-} == --self-test ]]; then
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Kan-claim: bafyrecursive\n- Status: Draft/' "$fixture/rfcs/0-rfc-and-adr-process.md"; expect_rejected recursive-publication 'normative RFC bytes contain a claim-CID backlink'
   reset_fixture; rm "$fixture/rfcs/1/denotational-semantics.md"; expect_rejected denotational-source 'missing RFC 1 denotational companion source'
   reset_fixture; perl -0pi -e 's|mathjax\@3/es5/tex-svg\.js|math-disabled.js|' "$fixture/rfcs/1/denotational-semantics.html"; expect_rejected denotational-math 'denotational HTML lacks MathJax rendering'
-  if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then scripts/check-rfc0-publication.py --self-test; fi
+  reset_fixture; printf '\nA stale-render mutation.\n' >> "$fixture/rfcs/1/denotational-semantics.md"; expect_rejected denotational-freshness 'denotational HTML is not the current rendering of its source'
+  if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then
+    scripts/check-rfc0-publication.py --self-test
+    scripts/check-rfc1-denotational-publication.py --self-test
+  fi
   scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json --self-test
   exit 0
 fi

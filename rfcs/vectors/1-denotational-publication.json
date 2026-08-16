@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "subject": "rfc/1/denotational-semantics",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "repository": "https://github.com/kan-tools/day.git",
+  "claim_cid": "bafyreidypozq3oukvjshclp5u42u56hchojrbk6764qqx2v3kb3t3zvccy",
+  "artifact_commit": "4872986bcef3d7c920745ca3edd96aebaf111f52",
+  "artifact_path": "rfcs/1/denotational-semantics.md",
+  "artifact_sha256": "b11d005981832485aa6b24d4aeac4f74d57626976c44fa6faff45477b8859863",
+  "projection_path": ".claims/rfc/1/denotational-semantics",
+  "claim_location": "external",
+  "normative_cid_embedding": "forbidden"
+}

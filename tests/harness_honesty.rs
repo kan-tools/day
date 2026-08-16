@@ -1045,6 +1045,75 @@ fn every_commit_is_accounted_for_under_the_demonstration_rule() {
     }
 }
 
+/// RFC 1 AC-17 — the derivative HTML is checked against a fresh rendering of
+/// the canonical Markdown. Presence, a source link, and a MathJax script are
+/// not freshness: all three survive when the source changes and the derivative
+/// does not, which is the exact hostile mutation this test drives.
+#[test]
+fn stale_denotational_html_is_rejected() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("scripts")).unwrap();
+    std::fs::create_dir_all(root.join("rfcs/1")).unwrap();
+    std::fs::copy(
+        repo_root().join("scripts/render-denotational-semantics.py"),
+        root.join("scripts/render-denotational-semantics.py"),
+    )
+    .unwrap();
+    std::fs::copy(
+        repo_root().join("rfcs/1/denotational-semantics.md"),
+        root.join("rfcs/1/denotational-semantics.md"),
+    )
+    .unwrap();
+    std::fs::copy(
+        repo_root().join("rfcs/1/denotational-semantics.html"),
+        root.join("rfcs/1/denotational-semantics.html"),
+    )
+    .unwrap();
+    let source = root.join("rfcs/1/denotational-semantics.md");
+    let mut changed = std::fs::read_to_string(&source).unwrap();
+    changed.push_str("\nA hostile source-only mutation.\n");
+    std::fs::write(&source, changed).unwrap();
+
+    let out = Command::new("python3")
+        .args(["scripts/render-denotational-semantics.py", "--check"])
+        .current_dir(root)
+        .output()
+        .expect("python3 should be runnable");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success() && text.contains("is out of date"),
+        "a source-only change must make the freshness check fail for the stated reason:\n{text}"
+    );
+}
+
+/// RFC 1 AC-17 — the companion's real Decision, exact FileAt address, bytes,
+/// repository, projection, and Publication claim all resolve from a no-local
+/// clone. The checker's self-test mutates every coordinate and physically hides
+/// the projection, so a presence-only implementation cannot satisfy this test.
+#[test]
+fn denotational_publication_resolves_and_rejects_hostile_mutations() {
+    let out = Command::new(repo_root().join("scripts/check-rfc1-denotational-publication.py"))
+        .arg("--self-test")
+        .current_dir(repo_root())
+        .output()
+        .expect("the denotational publication checker should run");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success()
+            && text.contains("RFC 1 denotational publication: fresh clone resolved"),
+        "the real publication and every hostile mutation must be checked:\n{text}"
+    );
+}
+
 /// **An empty range is its own outcome, distinct from could-not-check.**
 ///
 /// A census over no commits is vacuously complete, which is the failure class
