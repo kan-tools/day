@@ -32,20 +32,29 @@ if override == "None" and end - start < datetime.timedelta(hours=72):
     fail("fewer than 72 review hours elapsed")
 try:
     pr = json.loads(subprocess.run(
-        ["gh", "pr", "view", url, "--json", "files,commits"],
+        ["gh", "pr", "view", url, "--json", "files,headRefOid,createdAt"],
         check=True, capture_output=True, text=True,
     ).stdout)
 except (subprocess.CalledProcessError, json.JSONDecodeError):
     fail("Discussion pull request is not readable")
 if file not in {entry["path"] for entry in pr.get("files", [])}:
     fail("Discussion pull request does not contain the RFC file")
-commits = pr.get("commits", [])
-if not commits:
-    fail("Discussion pull request has no commits")
-latest = max(commits, key=lambda entry: timestamp(entry["committedDate"]))
-latest_time = timestamp(latest["committedDate"])
-if start < latest_time:
-    fail("review clock starts before the proposal's latest commit")
+head_oid = pr.get("headRefOid")
+if not re.fullmatch(r"[0-9a-f]{40}", head_oid or ""):
+    fail("Discussion pull request has no readable head commit")
+query = "query($owner:String!,$name:String!,$oid:GitObjectID!){repository(owner:$owner,name:$name){object(oid:$oid){... on Commit{oid pushedDate}}}}"
+try:
+    pushed = json.loads(subprocess.run(
+        ["gh", "api", "graphql", "-f", f"query={query}", "-F", "owner=kan-tools", "-F", "name=day", "-F", f"oid={head_oid}"],
+        check=True, capture_output=True, text=True,
+    ).stdout)["data"]["repository"]["object"]
+except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError):
+    fail("proposal head push time is not readable")
+if pushed.get("oid") != head_oid or not pushed.get("pushedDate"):
+    fail("proposal head has no server-recorded push time")
+review_anchor = max(timestamp(pr["createdAt"]), timestamp(pushed["pushedDate"]))
+if start < review_anchor:
+    fail("review clock starts before the proposal head reached GitHub")
 if end > datetime.datetime.now(datetime.timezone.utc):
     fail("review period has not ended")
 
@@ -53,7 +62,7 @@ if override == "None":
     pass
 else:
     override_match = re.fullmatch(r"unanimous:(https://github\.com/kan-tools/day/pull/(\d+))@([0-9a-f]{40})", override)
-    if not override_match or override_match.group(1) != url or override_match.group(3) != latest["oid"]:
+    if not override_match or override_match.group(1) != url or override_match.group(3) != head_oid:
         fail("override does not name this PR and its latest commit")
     repo_root = pathlib.Path(__file__).resolve().parent.parent
     maintainers = {
@@ -71,7 +80,7 @@ else:
         fail("override reactions are not readable")
     rockets = {
         reaction["user"]["login"] for reaction in reactions
-        if reaction.get("content") == "rocket" and timestamp(reaction["created_at"]) >= latest_time
+        if reaction.get("content") == "rocket" and timestamp(reaction["created_at"]) >= review_anchor
     }
     missing = maintainers - rockets
     if missing:

@@ -1,4 +1,4 @@
-# Feature: Day RFC foundations and process-model specification, correction round 3
+# Feature: Day RFC foundations and process-model specification, correction round 4
 
 ## Summary
 
@@ -317,6 +317,10 @@ connected to day through general atom and witness contracts.
   presence-only: review timestamps must demonstrate 72 elapsed hours (or name
   a structured unanimous override), and the exact day GitHub proposal PR must
   be readable and contain the RFC file.
+- RQ-16: Review chronology is anchored to GitHub's server-recorded push time
+  for the PR head, not author-controlled commit dates. Every finite reference
+  vector uses closed vocabularies and validates complete case structure before
+  relationship-specific outcome logic.
 
 ## Open Questions
 

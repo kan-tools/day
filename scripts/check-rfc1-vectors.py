@@ -19,22 +19,21 @@ def require(condition, message):
 def witness_outcome(case):
     relationship = case.get("relationship")
     require(relationship in {"sufficient", "necessary", "exact", "unspecified"}, f"unknown relationship: {relationship}")
+    components = case.get("components", [])
+    require(components, "witness case has no components")
+    require(len({component.get("name") for component in components}) == len(components), "component names are absent or duplicated")
+    outcomes = [component.get("outcome") for component in components]
+    require(all(outcome in {"material", "missing", "vacuous", "timeout", "error", "not-run"} for outcome in outcomes), "unknown component outcome")
+    coordinates = [component.get("coordinate") for component in components]
+    require(all(isinstance(value, str) and value for value in coordinates), "every component must supply its shared coordinate")
     if relationship in {"necessary", "exact"}:
         return "unsupported"
     if relationship == "unspecified":
         return "component-report"
-    require(relationship == "sufficient", f"unknown relationship: {relationship}")
-    components = case.get("components", [])
-    require(components, "sufficient case has no components")
-    require(len({component.get("name") for component in components}) == len(components), "component names are absent or duplicated")
-    outcomes = [component.get("outcome") for component in components]
-    require(all(outcome in {"material", "missing", "vacuous", "timeout", "error", "not-run"} for outcome in outcomes), "unknown component outcome")
     if any(outcome in {"timeout", "error", "not-run"} for outcome in outcomes):
         return "uncheckable"
     if not all(outcome == "material" for outcome in outcomes):
         return "not-certified"
-    coordinates = [component.get("coordinate") for component in components]
-    require(all(isinstance(value, str) and value for value in coordinates), "every component must supply its shared coordinate")
     return "certified" if len(set(coordinates)) == 1 else "not-certified"
 
 
@@ -87,14 +86,18 @@ def validate(data):
         "expression": "P0 ⇒ (A2 ⊙ A1) ⊙ T", "well_typed": False
     }, "reversed realization must be rejected")
 
-    witness = {case["id"]: case for case in data.get("witness_cases", [])}
+    witness_cases = data.get("witness_cases", [])
+    witness = {case["id"]: case for case in witness_cases}
     required_witness = {
         "artifact-two-evidence", "shared-evidence-reuse", "independent-components",
         "coordinate-mismatch", "missing-sufficient", "unavailable-sufficient",
         "legacy-flat", "necessary-unsupported", "exact-unsupported",
     }
     require(set(witness) == required_witness, "witness vector census changed")
+    require(len(witness_cases) == len(witness), "witness case IDs are duplicated")
     for case_id in ("artifact-two-evidence", "shared-evidence-reuse"):
+        require(isinstance(witness[case_id].get("artifact"), str) and witness[case_id]["artifact"], f"artifact address absent: {case_id}")
+        require(isinstance(witness[case_id].get("evidence_cids"), list) and all(isinstance(cid, str) and cid for cid in witness[case_id]["evidence_cids"]), f"evidence CIDs malformed: {case_id}")
         observed = len(set(witness[case_id]["evidence_cids"]))
         require(witness[case_id]["independent_observations"] == observed, f"wrong evidence independence: {case_id}")
     for case_id in required_witness - {"artifact-two-evidence", "shared-evidence-reuse"}:
@@ -111,8 +114,13 @@ def validate(data):
         require(migration[case_id]["expected"] == expected, f"wrong migration fixture: {case_id}")
         require(migration[case_id]["expected"] == migration_outcome(migration[case_id]), f"wrong migration result: {case_id}")
         require(isinstance(migration[case_id].get("transported"), list) and isinstance(migration[case_id].get("lost"), list), f"migration detail absent: {case_id}")
+        migration_vocabulary = {"telos", "evidence", "procedure", "assessment", "witness", "atom", "bridge", "realization", "artifact-coordinate", "assessment-outcome", "certificate", "individual-components", "monoidal-equivalence", "assembled-witness", "shared-coordinate", "component-assessments", "gluing-proof", "all-cross-frame-judgments"}
+        transported = migration[case_id]["transported"]
+        lost = migration[case_id]["lost"]
+        require(all(isinstance(item, str) and item in migration_vocabulary for item in transported + lost), f"unknown migration detail: {case_id}")
+        require(len(set(transported)) == len(transported) and len(set(lost)) == len(lost) and not set(transported) & set(lost), f"migration detail overlaps or duplicates: {case_id}")
         if expected == "equivalent":
-            require(not migration[case_id]["lost"], f"equivalent migration reports loss: {case_id}")
+            require(transported and not lost, f"equivalent migration lacks transport or reports loss: {case_id}")
         else:
             require(migration[case_id]["lost"], f"non-equivalent migration does not expose loss: {case_id}")
 
@@ -128,6 +136,11 @@ def self_test(data):
         ("stale-realization", lambda d: d["composition"]["atoms"][0].update(name="BROKEN")),
         ("invented-outcome", lambda d: next(c for c in d["witness_cases"] if c["id"] == "missing-sufficient")["components"][0].update(outcome="invented")),
         ("invented-migration", lambda d: next(c for c in d["migration_cases"] if c["id"] == "unsupported-procedure").update(comparison="invented")),
+        ("invented-legacy-outcome", lambda d: next(c for c in d["witness_cases"] if c["id"] == "legacy-flat")["components"][0].update(outcome="invented")),
+        ("malformed-evidence-cids", lambda d: next(c for c in d["witness_cases"] if c["id"] == "artifact-two-evidence").update(evidence_cids="cid-a")),
+        ("duplicate-witness-id", lambda d: d["witness_cases"].append(copy.deepcopy(d["witness_cases"][0]))),
+        ("invented-migration-detail", lambda d: next(c for c in d["migration_cases"] if c["id"] == "lax-comparison")["lost"].append("invented")),
+        ("empty-equivalent-transport", lambda d: next(c for c in d["migration_cases"] if c["id"] == "invertible-reindexing").update(transported=[])),
     ]
     for name, mutate in mutations:
         candidate = copy.deepcopy(data)
