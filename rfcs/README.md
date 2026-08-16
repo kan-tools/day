@@ -6,5 +6,5 @@ process is defined by [RFC 0](0-rfc-and-adr-process.md).
 
 ## Index
 
-- [RFC 0: RFC and ADR process](0-rfc-and-adr-process.md) — Draft
+- [RFC 0: RFC and ADR process](0-rfc-and-adr-process.md) — Review
 - [RFC 1: Frame-indexed process model](1-frame-indexed-process-model.md) — Draft
