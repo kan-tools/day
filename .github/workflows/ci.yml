@@ -105,6 +105,11 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq zsh
           zsh -c 'exit 0'
 
+      - name: Validate RFC and ADR structure
+        run: |
+          scripts/check-rfcs-adrs.sh
+          scripts/check-rfcs-adrs.sh --self-test
+
       - run: cargo build --workspace --all-targets
       # `--no-fail-fast` IS LOAD-BEARING, NOT TIDINESS. `cargo test` aborts the
       # whole run at the first failing TARGET, and a bare `cargo test
