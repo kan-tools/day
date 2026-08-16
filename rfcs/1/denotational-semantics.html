@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="source" content="denotational-semantics.md">
+  <title>Day as an indexed process equipment</title>
+  <style>
+    :root { color-scheme: light; --ink:#17211d; --muted:#5d6a64; --paper:#f6f2e8;
+      --card:#fffdf7; --rule:#c9d2c7; --accent:#285f50; --code:#e8eee8; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font:18px/1.66 Georgia,serif; }
+    header { padding:4.5rem max(1.5rem,calc((100vw - 760px)/2)); background:#183d34; color:#f9f5e9; }
+    header p { max-width:720px; color:#d6e5dd; margin:.65rem 0 0; }
+    main { max-width:820px; margin:2.5rem auto 6rem; padding:0 2rem 4rem; background:var(--card);
+      box-shadow:0 18px 50px rgba(34,46,39,.09); border-top:5px solid var(--accent); }
+    h1,h2,h3 { font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.16; letter-spacing:-.025em; }
+    main h1 { display:none; } h2 { margin:3.4rem 0 1rem; font-size:1.55rem; }
+    h3 { margin-top:2rem; } p,li { max-width:72ch; }
+    a { color:var(--accent); text-underline-offset:3px; }
+    code { font: .9em ui-monospace,SFMono-Regular,monospace; background:var(--code); padding:.12em .3em; border-radius:4px; }
+    .math { overflow-x:auto; margin:1.5rem 0; padding:1rem; border-left:3px solid var(--rule); }
+    .source { font:14px/1.4 ui-sans-serif,system-ui,sans-serif; color:var(--muted); margin-top:1.25rem; }
+    @media (max-width:650px) { body { font-size:16px; } header { padding-top:3rem; } main { margin:0; padding:0 1.25rem 3rem; } }
+  </style>
+  <script>window.MathJax={tex:{inlineMath:[['$','$'],['\(','\)']] },svg:{fontCache:'global'}};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Day as an indexed process equipment</h1>
+    <p>A denotational companion to Draft RFC 1: frames, predicates, processes, bridges, and witness-bearing realization cells.</p>
+    <p class="source">Canonical source: <a href="denotational-semantics.md">denotational-semantics.md</a></p>
+  </header>
+  <main>
+<h1 id="day-as-an-indexed-process-equipment">Day as an indexed process equipment</h1>
+<p>Status: normative denotational companion to Draft RFC 1</p>
+<p>This document is incorporated by the <code>Denotational target</code> section of <a href="../1-frame-indexed-process-model.md"><code>RFC 1</code></a>. It gives one coherent reading of that target. RFC 1 remains authoritative for lifecycle, operational-profile, and conflict-resolution questions. The adjacent HTML file is a derivative reading copy; this Markdown-with-LaTeX file is the claim-addressed source.</p>
+<h2 id="1-the-thesis">1. The thesis</h2>
+<p>Day is an indexed process bicategory—or, more precisely, a candidate symmetric monoidal equipment—fibred over frames. Teloi are frame-dependent predicates, atoms are process 1-cells, bridges are composites of atoms, and realizability is witnessed by 2-cells relating a present predicate to the predicate induced by a bridge and a target telos.</p>
+<p>The essential picture in a frame $f$ is</p>
+<div class="math">\[\begin{array}{c}
+X_0 \xrightsquigarrow{\quad B\quad} X_n\\[-2pt]
+P_0\Downarrow\eta\qquad\Downarrow T
+\end{array}
+\qquad
+\eta:P_0\Longrightarrow T\odot B.\]</div>
+<p>Here $P_0:X_0\rightsquigarrow I$ describes the presently inhabited region, $B:X_0\rightsquigarrow X_n$ is a bridge, and $T:X_n\rightsquigarrow I$ is the target telos. Composition is written right-to-left, so $T\odot B:X_0\rightsquigarrow I$ is the target predicate pulled back along the process represented by $B$.</p>
+<p>This is the abstraction the rest of the vocabulary exists to make operational. Day does not identify a command succeeding, an artifact existing, a witness being observed, an atom completing, and a telos being realized. Those are different cells or claims in this geometry.</p>
+<h2 id="2-frames-are-the-base-of-dependence">2. Frames are the base of dependence</h2>
+<p>Let $\mathcal F$ be a category of frames. A frame is not merely a bag of configuration. It is a dependent context fixing:</p>
+<ul>
+<li>which world states and artifacts are legible;</li>
+<li>which evidence claims and procedures are admitted;</li>
+<li>which equivalences are intentionally ignored;</li>
+<li>how witnesses are interpreted;</li>
+<li>which authority and provenance relations count; and</li>
+<li>which process compositions are meaningful.</li>
+</ul>
+<p>The long-term structure is an equipment-valued pseudofunctor</p>
+<div class="math">\[\mathbb D:\mathcal F^{op}\longrightarrow\mathbf{Equip}.\]</div>
+<p>For each $f\in\mathcal F$, the fiber $\mathbb D_f$ contains the predicates, processes, evidence semantics, and realization cells meaningful in that frame. A frame morphism $u:g\to f$ induces reindexing</p>
+<div class="math">\[u^*:\mathbb D_f\longrightarrow\mathbb D_g.\]</div>
+<p>Calling this structure “fibred” states the design obligation: meaning is local to a frame, and migration is an explicit typed operation. It does not assert that an ordinary Grothendieck fibration already captures every horizontal and vertical component of an equipment. The exact double-categorical Grothendieck construction remains an open formal choice.</p>
+<p>When they exist, adjoints</p>
+<div class="math">\[\Sigma_u\dashv u^*\dashv\Pi_u\]</div>
+<p>separate existential forgetting, substitution, and universal transport. If no frame morphism is known, day may not silently copy a verdict between frames.</p>
+<h2 id="3-the-process-equipment-in-one-frame">3. The process equipment in one frame</h2>
+<p>Fix a frame $f$. The candidate fiber $\mathbb D_f$ has:</p>
+<ul>
+<li>objects $X,Y,\ldots$ representing typed state or artifact contexts;</li>
+<li>horizontal 1-cells $A:X\rightsquigarrow Y$ representing open processes;</li>
+<li>predicate-like proarrows $P:X\rightsquigarrow I$;</li>
+<li>2-cells or squares relating predicates through processes; and</li>
+<li>a monoidal product for genuinely parallel composition.</li>
+</ul>
+<p>The equipment language matters because day needs both process composition and predicate semantics. A plain category of states makes processes easy but hides the squares that certify them. A plain logic of predicates makes satisfaction easy but hides open process boundaries. The double-dimensional picture keeps both and distinguishes:</p>
+<p>1. horizontal composition of atoms into bridges; 2. vertical pasting of realization cells; 3. monoidal juxtaposition of independent processes; 4. convolution or gluing of witness semantics; and 5. reindexing along frame morphisms.</p>
+<p>These operations may satisfy coherence and interchange laws, but they are not synonyms and must not share one operational verb merely because each can be described informally as “composition.”</p>
+<h2 id="4-teloi-are-predicates-not-points">4. Teloi are predicates, not points</h2>
+<p>Let $\mathcal S_f$ be the category of world states legible in $f$, and let $W_f$ be the selected weak equivalences. A telos is a frame-dependent predicate</p>
+<div class="math">\[T_f:\mathcal S_f^{op}\longrightarrow\mathcal V_f\]</div>
+<p>that factors through the localization $\mathcal S_f[W_f^{-1}]$. Thus a telos describes an invariant region of possible states rather than one privileged endpoint. Different concrete states may satisfy the same telos precisely because the frame declares their differences irrelevant to that purpose.</p>
+<p>The current observables do not define the telos. A witness system can be incomplete, unavailable, or replaced without changing what is wanted. This is why day distinguishes the predicate $T$ from an observational presentation of $T$ and why failure to obtain a sufficient certificate is not a refutation.</p>
+<h2 id="5-present-predicate-and-identity-process">5. Present predicate and identity process</h2>
+<p>Two identity-like ideas must remain type-distinct:</p>
+<div class="math">\[1_X:X\rightsquigarrow X,
+\qquad
+P_0:X\rightsquigarrow I.\]</div>
+<p>$1_X$ is the identity process: it changes nothing. $P_0$ is the present predicate: it describes the region currently inhabited according to the frame. The first is a process; the second is a predicate. Conflating them erases the difference between “do nothing” and “the world is presently such-and-such.”</p>
+<p>A telos is already realized without a nontrivial bridge when a cell exists:</p>
+<div class="math">\[P_0\Longrightarrow T\odot1_X\cong T.\]</div>
+<p>That is an attainment judgment, not an assertion that $P_0$, $T$, and $1_X$ are the same object.</p>
+<h2 id="6-atoms-generate-bridges">6. Atoms generate bridges</h2>
+<p>An atom is a generating open process</p>
+<div class="math">\[A_i:X_{i-1}\rightsquigarrow X_i.\]</div>
+<p>A bridge is a horizontal composite</p>
+<div class="math">\[B=A_n\odot\cdots\odot A_2\odot A_1:
+X_0\rightsquigarrow X_n.\]</div>
+<p>The bridge records a typed path of possible process. It does not by itself say that the processes ran, that their postconditions hold, or that the target telos is realized. A typeable bridge can have no realization cell.</p>
+<p>Intermediate predicates make local reasoning explicit. For $P_0,P_1,\ldots,P_n=T$, local cells have type</p>
+<div class="math">\[\eta_i:P_{i-1}\Longrightarrow P_i\odot A_i.\]</div>
+<p>When their boundaries agree, they paste to</p>
+<div class="math">\[\eta:P_0\Longrightarrow
+T\odot A_n\odot\cdots\odot A_1
+=T\odot B.\]</div>
+<p>This is the precise sense in which “bridging states” are intermediate teloi. They are predicates mediating adjacent process cells, not mutable workflow statuses stored by day.</p>
+<h2 id="7-realizability-is-the-2-dimensional-judgment">7. Realizability is the 2-dimensional judgment</h2>
+<p>The primary solution object is not a bridge $B$ but a pair $(B,\eta)$. Two identical atom sequences with different witness-bearing cells are different realizations because they carry different evidence, procedures, provenance, scope, or limitations.</p>
+<p>In a Hoare-style reading, the cell may be seen as</p>
+<div class="math">\[P_0\leq\operatorname{wp}_B(T),\]</div>
+<p>or dually as</p>
+<div class="math">\[\operatorname{sp}_B(P_0)\leq T.\]</div>
+<p>The equipment notation avoids choosing one predicate orientation too early. What matters operationally is that a realization has typed source and target boundaries and is assembled from witness-bearing assessments rather than inferred from control flow.</p>
+<h2 id="8-artifacts-evidence-and-assessment">8. Artifacts, evidence, and assessment</h2>
+<p>Artifacts are things in the world. They need not live in day or kan. Evidence is a typed, attributable claim that makes an artifact legible for an evidential role in frame $f$:</p>
+<div class="math">\[e:\operatorname{Evidence}_f(P,a).\]</div>
+<p>An evidence context $E$ is a finite frame-local diagram retaining artifact coordinates, provenance, dependencies, and correspondence. An assessment is a dependent object</p>
+<div class="math">\[\mathcal A:\operatorname{Assessment}_f(E,p,\sigma),\]</div>
+<p>where $p$ is the declared procedure and $\sigma$ its scope. A certificate is a durable attributable presentation of that assessment; it is not global truth.</p>
+<p>This separation prevents authority laundering. Artifact existence is not evidence. A validly signed evidence claim is not automatically admitted by a frame. An admitted claim does not determine an assessment procedure. A certificate authenticates that an assessment was made; it does not force every frame to accept its conclusion.</p>
+<h2 id="9-witnesses-probes-and-observational-semantics">9. Witnesses, probes, and observational semantics</h2>
+<p>A witness is a frame-relative observable concept through which a telos or process proposition can become evidenced. A probe is an operational procedure that samples or approximates witness-bearing. The probe is not the witness.</p>
+<p>Provisionally, witness-bearing is an enriched relation</p>
+<div class="math">\[\mathsf{Bear}_f:
+\mathsf{Assess}_f^{op}\otimes\mathsf{Witness}_f
+\longrightarrow\mathcal V_f.\]</div>
+<p>A candidate observation semantics chooses an evidence-to-state proarrow $R_f:\mathcal E_f\nrightarrow\mathcal S_f$ and forms</p>
+<div class="math">\[\operatorname{Obs}_f(T)(E)
+=\int^{s\in\mathcal S_f}R_f(E,s)\otimes T(s).\]</div>
+<p>A witness system is a diagram</p>
+<div class="math">\[W_T:J_T\longrightarrow[\mathcal E_f^{op},\mathcal V_f]\]</div>
+<p>whose assembly $\lVert W_T\rVert$ preserves shared coordinates and coherence. Its relationship to the telos must be explicit. A sufficient system carries a soundness map</p>
+<div class="math">\[\alpha_T:\lVert W_T\rVert
+\Longrightarrow\operatorname{Obs}_f(T).\]</div>
+<p>A necessary system reverses that direction; an exact observational presentation gives an equivalence. These three strengths support different inferences. In particular, absence of a sufficient witness-bearing assessment means “not certified,” not “the telos is false.”</p>
+<h2 id="10-why-convolution-appears">10. Why convolution appears</h2>
+<p>Witness components do not always combine by Cartesian conjunction. Evidence may be reused, independently reproduced, resource-sensitive, or required to agree on a shared candidate coordinate. Consequently the evidence tensor is a real design choice rather than decorative notation.</p>
+<p>Day convolution is a candidate operation when witness semantics compose along the monoidal structure of evidence contexts. Relative or promonoidal convolution is a candidate when components must glue along a boundary. The critical operational lesson is already stable even while the final tensor is not: two individually material components cannot certify one assembled witness when their required shared coordinates disagree.</p>
+<h2 id="11-frame-migration-reindexes-the-whole-diagram">11. Frame migration reindexes the whole diagram</h2>
+<p>A frame morphism migrates more than a rendered verdict. It reindexes teloi, evidence, assessments, procedures, witnesses, atoms, bridges, and realization cells together. For a pullback square</p>
+<div class="math">\[\begin{matrix}
+g'&\xrightarrow{v'}&g\\
+\downarrow{u'}&&\downarrow{u}\\
+f'&\xrightarrow{v}&f,
+\end{matrix}\]</div>
+<p>the candidate Beck--Chevalley obligation is invertibility of</p>
+<div class="math">\[\Sigma_{u'}(v')^*\Longrightarrow v^*\Sigma_u\]</div>
+<p>when the relevant adjoints exist. Strong monoidal comparison and preserved shared-boundary gluing express lossless transport. Lax comparison, an unsupported procedure, a forgotten coordinate, or absence of a frame morphism must remain visible as loss or incomparability.</p>
+<p>This is why frame migration is expected to be “nice” only conditionally. The fibred structure supplies the place to state the laws; it does not make every change of context invertible.</p>
+<h2 id="12-the-operational-profile-is-a-decategorification">12. The operational profile is a decategorification</h2>
+<p>Profile v1 has one implicit local frame. Project strings stand in for artifact types; <code>day-atom</code> blocks stand in for open process interfaces; <code>day-bridge</code> expressions approximate horizontal and monoidal composition; probe outcomes approximate witness-bearing; and kan Result claims carry assessment certificates.</p>
+<p>This is a deliberate decategorification. It preserves enough distinctions to avoid false claims while forgetting general state categories, explicit frame morphisms, enrichment, arbitrary witness diagrams, and realization cells as first-class data. The approximation must always be described in the weaker language:</p>
+<ul>
+<li>bridge checking establishes typeability, not execution or realizability;</li>
+<li>a probe result is evidence for an assessment, not a witness definition;</li>
+<li>a legacy witness list is a component report, not a logical conjunction;</li>
+<li>a sufficient coherent certificate supports a telos without defining it; and</li>
+<li>migration not established is not equivalent transport.</li>
+</ul>
+<h2 id="13-what-remains-open">13. What remains open</h2>
+<p>The abstract shape is firmer than several formal choices inside it. RFC 1 therefore leaves open:</p>
+<ul>
+<li>the exact objects and morphisms of $\mathcal E_f$;</li>
+<li>whether its tensor is Cartesian, cocartesian, resource-sensitive, open-diagram</li>
+<p>union, or part of a duoidal structure;</p>
+<li>the enrichment category $\mathcal V_f$;</li>
+<li>representability of $\mathsf{Bear}_f$;</li>
+<li>ordinary versus relative or promonoidal convolution;</li>
+<li>the exact equipment and double Grothendieck construction; and</li>
+<li>the class of frame morphisms carrying adjoints and invertible coherence.</li>
+</ul>
+<p>These choices refine the theory; they do not undo its central geometry. Day is organized around frame-local predicates and open processes, with bridges as horizontal composites and witness-bearing realizability as the 2-dimensional judgment connecting what is present to what is sought.</p>
+  </main>
+</body>
+</html>

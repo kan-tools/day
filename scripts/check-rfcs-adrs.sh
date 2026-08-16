@@ -121,6 +121,12 @@ done
 adr_index_count=$(grep -Ec '^- \[ADR [0-9]+: .+\]\([0-9]+-[^)]+\.md\) — .+$' adrs/README.md || true)
 [[ "$adr_index_count" -eq "$adr_count" ]] || fail 'adrs/README.md contains stale or missing ADR rows'
 
+[[ -f rfcs/1/denotational-semantics.md ]] || fail 'missing RFC 1 denotational companion source'
+[[ -f rfcs/1/denotational-semantics.html ]] || fail 'missing RFC 1 denotational companion HTML'
+grep -Fq '[`rfcs/1/denotational-semantics.md`](1/denotational-semantics.md)' rfcs/1-frame-indexed-process-model.md || fail 'RFC 1 does not incorporate its denotational companion'
+grep -Fq 'Canonical source: <a href="denotational-semantics.md">' rfcs/1/denotational-semantics.html || fail 'denotational HTML does not link its canonical source'
+grep -Fq 'mathjax@3/es5/tex-svg.js' rfcs/1/denotational-semantics.html || fail 'denotational HTML lacks MathJax rendering'
+
 if [[ ${1:-} == --self-test ]]; then
   fixture=$(mktemp -d "${TMPDIR:-/tmp}/day-rfc-check.XXXXXX"); trap 'rm -rf "$fixture"' EXIT
   reset_fixture() { rm -rf "$fixture/rfcs" "$fixture/adrs" "$fixture/scripts"; cp -R rfcs adrs scripts "$fixture/"; cp rfcs/numbers.tsv "$fixture/base-numbers.tsv"; }
@@ -144,6 +150,8 @@ if [[ ${1:-} == --self-test ]]; then
   reset_fixture; perl -0pi -e 's/- Profile-relationship: approximation/- Profile-relationship: full-implementation/' "$fixture/rfcs/1-frame-indexed-process-model.md"; expect_rejected profile-relationship 'unrecognized Profile-relationship: full-implementation'
   reset_fixture; perl -0pi -e 's/"expected": "not-certified"/"expected": "certified"/' "$fixture/rfcs/vectors/1-process-model.json"; expect_rejected coherence-vector 'wrong witness result: coordinate-mismatch'
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Kan-claim: bafyrecursive\n- Status: Draft/' "$fixture/rfcs/0-rfc-and-adr-process.md"; expect_rejected recursive-publication 'normative RFC bytes contain a claim-CID backlink'
+  reset_fixture; rm "$fixture/rfcs/1/denotational-semantics.md"; expect_rejected denotational-source 'missing RFC 1 denotational companion source'
+  reset_fixture; perl -0pi -e 's|mathjax\@3/es5/tex-svg\.js|math-disabled.js|' "$fixture/rfcs/1/denotational-semantics.html"; expect_rejected denotational-math 'denotational HTML lacks MathJax rendering'
   if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then scripts/check-rfc0-publication.py --self-test; fi
   scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json --self-test
   exit 0

@@ -1,4 +1,4 @@
-# Feature: Day RFC foundations and process-model specification, correction round 5
+# Feature: Day RFC foundations and process-model specification, correction round 6
 
 ## Summary
 
@@ -124,6 +124,14 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
   shared-coordinate mismatch, and frame-migration outcomes. A checklist of
   future examples is not a reference vector.
 
+- REQ-17: RFC 1 must incorporate a standalone Markdown-with-LaTeX denotational
+  companion organized from the thesis that day is an indexed process
+  bicategory or equipment fibred over frames. It must develop predicates,
+  atoms, bridges, realization cells, witness-bearing assessment, and migration
+  as one coherent account; ship a local HTML reading copy with LaTeX rendering;
+  and be published as an exact-address kan claim without embedding its CID in
+  the normative bytes.
+
 ## Acceptance Criteria
 
 - [ ] AC-1: (REQ-1, REQ-2) `rfcs/0-rfc-and-adr-process.md`, `rfcs/template.md`,
@@ -203,6 +211,13 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
       labelled certified, a missing sufficient witness labelled refuted, and a
       lossy frame migration labelled equivalent.
 
+- [ ] AC-17: (REQ-17) `rfcs/1/denotational-semantics.md` is incorporated by
+      RFC 1's `Denotational target`, presents the indexed-equipment account
+      around the typed cell $P_0\Rightarrow T\odot B$, and has a source-linked
+      `rfcs/1/denotational-semantics.html` rendering whose LaTeX displays
+      correctly. A published claim on `rfc/1/denotational-semantics` resolves
+      from a fresh clone to the exact committed Markdown bytes.
+
 - [ ] AC-12: (post-acceptance rollout gate; REQ-13) Every deferred rollout area has a GitHub issue citing
       RFC 1 and naming the relevant semantic obligation. Closing or deferring
       an issue cannot change RFC 1's accepted semantics without a superseding
@@ -244,6 +259,9 @@ indexed symmetric monoidal equipment
 $\mathbb D:\mathcal F^{op}\to\mathbf{Equip}$. This is a trajectory, not a claim
 that current Rust types implement an equipment. The operational profile must
 be stated using independently implementable rules and finite reference vectors.
+The standalone companion at `rfcs/1/denotational-semantics.md` is the coherent
+mathematical reading of that target and is incorporated by RFC 1. Its adjacent
+HTML file is a derivative reading artifact, never a second normative source.
 
 `docs/TELOS.md` remains explanatory foundations: motivation, plausible
 fiction, weak equivalence, and the longer category-theoretic trajectory.
@@ -326,6 +344,9 @@ connected to day through general atom and witness contracts.
   server-issued signature-verification timestamp. Evidence and migration
   vectors additionally have exact closed case schemas and case-derived
   transport/loss semantics.
+- RQ-18: The indexed-process/equipment account receives a clean standalone
+  rewrite under `rfcs/1/`, incorporated by RFC 1. Markdown-with-LaTeX is the
+  claim-addressed source; HTML is a local derivative for reading.
 
 ## Open Questions
 

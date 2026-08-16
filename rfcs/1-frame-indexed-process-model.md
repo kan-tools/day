@@ -86,6 +86,13 @@ that current Rust types implement the named categorical structures. The
 exploratory derivation lives in
 `docs/day-process-model-category-sketch.md`.
 
+The standalone companion
+[`rfcs/1/denotational-semantics.md`](1/denotational-semantics.md) is
+incorporated into this denotational target. It gives the coherent mathematical
+reading organized around the cell $P_0\Rightarrow T\odot B$. This RFC remains
+authoritative where the companion, the exploratory sketch, lifecycle rules, or
+the operational profile conflict.
+
 ### Frames and dependent structure
 
 Let $\mathcal F$ be a category of frames. The long-term target is an
