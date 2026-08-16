@@ -4,6 +4,7 @@
 import copy
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -45,8 +46,12 @@ def main():
         subprocess.run(["git", "clone", "--quiet", "--no-local", str(root), str(checkout)], check=True)
         projection = checkout / vector["projection_path"]
         require(projection.is_dir() and any(projection.glob("*.md")), "published claim projection is absent from fresh clone")
-        subprocess.run(["kan", "restore"], cwd=checkout, check=True, capture_output=True)
-        output = subprocess.run(["kan", "show", vector["subject"], "--json"], cwd=checkout, check=True, capture_output=True, text=True)
+        identity = root / ".kan/identity"
+        require(identity.is_file(), "the fixture author's signing identity is unavailable")
+        clean_env = os.environ.copy()
+        clean_env["KAN_IDENTITY_FILE"] = str(identity)
+        subprocess.run(["kan", "restore"], cwd=checkout, env=clean_env, check=True, capture_output=True)
+        output = subprocess.run(["kan", "show", vector["subject"], "--json"], cwd=checkout, env=clean_env, check=True, capture_output=True, text=True)
         claims = json.loads(output.stdout)["claims"]
         validate(vector, checkout, claims)
         if "--self-test" in sys.argv[1:]:
