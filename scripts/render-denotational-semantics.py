@@ -94,29 +94,48 @@ def page(body: str) -> str:
   <meta name="source" content="denotational-semantics.md">
   <title>Day as an indexed process equipment</title>
   <style>
-    :root {{ color-scheme: light; --ink:#17211d; --muted:#5d6a64; --paper:#f6f2e8;
-      --card:#fffdf7; --rule:#c9d2c7; --accent:#285f50; --code:#e8eee8; }}
+    :root {{ color-scheme: light dark; --ink:#17211d; --muted:#5d6a64; --paper:#f6f2e8;
+      --card:#fffdf7; --rule:#c9d2c7; --accent:#285f50; --code:#e8eee8;
+      --header:#183d34; --header-ink:#f9f5e9; --header-muted:#d6e5dd;
+      --neutral-bg:#f1f3ed; --definition:#397262; --definition-bg:#eaf2ed;
+      --construction:#47719b; --construction-bg:#edf2f7;
+      --proposition:#765598; --proposition-bg:#f1edf6;
+      --proof:#8a7651; --proof-bg:#f5f0e5;
+      --example:#ad7042; --example-bg:#f7eee7;
+      --obligation:#aa514b; --obligation-bg:#f8eae8; }}
     * {{ box-sizing:border-box; }}
     body {{ margin:0; color:var(--ink); background:var(--paper); font:18px/1.66 Georgia,serif; }}
-    header {{ padding:4.5rem max(1.5rem,calc((100vw - 760px)/2)); background:#183d34; color:#f9f5e9; }}
-    header p {{ max-width:720px; color:#d6e5dd; margin:.65rem 0 0; }}
+    header {{ padding:4.5rem max(1.5rem,calc((100vw - 760px)/2)); background:var(--header); color:var(--header-ink); }}
+    header p {{ max-width:720px; color:var(--header-muted); margin:.65rem 0 0; }}
     main {{ max-width:820px; margin:2.5rem auto 6rem; padding:0 2rem 4rem; background:var(--card);
       box-shadow:0 18px 50px rgba(34,46,39,.09); border-top:5px solid var(--accent); }}
     h1,h2,h3 {{ font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.16; letter-spacing:-.025em; }}
     main h1 {{ display:none; }} h2 {{ margin:3.4rem 0 1rem; font-size:1.55rem; }}
     h3 {{ margin:2.25rem 0 .75rem; padding:.5rem .75rem; border-left:4px solid var(--rule);
-      background:#f1f3ed; font-size:1.05rem; letter-spacing:-.01em; }}
-    h3.definition {{ border-color:#397262; background:#eaf2ed; }}
-    h3.construction {{ border-color:#47719b; background:#edf2f7; }}
-    h3.proposition, h3.theorem {{ border-color:#765598; background:#f1edf6; }}
-    h3.proof {{ border-color:#8a7651; background:#f5f0e5; font-style:italic; }}
-    h3.example, h3.instance {{ border-color:#ad7042; background:#f7eee7; }}
-    h3.open {{ border-color:#aa514b; background:#f8eae8; }}
+      background:var(--neutral-bg); font-size:1.05rem; letter-spacing:-.01em; }}
+    h3.definition {{ border-color:var(--definition); background:var(--definition-bg); }}
+    h3.construction {{ border-color:var(--construction); background:var(--construction-bg); }}
+    h3.proposition, h3.theorem {{ border-color:var(--proposition); background:var(--proposition-bg); }}
+    h3.proof {{ border-color:var(--proof); background:var(--proof-bg); font-style:italic; }}
+    h3.example, h3.instance {{ border-color:var(--example); background:var(--example-bg); }}
+    h3.open {{ border-color:var(--obligation); background:var(--obligation-bg); }}
     p,li {{ max-width:72ch; }}
     a {{ color:var(--accent); text-underline-offset:3px; }}
     code {{ font: .9em ui-monospace,SFMono-Regular,monospace; background:var(--code); padding:.12em .3em; border-radius:4px; }}
     .math {{ overflow-x:auto; margin:1.5rem 0; padding:1rem; border-left:3px solid var(--rule); }}
     .source {{ font:14px/1.4 ui-sans-serif,system-ui,sans-serif; color:var(--muted); margin-top:1.25rem; }}
+    @media (prefers-color-scheme:dark) {{
+      :root {{ --ink:#e5eee9; --muted:#a9b8b0; --paper:#101713; --card:#17211c;
+        --rule:#405149; --accent:#8bc8b5; --code:#27352e; --header:#0c2a22;
+        --header-ink:#f2f7f4; --header-muted:#aac8bc; --neutral-bg:#202c26;
+        --definition:#66ad97; --definition-bg:#1d332b;
+        --construction:#78a8d4; --construction-bg:#1d2d3a;
+        --proposition:#aa8dca; --proposition-bg:#2c2436;
+        --proof:#c2a66d; --proof-bg:#332d21;
+        --example:#d09567; --example-bg:#38291f;
+        --obligation:#d57c75; --obligation-bg:#3a2423; }}
+      main {{ box-shadow:0 18px 55px rgba(0,0,0,.35); }}
+    }}
     @media (max-width:650px) {{ body {{ font-size:16px; }} header {{ padding-top:3rem; }} main {{ margin:0; padding:0 1.25rem 3rem; }} }}
   </style>
   <script>window.MathJax={{tex:{{inlineMath:[['$','$'],['\\(','\\)']] }},svg:{{fontCache:'global'}}}};</script>
