@@ -322,20 +322,73 @@ u^*P_n\odot u^*B.
 \end{array}\]</div>
 <h3 id="proof-sketch" class="proof">Proof sketch</h3>
 <p>The first statement is Proposition 4.6. Functoriality preserves vertical pasting, the strong comparison preserves horizontal whiskering, and the equipment-morphism coherence axiom equates the composites. Without strength or coherence, the lower cell need not equal the image of the upper one.</p>
-<h2 id="10-concrete-operational-instances">10. Concrete operational instances</h2>
-<h3 id="instance-10-1-present-identity-telos" class="instance">Instance 10.1 — Present identity telos</h3>
+<h2 id="10-epistemic-sites-descent-and-telos-relative-obstruction">10. Epistemic sites, descent, and telos-relative obstruction</h2>
+<p>The indexed equipment supplies two independent engineering controls. One may change which frame translations an agent collective can perform, or change which families of translations count as jointly sufficient for a telos. The first changes the category on which realization is sought. The second changes its Grothendieck topology and therefore its local notion of equivalence.</p>
+<h3 id="definition-10-1-agent-epistemic-subcategory" class="definition">Definition 10.1 — Agent epistemic subcategory</h3>
+<p>Fix a versioned cooperating-agent system $A$ and a starting frame $f_0$. Its epistemic subcategory</p>
+<div class="math">\[\mathcal C_{A,f_0}\hookrightarrow\mathcal F\]</div>
+<p>contains the frames reachable from $f_0$ by translations that $A$ can actually perform, together with the coherent composites that $A$ can preserve. It is not the full subcategory on imaginable contexts. Its arrows encode concrete translation guarantees: which artifacts remain addressable, which evidence types remain legible, which procedures remain available, and which equipment comparisons are strong, lax, or absent.</p>
+<p>For a telos $T$, a smaller $\mathcal C^T_{A,f_0}$ may retain only translations whose losses are irrelevant to interpreting and realizing $T$. Thus epistemic restriction may be telos-relative without declaring the discarded distinctions globally meaningless.</p>
+<h3 id="definition-10-2-telos-relative-epistemic-topology" class="definition">Definition 10.2 — Telos-relative epistemic topology</h3>
+<p>A Grothendieck topology $J_T$ on $\mathcal C^T_{A,f_0}$ declares which covering families</p>
+<div class="math">\[\{u_i:f_i\to f\}_{i\in I}\]</div>
+<p>are jointly sufficient to observe, translate, or construct $T$ at $f$. A $J_T$-local equivalence is a map that becomes invertible after restriction to such a cover and coherent descent.</p>
+<p>This is distinct from $W_f$ in Definition 3.3. The class $W_f$ identifies states that a telos cannot distinguish inside one frame. The topology $J_T$ specifies when frame-local presentations collectively count as equivalent or sufficient. Changing $W_f$ changes the fiberwise predicate; changing $J_T$ changes locality and gluing across frames.</p>
+<h3 id="definition-10-3-telos-stack-and-realization-prestack" class="definition">Definition 10.3 — Telos stack and realization prestack</h3>
+<p>The frame-indexed interpretations of a telos form, provisionally, a prestack $\mathbf T$ on $(\mathcal C^T_{A,f_0},J_T)$. For each frame $f$, let $\mathbf{Real}_T(f)$ be the category or bicategory whose objects are candidate realizations $(B,\eta)$ in $\mathbb D_f$ and whose arrows are the accepted equivalences between their bridges, evidence, and realization cells. Reindexing along frame morphisms makes</p>
+<div class="math">\[\mathbf{Real}_T:(\mathcal C^T_{A,f_0})^{op}
+\longrightarrow\mathbf{Bicat}\]</div>
+<p>a schematic realization prestack. Stackification, when it exists, freely adds effective descent for the equivalences selected by $J_T$; it does not invent missing atoms or evidence.</p>
+<h3 id="proposition-sketch-10-4-attainment-is-a-descent-problem" class="proposition">Proposition sketch 10.4 — Attainment is a descent problem</h3>
+<p>Suppose $\{u_i:f_i\to f\}$ is a $J_T$-cover. Local realizations $(B_i,\eta_i)\in\mathbf{Real}_T(f_i)$ determine a realization at $f$ exactly when they carry equivalences on pairwise overlaps and coherent higher compatibilities, and that descent datum is effective in $\mathbf{Real}_T$.</p>
+<h3 id="proof-sketch" class="proof">Proof sketch</h3>
+<p>The local bridges and cells are objects in the fibers of the realization prestack. Agreement on $f_i\times_f f_j$ supplies the first gluing cells; triple overlaps require their composites to agree up to the specified coherent 2-cells. Effective descent produces the global object. When realizations have nontrivial automorphisms, equality on overlaps is the wrong condition: the groupoid- or bicategory-valued descent datum is essential. This is the first reason stacks, rather than sets of successful runs, are the natural target.</p>
+<h3 id="definition-10-5-telos-local-obstruction-theory" class="definition">Definition 10.5 — Telos-local obstruction theory</h3>
+<p>Let $\mathcal O_T$ denote whatever coefficient object records failures to extend and glue $T$-realizations. When an abelian approximation is justified, successive obstruction classes may be written schematically as</p>
+<div class="math">\[o_k(T,A,f_0,J_T)\in
+H^k(\mathcal C^T_{A,f_0},J_T;\mathcal O_T).\]</div>
+<p>Their interpretation is staged: degree zero concerns local realizers, low degrees detect failed transport and incompatible overlap data, and higher degrees detect coherence among alternative composites. Vanishing of the relevant classes is a sufficient construction criterion only under the hypotheses of the chosen obstruction theory.</p>
+<p>For nonabelian automorphisms, genuinely bicategorical coefficients, or processes whose composition carries higher coherence, the notation $H^k$ is only a shadow. The intended target may require nonabelian cohomology, stacks of realizations, hyperdescent, or a categorical generalized cohomology theory.</p>
+<h3 id="definition-10-6-attainability-envelope" class="definition">Definition 10.6 — Attainability envelope</h3>
+<p>The capability of $A$ from $f_0$ is the telos-indexed class</p>
+<div class="math">\[\operatorname{Att}(A,f_0)=
+\left\{T\;\middle|\;
+\begin{array}{l}
+\text{there exist }\mathcal C^T_{A,f_0}\text{ and }J_T\text{ such that}\\
+\text{the required local realizers exist and their descent}\\
+\text{obstructions are controlled in the declared theory}
+\end{array}
+\right\}.\]</div>
+<p>“Controlled” is stronger than merely assigning a class: the implementation must know which obstruction matters, how it is assessed, and what vanishing or trivialization permits it to construct. This envelope describes what a specific version of cooperating agents can actually do starting here, rather than what processes exist in an unrestricted semantic universe.</p>
+<h3 id="theorem-sketch-10-7-two-levers-for-enlarging-attainability" class="theorem">Theorem sketch 10.7 — Two levers for enlarging attainability</h3>
+<p>For fixed $T$, implementation frustration may be reduced in two categorically different ways:</p>
+<ul>
+<li>improve $A$'s translation guarantees, thereby adding useful objects,</li>
+<p>morphisms, comparisons, or local realizers to $\mathcal C^T_{A,f_0}$; or</p>
+<li>alter the defensible topology $J_T$, thereby changing which local families</li>
+<p>cover and which maps are weak equivalences for descent.</p>
+</ul>
+<p>Either change may trivialize an obstruction that was previously nonzero. The second is sound only when the new covers preserve the distinctions the telos declares material.</p>
+<h3 id="proof-sketch" class="proof">Proof sketch</h3>
+<p>Restriction, refinement, or extension of the epistemic site induces comparison maps between the corresponding realization prestacks and obstruction objects. Improved translations can supply a missing local section or a missing overlap comparison. A changed topology can make a previously global demand local, or identify presentations after a jointly sufficient cover. In either case the obstruction problem changes functorially. An indiscriminately coarse topology could make every obstruction disappear by forgetting the telos, hence the materiality condition is part of the construction rather than an external policy check.</p>
+<h3 id="instance-10-8-commit-coherent-release-attainment" class="instance">Instance 10.8 — Commit-coherent release attainment</h3>
+<p>Let $T$ say that a release is tested and unanimously approved for one commit. One frame contains test execution, another contains review authority, and a third preserves the shared commit coordinate. A cover by the test and review frames is sufficient only if their overlap identifies the same commit and the approval equivalences satisfy cocycle coherence. If translation forgets the commit, the descent datum cannot be formed. Adding a commit-preserving frame morphism improves the epistemic category; declaring different commits weakly equivalent would instead alter $J_T$ but would be unsound for this $T$.</p>
+<h3 id="open-obligation-10-a-site-and-coefficient-selection" class="open">Open obligation 10.A — Site and coefficient selection</h3>
+<p>RFC 1 does not yet select a canonical site, coverage, model structure, coefficient object, or cohomology theory. Operational work must first expose frame translations and telos materiality explicitly enough that these choices are inspectable. The stable commitment is the two-lever architecture and the use of descent obstruction—not a premature claim that ordinary sheaf cohomology computes every realization problem.</p>
+<h2 id="11-concrete-operational-instances">11. Concrete operational instances</h2>
+<h3 id="instance-11-1-present-identity-telos" class="instance">Instance 11.1 — Present identity telos</h3>
 <p>Take a repository already satisfying “working tree has no RFC validation errors.” The present predicate entails the telos under the validator assessment. The bridge is $1_X$ and the certificate approximates $\eta_0:P_0\Rightarrow T$. Day can report attainment without inventing an atom execution. It forgets the full predicate hom and proof that the validator is sound for $T$.</p>
-<h3 id="instance-10-2-design-to-build-bridge" class="instance">Instance 10.2 — Design-to-build bridge</h3>
+<h3 id="instance-11-2-design-to-build-bridge" class="instance">Instance 11.2 — Design-to-build bridge</h3>
 <p>Let</p>
 <div class="math">\[A_1=\texttt{atom/design}:\texttt{intent}\rightsquigarrow\texttt{design-doc},\]</div>
 <div class="math">\[A_2=\texttt{atom/generative-build}:
 \texttt{design-doc}\rightsquigarrow\texttt{code-change}.\]</div>
 <p>The bridge checker establishes the middle-boundary equality and hence the type of $A_2\odot A_1$. Design and build results provide candidate local assessments. Current day forgets general contexts, actual realization squares, and proof that procedures establish their postconditions.</p>
-<h3 id="instance-10-3-coherent-release-witness" class="instance">Instance 10.3 — Coherent release witness</h3>
+<h3 id="instance-11-3-coherent-release-witness" class="instance">Instance 11.3 — Coherent release witness</h3>
 <p>Let $W_1$ be “tests pass for commit $c$” and $W_2$ be “review approves commit $c$.” Their witness diagram shares <code>Commit</code>. Assessments at one commit assemble; assessments at different commits do not. The profile stores artifact addresses and rejects mismatch. It forgets the pullback's universal property and does not expose $W_1\star W_2$ as a presheaf.</p>
-<h3 id="instance-10-4-migration-with-an-unsupported-procedure" class="instance">Instance 10.4 — Migration with an unsupported procedure</h3>
+<h3 id="instance-11-4-migration-with-an-unsupported-procedure" class="instance">Instance 11.4 — Migration with an unsupported procedure</h3>
 <p>Frame $f$ admits <code>cargo-test/v1</code>; frame $g$ addresses the same commit but does not admit that procedure. Reindexing transports artifact and evidence coordinates. It cannot construct $\operatorname{Assessment}_g(E,p,\sigma)$ for unsupported $p$. The correct profile outcome is <code>uncheckable</code>, not <code>not-certified</code>, and not a transported realization cell.</p>
-<h2 id="11-operational-profile-as-decategorification">11. Operational profile as decategorification</h2>
+<h2 id="12-operational-profile-as-decategorification">12. Operational profile as decategorification</h2>
 <p>Profile v1 has one implicit local frame. Project strings approximate artifact types. <code>day-atom</code> blocks approximate open-process interfaces. <code>day-bridge</code> expressions approximate horizontal and monoidal composition. Probe outcomes approximate witness-bearing assessments. Kan Result claims approximate durable certificates.</p>
 <p>The profile aims to preserve this typeability square:</p>
 <div class="math">\[\begin{array}{ccc}
@@ -347,8 +400,8 @@ u^*P_n\odot u^*B.
 \text{boundary-compatible expression.}
 \end{array}\]</div>
 <p>The square commutes only for typeability. Bridge-check success is not execution, assessment, witness-bearing, or realization. Probe success is evidence for an assessment rather than a witness definition; a legacy witness list is a component report rather than conjunction; migration not established is not equivalent transport.</p>
-<h2 id="12-remaining-formal-obligations">12. Remaining formal obligations</h2>
-<p>The evidence category still needs defined variance and morphisms. Its tensor must distinguish copying, independence, resources, and boundary gluing. The enrichment must support the claimed coends and transformations. Witness-bearing may or may not be representable. Ordinary, relative, or promonoidal convolution must be chosen. The exact equipment and double Grothendieck construction must be identified. Admissible frame morphisms, adjoints, and strong or lax comparisons must be classified.</p>
+<h2 id="13-remaining-formal-obligations">13. Remaining formal obligations</h2>
+<p>The evidence category still needs defined variance and morphisms. Its tensor must distinguish copying, independence, resources, and boundary gluing. The enrichment must support the claimed coends and transformations. Witness-bearing may or may not be representable. Ordinary, relative, or promonoidal convolution must be chosen. The exact equipment and double Grothendieck construction must be identified. Admissible frame morphisms, adjoints, and strong or lax comparisons must be classified. The epistemic site, telos-relative coverage, realization prestack, descent conditions, and appropriate ordinary, nonabelian, or generalized cohomology theory must be selected rather than inferred from notation.</p>
 <p>Those are open obligations, not holes concealed by notation. The stable result is the typed geometry: day is organized around frame-local predicates and open processes; bridges are horizontal composites; witness-bearing realizability is the 2-dimensional judgment connecting what is present to what is sought; and frame migration acts on the entire diagram rather than copying a verdict.</p>
   </main>
 </body>
