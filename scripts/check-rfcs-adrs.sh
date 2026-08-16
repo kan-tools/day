@@ -66,8 +66,9 @@ check_rfc_shape rfcs/template.md
 check_adr_shape adrs/template.md
 [[ -x scripts/check-rfc1-vectors.py ]] || fail 'scripts/check-rfc1-vectors.py is not executable'
 [[ -x scripts/check-rfc0-publication.py ]] || fail 'scripts/check-rfc0-publication.py is not executable'
-scripts/check-rfc0-publication.py
+if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then scripts/check-rfc0-publication.py; fi
 scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json
+if rg -q '^- Kan-claim:' rfcs/*.md adrs/*.md; then fail 'normative RFC bytes contain a claim-CID backlink'; fi
 
 rfc_numbers=''; rfc_count=0
 for file in rfcs/[0-9]*-*.md; do
@@ -124,7 +125,7 @@ if [[ ${1:-} == --self-test ]]; then
   reset_fixture() { rm -rf "$fixture/rfcs" "$fixture/adrs" "$fixture/scripts"; cp -R rfcs adrs scripts "$fixture/"; cp rfcs/numbers.tsv "$fixture/base-numbers.tsv"; }
   expect_rejected() {
     local label=$1 expected=$2
-    if DAY_RFC_ROOT="$fixture" DAY_RFC_BASE_REGISTRY="$fixture/base-numbers.tsv" "$fixture/scripts/check-rfcs-adrs.sh" >"$fixture/output" 2>&1; then fail "self-test accepted $label mutation"; fi
+    if DAY_RFC_ROOT="$fixture" DAY_RFC_BASE_REGISTRY="$fixture/base-numbers.tsv" DAY_RFC_PUBLICATION_SKIP=1 "$fixture/scripts/check-rfcs-adrs.sh" >"$fixture/output" 2>&1; then fail "self-test accepted $label mutation"; fi
     grep -Fq "$expected" "$fixture/output" || fail "self-test $label failed for the wrong reason"
     echo "RFC/ADR self-test: $label mutation rejected"
   }
@@ -141,6 +142,7 @@ if [[ ${1:-} == --self-test ]]; then
   reset_fixture; perl -0pi -e 's/- Profile-relationship: approximation/- Profile-relationship: full-implementation/' "$fixture/rfcs/1-frame-indexed-process-model.md"; expect_rejected profile-relationship 'unrecognized Profile-relationship: full-implementation'
   reset_fixture; perl -0pi -e 's/"expected": "not-certified"/"expected": "certified"/' "$fixture/rfcs/vectors/1-process-model.json"; expect_rejected coherence-vector 'wrong witness result: coordinate-mismatch'
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Kan-claim: bafyrecursive\n- Status: Draft/' "$fixture/rfcs/0-rfc-and-adr-process.md"; expect_rejected recursive-publication 'normative RFC bytes contain a claim-CID backlink'
+  if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then scripts/check-rfc0-publication.py --self-test; fi
   scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json --self-test
   exit 0
 fi
