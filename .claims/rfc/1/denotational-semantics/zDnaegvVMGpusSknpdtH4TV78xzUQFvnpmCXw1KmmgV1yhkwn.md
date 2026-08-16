@@ -11,7 +11,7 @@
   "cites": [],
   "rev": "223mt7kuqfbyy",
   "seq": 0,
-  "of": 3,
+  "of": 5,
   "text_len": 332,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBxyZmMvMS9kZW5vdGF0aW9uYWwtc2VtYW50aWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoMWUxNTY4ODYxNWI4MjJjYjRiMGM4MjQ4ZmYxNDQ5YzAzZDQzNTY1NqFmRmlsZUF0gnggcmZjcy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3MubWR4KDFlMTU2ODg2MTViODIyY2I0YjBjODI0OGZmMTQ0OWMwM2Q0MzU2NTZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLDVln3M="
 }
@@ -34,7 +34,7 @@ Draft RFC 1 denotational companion: Day is an indexed process bicategory—or ca
   ],
   "rev": "223mt7kuqqqsa",
   "seq": 1,
-  "of": 3,
+  "of": 5,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZE9wZW5lY2l0ZXOB2CpYJQABcRIgh58z++sg1UPST/skF5RDUC3HQ4ApJ5zctdhYT/WoEeNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgxZTE1Njg4NjE1YjgyMmNiNGIwYzgyNDhmZjE0NDljMDNkNDM1NjU2aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSw1a1qV"
 }
 ---
@@ -52,7 +52,48 @@ Draft RFC 1 denotational companion: Day is an indexed process bicategory—or ca
   "cites": [],
   "rev": "223mt7kurcnzq",
   "seq": 2,
-  "of": 3,
+  "of": 5,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgxZTE1Njg4NjE1YjgyMmNiNGIwYzgyNDhmZjE0NDljMDNkNDM1NjU2aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSw1dE+O"
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreic3jv2nm2al6anxakreajtsyyhs4bjtfnyqnd5iv5z5nlblq65suq",
+  "sig": "5f982d2aed8682d27967afa4260b531eba6ec40592683c3462d099da1644738c0c88df19506e79725ea7ea61ee29d548c4b7c6ec0cb98b6915c75daede7411e5",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "rfc/1/denotational-semantics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreieht4z7x2za2vb5et73eqlziq2qfxduhabje6onznoylbh7lkar4m"
+  ],
+  "rev": "223mt7newjf7c",
+  "seq": 3,
+  "of": 5,
+  "text_len": 185,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgh58z++sg1UPST/skF5RDUC3HQ4ApJ5zctdhYT/WoEeNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCgwYTE4NjBiODhkYjNlZjAwNzllZjVkZWMwYTdkOWU0OGNmZjBkMDUxoWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoMGExODYwYjg4ZGIzZWYwMDc5ZWY1ZGVjMGE3ZDllNDhjZmYwZDA1MWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlks1cesOw=="
+}
+---
+
+Correct the companion's bridge diagram to use core-TeX \overset{B}{\rightsquigarrow} notation; this supersedes the unsupported \xrightsquigarrow rendering in the prior addressed source.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreih7gzfjh4h2ms3gwcxrx7hwxvlbrwp77oksy24tk5hwuxyoy5spv4",
+  "sig": "a68352bb916de71f5f256399e4b31c52f7e1423c715ab591007b189673aac96074d5e6cca93fac97e5a9d7587ad734ee2853d423db7fb55257681275920f01e4",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "rfc/1/denotational-semantics"
+  },
+  "kind": "publication",
+  "cites": [],
+  "rev": "223mt7nex3mvf",
+  "seq": 4,
+  "of": 5,
+  "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYTE4NjBiODhkYjNlZjAwNzllZjVkZWMwYTdkOWU0OGNmZjBkMDUxaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSzV0MsA"
 }
 ---
