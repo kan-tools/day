@@ -4,8 +4,8 @@
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: https://github.com/kan-tools/day/pull/220
-- Review-started-at: 2026-08-16T20:54:32Z
-- Review-period-ends: 2026-08-19T20:59:32Z
+- Review-started-at: 2026-08-16T21:00:15Z
+- Review-period-ends: 2026-08-19T21:05:15Z
 - Review-override: None
 - Supersedes: The implicit design and decision process in `CONTRIBUTING.md`
 - Superseded-by: None
