@@ -11,7 +11,7 @@
   "cites": [],
   "rev": "223mt5yfjcn2h",
   "seq": 0,
-  "of": 106,
+  "of": 112,
   "text_len": 195,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCgzZjlhZTM5Y2M3N2MzYjQxMDlhMzg2YzE0M2Q5NjY1MjNhMDhiYjg0aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWR+W9Eul"
 }
@@ -34,7 +34,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt5yfjqsj7",
   "seq": 1,
-  "of": 106,
+  "of": 112,
   "text_len": 597,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiBPPCSYbB7nyBlFZLOjedt3a5mIh1iBBWnSjIOXBVHLumZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHNkYXktcmZjLWZvdW5kYXRpb25zaWFydGlmYWN0c4GhZkNvbW1pdHgoM2Y5YWUzOWNjNzdjM2I0MTA5YTM4NmMxNDNkOTY2NTIzYTA4YmI4NGl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkflvtheQ=="
 }
@@ -55,7 +55,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt5yfk2lwv",
   "seq": 2,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg8RmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9ubHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHNkYXktcmZjLWZvdW5kYXRpb25zaWFydGlmYWN0c4GhZkNvbW1pdHgoM2Y5YWUzOWNjNzdjM2I0MTA5YTM4NmMxNDNkOTY2NTIzYTA4YmI4NGl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkflwBHLA=="
 }
 ---
@@ -75,7 +75,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt5yfks36j",
   "seq": 3,
-  "of": 106,
+  "of": 112,
   "text_len": 186,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5cMBCc="
 }
@@ -98,7 +98,7 @@ RQ-1: Day adopts separate RFC and ADR disciplines modeled on kan RFC 0; working 
   ],
   "rev": "223mt5yflac33",
   "seq": 4,
-  "of": 106,
+  "of": 112,
   "text_len": 142,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5cTH7U="
 }
@@ -121,7 +121,7 @@ RQ-2: RFC 1 defines the ontology and operational approximation but defers concre
   ],
   "rev": "223mt5yfloi2s",
   "seq": 5,
-  "of": 106,
+  "of": 112,
   "text_len": 171,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5caN60="
 }
@@ -144,7 +144,7 @@ RQ-3: Frames are normative dependent contexts in RFC 1; operational profile v1 h
   ],
   "rev": "223mt5yfm4p7m",
   "seq": 6,
-  "of": 106,
+  "of": 112,
   "text_len": 136,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5chVEA="
 }
@@ -167,7 +167,7 @@ RQ-4: Artifacts, evidence, assessments, certificates, witnesses, and probes are 
   ],
   "rev": "223mt5yfmktzn",
   "seq": 7,
-  "of": 106,
+  "of": 112,
   "text_len": 176,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5coZ4k="
 }
@@ -190,7 +190,7 @@ RQ-5: The category-theoretic model is an explicit aspirational target with a con
   ],
   "rev": "223mt5yfmz66o",
   "seq": 8,
-  "of": 106,
+  "of": 112,
   "text_len": 108,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5cvkCs="
 }
@@ -213,7 +213,7 @@ RQ-6: RFC 1 acceptance precedes further v0.13 feature implementation. The full d
   ],
   "rev": "223mt5yfnhi6k",
   "seq": 9,
-  "of": 106,
+  "of": 112,
   "text_len": 169,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5c2uCA="
 }
@@ -236,7 +236,7 @@ RQ-7: Rollout details are scoped through GitHub issues derived from RFC 1; they 
   ],
   "rev": "223mt5yfnvolz",
   "seq": 10,
-  "of": 106,
+  "of": 112,
   "text_len": 124,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5c90dE="
 }
@@ -259,7 +259,7 @@ RQ-8: Markdown-with-LaTeX is the canonical exploratory mathematical document; re
   ],
   "rev": "223mt5yfodzsw",
   "seq": 11,
-  "of": 106,
+  "of": 112,
   "text_len": 273,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgiD8VbTskaeVlm1jDuo9DTZOuJTGS1FZLeccWUwvMMiRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNmOWFlMzljYzc3YzNiNDEwOWEzODZjMTQzZDk2NjUyM2EwOGJiODRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH5dE/qk="
 }
@@ -282,7 +282,7 @@ RQ-9: Legacy `day-telos` witness lists default to `sufficient`. This permits a c
   ],
   "rev": "223mt5yuvteup",
   "seq": 12,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgTzwkmGwe58gZRWSzo3nbd2uZiIdYgQVp0oyDlwVRy7pmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjZGEzYTliYTNlOWJkN2IxZjQxMTQ1MWIzZjU0NTkwZjZhYTAwYjFpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH7W8qto="
 }
@@ -306,7 +306,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt5yuwchhz",
   "seq": 13,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiCMmr/wXhDew7651s3UlmJJV6tvmPtnMLgZdNSbsHjpctgqWCUAAXESIIg/FW07JGnlZZtYw7qPQ02TriUxktRWS3nHFlMLzDIkZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCgyY2RhM2E5YmEzZTliZDdiMWY0MTE0NTFiM2Y1NDU5MGY2YWEwMGIxaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWR+1xDVW"
 }
@@ -327,7 +327,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt5yuwmqql",
   "seq": 14,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg8RmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9ubHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHNkYXktcmZjLWZvdW5kYXRpb25zaWFydGlmYWN0c4GhZkNvbW1pdHgoMmNkYTNhOWJhM2U5YmQ3YjFmNDExNDUxYjNmNTQ1OTBmNmFhMDBiMWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkftclaag=="
 }
 ---
@@ -345,7 +345,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt5yv23y7f",
   "seq": 15,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjZGEzYTliYTNlOWJkN2IxZjQxMTQ1MWIzZjU0NTkwZjZhYTAwYjFpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZH7YA+Ds="
 }
 ---
@@ -365,7 +365,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt62nbmsxx",
   "seq": 16,
-  "of": 106,
+  "of": 112,
   "text_len": 248,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg0/s6lRnhFGc0lwcobdZ7JWWYGCkNf8a6xGajZhk2nSFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICZ5Yeg="
 }
@@ -388,7 +388,7 @@ adversarial review of day-rfc-foundations: BLOCK — RFC 0 publication is recurs
   ],
   "rev": "223mt62nrcn75",
   "seq": 17,
-  "of": 106,
+  "of": 112,
   "text_len": 397,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICd0TDM="
 }
@@ -411,7 +411,7 @@ RFC 0's publication protocol is recursively inconsistent: normative byte identit
   ],
   "rev": "223mt62nrsc7b",
   "seq": 18,
-  "of": 106,
+  "of": 112,
   "text_len": 423,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICd8IDI="
 }
@@ -434,7 +434,7 @@ The RFC/ADR validator reports templates and indexes valid while hostile mutation
   ],
   "rev": "223mt62nsbxz2",
   "seq": 19,
-  "of": 106,
+  "of": 112,
   "text_len": 307,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICeD924="
 }
@@ -457,7 +457,7 @@ RFC 1's realization cells are ill-typed under either composition convention: the
   ],
   "rev": "223mt62nsrsvi",
   "seq": 20,
-  "of": 106,
+  "of": 112,
   "text_len": 449,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICeL4wE="
 }
@@ -480,7 +480,7 @@ RFC 1 does not coherently connect its equipment, predicate, and witness semantic
   ],
   "rev": "223mt62ntbmbq",
   "seq": 21,
-  "of": 106,
+  "of": 112,
   "text_len": 406,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICeTyC4="
 }
@@ -503,7 +503,7 @@ Operational profile v1 is not independently implementable: mandatory shared-coor
   ],
   "rev": "223mt62ntrdnp",
   "seq": 22,
-  "of": 106,
+  "of": 112,
   "text_len": 304,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICebpgg="
 }
@@ -526,7 +526,7 @@ Frame migration is asserted without the required base-change squares, mate trans
   ],
   "rev": "223mt62nub3qu",
   "seq": 23,
-  "of": 106,
+  "of": 112,
   "text_len": 348,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICejhmU="
 }
@@ -549,7 +549,7 @@ The conformance census is incomplete: the design lists thirteen terms while AC-4
   ],
   "rev": "223mt62nuqz6u",
   "seq": 24,
-  "of": 106,
+  "of": 112,
   "text_len": 368,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgSnGn9smldCFJjLnsFNKaQ7LwU9mMfuQF4X2KBDJrJBJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDIzYTE5NDc5NDgzNzk0NTlmZjNhZjBiNjdiN2Y4NzU0YzdmZDg5MzNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZICerfCE="
 }
@@ -570,7 +570,7 @@ Rollout and self-application remain unfulfilled: no RFC review PR or publication
   "cites": [],
   "rev": "223mt62nzsabn",
   "seq": 25,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCgyM2ExOTQ3OTQ4Mzc5NDU5ZmYzYWYwYjY3YjdmODc1NGM3ZmQ4OTMzaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSAn/Bh/"
 }
 ---
@@ -590,7 +590,7 @@ Rollout and self-application remain unfulfilled: no RFC review PR or publication
   ],
   "rev": "223mt66r6ahu7",
   "seq": 26,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgjJq/8F4Q3sO+udbN1JZiSVerb5j7ZzC4GXTUm7B46XJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDc3NWEyZDE2YmZiMzcwMmJmYTE3ZDJkY2M0OTAxYzJkNWE0M2YwYTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIS5DNts="
 }
@@ -614,7 +614,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt66r6poj7",
   "seq": 27,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiAYJPNaRCtM/l3qqzKjwCncZjQsTBylKS09RAx/uw0bqNgqWCUAAXESINP7OpUZ4RRnNJcHKG3WeyVlmBgpDX/GusRmo2YZNp0hZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NzVhMmQxNmJmYjM3MDJiZmExN2QyZGNjNDkwMWMyZDVhNDNmMGEzaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSEuStF6"
 }
@@ -635,7 +635,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt66r72bfh",
   "seq": 28,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDFsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NzVhMmQxNmJmYjM3MDJiZmExN2QyZGNjNDkwMWMyZDVhNDNmMGEzaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSEuUB0F"
 }
 ---
@@ -655,7 +655,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt66r7slve",
   "seq": 29,
-  "of": 106,
+  "of": 112,
   "text_len": 230,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgEM2ibr83AZ8hi6vi7u4woIKY4gmrCPurfn0EJoi5QKBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDc3NWEyZDE2YmZiMzcwMmJmYTE3ZDJkY2M0OTAxYzJkNWE0M2YwYTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIS5cRv4="
 }
@@ -678,7 +678,7 @@ RQ-10: Operational profile v1 supports an explicit versioned `sufficient` relati
   ],
   "rev": "223mt66rabsii",
   "seq": 30,
-  "of": 106,
+  "of": 112,
   "text_len": 189,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgEM2ibr83AZ8hi6vi7u4woIKY4gmrCPurfn0EJoi5QKBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDc3NWEyZDE2YmZiMzcwMmJmYTE3ZDJkY2M0OTAxYzJkNWE0M2YwYTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIS5j4V4="
 }
@@ -701,7 +701,7 @@ RQ-11: Composition is conventional right-to-left. A bridge $B=A_n\odot\cdots\odo
   ],
   "rev": "223mt66rar537",
   "seq": 31,
-  "of": 106,
+  "of": 112,
   "text_len": 122,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgEM2ibr83AZ8hi6vi7u4woIKY4gmrCPurfn0EJoi5QKBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDc3NWEyZDE2YmZiMzcwMmJmYTE3ZDJkY2M0OTAxYzJkNWE0M2YwYTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIS5ri7w="
 }
@@ -724,7 +724,7 @@ RQ-12: RFC claim discovery is non-normative and external to RFC bytes; no RFC em
   ],
   "rev": "223mt66rbakdi",
   "seq": 32,
-  "of": 106,
+  "of": 112,
   "text_len": 209,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgEM2ibr83AZ8hi6vi7u4woIKY4gmrCPurfn0EJoi5QKBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDc3NWEyZDE2YmZiMzcwMmJmYTE3ZDJkY2M0OTAxYzJkNWE0M2YwYTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIS5zQMI="
 }
@@ -745,7 +745,7 @@ RQ-13: Draft readiness, formal review and acceptance, and post-acceptance rollou
   "cites": [],
   "rev": "223mt66rmhlmt",
   "seq": 33,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDc3NWEyZDE2YmZiMzcwMmJmYTE3ZDJkY2M0OTAxYzJkNWE0M2YwYTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIS8mxfA="
 }
 ---
@@ -765,7 +765,7 @@ RQ-13: Draft readiness, formal review and acceptance, and post-acceptance rollou
   ],
   "rev": "223mt67h7muhc",
   "seq": 34,
-  "of": 106,
+  "of": 112,
   "text_len": 252,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgEM2ibr83AZ8hi6vi7u4woIKY4gmrCPurfn0EJoi5QKBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIVpZaT8="
 }
@@ -788,7 +788,7 @@ adversarial review of day-rfc-foundations: BLOCK — RFC 0 publication and lifec
   ],
   "rev": "223mt67idzxxq",
   "seq": 35,
-  "of": 106,
+  "of": 112,
   "text_len": 441,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgFCHthIo/Spo8GPNCrDYIlaEzmmrDbiZMVRosfFbI3clmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOha0xpbmVSYW5nZUF0g3ghc2NyaXB0cy9jaGVjay1yZmMwLXB1YmxpY2F0aW9uLnB5eChhOTdlNGQ0YzNlMDQ2NTAwYjVjNDUxMjJlZDgxMzFiN2EyNTZkODVjomNlbmQYOGVzdGFydBgkaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSFcn/dI"
 }
@@ -811,7 +811,7 @@ BLOCK-F1: AC-3 publication evidence is not a claim-resolution fixture. scripts/c
   ],
   "rev": "223mt67iejxc5",
   "seq": 36,
-  "of": 106,
+  "of": 112,
   "text_len": 321,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgFCHthIo/Spo8GPNCrDYIlaEzmmrDbiZMVRosfFbI3clmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOhZkZpbGVBdIJ4GnNjcmlwdHMvY2hlY2stcmZjcy1hZHJzLnNoeChhOTdlNGQ0YzNlMDQ2NTAwYjVjNDUxMjJlZDgxMzFiN2EyNTZkODVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSFcp/SZ"
 }
@@ -834,7 +834,7 @@ BLOCK-F2: REQ-15 does not enforce an append-only number registry. scripts/check-
   ],
   "rev": "223mt67ieznco",
   "seq": 37,
-  "of": 106,
+  "of": 112,
   "text_len": 354,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgFCHthIo/Spo8GPNCrDYIlaEzmmrDbiZMVRosfFbI3clmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOha0xpbmVSYW5nZUF0g3gac2NyaXB0cy9jaGVjay1yZmNzLWFkcnMuc2h4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOiY2VuZBgqZXN0YXJ0GCRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIVyvzKs="
 }
@@ -857,7 +857,7 @@ BLOCK-F3: Accepted-state review metadata is presence-only. scripts/check-rfcs-ad
   ],
   "rev": "223mt67ifjaut",
   "seq": 38,
-  "of": 106,
+  "of": 112,
   "text_len": 412,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgFCHthIo/Spo8GPNCrDYIlaEzmmrDbiZMVRosfFbI3clmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOhZkZpbGVBdIJ4HXNjcmlwdHMvY2hlY2stcmZjMS12ZWN0b3JzLnB5eChhOTdlNGQ0YzNlMDQ2NTAwYjVjNDUxMjJlZDgxMzFiN2EyNTZkODVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSFct5rw"
 }
@@ -880,7 +880,7 @@ BLOCK-F4: The RFC 1 checker does not type-check its declared bridge or enforce p
   ],
   "rev": "223mt67ifyzce",
   "seq": 39,
-  "of": 106,
+  "of": 112,
   "text_len": 547,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgFCHthIo/Spo8GPNCrDYIlaEzmmrDbiZMVRosfFbI3clmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOha0xpbmVSYW5nZUF0g3glcmZjcy8xLWZyYW1lLWluZGV4ZWQtcHJvY2Vzcy1tb2RlbC5tZHgoYTk3ZTRkNGMzZTA0NjUwMGI1YzQ1MTIyZWQ4MTMxYjdhMjU2ZDg1Y6JjZW5kGQI7ZXN0YXJ0GQIQaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSFcv3yb"
 }
@@ -903,7 +903,7 @@ BLOCK-F5: Required RFC 1 acceptance evidence remains absent. Design AC-6 require
   ],
   "rev": "223mt67igisiv",
   "seq": 40,
-  "of": 106,
+  "of": 112,
   "text_len": 458,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgFCHthIo/Spo8GPNCrDYIlaEzmmrDbiZMVRosfFbI3clmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE5N2U0ZDRjM2UwNDY1MDBiNWM0NTEyMmVkODEzMWI3YTI1NmQ4NWOhZkZpbGVBdIJ4UC5jbGFpbXMvZGF5LXJmYy1mb3VuZGF0aW9ucy96RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duLm1keChhOTdlNGQ0YzNlMDQ2NTAwYjVjNDUxMjJlZDgxMzFiN2EyNTZkODVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSFcx2Fy"
 }
@@ -924,7 +924,7 @@ BLOCK-F6: The published correction leaves contradictory live decisions without d
   "cites": [],
   "rev": "223mt67immd2z",
   "seq": 41,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChhOTdlNGQ0YzNlMDQ2NTAwYjVjNDUxMjJlZDgxMzFiN2EyNTZkODVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSFdKSO3"
 }
 ---
@@ -945,7 +945,7 @@ BLOCK-F6: The published correction leaves contradictory live decisions without d
   ],
   "rev": "223mt6axs4g5g",
   "seq": 42,
-  "of": 106,
+  "of": 112,
   "text_len": 173,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOC2CpYJQABcRIgACyh8baGKMXYYWOy44XQ3mS0x2fxa5cop66aemGd94TYKlglAAFxEiDxsElisFhODedEHpTdKZRj43KwWLC9Hrv9xQnshKymOWZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHNkYXktcmZjLWZvdW5kYXRpb25zaWFydGlmYWN0c4GhZkNvbW1pdHgoYmI3MWU3MGE5YjQxNTA0ZDVmNWY4YTEwODY4MjI4N2I0OTQ2N2EzY2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkhu4Ev+g=="
 }
@@ -968,7 +968,7 @@ RQ-14: RQ-10 supersedes the earlier RQ-9 decision. Legacy witness lists are flat
   ],
   "rev": "223mt6axu6imx",
   "seq": 43,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgGCTzWkQrTP5d6qsyo8Ap3GY0LEwcpSktPUQMf7sNG6hmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGJiNzFlNzBhOWI0MTUwNGQ1ZjVmOGExMDg2ODIyODdiNDk0NjdhM2Npd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIbuiOek="
 }
@@ -992,7 +992,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt6axupcxz",
   "seq": 44,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDd2WNLbvDFV8263URYExpy093t9qtj1sfCPNDy6SVz0tgqWCUAAXESIBDNom6/NwGfIYur4u7uMKCCmOIJqwj7q359BCaIuUCgZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChiYjcxZTcwYTliNDE1MDRkNWY1ZjhhMTA4NjgyMjg3YjQ5NDY3YTNjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSG7qqNK"
 }
@@ -1013,7 +1013,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt6axv2wyz",
   "seq": 45,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDJsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChiYjcxZTcwYTliNDE1MDRkNWY1ZjhhMTA4NjgyMjg3YjQ5NDY3YTNjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSG7sHNx"
 }
 ---
@@ -1031,7 +1031,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt6axvx46q",
   "seq": 46,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGJiNzFlNzBhOWI0MTUwNGQ1ZjVmOGExMDg2ODIyODdiNDk0NjdhM2Npd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZIbu+iCM="
 }
 ---
@@ -1051,7 +1051,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt7fttpglj",
   "seq": 47,
-  "of": 106,
+  "of": 112,
   "text_len": 294,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgWWK8cxPQW1UQNwoy37gQA4LasykXnaNSPOCYS9zUObBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTNpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKvOascI="
 }
@@ -1074,7 +1074,7 @@ adversarial review of day-rfc-foundations: BLOCK — Round-2 RFC foundations rem
   ],
   "rev": "223mt7fus6lzo",
   "seq": 48,
-  "of": 106,
+  "of": 112,
   "text_len": 694,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgw4t1/fRTFzAI14UdoidAkafu5zbf3pWmWnMPIBms7slmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOha0xpbmVSYW5nZUF0g3ghc2NyaXB0cy9jaGVjay1yZmMwLXB1YmxpY2F0aW9uLnB5eCg2ZjhiY2I5YTEwNjM5MWNkMGJhZDc0YzQ4ODY1YzAwOTBiZWU1NDUzomNlbmQYOGVzdGFydBdpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKvWCR4o="
 }
@@ -1097,7 +1097,7 @@ BLOCK-R2-F1: AC-3 publication evidence is non-hermetic and does not prove public
   ],
   "rev": "223mt7fuspjz3",
   "seq": 49,
-  "of": 106,
+  "of": 112,
   "text_len": 573,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgw4t1/fRTFzAI14UdoidAkafu5zbf3pWmWnMPIBms7slmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOha0xpbmVSYW5nZUF0g3gac2NyaXB0cy9jaGVjay1yZmNzLWFkcnMuc2h4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOiY2VuZBhmZXN0YXJ0GFtpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKvWKv3c="
 }
@@ -1120,7 +1120,7 @@ BLOCK-R2-F2: REQ-15 still does not enforce an append-only RFC allocation in prod
   ],
   "rev": "223mt7futajwp",
   "seq": 50,
-  "of": 106,
+  "of": 112,
   "text_len": 678,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgw4t1/fRTFzAI14UdoidAkafu5zbf3pWmWnMPIBms7slmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOha0xpbmVSYW5nZUF0g3gac2NyaXB0cy9jaGVjay1yZmNzLWFkcnMuc2h4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOiY2VuZBgxZXN0YXJ0GCRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKvWTPyA="
 }
@@ -1143,7 +1143,7 @@ BLOCK-R2-F3: RFC 0 review acceptance remains forgeable despite stricter syntax. 
   ],
   "rev": "223mt7futrmdg",
   "seq": 51,
-  "of": 106,
+  "of": 112,
   "text_len": 742,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgw4t1/fRTFzAI14UdoidAkafu5zbf3pWmWnMPIBms7slmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOha0xpbmVSYW5nZUF0g3gdc2NyaXB0cy9jaGVjay1yZmMxLXZlY3RvcnMucHl4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOiY2VuZBhOZXN0YXJ0GDFpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKvWbyME="
 }
@@ -1166,7 +1166,7 @@ BLOCK-R2-F4: RFC 1 realization vectors remain not type-checked end to end. scrip
   ],
   "rev": "223mt7fuucnr3",
   "seq": 52,
-  "of": 106,
+  "of": 112,
   "text_len": 651,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgw4t1/fRTFzAI14UdoidAkafu5zbf3pWmWnMPIBms7slmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOha0xpbmVSYW5nZUF0g3gdc2NyaXB0cy9jaGVjay1yZmMxLXZlY3RvcnMucHl4KDZmOGJjYjlhMTA2MzkxY2QwYmFkNzRjNDg4NjVjMDA5MGJlZTU0NTOiY2VuZBguZXN0YXJ0E2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkq9aRObQ=="
 }
@@ -1187,7 +1187,7 @@ BLOCK-R2-F5: RFC 1 witness and migration vectors accept values outside the norma
   "cites": [],
   "rev": "223mt7fuxvfzq",
   "seq": 53,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCg2ZjhiY2I5YTEwNjM5MWNkMGJhZDc0YzQ4ODY1YzAwOTBiZWU1NDUzaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSr13a+N"
 }
 ---
@@ -1207,7 +1207,7 @@ BLOCK-R2-F5: RFC 1 witness and migration vectors accept values outside the norma
   ],
   "rev": "223mt7gbvnzh2",
   "seq": 54,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg3dljS27wxVfNut1EWBMactPd7farY9bHwjzQ8uklc9JmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGYyMWExNzBhYTliNjRjNGZmNzdmMmU1OTRjOTQzY2RhYzY3MjQ1ODJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKw+5+fw="
 }
@@ -1231,7 +1231,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt7gbw7akc",
   "seq": 55,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiCSK1+/ulQddtziO4sjsVWpFc/uNG6b9/9en6SwZWntG9gqWCUAAXESIFlivHMT0FtVEDcKMt+4EAOC2rMpF52jUjzgmEvc1DmwZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChmMjFhMTcwYWE5YjY0YzRmZjc3ZjJlNTk0Yzk0M2NkYWM2NzI0NTgyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSsPwpmf"
 }
@@ -1252,7 +1252,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt7gbwksl3",
   "seq": 56,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDNsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChmMjFhMTcwYWE5YjY0YzRmZjc3ZjJlNTk0Yzk0M2NkYWM2NzI0NTgyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSsPyGG5"
 }
 ---
@@ -1272,7 +1272,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt7gbxhhv5",
   "seq": 57,
-  "of": 106,
+  "of": 112,
   "text_len": 254,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBLyLA++KjXgbGa/zS/9lJoiiH86HDNabfG1b+nMe2SdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGYyMWExNzBhYTliNjRjNGZmNzdmMmU1OTRjOTQzY2RhYzY3MjQ1ODJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKw/WtvQ="
 }
@@ -1293,7 +1293,7 @@ RQ-15: Accepted-state validation is evidence-bearing rather than presence-only: 
   "cites": [],
   "rev": "223mt7gbxyxw2",
   "seq": 58,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGYyMWExNzBhYTliNjRjNGZmNzdmMmU1OTRjOTQzY2RhYzY3MjQ1ODJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZKw/fdws="
 }
 ---
@@ -1313,7 +1313,7 @@ RQ-15: Accepted-state validation is evidence-bearing rather than presence-only: 
   ],
   "rev": "223mt7iczyhdy",
   "seq": 59,
-  "of": 106,
+  "of": 112,
   "text_len": 210,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBLyLA++KjXgbGa/zS/9lJoiiH86HDNabfG1b+nMe2SdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGE2N2ZjNzVjOTBiYWI4N2FiNmY5NmJjMjk4MDkzYWFlZWY4MWY3YzVpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK5H/NMY="
 }
@@ -1336,7 +1336,7 @@ adversarial review of day-rfc-foundations: BLOCK — Round 3 remains unshippable
   ],
   "rev": "223mt7idp4tzq",
   "seq": 60,
-  "of": 106,
+  "of": 112,
   "text_len": 713,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwRArlB7o/YR7Jhg30ll01Hhj0h7FW+1RmWhwTUuYMCtmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE2N2ZjNzVjOTBiYWI4N2FiNmY5NmJjMjk4MDkzYWFlZWY4MWY3YzWha0xpbmVSYW5nZUF0g3gbc2NyaXB0cy9jaGVjay1yZmMtcmV2aWV3LnB5eChhNjdmYzc1YzkwYmFiODdhYjZmOTZiYzI5ODA5M2FhZWVmODFmN2M1omNlbmQYTmVzdGFydBgiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSuTUWd2"
 }
@@ -1359,7 +1359,7 @@ BLOCK-R3-F1: Accepted-state chronology is still forgeable. scripts/check-rfc-rev
   ],
   "rev": "223mt7ids7lia",
   "seq": 61,
-  "of": 106,
+  "of": 112,
   "text_len": 644,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwRArlB7o/YR7Jhg30ll01Hhj0h7FW+1RmWhwTUuYMCtmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE2N2ZjNzVjOTBiYWI4N2FiNmY5NmJjMjk4MDkzYWFlZWY4MWY3YzWha0xpbmVSYW5nZUF0g3gdc2NyaXB0cy9jaGVjay1yZmMxLXZlY3RvcnMucHl4KGE2N2ZjNzVjOTBiYWI4N2FiNmY5NmJjMjk4MDkzYWFlZWY4MWY3YzWiY2VuZBhlZXN0YXJ0E2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkrk4K16w=="
 }
@@ -1382,7 +1382,7 @@ BLOCK-R3-F2: RFC 1 witness vectors still accept structures the checker does not 
   ],
   "rev": "223mt7idtgrdz",
   "seq": 62,
-  "of": 106,
+  "of": 112,
   "text_len": 585,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwRArlB7o/YR7Jhg30ll01Hhj0h7FW+1RmWhwTUuYMCtmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KGE2N2ZjNzVjOTBiYWI4N2FiNmY5NmJjMjk4MDkzYWFlZWY4MWY3YzWha0xpbmVSYW5nZUF0g3gdc2NyaXB0cy9jaGVjay1yZmMxLXZlY3RvcnMucHl4KGE2N2ZjNzVjOTBiYWI4N2FiNmY5NmJjMjk4MDkzYWFlZWY4MWY3YzWiY2VuZBh1ZXN0YXJ0GGdpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK5OWXMk="
 }
@@ -1403,7 +1403,7 @@ BLOCK-R3-F3: RFC 1 migration vectors certify invented output semantics. scripts/
   "cites": [],
   "rev": "223mt7idu4eyn",
   "seq": 63,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgqFmQ29tbWl0eChhNjdmYzc1YzkwYmFiODdhYjZmOTZiYzI5ODA5M2FhZWVmODFmN2M1oWtMaW5lUmFuZ2VBdIN4G3NjcmlwdHMvY2hlY2stcmZjLXJldmlldy5weXgoYTY3ZmM3NWM5MGJhYjg3YWI2Zjk2YmMyOTgwOTNhYWVlZjgxZjdjNaJjZW5kGE5lc3RhcnQYIml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkrk6ErXA=="
 }
 ---
@@ -1423,7 +1423,7 @@ BLOCK-R3-F3: RFC 1 migration vectors certify invented output semantics. scripts/
   ],
   "rev": "223mt7iitq5qe",
   "seq": 64,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgkitfv7pUHXbc4juLI7FVqRXP7jRum/f/Xp+ksGVp7RtmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGQ0MzY2MjRjMDNiZjY5ZWY4MzFjN2VhYjk1ODFiOTE4ZGU4YWUwMmZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK52bDmA="
 }
@@ -1447,7 +1447,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt7iiuccif",
   "seq": 65,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiBYTXC2cNU/FkrJGT862hALv0H0NuuN0Uxx/eVPei+B59gqWCUAAXESIAS8iwPvio14Gxmv80v/ZSaIoh/OhwzWm3xtW/pzHtknZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChkNDM2NjI0YzAzYmY2OWVmODMxYzdlYWI5NTgxYjkxOGRlOGFlMDJmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSudpCFN"
 }
@@ -1468,7 +1468,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt7iiuobq6",
   "seq": 66,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDRsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChkNDM2NjI0YzAzYmY2OWVmODMxYzdlYWI5NTgxYjkxOGRlOGFlMDJmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSudqh5d"
 }
 ---
@@ -1488,7 +1488,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt7iivniko",
   "seq": 67,
-  "of": 106,
+  "of": 112,
   "text_len": 264,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgmx+Jfk+wNWyguvl9kenoF6EF0ID1l2+abo0pQo7a9vVmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGQ0MzY2MjRjMDNiZjY5ZWY4MzFjN2VhYjk1ODFiOTE4ZGU4YWUwMmZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK525uaM="
 }
@@ -1509,7 +1509,7 @@ RQ-16: Review chronology is anchored to GitHub's server-recorded push time for t
   "cites": [],
   "rev": "223mt7iiwbwch",
   "seq": 68,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGQ0MzY2MjRjMDNiZjY5ZWY4MzFjN2VhYjk1ODFiOTE4ZGU4YWUwMmZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK53D8As="
 }
 ---
@@ -1529,7 +1529,7 @@ RQ-16: Review chronology is anchored to GitHub's server-recorded push time for t
   ],
   "rev": "223mt7jb6dlgx",
   "seq": 69,
-  "of": 106,
+  "of": 112,
   "text_len": 261,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgmx+Jfk+wNWyguvl9kenoF6EF0ID1l2+abo0pQo7a9vVmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDk2NGUxMmMzOWY3NGRjNWM1NjI4ZDhhMzI2OTAxMmM5YmNjYzRiNzhpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK85ExS0="
 }
@@ -1552,7 +1552,7 @@ adversarial review of day-rfc-foundations: BLOCK — Round 4 remains unshippable
   ],
   "rev": "223mt7jbmxxge",
   "seq": 70,
-  "of": 106,
+  "of": 112,
   "text_len": 547,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwkPF3CitSdprxfqXX0cEqYY4hCZ7n4BXg+915KP3b0ZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDk2NGUxMmMzOWY3NGRjNWM1NjI4ZDhhMzI2OTAxMmM5YmNjYzRiNziha0xpbmVSYW5nZUF0g3gbc2NyaXB0cy9jaGVjay1yZmMtcmV2aWV3LnB5eCg5NjRlMTJjMzlmNzRkYzVjNTYyOGQ4YTMyNjkwMTJjOWJjY2M0Yjc4omNlbmQYOWVzdGFydBgtaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSvPLvUV"
 }
@@ -1575,7 +1575,7 @@ BLOCK-R4-F1: Accepted-state chronology is inoperable for normal GitHub PR heads.
   ],
   "rev": "223mt7jbnjh4n",
   "seq": 71,
-  "of": 106,
+  "of": 112,
   "text_len": 625,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwkPF3CitSdprxfqXX0cEqYY4hCZ7n4BXg+915KP3b0ZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDk2NGUxMmMzOWY3NGRjNWM1NjI4ZDhhMzI2OTAxMmM5YmNjYzRiNziha0xpbmVSYW5nZUF0g3gdc2NyaXB0cy9jaGVjay1yZmMxLXZlY3RvcnMucHl4KDk2NGUxMmMzOWY3NGRjNWM1NjI4ZDhhMzI2OTAxMmM5YmNjYzRiNziiY2VuZBhoZXN0YXJ0E2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkrzzez3w=="
 }
@@ -1598,7 +1598,7 @@ BLOCK-R4-F2: RFC 1 witness evidence remains structurally uncertified. scripts/ch
   ],
   "rev": "223mt7jbo2w4e",
   "seq": 72,
-  "of": 106,
+  "of": 112,
   "text_len": 685,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwkPF3CitSdprxfqXX0cEqYY4hCZ7n4BXg+915KP3b0ZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDk2NGUxMmMzOWY3NGRjNWM1NjI4ZDhhMzI2OTAxMmM5YmNjYzRiNziha0xpbmVSYW5nZUF0g3gdc2NyaXB0cy9jaGVjay1yZmMxLXZlY3RvcnMucHl4KDk2NGUxMmMzOWY3NGRjNWM1NjI4ZDhhMzI2OTAxMmM5YmNjYzRiNziiY2VuZBh9ZXN0YXJ0GGppd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK89Ab88="
 }
@@ -1619,7 +1619,7 @@ BLOCK-R4-F3: RFC 1 migration details are still asserted rather than derived. scr
   "cites": [],
   "rev": "223mt7jbomq2l",
   "seq": 73,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCg5NjRlMTJjMzlmNzRkYzVjNTYyOGQ4YTMyNjkwMTJjOWJjY2M0Yjc4aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSvPSVeg"
 }
 ---
@@ -1639,7 +1639,7 @@ BLOCK-R4-F3: RFC 1 migration details are still asserted rather than derived. scr
   ],
   "rev": "223mt7jov65it",
   "seq": 74,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgWE1wtnDVPxZKyRk/OtoQC79B9DbrjdFMcf3lT3ovgedmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGVkMGI3NGZjMDlkNzViODZiNTAxNzFlZjhmZDViNDg3Y2QxZWVkZWZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK+myCkU="
 }
@@ -1663,7 +1663,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt7jovptuf",
   "seq": 75,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiCNY2n1+s3NJFU0la6C5WsbdtjAy94LfiJSk3fxyLSZWdgqWCUAAXESIJsfiX5PsDVsoLr5fZHp6BehBdCA9Zdvmm6NKUKO2vb1ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChlZDBiNzRmYzA5ZDc1Yjg2YjUwMTcxZWY4ZmQ1YjQ4N2NkMWVlZGVmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSvpuubf"
 }
@@ -1684,7 +1684,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt7jow3hyy",
   "seq": 76,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDVsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChlZDBiNzRmYzA5ZDc1Yjg2YjUwMTcxZWY4ZmQ1YjQ4N2NkMWVlZGVmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSvpwLd6"
 }
 ---
@@ -1704,7 +1704,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt7jox2wpt",
   "seq": 77,
-  "of": 106,
+  "of": 112,
   "text_len": 309,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg75YEpTHfG8sBXXzOKsvyuYH5y1zkylGjEc3z+y4IN29mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGVkMGI3NGZjMDlkNzViODZiNTAxNzFlZjhmZDViNDg3Y2QxZWVkZWZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK+nQck0="
 }
@@ -1725,7 +1725,7 @@ RQ-17: Because GitHub's `Commit.pushedDate` is null for ordinary day PRs, review
   "cites": [],
   "rev": "223mt7joxmvfn",
   "seq": 78,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGVkMGI3NGZjMDlkNzViODZiNTAxNzFlZjhmZDViNDg3Y2QxZWVkZWZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZK+nZbO8="
 }
 ---
@@ -1745,7 +1745,7 @@ RQ-17: Because GitHub's `Commit.pushedDate` is null for ordinary day PRs, review
   ],
   "rev": "223mt7kq67tsk",
   "seq": 79,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgjWNp9frNzSRVNJWuguVrG3bYwMveC34iUpN38ci0mVlmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDkwY2RlYThhNjZlOTMyMzBhZGFjMTcwNWM5M2M2YmY3ZjY3YzRhN2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLCxC5Dc="
 }
@@ -1769,7 +1769,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt7kq6sdrn",
   "seq": 80,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiBO9jN0M4meC0nzpHZ5Wb9zQF0LnYyT5a3aF5IsU1bDq9gqWCUAAXESIO+WBKUx3xvLAV18zirL8rmB+ctc5MpRoxHN8/suCDdvZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCg5MGNkZWE4YTY2ZTkzMjMwYWRhYzE3MDVjOTNjNmJmN2Y2N2M0YTdkaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSwsTCZ/"
 }
@@ -1790,7 +1790,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt7kq76ghi",
   "seq": 81,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDZsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCg5MGNkZWE4YTY2ZTkzMjMwYWRhYzE3MDVjOTNjNmJmN2Y2N2M0YTdkaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSwsUjFI"
 }
 ---
@@ -1810,7 +1810,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt7kqa6r3h",
   "seq": 82,
-  "of": 106,
+  "of": 112,
   "text_len": 211,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg5bp9aBInDvXxnRyRlXb94zbEUrKrPhiOZ2oJPMyJC/tmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDkwY2RlYThhNjZlOTMyMzBhZGFjMTcwNWM5M2M2YmY3ZjY3YzRhN2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLCxiW7g="
 }
@@ -1831,7 +1831,7 @@ RQ-18: The indexed-process/equipment account receives a clean standalone rewrite
   "cites": [],
   "rev": "223mt7kuskfuy",
   "seq": 83,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDFlMTU2ODg2MTViODIyY2I0YjBjODI0OGZmMTQ0OWMwM2Q0MzU2NTZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLDWILv8="
 }
 ---
@@ -1851,7 +1851,7 @@ RQ-18: The indexed-process/equipment account receives a clean standalone rewrite
   ],
   "rev": "223mt7o355ggq",
   "seq": 84,
-  "of": 106,
+  "of": 112,
   "text_len": 194,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgTvYzdDOJngtJ86R2eVm/c0BdC52Mk+Wt2heSLFNWw6tmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDI3NjkzNDQ5YmYzZGVlMTZlMTMzODIzYWRiMGIyZWFhMDcwNDg5NGZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLQIxsQ4="
 }
@@ -1875,7 +1875,7 @@ design doc .design/day-rfc-foundations.md checked against the live design-doc sc
   ],
   "rev": "223mt7o35ps4a",
   "seq": 85,
-  "of": 106,
+  "of": 112,
   "text_len": 596,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiCFuS5W8ftYWnLGuo4OiAh1VFn54SkvtSpRwCU+4RTz8dgqWCUAAXESIOW6fWgSJw718Z0ckZV2/eM2xFKyqz4YjmdqCTzMiQv7ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCgyNzY5MzQ0OWJmM2RlZTE2ZTEzMzgyM2FkYjBiMmVhYTA3MDQ4OTRmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWS0COt/Y"
 }
@@ -1896,7 +1896,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   "cites": [],
   "rev": "223mt7o363ktf",
   "seq": 86,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXhQRmVhdHVyZTogRGF5IFJGQyBmb3VuZGF0aW9ucyBhbmQgcHJvY2Vzcy1tb2RlbCBzcGVjaWZpY2F0aW9uLCBjb3JyZWN0aW9uIHJvdW5kIDZsc3ViamVjdF9raW5kZElkZWFlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCgyNzY5MzQ0OWJmM2RlZTE2ZTEzMzgyM2FkYjBiMmVhYTA3MDQ4OTRmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWS0CQMK8"
 }
 ---
@@ -1916,7 +1916,7 @@ day-rfc-foundations design (.design/day-rfc-foundations.md): Establish a reviewe
   ],
   "rev": "223mt7o373sml",
   "seq": 87,
-  "of": 106,
+  "of": 112,
   "text_len": 393,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgaiS7fE+RBhQeL+CotnI0PbItSW0aAsWz9CVnYX7/ZqRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDI3NjkzNDQ5YmYzZGVlMTZlMTMzODIzYWRiMGIyZWFhMDcwNDg5NGZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLQJQ4eQ="
 }
@@ -1937,7 +1937,7 @@ RQ-19: The companion is strengthened into a definition–proposition–proof ske
   "cites": [],
   "rev": "223mt7oj3nomj",
   "seq": 88,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDQzMDU5MWVjMmYxYjk5ZjlhNDY4MGQzNTI2OTEwYTllOWEyYmY1OWJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLR4Z0eo="
 }
 ---
@@ -1957,7 +1957,7 @@ RQ-19: The companion is strengthened into a definition–proposition–proof ske
   ],
   "rev": "223mt7pudrawa",
   "seq": 89,
-  "of": 106,
+  "of": 112,
   "text_len": 251,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgaiS7fE+RBhQeL+CotnI0PbItSW0aAsWz9CVnYX7/ZqRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGJkZmY1ZTQ0ODk5MmQxNTE2YjYyYWNmMDE0MWIxYmY0MmM1NGYzYzJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLXSbmNU="
 }
@@ -1980,7 +1980,7 @@ adversarial review of day-rfc-foundations: BLOCK — RFC 1 companion acceptance 
   ],
   "rev": "223mt7puqipw6",
   "seq": 90,
-  "of": 106,
+  "of": 112,
   "text_len": 619,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgNp/EH60a2tVIvkprc0vT60GGt0HTh0T9OwYkiAL4CtdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGJkZmY1ZTQ0ODk5MmQxNTE2YjYyYWNmMDE0MWIxYmY0MmM1NGYzYzJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLXVnVxk="
 }
@@ -2003,7 +2003,7 @@ BLOCK-R6-F1: AC-17's HTML-derivative guarantee is presence-only. scripts/check-r
   ],
   "rev": "223mt7pur34at",
   "seq": 91,
-  "of": 106,
+  "of": 112,
   "text_len": 579,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgNp/EH60a2tVIvkprc0vT60GGt0HTh0T9OwYkiAL4CtdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGJkZmY1ZTQ0ODk5MmQxNTE2YjYyYWNmMDE0MWIxYmY0MmM1NGYzYzJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLXVwiGc="
 }
@@ -2026,7 +2026,7 @@ BLOCK-R6-F2: AC-17's exact-address publication guarantee is not checked. scripts
   ],
   "rev": "223mt7purnnh4",
   "seq": 92,
-  "of": 106,
+  "of": 112,
   "text_len": 370,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgNp/EH60a2tVIvkprc0vT60GGt0HTh0T9OwYkiAL4CtdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGJkZmY1ZTQ0ODk5MmQxNTE2YjYyYWNmMDE0MWIxYmY0MmM1NGYzYzJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLXV5zTE="
 }
@@ -2047,7 +2047,7 @@ BLOCK-R6-F3: cargo test --workspace is red on the reviewed HEAD. tests/harness_h
   "cites": [],
   "rev": "223mt7puuhss2",
   "seq": 93,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eChiZGZmNWU0NDg5OTJkMTUxNmI2MmFjZjAxNDFiMWJmNDJjNTRmM2MyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWS11puKT"
 }
 ---
@@ -2067,7 +2067,7 @@ BLOCK-R6-F3: cargo test --workspace is red on the reviewed HEAD. tests/harness_h
   ],
   "rev": "223mt7qp5g4nu",
   "seq": 94,
-  "of": 106,
+  "of": 112,
   "text_len": 198,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgL14DbJTpkl2SXkiyZc5ZCt2Pr3Ti2AW0yedhm+WeQ71mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDE2Nzg5ZTkzNDM5NDRkMDBkNThhYmE3ZDkyNzlhNTIzNWQ4MDcwZDKhZkZpbGVBdIJ4KHNjcmlwdHMvcmVuZGVyLWRlbm90YXRpb25hbC1zZW1hbnRpY3MucHl4KDE2Nzg5ZTkzNDM5NDRkMDBkNThhYmE3ZDkyNzlhNTIzNWQ4MDcwZDJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLao2Cfo="
 }
@@ -2090,7 +2090,7 @@ Correction for AC-17 HTML freshness: the RFC validator now compares the committe
   ],
   "rev": "223mt7qp5zakc",
   "seq": 95,
-  "of": 106,
+  "of": 112,
   "text_len": 261,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgX+TWiiRgX4gHpTaNsGe5CbeyRSFME/rz6ddEaFVzZEdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDE2Nzg5ZTkzNDM5NDRkMDBkNThhYmE3ZDkyNzlhNTIzNWQ4MDcwZDKhZkZpbGVBdIJ4LnNjcmlwdHMvY2hlY2stcmZjMS1kZW5vdGF0aW9uYWwtcHVibGljYXRpb24ucHl4KDE2Nzg5ZTkzNDM5NDRkMDBkNThhYmE3ZDkyNzlhNTIzNWQ4MDcwZDJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLao/mZY="
 }
@@ -2113,7 +2113,7 @@ Correction for AC-17 publication resolution: a real fresh-clone checker verifies
   ],
   "rev": "223mt7qp6m5ty",
   "seq": 96,
-  "of": 106,
+  "of": 112,
   "text_len": 244,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghIdmadDx5U8UxE1FST4orUSydsOS0RUzzGdNIANquuxmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOCoWZDb21taXR4KDE2Nzg5ZTkzNDM5NDRkMDBkNThhYmE3ZDkyNzlhNTIzNWQ4MDcwZDKhZkZpbGVBdIJ4GHRlc3RzL2hhcm5lc3NfaG9uZXN0eS5yc3goMTY3ODllOTM0Mzk0NGQwMGQ1OGFiYTdkOTI3OWE1MjM1ZDgwNzBkMml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlktqkkO0g=="
 }
@@ -2134,7 +2134,7 @@ Correction for the red workspace suite: the four historical v0.13 design/project
   "cites": [],
   "rev": "223mt7qp77gyn",
   "seq": 97,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDE2Nzg5ZTkzNDM5NDRkMDBkNThhYmE3ZDkyNzlhNTIzNWQ4MDcwZDJpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLapSs2k="
 }
 ---
@@ -2154,7 +2154,7 @@ Correction for the red workspace suite: the four historical v0.13 design/project
   ],
   "rev": "223mt7r665uue",
   "seq": 98,
-  "of": 106,
+  "of": 112,
   "text_len": 288,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgaiS7fE+RBhQeL+CotnI0PbItSW0aAsWz9CVnYX7/ZqRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGM0ZWM1YjE2NzQ3MWI5OTRjNDg5MGE0ODVhMmQ1MWNmNzhlZDdjMzRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLchB6t8="
 }
@@ -2175,7 +2175,7 @@ adversarial review of day-rfc-foundations: APPROVE — Fix round closes all thre
   "cites": [],
   "rev": "223mt7r66r6e5",
   "seq": 99,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlaFJlc29sdmVkZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHNkYXktcmZjLWZvdW5kYXRpb25zaWFydGlmYWN0c4GhZkNvbW1pdHgoYzRlYzViMTY3NDcxYjk5NGM0ODkwYTQ4NWEyZDUxY2Y3OGVkN2MzNGl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlktyEuQ2A=="
 }
 ---
@@ -2193,7 +2193,7 @@ adversarial review of day-rfc-foundations: APPROVE — Fix round closes all thre
   "cites": [],
   "rev": "223mt7r6s2lxj",
   "seq": 100,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KGM0ZWM1YjE2NzQ3MWI5OTRjNDg5MGE0ODVhMmQ1MWNmNzhlZDdjMzRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLcmAR0Q="
 }
 ---
@@ -2211,7 +2211,7 @@ adversarial review of day-rfc-foundations: APPROVE — Fix round closes all thre
   "cites": [],
   "rev": "223mt7s3kkuyd",
   "seq": 101,
-  "of": 106,
+  "of": 112,
   "text_len": 447,
   "content": "p2Rib2R5oWZSZXN1bHShZHRleHRgZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHNkYXktcmZjLWZvdW5kYXRpb25zaWFydGlmYWN0c4KhZkNvbW1pdHgoM2Q1MDVlN2RjOGI2N2M0MjlhZWVjMTViODc1MjBiZjUwOWUyNDA4OKFmRmlsZUF0gnggcmZjcy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3MubWR4KDNkNTA1ZTdkYzhiNjdjNDI5YWVlYzE1Yjg3NTIwYmY1MDllMjQwODhpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLgMIZ08="
 }
@@ -2232,7 +2232,7 @@ The denotational companion now defines telos-relative epistemic subcategories, G
   "cites": [],
   "rev": "223mt7s3l6pwy",
   "seq": 102,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDNkNTA1ZTdkYzhiNjdjNDI5YWVlYzE1Yjg3NTIwYmY1MDllMjQwODhpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLgMSVzA="
 }
 ---
@@ -2250,7 +2250,7 @@ The denotational companion now defines telos-relative epistemic subcategories, G
   "cites": [],
   "rev": "223mt7snkmhxb",
   "seq": 103,
-  "of": 106,
+  "of": 112,
   "text_len": 408,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgqFmQ29tbWl0eCgwNTM3MjRmMTg0Yzc3MDhlNTIzOWUxMDk0NGFhYTY5MzMyMDFjZTY5oWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoMDUzNzI0ZjE4NGM3NzA4ZTUyMzllMTA5NDRhYWE2OTMzMjAxY2U2OWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkuJwk3RA=="
 }
@@ -2273,7 +2273,7 @@ Day's maximal theoretical role is a conservative calculus of collective agency: 
   ],
   "rev": "223mt7snpn6g7",
   "seq": 104,
-  "of": 106,
+  "of": 112,
   "text_len": 361,
   "content": "p2Rib2R5oWZSZXN1bHShZHRleHRgZWNpdGVzgdgqWCUAAXESIOwI6ZfJEuzw2sf38/uQ5Fc3aH6bsXcTL6hJgXCtqnvqZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgqFmQ29tbWl0eCgwNTM3MjRmMTg0Yzc3MDhlNTIzOWUxMDk0NGFhYTY5MzMyMDFjZTY5oWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoMDUzNzI0ZjE4NGM3NzA4ZTUyMzllMTA5NDRhYWE2OTMzMjAxY2U2OWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkuJ1mRGA=="
 }
@@ -2294,7 +2294,135 @@ The mathematical arc of Draft RFC 1 now reaches its intended specification targe
   "cites": [],
   "rev": "223mt7snqahjt",
   "seq": 105,
-  "of": 106,
+  "of": 112,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDA1MzcyNGYxODRjNzcwOGU1MjM5ZTEwOTQ0YWFhNjkzMzIwMWNlNjlpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLidjNZA="
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreidhew5j5yhodb4fywebxg7tbquli4riw3wl2aqwmjfhtmllafuyvi",
+  "sig": "b17e8e8bcf64b0d9b06f088fee1c67c0d785a24a0a8d90b1bc64160e2ec842b950e68050f2bb119e916a26f4c583285db778869cf186a8f2e143fbd7b382c6dc",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "day-rfc-foundations"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreidkes5xyt4raykb4l7avc3henb5wiwus3i2alc3h5bfm5qx573guq"
+  ],
+  "rev": "223mt7yi356is",
+  "seq": 106,
+  "of": 112,
+  "text_len": 316,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgaiS7fE+RBhQeL+CotnI0PbItSW0aAsWz9CVnYX7/ZqRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjMTExNmY0ZWU0MmI5MDI0ZjU2Mzg4ZmEzZjc2MDg4ZmRjYWY0N2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZL5wRkVo="
+}
+---
+
+adversarial review of day-rfc-foundations: BLOCK — The mathematical delta reuses J_T for both the witness-diagram index category and a Grothendieck topology, making the incorporated normative account ill-typed, and it omits its new site/topology/coefficient choices from RFC 1's required unresolved-question table.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiacnzifvmxjr6qxtk2ae5c3g6bnch6gxxmuua575vpybesc2u7dyq",
+  "sig": "d769883e68234ead99206ecb280065cad72eb7e7d36f7a1efb83b80cf6d8ef297beb08070d1c7003c44b5b61f6fc8043bae7db11cd39d92fbe3aee346499f0c3",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "day-rfc-foundations"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreidhew5j5yhodb4fywebxg7tbquli4riw3wl2aqwmjfhtmllafuyvi"
+  ],
+  "rev": "223mt7yjaeopr",
+  "seq": 107,
+  "of": 112,
+  "text_len": 469,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgZyW6nuDuGHhcWIG5vzDCi0cii27L0CFmJKebFrAWmKpmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjMTExNmY0ZWU0MmI5MDI0ZjU2Mzg4ZmEzZjc2MDg4ZmRjYWY0N2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZL55lUko="
+}
+---
+
+BLOCK finding F1: the incorporated normative account assigns J_T two incompatible roles. RFC 1 defines W_T:J_T -> [E_f^op,V_f], so J_T is the witness-diagram indexing category (rfcs/1-frame-indexed-process-model.md:189-200). The delta then defines J_T as a Grothendieck topology on C^T_{A,f_0} (rfcs/1/denotational-semantics.md:675-692). A topology is not the domain category of W_T; the collision makes later references to J_T ambiguous and the combined RFC ill-typed.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreic22f3cgkc73wfyq3skjlk3ynwwg25d5u37xrbxbhejzlghholafa",
+  "sig": "557e2e48d9778d5a3fd1dede3adfbf00e9a4151e4292ae6a23d0dfedb5a1acfd73d8a1d853fcfe3c89b5a341b87736bfa804804d525debe8e492f56799dd44f3",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "day-rfc-foundations"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreidhew5j5yhodb4fywebxg7tbquli4riw3wl2aqwmjfhtmllafuyvi"
+  ],
+  "rev": "223mt7yjayuyr",
+  "seq": 108,
+  "of": 112,
+  "text_len": 551,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgZyW6nuDuGHhcWIG5vzDCi0cii27L0CFmJKebFrAWmKpmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjMTExNmY0ZWU0MmI5MDI0ZjU2Mzg4ZmEzZjc2MDg4ZmRjYWY0N2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZL55va18="
+}
+---
+
+BLOCK finding F2: the delta introduces unresolved choices of epistemic site, telos-relative coverage/topology, realization prestack, coefficient object, descent conditions, model structure, and cohomology theory (rfcs/1/denotational-semantics.md:810-817,972-981), but RFC 1's exhaustive Unresolved questions table remains limited to seven older choices (rfcs/1-frame-indexed-process-model.md:571-585). This violates .design/day-rfc-foundations.md AC-10 at lines 201-205 and risks acceptance without reviewing whether the new choices affect profile v1.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreicrpzp3cc7obmcuw3xiohuesyqi3udi25gy4tbdjjj3qojtpswwgi",
+  "sig": "cc8d8ea47a7ad3ab1e396d3d7e5022ec689418f6e4ef558506f98bfae352941c66ddbe9f3a858a0fc123f56f00a84d08c912f048dc8b177130ec671e32f9f8d9",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "day-rfc-foundations"
+  },
+  "kind": "observation",
+  "cites": [
+    "bafyreidhew5j5yhodb4fywebxg7tbquli4riw3wl2aqwmjfhtmllafuyvi"
+  ],
+  "rev": "223mt7yjbn46x",
+  "seq": 109,
+  "of": 112,
+  "text_len": 664,
+  "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgZyW6nuDuGHhcWIG5vzDCi0cii27L0CFmJKebFrAWmKpmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjMTExNmY0ZWU0MmI5MDI0ZjU2Mzg4ZmEzZjc2MDg4ZmRjYWY0N2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZL555iCg="
+}
+---
+
+Review qualification F3: within the delta itself, the requested safety distinctions are present: W_f versus topology/locality (rfcs/1/denotational-semantics.md:688-692), telos-materiality guarding topology changes (783-808), fragment-relative obstruction and mandatory unknown (819-855), and conditional completeness (862-895). RFC 1 still says the denotational target is trajectory-only and full implementation is not required for profile v1 (rfcs/1-frame-indexed-process-model.md:81-94,523-525,583-585). Thus no separate finding says profile v1 must solve the open mathematics; the BLOCK is the notation/type collision and missing unresolved-choice registration.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreidr35ti6gbmp6geqswlu54v5amjioqdeyryyaf2b5wixauxjqhphe",
+  "sig": "bd86f23e487a7f2da0554f7fd0f5df1cbf17cd1763b8d7507e39b0a6cdb806bd68f982e8d969d09f7acf8e1892ee48dd67bf15b8cecd7ff1bcd48e5b41709775",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "day-rfc-foundations"
+  },
+  "kind": "status",
+  "cites": [],
+  "rev": "223mt7yjqnhyz",
+  "seq": 110,
+  "of": 112,
+  "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2Fsc2RheS1yZmMtZm91bmRhdGlvbnNpYXJ0aWZhY3RzgaFmQ29tbWl0eCgyYzExMTZmNGVlNDJiOTAyNGY1NjM4OGZhM2Y3NjA4OGZkY2FmNDdkaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWS+fabdz"
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiat33ouel6jb55be535slmgnmrglfhunewd62hjoy5htainusvdca",
+  "sig": "3da412a8231eb9c0734e9b4390bbe336bae9eebeead7d704c656df772d9d4214372ac9f7d30d30377500dc1e3c88bf97d3529b4578a93a00f5e48e7d2764951d",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "day-rfc-foundations"
+  },
+  "kind": "publication",
+  "cites": [],
+  "rev": "223mt7ykiyxdy",
+  "seq": 111,
+  "of": 112,
+  "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWxzZGF5LXJmYy1mb3VuZGF0aW9uc2lhcnRpZmFjdHOBoWZDb21taXR4KDJjMTExNmY0ZWU0MmI5MDI0ZjU2Mzg4ZmEzZjc2MDg4ZmRjYWY0N2Rpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZL6DvdMo="
 }
 ---
