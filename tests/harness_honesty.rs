@@ -1219,6 +1219,12 @@ fn ordinary_ci_uses_the_newest_measured_kan() {
 /// vacuous at the exact lifecycle transition they exist to protect.
 #[test]
 fn rfc_acceptance_self_tests_survive_the_review_transition() {
+    let checker = read("scripts/check-rfcs-adrs.sh");
+    assert!(
+        checker.contains("s/- Authors:/- Kan-claim: bafyrecursive\\n- Authors:/")
+            && checker.contains("self-test could not construct recursive-publication mutation"),
+        "the recursive-publication mutation must be capture-free and prove that it was constructed"
+    );
     let out = Command::new("bash")
         .args(["scripts/check-rfcs-adrs.sh", "--self-test"])
         .current_dir(repo_root())
