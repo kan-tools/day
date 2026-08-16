@@ -4,7 +4,6 @@
 import copy
 import hashlib
 import json
-import os
 import pathlib
 import subprocess
 import sys
@@ -20,10 +19,11 @@ def require(condition, message):
         raise InvalidPublication(message)
 
 
-def validate(vector, checkout, claims):
+def validate(vector, checkout, claims, repository_origin):
     require(vector.get("version") == 2, "publication vector version changed")
     require(vector.get("claim_location") == "external", "claim is not external")
     require(vector.get("normative_cid_embedding") == "forbidden", "CID embedding is not forbidden")
+    require(vector.get("repository") == repository_origin, "fixture repository origin is wrong")
     artifact_path = vector["artifact_path"]
     artifact_commit = vector["artifact_commit"]
     claim = next((item for item in claims if item.get("cid") == vector["claim_cid"]), None)
@@ -36,6 +36,7 @@ def validate(vector, checkout, claims):
     require(b"Kan-claim:" not in committed, "normative RFC bytes contain their own claim CID")
     statuses = [item for item in claims if item.get("kind") == "Status" and vector["claim_cid"] in item.get("cites", [])]
     require(any(item.get("status") == "Closed" for item in statuses), "fixture claim has no closed status")
+    require(any(item.get("kind") == "Publication" for item in claims), "fixture has no signed Publication claim")
 
 
 def main():
@@ -43,27 +44,29 @@ def main():
     vector = json.loads((root / "rfcs/vectors/0-publication.json").read_text())
     with tempfile.TemporaryDirectory(prefix="day-rfc0-fresh-clone-") as temp:
         checkout = pathlib.Path(temp) / "clone"
+        origin = subprocess.run(["git", "remote", "get-url", "origin"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
         subprocess.run(["git", "clone", "--quiet", "--no-local", str(root), str(checkout)], check=True)
         projection = checkout / vector["projection_path"]
         require(projection.is_dir() and any(projection.glob("*.md")), "published claim projection is absent from fresh clone")
-        identity = root / ".kan/identity"
-        require(identity.is_file(), "the fixture author's signing identity is unavailable")
-        clean_env = os.environ.copy()
-        clean_env["KAN_IDENTITY_FILE"] = str(identity)
-        subprocess.run(["kan", "restore"], cwd=checkout, env=clean_env, check=True, capture_output=True)
-        output = subprocess.run(["kan", "show", vector["subject"], "--json"], cwd=checkout, env=clean_env, check=True, capture_output=True, text=True)
+        output = subprocess.run(["kan", "show", vector["subject"], "--json", "--trust", vector["author"]], cwd=checkout, check=True, capture_output=True, text=True)
         claims = json.loads(output.stdout)["claims"]
-        validate(vector, checkout, claims)
+        validate(vector, checkout, claims, origin)
         if "--self-test" in sys.argv[1:]:
-            mutations = {"cid": ("claim_cid", "bafywrong"), "commit": ("artifact_commit", "0" * 40), "path": ("artifact_path", "rfcs/fixtures/wrong.md"), "bytes": ("artifact_sha256", "0" * 64)}
+            mutations = {"cid": ("claim_cid", "bafywrong"), "commit": ("artifact_commit", "0" * 40), "path": ("artifact_path", "rfcs/fixtures/wrong.md"), "bytes": ("artifact_sha256", "0" * 64), "repository": ("repository", "https://example.com/wrong.git")}
             for name, (field, value) in mutations.items():
                 candidate = copy.deepcopy(vector)
                 candidate[field] = value
                 try:
-                    validate(candidate, checkout, claims)
+                    validate(candidate, checkout, claims, origin)
                 except (InvalidPublication, subprocess.CalledProcessError):
                     continue
                 raise InvalidPublication(f"self-test accepted {name} mutation")
+            try:
+                validate(vector, checkout, [claim for claim in claims if claim.get("kind") != "Publication"], origin)
+            except InvalidPublication:
+                pass
+            else:
+                raise InvalidPublication("self-test accepted missing Publication claim")
     print(f"RFC 0 publication: fresh clone resolved {vector['claim_cid']}")
 
 

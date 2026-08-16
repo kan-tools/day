@@ -1,4 +1,4 @@
-# Feature: Day RFC foundations and process-model specification, correction round 2
+# Feature: Day RFC foundations and process-model specification, correction round 3
 
 ## Summary
 
@@ -313,6 +313,10 @@ connected to day through general atom and witness contracts.
   `bafyreiaafsq7dnugfdc5qyldwlrylug6ms2moz7rnolsrj5otj5gdhpxqq` on this
   subject. Legacy witness lists are flat component reports and are not
   sufficient systems without an explicit versioned relationship.
+- RQ-15: Accepted-state validation is evidence-bearing rather than
+  presence-only: review timestamps must demonstrate 72 elapsed hours (or name
+  a structured unanimous override), and the exact day GitHub proposal PR must
+  be readable and contain the RFC file.
 
 ## Open Questions
 

@@ -4,6 +4,7 @@
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: Not opened
+- Review-started-at: Not scheduled
 - Review-period-ends: Not scheduled
 - Review-override: None
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative

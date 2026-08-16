@@ -18,6 +18,7 @@ def require(condition, message):
 
 def witness_outcome(case):
     relationship = case.get("relationship")
+    require(relationship in {"sufficient", "necessary", "exact", "unspecified"}, f"unknown relationship: {relationship}")
     if relationship in {"necessary", "exact"}:
         return "unsupported"
     if relationship == "unspecified":
@@ -27,6 +28,7 @@ def witness_outcome(case):
     require(components, "sufficient case has no components")
     require(len({component.get("name") for component in components}) == len(components), "component names are absent or duplicated")
     outcomes = [component.get("outcome") for component in components]
+    require(all(outcome in {"material", "missing", "vacuous", "timeout", "error", "not-run"} for outcome in outcomes), "unknown component outcome")
     if any(outcome in {"timeout", "error", "not-run"} for outcome in outcomes):
         return "uncheckable"
     if not all(outcome == "material" for outcome in outcomes):
@@ -37,6 +39,9 @@ def witness_outcome(case):
 
 
 def migration_outcome(case):
+    require(case.get("comparison") in {"invertible", "lax", "absent"}, "unknown migration comparison")
+    require(case.get("procedure") in {"supported", "unsupported"}, "unknown migration procedure status")
+    require(case.get("coordinates") in {"preserved", "forgotten"}, "unknown migration coordinate status")
     if case.get("comparison") == "absent":
         return "incomparable"
     if (case.get("comparison") == "invertible"
@@ -68,11 +73,16 @@ def validate(data):
         require(cell.get("target_context") == atoms[atom_name]["target"], f"local cell {index} has the wrong boundary")
         if index:
             require(cell.get("source_predicate") == local_cells[index - 1].get("target_predicate"), f"local cells do not paste at {index}")
-    require(composition.get("expected_realization") == "P0 ⇒ T ⊙ (A2 ⊙ A1)", "realization order is wrong")
+    require(local_cells[0].get("source_predicate") == composition["present"]["name"], "first local cell does not start at the present predicate")
+    require(local_cells[-1].get("target_predicate") == composition["target"]["name"], "last local cell does not end at the target telos")
+    require(all(cell.get("exists") is True for cell in local_cells), "global realization names a nonexistent local cell")
+    composite_expression = " ⊙ ".join(reversed(order))
+    derived_realization = f"{composition['present']['name']} ⇒ {composition['target']['name']} ⊙ ({composite_expression})"
+    require(composition.get("expected_realization") == derived_realization, "realization expression is stale or wrongly ordered")
     no_realization = composition.get("typeable_without_realization", {})
-    missing = no_realization.get("missing_local_cell")
-    require(no_realization.get("bridge_order") == order and isinstance(missing, int) and 0 <= missing < len(local_cells), "no-realization vector is malformed")
-    require(local_cells[missing].get("exists") is True and no_realization.get("expected") == "no-realization", "typeable/no-realization distinction changed")
+    counterfactual = no_realization.get("local_cell_exists")
+    require(no_realization.get("bridge_order") == order and isinstance(counterfactual, list) and len(counterfactual) == len(local_cells), "no-realization vector is malformed")
+    require(all(isinstance(value, bool) for value in counterfactual) and not all(counterfactual) and no_realization.get("expected") == "no-realization", "typeable/no-realization distinction changed")
     require(composition.get("reversed_realization") == {
         "expression": "P0 ⇒ (A2 ⊙ A1) ⊙ T", "well_typed": False
     }, "reversed realization must be rejected")
@@ -115,6 +125,9 @@ def self_test(data):
         ("legacy-strengthening", lambda d: next(c for c in d["witness_cases"] if c["id"] == "legacy-flat").update(expected="certified")),
         ("lossy-equivalence", lambda d: next(c for c in d["migration_cases"] if c["id"] == "forgotten-coordinate").update(expected="equivalent")),
         ("missing-component-coordinate", lambda d: next(c for c in d["witness_cases"] if c["id"] == "independent-components")["components"][1].pop("coordinate")),
+        ("stale-realization", lambda d: d["composition"]["atoms"][0].update(name="BROKEN")),
+        ("invented-outcome", lambda d: next(c for c in d["witness_cases"] if c["id"] == "missing-sufficient")["components"][0].update(outcome="invented")),
+        ("invented-migration", lambda d: next(c for c in d["migration_cases"] if c["id"] == "unsupported-procedure").update(comparison="invented")),
     ]
     for name, mutate in mutations:
         candidate = copy.deepcopy(data)

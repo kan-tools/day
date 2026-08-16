@@ -4,6 +4,7 @@
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: Not opened
+- Review-started-at: Not scheduled
 - Review-period-ends: Not scheduled
 - Review-override: None
 - Supersedes: The implicit design and decision process in `CONTRIBUTING.md`
@@ -128,8 +129,10 @@ through kan's claim graph.
 and sections, both templates, shortest-decimal filenames, the append-only
 `rfcs/numbers.tsv` allocation registry, bidirectional exact index coverage,
 file/index status agreement, and review metadata required by Accepted or later
-states. It runs in ordinary CI. The validator checks structure and lifecycle
-preconditions, not the proposal's truth.
+states. For Accepted or later states it also resolves the exact GitHub proposal
+PR and verifies that the PR contains the RFC file; an arbitrary URL is not
+review evidence. It runs in ordinary CI. The validator checks structure and
+lifecycle evidence, not the proposal's truth.
 
 ## Approximation map
 
@@ -153,7 +156,9 @@ equivalent only when they resolve to identical normative bytes.
 2. Copy `rfcs/template.md` and author a Draft.
 3. Open the proposal pull request, allocate the next unused number, and update
    `rfcs/README.md`.
-4. Change status to Review and record the discussion and review deadline.
+4. Change status to Review and record the discussion, review-start timestamp,
+   and deadline. The deadline is at least 72 hours after that start unless the
+   structured unanimous override cites the proposal PR and reviewed commit.
 5. Resolve blocking questions; restart review after substantive changes.
 6. After the review period or valid unanimous override, a maintainer accepts,
    rejects, or requests revision.

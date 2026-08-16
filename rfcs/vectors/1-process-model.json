@@ -17,7 +17,7 @@
     "expected_composite": {"source": "X0", "target": "X2"},
     "expected_realization": "P0 ⇒ T ⊙ (A2 ⊙ A1)",
     "reversed_realization": {"expression": "P0 ⇒ (A2 ⊙ A1) ⊙ T", "well_typed": false},
-    "typeable_without_realization": {"bridge_order": ["A1", "A2"], "missing_local_cell": 1, "expected": "no-realization"}
+    "typeable_without_realization": {"bridge_order": ["A1", "A2"], "local_cell_exists": [true, false], "expected": "no-realization"}
   },
   "witness_cases": [
     {"id": "artifact-two-evidence", "evidence_cids": ["cid-a", "cid-b"], "artifact": "sha256:artifact", "independent_observations": 2},
