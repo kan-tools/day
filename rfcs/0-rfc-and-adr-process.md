@@ -8,7 +8,7 @@
 - Review-override: None
 - Supersedes: The implicit design and decision process in `CONTRIBUTING.md`
 - Superseded-by: None
-- Kan-claim: Not published
+- Profile-relationship: not-applicable
 - Implementation: Proposed in this RFC
 
 ## Summary
@@ -43,7 +43,8 @@ historical ADR sequence.
 - **Normative file:** The merged RFC or ADR Markdown file whose bytes constitute
   the reviewed repository record.
 - **Published claim:** A signed kan claim pointing to the normative file at an
-  exact commit and path.
+  exact commit and path. It is discovered through kan's published claim tree,
+  not through a CID embedded in the normative file.
 - **Maintainer:** A person authorized to merge into the day repository.
 
 Normative words such as MUST, SHOULD, and MAY have their RFC 2119 meanings.
@@ -53,7 +54,7 @@ Normative words such as MUST, SHOULD, and MAY have their RFC 2119 meanings.
 Not applicable. This RFC governs specification records; RFC 1 supplies the
 first process-model denotational target.
 
-## Operational profile
+## Operational profile v1
 
 ### When an RFC is required
 
@@ -116,20 +117,28 @@ The merged repository file is authoritative for RFC or ADR text and status.
 An accepted or implemented record MUST also be published as a kan claim with an
 exact committed artifact address. The claim provides identity, authorship,
 citations, and graph reachability; it does not replace or duplicate the file's
-normative content.
+normative content. Normative RFC and ADR metadata MUST NOT contain the claim CID:
+that backlink would change the addressed bytes and recursively invalidate the
+address. Readers discover the claim under the tracked `.claims/` projection or
+through kan's claim graph.
 
 ### Validation
 
 `scripts/check-rfcs-adrs.sh` validates recognized statuses, required metadata
-and sections, shortest-decimal unique filenames, and exact index coverage. It
-runs in ordinary CI. The validator checks structure, not truth or acceptance.
+and sections, both templates, shortest-decimal filenames, the append-only
+`rfcs/numbers.tsv` allocation registry, bidirectional exact index coverage,
+file/index status agreement, and review metadata required by Accepted or later
+states. It runs in ordinary CI. The validator checks structure and lifecycle
+preconditions, not the proposal's truth.
 
 ## Approximation map
 
 The RFC lifecycle is represented by repository metadata and review state. Kan
 publication projects the accepted file into the claim graph but does not make
-the mutable claim fold the RFC status authority. `.design/` Plan claims remain
-working proposals and do not become accepted RFCs merely by being published.
+the mutable claim fold the RFC status authority. Publication is one-way: the
+claim addresses normative bytes, while no normative field addresses the claim.
+`.design/` Plan claims remain working proposals and do not become accepted RFCs
+merely by being published.
 
 ## Canonicalization and equivalence
 
@@ -148,8 +157,8 @@ equivalent only when they resolve to identical normative bytes.
 5. Resolve blocking questions; restart review after substantive changes.
 6. After the review period or valid unanimous override, a maintainer accepts,
    rejects, or requests revision.
-7. Merge the normative file, publish a kan claim addressing its exact commit
-   and path, and record that CID in a follow-up metadata change.
+7. Merge the normative file and publish a kan claim addressing its exact commit
+   and path under an `rfc/<number>` subject. Do not write its CID into the RFC.
 8. Change status to Implemented only when shipped evidence is linked.
 
 ADRs follow the corresponding template, numbering, index, review, merge, and
@@ -194,8 +203,11 @@ historical ADR migration is performed by this RFC.
 ## Reference test vectors
 
 The executable validator MUST accept RFC 0, RFC 1, and both templates. Its
-self-test MUST reject at least a missing section, invalid status, duplicate
-number, leading-zero number, and missing index entry.
+self-test MUST reject every structural and lifecycle guarantee the command
+reports, including missing template sections, incomplete ADR metadata, stale or
+status-mismatched index rows, title/number mismatch, reused allocation, leading
+zeroes, invalid Accepted metadata, and a target/profile relationship that
+claims the operational profile fully implements the denotational target.
 
 ## Unresolved questions
 
@@ -211,4 +223,3 @@ None.
 Draft. The accompanying change supplies the file structure, templates,
 validator, contributor guidance, and CI integration. Acceptance and claim
 publication require the review lifecycle above.
-

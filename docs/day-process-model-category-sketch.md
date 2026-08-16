@@ -499,7 +499,8 @@ $$
 A:X\rightsquigarrow Y.
 $$
 
-A bridge is a horizontal composite of atoms:
+A bridge is a horizontal composite of atoms. Here $C\odot A$ means first $A$,
+then $C$:
 
 $$
 B=A_n\odot\cdots\odot A_2\odot A_1:X_0\rightsquigarrow X_n.
@@ -509,13 +510,13 @@ Composing a bridge with the target predicate gives a predicate on starting
 states:
 
 $$
-B\odot T:X_0\rightsquigarrow I.
+T\odot B:X_0\rightsquigarrow I.
 $$
 
 A realization or correctness certificate is a 2-cell
 
 $$
-\eta:P_0\Rightarrow B\odot T.
+\eta:P_0\Rightarrow T\odot B.
 $$
 
 Depending on predicate orientation, this is the Hoare-style refinement
@@ -543,17 +544,17 @@ $$
 each atom may carry a local realizability cell:
 
 $$
-\eta_i:P_{i-1}\Rightarrow A_i\odot P_i.
+\eta_i:P_{i-1}\Rightarrow P_i\odot A_i.
 $$
 
 These cells paste vertically:
 
 $$
 P_0
-\Rightarrow A_1\odot P_1
-\Rightarrow A_1\odot A_2\odot P_2
+\Rightarrow P_1\odot A_1
+\Rightarrow P_2\odot A_2\odot A_1
 \Rightarrow\cdots
-\Rightarrow B\odot T.
+\Rightarrow T\odot B.
 $$
 
 This gives precise content to the statement that bridging states are
@@ -564,7 +565,7 @@ The empty bridge is the identity process. A target telos is already attained
 when there is a cell
 
 $$
-P_0\Rightarrow 1_X\odot T\cong T.
+P_0\Rightarrow T\odot 1_X\cong T.
 $$
 
 Otherwise bridge search seeks a pair $(B,\eta)$, not merely an atom sequence.

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "composition": {
+    "convention": "right-to-left",
+    "bridge": ["A1:X0->X1", "A2:X1->X2"],
+    "composite": "A2 ⊙ A1:X0->X2",
+    "realization": "P0 ⇒ T ⊙ (A2 ⊙ A1)",
+    "reversed_realization": {"expression": "P0 ⇒ (A2 ⊙ A1) ⊙ T", "well_typed": false}
+  },
+  "witness_cases": [
+    {"id": "artifact-two-evidence", "evidence_cids": ["cid-a", "cid-b"], "artifact": "sha256:artifact", "independent_observations": 2},
+    {"id": "shared-evidence-reuse", "evidence_cids": ["cid-a", "cid-a"], "artifact": "sha256:artifact", "independent_observations": 1},
+    {"id": "independent-components", "relationship": "sufficient", "component_outcomes": ["material", "material"], "coordinates": ["candidate-1", "candidate-1"], "expected": "certified"},
+    {"id": "coordinate-mismatch", "relationship": "sufficient", "component_outcomes": ["material", "material"], "coordinates": ["candidate-1", "candidate-2"], "expected": "not-certified"},
+    {"id": "missing-sufficient", "relationship": "sufficient", "component_outcomes": ["missing"], "coordinates": ["candidate-1"], "expected": "not-certified"},
+    {"id": "unavailable-sufficient", "relationship": "sufficient", "component_outcomes": ["timeout"], "coordinates": ["candidate-1"], "expected": "uncheckable"},
+    {"id": "legacy-flat", "relationship": "unspecified", "component_outcomes": ["material"], "coordinates": ["candidate-1"], "expected": "component-report"},
+    {"id": "necessary-unsupported", "relationship": "necessary", "component_outcomes": ["material"], "coordinates": ["candidate-1"], "expected": "unsupported"},
+    {"id": "exact-unsupported", "relationship": "exact", "component_outcomes": ["material"], "coordinates": ["candidate-1"], "expected": "unsupported"}
+  ],
+  "migration_cases": [
+    {"id": "invertible-reindexing", "comparison": "invertible", "procedure": "supported", "coordinates": "preserved", "expected": "equivalent"},
+    {"id": "unsupported-procedure", "comparison": "invertible", "procedure": "unsupported", "coordinates": "preserved", "expected": "lossy"},
+    {"id": "lax-comparison", "comparison": "lax", "procedure": "supported", "coordinates": "preserved", "expected": "lossy"},
+    {"id": "successful-gluing", "comparison": "invertible", "procedure": "supported", "coordinates": "preserved", "expected": "equivalent"},
+    {"id": "forgotten-coordinate", "comparison": "invertible", "procedure": "supported", "coordinates": "forgotten", "expected": "lossy"},
+    {"id": "incomparable-frames", "comparison": "absent", "procedure": "supported", "coordinates": "preserved", "expected": "incomparable"}
+  ]
+}

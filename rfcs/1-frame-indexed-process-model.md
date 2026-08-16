@@ -8,7 +8,7 @@
 - Review-override: None
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative
 - Superseded-by: None
-- Kan-claim: Not published
+- Profile-relationship: approximation
 - Implementation: Operational profile partially implemented; conformance reconciliation not started
 
 ## Summary
@@ -87,16 +87,19 @@ exploratory derivation lives in
 
 ### Frames and dependent structure
 
-Let $\mathcal F$ be a category of frames and let the process model be indexed:
+Let $\mathcal F$ be a category of frames. The long-term target is an
+equipment-valued pseudofunctor:
 
 $$
 \mathbb D:\mathcal F^{op}\to\mathbf{Equip}.
 $$
 
-Equivalently, view it as a fibration $\pi:\int\mathbb D\to\mathcal F$. A frame
-morphism $u:g\to f$ induces reindexing $u^*:\mathbb D_f\to\mathbb D_g$ of
-teloi, evidence, assessments, witnesses, processes, and realization cells.
-When adjoints exist,
+This is not claimed to be equivalent to an ordinary Grothendieck fibration:
+the exact double-categorical Grothendieck construction is unresolved. Its
+category-valued shadows MUST behave fibrationally. In particular, a frame
+morphism $u:g\to f$ induces typed reindexing functors such as
+$u^*:\mathcal S_f\to\mathcal S_g$ and corresponding reindexing of evidence,
+assessments, witnesses, processes, and realization cells. When adjoints exist,
 
 $$
 \Sigma_u\dashv u^*\dashv\Pi_u
@@ -105,10 +108,24 @@ $$
 distinguishes existential forgetting, dependent substitution, and universal
 transport. No frame morphism means no inferred migration.
 
-Reindexing SHOULD preserve monoidal composition, witness assembly, and shared
-boundary gluing where the frame map admits them. Invertible comparisons express
-lossless migration. Lax or absent comparisons MUST expose loss or
-incomparability rather than yield an equivalent-looking verdict.
+Reindexing SHOULD carry explicit monoidal comparison maps and preserve witness
+assembly and shared-boundary gluing where the frame map admits them. For a
+pullback square of frames
+
+$$
+\begin{matrix}
+g'&\xrightarrow{v'}&g\\
+\downarrow{u'}&&\downarrow{u}\\
+f'&\xrightarrow{v}&f,
+\end{matrix}
+$$
+
+the candidate Beck--Chevalley obligation is invertibility of the well-typed
+mate $\Sigma_{u'}(v')^*\Rightarrow v^*\Sigma_u$ whenever the displayed
+adjoints exist. These comparisons are target obligations, not profile-v1
+operations. Invertible comparisons express lossless migration. Lax or absent
+comparisons MUST expose loss or incomparability rather than yield an
+equivalent-looking verdict.
 
 ### States and teloi
 
@@ -149,10 +166,22 @@ Boolean definition of $W$.
 
 ### Witness systems and teloi
 
+A candidate equipment-level observation semantics chooses an evidence-to-state
+proarrow $R_f:\mathcal E_f\nrightarrow\mathcal S_f$ and defines
+
+$$
+\operatorname{Obs}_f(T)(E)=
+\int^{s\in\mathcal S_f}R_f(E,s)\otimes T(s),
+$$
+
+an object of $[\mathcal E_f^{op},\mathcal V_f]$. This choice is explicitly
+provisional: it states the types required of a future construction without
+selecting the final equipment or tensor.
+
 A telos $T$ has a witness diagram
 
 $$
-W_T:J_T\to\mathsf{Witness}_f
+W_T:J_T\to[\mathcal E_f^{op},\mathcal V_f]
 $$
 
 whose assembly $\lVert W_T\rVert$ retains shared coordinates and coherence.
@@ -181,28 +210,29 @@ B=A_n\odot\cdots\odot A_1:X_0\rightsquigarrow X_n.
 $$
 
 Let $P_0:X_0\rightsquigarrow I$ be the present predicate and
-$T:X_n\rightsquigarrow I$ the target telos. Realization seeks a pair $(B,\eta)$
-with
+$T:X_n\rightsquigarrow I$ the target telos. Composition is written
+right-to-left: if $A:X\rightsquigarrow Y$ and $C:Y\rightsquigarrow Z$, then
+$C\odot A:X\rightsquigarrow Z$. Realization seeks a pair $(B,\eta)$ with
 
 $$
-\eta:P_0\Rightarrow B\odot T.
+\eta:P_0\Rightarrow T\odot B.
 $$
 
 For intermediate teloi $P_0,P_1,\ldots,P_n=T$, local cells
 
 $$
-\eta_i:P_{i-1}\Rightarrow A_i\odot P_i
+\eta_i:P_{i-1}\Rightarrow P_i\odot A_i
 $$
 
 paste into the global cell. This gives exact meaning to “bridging states are
 intermediate teloi.” The empty bridge is the identity process; $T$ is already
-attained when $P_0\Rightarrow 1_X\odot T\cong T$.
+attained when $P_0\Rightarrow T\odot 1_X\cong T$.
 
 Parallel process composition is monoidal. Sequential atom composition,
 vertical pasting of realization cells, witness convolution, evidence gluing,
 and frame reindexing are distinct operations subject to coherence laws.
 
-## Operational profile
+## Operational profile v1
 
 ### Frame
 
@@ -221,23 +251,58 @@ trust. Day MUST NOT collapse those into one authority judgment.
 ### Teloi
 
 A `telos/<slug>` subject carries the current telos declaration and a
-`day-telos` block listing witness names. A declaration without a relationship
-field is interpreted as a **sufficient** witness system. It can produce
-`CERTIFIED`, `NOT CERTIFIED`, or `UNCHECKABLE`; absence of a sufficient
-certificate MUST NOT render the telos false.
+`day-telos` block listing witness names. An unversioned declaration without a
+relationship field is a **legacy flat component report**. It does not state a
+logical relationship to the telos and cannot produce a telos certificate.
 
-Future blocks MAY explicitly declare `necessary` or `exact` only after their
-operational algorithms and compatibility are specified. Profile v1 does not
-infer either strength.
+Profile v1 adds one explicit declaration shape:
+
+```day-telos
+{"_version":3,"witnesses":["candidate","tests"],"relationship":"sufficient"}
+```
+
+`_version` MUST be `3`, `witnesses` MUST be a nonempty array of distinct
+project witness names, and `relationship` MUST be `sufficient`. Unknown keys
+MUST be preserved by rewriting tools. `necessary` and `exact` are reserved;
+profile-v1 readers MUST report them as unsupported rather than guess an
+algorithm. Failure to obtain a sufficient certificate never refutes a telos.
 
 ### Evidence and assessments
 
 An artifact is addressed by existing kan artifact coordinates or by coordinates
 inside a typed claim block. Evidence is an ordinary typed claim referencing the
-artifact. A certificate is a Result claim that identifies its assessment
-procedure, scope, evidence coordinates, outcome, provenance, and limitations.
-Legacy Results without these fields remain readable but are `UNCHECKABLE` for
-relationships requiring them.
+artifact. A profile-v1 certificate is a Result claim containing exactly one
+`day-assessment` JSON block with this required shape (additional keys are
+preserved but have no profile-v1 semantics):
+
+```day-assessment
+{
+  "_version": 1,
+  "frame": {"kind": "implicit-local", "repository": "REPO", "commit": "OID"},
+  "procedure": {"id": "PROC", "version": "VERSION"},
+  "scope": {"subject": "SUBJECT"},
+  "evidence": [
+    {"cid": "CID", "role": "ROLE", "artifact": {"repository": "REPO", "commit": "OID", "path": "PATH", "sha256": "HEX"}}
+  ],
+  "witness_system": {
+    "telos": "TELOS",
+    "relationship": "sufficient",
+    "components": ["candidate", "tests"],
+    "correspondence": [{"coordinate": "candidate", "value": "VALUE", "components": ["candidate", "tests"]}]
+  },
+  "outcome": "certified",
+  "limitations": []
+}
+```
+
+Required scalar strings MUST be nonempty. `commit` is the full repository
+object ID and `sha256` is lowercase hexadecimal. Component names MUST be
+distinct and equal the declared telos witnesses. Each correspondence names a
+nonempty component subset and one exact value; certification requires every
+named component assessment to carry that value. `outcome` is one of
+`certified`, `not-certified`, or `uncheckable`. Legacy Results remain readable
+but are not profile-v1 certificates. Kan supplies claim attribution and
+provenance outside this block; day MUST preserve that distinction.
 
 ### Witnesses and probes
 
@@ -251,12 +316,11 @@ not-run execution, timeout, and error. Could-not-check outcomes outrank
 checked-and-clean. A command requires explicit `--run`, uses argv without a
 shell, is bounded, and is unavailable through MCP.
 
-Where witness components share a coordinate, the operational declaration MUST
-name that correspondence and an assessment certificate MUST carry the value.
-Independent component success without correspondence cannot certify the
-assembled witness system. The exact block extension is deferred to an
-implementation RFC or ADR; profile-v1 conformance requires preserving the
-distinction, not a particular JSON spelling.
+Where witness components share a coordinate, the `correspondence` entries above
+MUST name that coordinate, its exact value, and every constrained component.
+Independent component success without matching correspondence cannot certify
+the assembled witness system. Empty correspondence is valid only when the
+procedure declares the components independent in its versioned specification.
 
 ### Atoms
 
@@ -306,22 +370,45 @@ execution specifications requires a later RFC.
 |---|---|---|---|
 | Frame | implicit invocation context | locality disclosure | identity, morphisms, migration, overlaps |
 | Telos predicate | prose declaration plus witness names | stable subject, intended invariant | state category and explicit weak equivalences |
-| Artifact context | free-form type string | type-name equality | values, boundaries, dependencies |
-| Evidence diagram | kan claims and artifact coordinates | CIDs, authorship, cited relations | general open-diagram structure |
+| Artifact | external thing addressed by coordinates | repository bytes and digest when supplied | the thing beyond its address |
+| Artifact type | free-form type string | exact type-name equality | domain meaning and semantic equivalence |
+| Evidence | typed kan claim referencing an artifact | CID, attribution, role, artifact address | truth outside the frame |
+| Evidence context | finite set of certificate evidence entries | cited coordinates and roles | general open-diagram structure and tensor |
 | Assessment | probe execution plus optional Result | procedure outcome and some scope | full dependent assessment object |
 | Certificate | Result claim | durable attribution and cited evidence | canonical realization-cell encoding |
 | Witness | project name resolved to a probe | project vocabulary and operational evaluator | witness concept independent of evaluator |
-| Witness diagram | flat list with limited alternatives | component identity | shared coordinates and general coherence |
-| Witness-bearing object | finite probe verdict | checked/missing/unavailable distinctions | space of bearing maps and derivations |
+| Witness system | explicit sufficient list plus correspondence | components, relationship, exact shared values | alternatives and general coherence diagrams |
+| Probe | built-in probe specification and bounded run | declared procedure and finite outcome | the witness-bearing relation itself |
 | Atom 1-cell | `day-atom` block | input/output names and graph relations | process semantics and execution binding |
 | Bridge composite | `day-bridge` expression | typeability and coarse availability | realization cell and execution trace |
-| Intermediate telos | separately declared telos | durable identity | typed mediation between adjacent atoms |
-| Realization 2-cell | not represented directly | partial evidence through Results | the pasted correctness argument |
+| Vocabulary | live project declaration fold | scoped declared names and encodings | global ontology or authority |
+| Pack | transport manifest applied with consent | declaration transport | authority and execution substrate |
+| Present predicate | implicit current checkout/context | current source scope | explicit predicate object |
+| Identity process | empty bridge | absence of process steps | categorical identity laws as data |
+| Realizability cell | not represented directly | partial evidence through certificates | pasted correctness argument |
 | Monoidal process composition | `&` plus output union | branch distinction | general tensor and interchange laws |
 | Alternative | `|` plus downstream intersection | conservative common outputs | coproduct injections and choice evidence |
 | Frame migration | prose-only limitation | acknowledgement of absence | reindexing, adjoints, Beck--Chevalley data |
 
 No profile-v1 command may claim more than the corresponding `Preserved` column.
+
+### Operational surface census
+
+| Surface | Approximates | Preserves | Forgets or does not imply |
+|---|---|---|---|
+| `day-atom.in` / `.out` | open-process boundaries | exact project type names | artifact existence or semantic subtyping |
+| `day-atom.next` | possible process composition | permitted forward graph edge | successful execution |
+| `day-atom.revisits` | negative process transition | return edge | forward reachability |
+| `day-atom.done` | completion witness system | witness names | atom applicability or telos truth |
+| `day-bridge` sequence / `&` / `\|` | horizontal, monoidal, and alternative composition | conservative type propagation | realization or execution trace |
+| `day-telos` legacy list | observational components | component identities and results | logical sufficiency |
+| `day-telos` v3 sufficient list | witness-to-telos soundness map | one-way certification relationship | necessity, exactness, or refutation |
+| `day-witness` path/tag/claim/every/absent/command | probes of witness-bearing | evaluator specification | witness identity with its evaluator |
+| `MATERIAL` / `MISSING` / `VACUOUS` | checked bearing sample | checked component result | telos truth or falsity |
+| `ERROR` / `NOT RUN` / `TIMEOUT` | unavailable bearing sample | reason evaluation was unavailable | checked failure |
+| `day atom declare` | vocabulary extension | appended declaration and findings | vocabulary authorization |
+| `day assess atom` / `day assess telos` | frame-local assessment | component or sufficient-system result | global judgment |
+| `day bridge check` | bridge typeability | single-frame syntactic composition | execution or realizability |
 
 ## Canonicalization and equivalence
 
@@ -353,17 +440,21 @@ places remains reuse of one claim, not two independent observations.
 ### Assessment and certification
 
 1. Identify the implicit frame and assessment scope.
-2. Resolve the telos or atom's witness-system relationship; absent means
-   `sufficient` for compatibility.
+2. Resolve the telos relationship. For an unversioned legacy list, stop after
+   rendering component probe results and label the aggregate `COMPONENT REPORT`.
+   Refuse unsupported versions and `necessary` or `exact` relationships.
 3. Resolve each witness name to its probe without identifying the two.
 4. Report executable probes before authorization; execute commands only under
    explicit bounded authorization.
 5. Preserve material, missing, vacuous, unavailable, and error outcomes.
-6. Enforce declared correspondence between components before assembly.
-7. Render a sufficient coherent assembly as `CERTIFIED`; render its absence as
-   `NOT CERTIFIED`; render unavailable evaluation as `UNCHECKABLE`.
+6. For an explicit sufficient system, require every component to be material
+   and enforce every exact correspondence value before assembly.
+7. Render a sufficient coherent assembly as `CERTIFIED`; render checked
+   absence, vacuity, or correspondence mismatch as `NOT CERTIFIED`; render
+   not-run, timeout, error, unreadable input, or unavailable evaluation as
+   `UNCHECKABLE`. Profile v1 has no `REFUTED` outcome.
 8. Record a certificate only through an explicit kan Result write carrying its
-   frame, procedure, scope, evidence, provenance, outcome, and limitations.
+   required `day-assessment` block. Validate it before publication.
 
 ### Frame migration
 
@@ -403,7 +494,8 @@ joined when required shared coordinates disagree.
 ## Compatibility
 
 Existing `day-atom`, `day-bridge`, `day-telos`, and `day-witness` blocks remain
-readable. A legacy witness list is interpreted as sufficient. Existing
+readable. A legacy witness list is rendered only as a flat component report;
+it is not silently strengthened to sufficient. Existing
 `MATERIAL`, `MISSING`, `VACUOUS`, `ERROR`, `NOT RUN`, and `TIMEOUT` renderings
 remain input evidence for the new certification vocabulary but MUST not be
 silently relabeled as telos truth or falsity.
@@ -435,8 +527,8 @@ continues as project-declared procedures rather than new core verbs.
 
 ## Reference test vectors
 
-Normative vectors will live beside this RFC before Review. At minimum they MUST
-cover:
+Normative machine-checked vectors live in `rfcs/vectors/1-process-model.json`
+and are validated by `scripts/check-rfc1-vectors.py`. They cover:
 
 1. One artifact addressed by two distinct evidence claims.
 2. One evidence claim reused by two witness components without becoming two
@@ -446,12 +538,16 @@ cover:
    conjunction passes and coherent assembly rejects certification.
 5. A sufficient witness absent while the telos remains `NOT CERTIFIED`, not
    false.
-6. Necessary and exact witness examples with distinguishable results.
-7. A typeable bridge for which no realization cell exists.
-8. Intermediate telos cells that paste into a global bridge certificate.
-9. Lossless frame reindexing, lossy migration, unsupported procedure,
+6. Necessary and exact declarations refused as unsupported by profile v1.
+7. A correctly typed realization composite and rejection of its reversed form.
+8. Lossless frame reindexing, lossy migration, unsupported procedure,
    forgotten gluing coordinate, and incomparable frames.
-10. A legacy `day-telos` block read as sufficient without changing its bytes.
+9. A legacy `day-telos` block rendered as a flat component report rather than
+   silently strengthened.
+
+The denotational examples of a typeable bridge without a realization cell and
+local intermediate-telos cells pasting to a global cell remain proof-oriented
+Review obligations. They are not claimed as profile-v1 executable algorithms.
 
 ## Unresolved questions
 
@@ -480,7 +576,8 @@ depends on selecting among them.
 - Generic atom execution descriptors and executor registries.
 - Dynamic CLI projection from atom specifications.
 - Pack transport of execution bindings.
-- A canonical kan encoding for assessment certificates and realization cells.
+- A canonical kan encoding for realization cells beyond profile-v1 assessment
+  certificates.
 - Automatic bridge search over bridge-and-certificate pairs.
 - Formal mechanization in a proof assistant.
 

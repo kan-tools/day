@@ -1,4 +1,4 @@
-# Feature: Day RFC foundations and process-model specification
+# Feature: Day RFC foundations and process-model specification, correction round 1
 
 ## Summary
 
@@ -31,11 +31,14 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
   accepted or implemented RFC must also be published as a kan claim carrying
   an exact committed repository artifact address. The claim supplies durable
   identity, provenance, and graph relations without creating a competing copy
-  of the RFC text.
+  of the RFC text. Normative RFC bytes must not contain their own claim CID;
+  publication discovery belongs in kan's `.claims/` projection or another
+  derived index, so publication cannot recursively change its addressed bytes.
 
 - REQ-4: RFC 1 must define the central terms `Frame`, `Artifact`, `Evidence`,
   `Evidence Context`, `Assessment`, `Certificate`, `Witness`, `Probe`, `Telos`,
-  `Atom`, `Bridge`, `Vocabulary`, and `Pack`, including their identities,
+  `Witness System`, `Atom`, `Bridge`, `Vocabulary`, `Pack`, `Present Predicate`,
+  `Identity Process`, and `Realizability Cell`, including their identities,
   relationships, authority, provenance, equivalence rules, and lifecycle.
 
 - REQ-5: RFC 1 must contain three visibly separate layers: an aspirational
@@ -53,8 +56,9 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
 - REQ-7: RFC 1 must distinguish the identity process from the present
   predicate. Given present predicate $P_0$, bridge $B$, and target telos $T$,
   the target realizability shape is a bridge-and-certificate pair $(B,\eta)$
-  with $\eta:P_0\Rightarrow B\odot T$. Intermediate teloi mediate local cells
-  that paste into the global argument.
+  with $\eta:P_0\Rightarrow T\odot B$ under the declared right-to-left
+  composition convention. Intermediate teloi mediate local cells
+  $\eta_i:P_{i-1}\Rightarrow P_i\odot A_i$ that paste into the global argument.
 
 - REQ-8: RFC 1 must define artifacts as things in the world that need not live
   in kan or day; evidence as typed claims making artifacts legible;
@@ -68,13 +72,17 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
   and state the soundness map from assembled witness semantics to the
   frame-local observable semantics of a telos. Failure to form a sufficient
   witness certificate must not be rendered as proof that the telos is false.
-  A legacy witness list with no declared relationship is interpreted as
-  `sufficient`, the weakest sound compatibility reading.
+  In operational profile v1, a legacy witness list is only a flat
+  component-evidence report: it does not certify or refute a telos. A versioned
+  `sufficient` relationship and certificate schema are specified for new
+  writes. `Necessary` and `exact` remain denotational relationships until a
+  later profile specifies their refutation algorithms.
 
 - REQ-10: RFC 1 must describe frame migration as dependent reindexing of
   teloi, evidence, assessments, witnesses, atoms, bridges, and realization
-  cells. It must state the desired monoidal, gluing, naturality, and
-  Beck--Chevalley coherence conditions, and distinguish invertible transport
+  cells. It must state the desired monoidal, gluing, and naturality conditions,
+  including an explicit base-change square and mate transformation where
+  adjoints are assumed, and distinguish invertible transport
   from lax, lossy, unsupported, or incomparable frame relationships.
 
 - REQ-11: The evidence-context tensor, enrichment category, ordinary versus
@@ -104,6 +112,18 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
   reconstruction behavior through project-declared atoms, witnesses, and
   repository procedures rather than new release-specific day verbs.
 
+- REQ-15: The RFC/ADR validator must enforce every guarantee it reports. It
+  validates both templates structurally, complete ADR metadata,
+  file/title/index number agreement, bidirectional exact index coverage,
+  index/file status agreement, an append-only number registry, Accepted-state
+  discussion and review metadata, and a structured target/profile relationship
+  field. Its self-test mutates each guarantee and observes rejection.
+
+- REQ-16: RFC 1 must ship machine-readable finite reference vectors and an
+  executable checker for composition typing, witness-result semantics,
+  shared-coordinate mismatch, and frame-migration outcomes. A checklist of
+  future examples is not a reference vector.
+
 ## Acceptance Criteria
 
 - [ ] AC-1: (REQ-1, REQ-2) `rfcs/0-rfc-and-adr-process.md`, `rfcs/template.md`,
@@ -121,10 +141,12 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
 - [ ] AC-3: (REQ-3) A fixture publishes an accepted RFC claim whose artifact
       address resolves in a fresh clone to the exact merged RFC bytes. Changing
       the CID, commit, path, or file bytes fails resolution; the index and RFC
-      status remain derived from the merged repository file.
+      status remain derived from the merged repository file. No normative RFC
+      field contains the claim CID, so republishing cannot change the addressed
+      RFC bytes.
 
 - [ ] AC-4: (REQ-4, REQ-8) RFC 1 contains normative definitions for all
-      fourteen central terms and a conformance table showing which current kan
+      seventeen central terms and a conformance table showing which current kan
       subjects, fenced blocks, files, or runtime structures encode each term.
       `Artifact`, `Evidence`, `Assessment`, `Witness`, and `Probe` are never
       defined as synonyms.
@@ -137,7 +159,7 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
 - [ ] AC-6: (REQ-6, REQ-7) RFC 1 includes typed reference diagrams and test
       vectors for the identity process, present predicate, atom 1-cell, bridge
       composite, intermediate-telos cells, and pasted realization cell
-      $\eta:P_0\Rightarrow B\odot T$. At least one vector has a typeable bridge
+      $\eta:P_0\Rightarrow T\odot B$. At least one vector has a typeable bridge
       with no realizability cell.
 
 - [ ] AC-7: (REQ-8, REQ-9) Reference vectors distinguish one artifact with two
@@ -146,12 +168,12 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
       whose shared coordinate disagrees. Flat conjunction passes the mismatch
       vector while coherent witness assembly rejects it.
 
-- [ ] AC-8: (REQ-9) RFC 1 gives separate sufficient, necessary, and exact
-      witness-system examples. The operational result vocabulary distinguishes
-      `certified`, `not certified`, `uncheckable`, and a genuinely refuting
-      assessment; no missing sufficient witness is rendered as telos false. A
-      legacy `day-telos` block without a relationship field is read as
-      `sufficient`, while new declarations can state all three relationships.
+- [ ] AC-8: (REQ-9) RFC 1 gives separate denotational examples of sufficient,
+      necessary, and exact witness systems. Operational profile v1 specifies
+      versioned `sufficient` declarations and distinguishes `certified`, `not
+      certified`, and `uncheckable`; legacy lists remain component reports.
+      Refutation, necessary, and exact declarations are unavailable in v1
+      rather than accepted with unspecified behavior.
 
 - [ ] AC-9: (REQ-10) Frame-migration vectors cover invertible reindexing,
       evidence transport with an unsupported procedure, lossy lax-monoidal
@@ -170,23 +192,39 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
       assessment command to the denotational structure it approximates, the
       information it preserves, and the information it loses.
 
-- [ ] AC-12: (REQ-13) Every deferred rollout area has a GitHub issue citing
+- [ ] AC-15: (REQ-15) Hostile validator mutations covering RFC and ADR
+      templates, ADR metadata, stale and status-mismatched index rows, title and
+      number mismatch, reused historical numbers, invalid Accepted metadata,
+      and a target/profile relationship claiming full implementation all fail
+      for their intended reasons.
+
+- [ ] AC-16: (REQ-16) The RFC 1 vector checker parses committed vectors and
+      rejects a reversed composition boundary, a shared-coordinate mismatch
+      labelled certified, a missing sufficient witness labelled refuted, and a
+      lossy frame migration labelled equivalent.
+
+- [ ] AC-12: (post-acceptance rollout gate; REQ-13) Every deferred rollout area has a GitHub issue citing
       RFC 1 and naming the relevant semantic obligation. Closing or deferring
       an issue cannot change RFC 1's accepted semantics without a superseding
       RFC or ADR explaining an implementation departure.
 
-- [ ] AC-13: (REQ-14) The v0.13 roadmap and canonical design identify RFC 1
+- [ ] AC-13: (post-acceptance rollout gate; REQ-14) The v0.13 roadmap and canonical design identify RFC 1
       acceptance as an implementation prerequisite, contain no bespoke
       `day release verify` or release-specific core verb, and assign concrete
       release/trial execution to project-declared vocabulary plus
       repository-owned procedures.
 
-- [ ] AC-14: (REQ-1, REQ-3, REQ-14) RFC 0 and RFC 1 each receive their own
+- [ ] AC-14: (review/acceptance gate; REQ-1, REQ-3, REQ-14) RFC 0 and RFC 1 each receive their own
       cold adversarial review and published kan claim. The v0.13 design cites
       the accepted RFC 1 claim and exact committed file rather than an
       unreviewed working sketch.
 
 ## Architecture
+
+This correction answers BLOCK verdict
+`bafyreickogt7nsnfoqqutdfz5qknfgsdwlyfhwmmp3salyl5ricde2zeci`. The blocked
+draft remains append-only history; the corrected design and RFC bytes receive a
+new Plan and fresh cold review.
 
 `docs/day-process-model-category-sketch.md` is the exploratory mathematical
 source for RFC 1. It remains explicitly non-normative and may change as the
@@ -255,10 +293,22 @@ connected to day through general atom and witness contracts.
   repository needs them.
 - RQ-8: Markdown-with-LaTeX is the canonical exploratory mathematical document;
   rendered HTML is a derivative reading surface.
-- RQ-9: Legacy `day-telos` witness lists default to `sufficient`. This permits a
-  coherent certificate to support the telos but renders its absence as `not
-  certified`, never as proof that the telos is false. `Necessary` and `exact`
-  relationships require explicit declarations.
+- RQ-9: The initial draft proposed reading legacy `day-telos` witness lists as
+  `sufficient`; correction round 1 rejects that strengthening. Legacy lists
+  carry component evidence only unless an explicit versioned relationship is
+  present.
+- RQ-10: Operational profile v1 supports an explicit versioned `sufficient`
+  relationship. Legacy lists remain flat component reports, while `necessary`,
+  `exact`, and sound refutation wait for a later profile with defined algorithms.
+- RQ-11: Composition is conventional right-to-left. A bridge
+  $B=A_n\odot\cdots\odot A_1$ realizes $T$ through
+  $\eta:P_0\Rightarrow T\odot B$ and local cells
+  $P_{i-1}\Rightarrow P_i\odot A_i$.
+- RQ-12: RFC claim discovery is non-normative and external to RFC bytes; no RFC
+  embeds the CID of a claim addressing itself.
+- RQ-13: Draft readiness, formal review and acceptance, and post-acceptance
+  rollout are separate delivery stages. AC-12 through AC-14 are lifecycle
+  gates, not claims that a Draft build has already been accepted.
 
 ## Open Questions
 

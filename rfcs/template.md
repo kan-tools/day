@@ -8,7 +8,7 @@
 - Review-override: None
 - Supersedes: None
 - Superseded-by: None
-- Kan-claim: Not published
+- Profile-relationship: not-applicable
 - Implementation: Not implemented
 
 ## Summary
@@ -28,7 +28,7 @@ Define normative terms.
 State the semantic structure the design approaches, or state that this section
 is not applicable.
 
-## Operational profile
+## Operational profile v1
 
 Specify behavior precisely enough for independent implementations.
 
@@ -77,4 +77,3 @@ List matters shown not to affect the proposed operational contract.
 
 State `Not implemented`, link implementation work, or identify the release in
 which the RFC became implemented.
-

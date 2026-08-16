@@ -6,7 +6,6 @@
 - Supersedes: None
 - Superseded-by: None
 - Related-RFC: None
-- Kan-claim: Not published
 
 ## Context
 
@@ -35,4 +34,3 @@ Other meaningful options.
 ## Supersession
 
 How a later record may replace this decision.
-

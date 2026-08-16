@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "subject": "rfc/0",
+  "artifact_path": "rfcs/0-rfc-and-adr-process.md",
+  "projection_path": ".claims/by-subject/rfc/0",
+  "claim_location": "external",
+  "normative_cid_embedding": "forbidden"
+}
