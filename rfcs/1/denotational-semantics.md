@@ -20,7 +20,7 @@ The essential picture in a frame $f$ is
 
 $$
 \begin{array}{c}
-X_0 \xrightsquigarrow{\quad B\quad} X_n\\[-2pt]
+X_0 \overset{\;B\;}{\rightsquigarrow} X_n\\[-2pt]
 P_0\Downarrow\eta\qquad\Downarrow T
 \end{array}
 \qquad
