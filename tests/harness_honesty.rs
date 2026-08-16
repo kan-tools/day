@@ -482,9 +482,26 @@ fn the_review_atom_states_adr_52_and_the_demonstration_rule() {
 #[test]
 fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
     let yaml = read(".github/workflows/revert-demo.yml");
+    let matrix = read("tests/fixtures/kan-compat.tsv");
+    let newest = matrix
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let tag = fields.next()?;
+            (fields.next()? == "ok").then_some(tag)
+        })
+        .last()
+        .expect("the compatibility matrix must contain an ok row");
     assert!(
         yaml.contains("scripts/revert-demo.py --verify"),
         "the job must re-derive with the harness, not read the trailer"
+    );
+    assert!(
+        yaml.contains(&format!("KAN_TAG: {newest}"))
+            && yaml.contains("--tag \"${KAN_TAG}\" --force kan")
+            && yaml.contains("test -x \"$(command -v kan)\""),
+        "the verifier must install and prove the newest measured kan is present; kan-backed tests cannot re-derive from a red missing-reader baseline"
     );
     assert!(
         yaml.contains("could not compute a merge base") && yaml.contains("exit 1"),
