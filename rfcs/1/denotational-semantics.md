@@ -72,10 +72,9 @@ For $v:h\to g$, pseudofunctoriality supplies a coherent comparison
 $$
 \begin{array}{ccccc}
 \mathbb D_f & \xrightarrow{\;u^*\;} & \mathbb D_g
-  & \xrightarrow{\;v^*\;} & \mathbb D_h\\[4pt]
-\big\Vert & & & & \big\Updownarrow\scriptstyle\phi_{u,v}\\[-2pt]
-\mathbb D_f & \xrightarrow{\;(u\circ v)^*\;} &
-\multicolumn{3}{l}{\mathbb D_h.}
+  & \xrightarrow{\;v^*\;} & \mathbb D_h\\[7pt]
+v^*u^* & \underset{\phi_{u,v}}{\overset{\cong}{\Longrightarrow}} &
+  (u\circ v)^* & :\mathbb D_f\longrightarrow & \mathbb D_h
 \end{array}
 $$
 
