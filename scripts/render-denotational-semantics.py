@@ -62,7 +62,9 @@ def render(markdown: str) -> str:
             level = len(heading.group(1))
             title = inline(heading.group(2))
             anchor = re.sub(r"[^a-z0-9]+", "-", heading.group(2).lower()).strip("-")
-            body.append(f'<h{level} id="{anchor}">{title}</h{level}>')
+            kind = re.match(r"([A-Za-z]+)", heading.group(2))
+            css_class = f' class="{kind.group(1).lower()}"' if level == 3 and kind else ""
+            body.append(f'<h{level} id="{anchor}"{css_class}>{title}</h{level}>')
             continue
         item = re.match(r"^-\s+(.+)$", line)
         if item:
@@ -102,7 +104,15 @@ def page(body: str) -> str:
       box-shadow:0 18px 50px rgba(34,46,39,.09); border-top:5px solid var(--accent); }}
     h1,h2,h3 {{ font-family:ui-sans-serif,system-ui,sans-serif; line-height:1.16; letter-spacing:-.025em; }}
     main h1 {{ display:none; }} h2 {{ margin:3.4rem 0 1rem; font-size:1.55rem; }}
-    h3 {{ margin-top:2rem; }} p,li {{ max-width:72ch; }}
+    h3 {{ margin:2.25rem 0 .75rem; padding:.5rem .75rem; border-left:4px solid var(--rule);
+      background:#f1f3ed; font-size:1.05rem; letter-spacing:-.01em; }}
+    h3.definition {{ border-color:#397262; background:#eaf2ed; }}
+    h3.construction {{ border-color:#47719b; background:#edf2f7; }}
+    h3.proposition, h3.theorem {{ border-color:#765598; background:#f1edf6; }}
+    h3.proof {{ border-color:#8a7651; background:#f5f0e5; font-style:italic; }}
+    h3.example, h3.instance {{ border-color:#ad7042; background:#f7eee7; }}
+    h3.open {{ border-color:#aa514b; background:#f8eae8; }}
+    p,li {{ max-width:72ch; }}
     a {{ color:var(--accent); text-underline-offset:3px; }}
     code {{ font: .9em ui-monospace,SFMono-Regular,monospace; background:var(--code); padding:.12em .3em; border-radius:4px; }}
     .math {{ overflow-x:auto; margin:1.5rem 0; padding:1rem; border-left:3px solid var(--rule); }}

@@ -132,6 +132,15 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
   and be published as an exact-address kan claim without embedding its CID in
   the normative bytes.
 
+- REQ-18: The denotational companion must be structured as an expository
+  definition–proposition–proof-sketch development rather than a vocabulary
+  survey. Every primitive and composite must state its ambient fiber, source,
+  target, and variance; every proposed composition or transport law must be
+  accompanied by a typed pasting or commuting diagram; and concrete finite
+  instances must exercise identity attainment, sequential pasting, coherent
+  witness assembly, and frame migration. Unselected categorical choices remain
+  labelled conjectures or obligations rather than silently becoming theorems.
+
 ## Acceptance Criteria
 
 - [ ] AC-1: (REQ-1, REQ-2) `rfcs/0-rfc-and-adr-process.md`, `rfcs/template.md`,
@@ -218,6 +227,16 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
       correctly. A published claim on `rfc/1/denotational-semantics` resolves
       from a fresh clone to the exact committed Markdown bytes.
 
+- [ ] AC-18: (REQ-18) The companion contains explicit `Definition`,
+      `Construction`, `Proposition`, `Proof sketch`, `Example`, and `Open
+      obligation` units. Its diagrams type-check the equipment square
+      $P_0\Rightarrow T\odot B$, identity attainment, two-atom vertical
+      pasting, witness-system soundness, convolution/shared-coordinate
+      compatibility, reindexing of a realization cell, and the
+      Beck--Chevalley mate. At least three concrete instances trace the
+      abstract objects to profile-v1 artifacts and state exactly which
+      categorical structure the instance forgets.
+
 - [ ] AC-12: (post-acceptance rollout gate; REQ-13) Every deferred rollout area has a GitHub issue citing
       RFC 1 and naming the relevant semantic obligation. Closing or deferring
       an issue cannot change RFC 1's accepted semantics without a superseding
@@ -262,6 +281,14 @@ be stated using independently implementable rules and finite reference vectors.
 The standalone companion at `rfcs/1/denotational-semantics.md` is the coherent
 mathematical reading of that target and is incorporated by RFC 1. Its adjacent
 HTML file is a derivative reading artifact, never a second normative source.
+The companion proceeds in dependency order: ambient indexed equipment;
+predicate and process typing; realization and pasting; evidence and
+assessment; witness observation and assembly; convolution; frame migration;
+then operational decategorification. Definitions precede uses, propositions
+name the exact claim being made, proof sketches expose required coherence
+laws, and open obligations prevent provisional tensors or adjoints from being
+treated as settled structure. Worked instances use finite sets and current day
+objects so that commutativity and information loss can be inspected directly.
 
 `docs/TELOS.md` remains explanatory foundations: motivation, plausible
 fiction, weak equivalence, and the longer category-theoretic trajectory.
@@ -347,6 +374,12 @@ connected to day through general atom and witness contracts.
 - RQ-18: The indexed-process/equipment account receives a clean standalone
   rewrite under `rfcs/1/`, incorporated by RFC 1. Markdown-with-LaTeX is the
   claim-addressed source; HTML is a local derivative for reading.
+- RQ-19: The companion is strengthened into a definition–proposition–proof
+  sketch with concrete instances and boundary-explicit diagrams. A statement
+  is called a proposition only relative to declared assumptions; unresolved
+  equipment, enrichment, tensor, representability, or adjoint choices appear
+  as open obligations and do not acquire normative force from mathematical
+  presentation alone.
 
 ## Open Questions
 
