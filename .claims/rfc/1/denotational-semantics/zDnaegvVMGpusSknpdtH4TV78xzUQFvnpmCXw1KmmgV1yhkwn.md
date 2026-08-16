@@ -11,7 +11,7 @@
   "cites": [],
   "rev": "223mt7kuqfbyy",
   "seq": 0,
-  "of": 9,
+  "of": 11,
   "text_len": 332,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBxyZmMvMS9kZW5vdGF0aW9uYWwtc2VtYW50aWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoMWUxNTY4ODYxNWI4MjJjYjRiMGM4MjQ4ZmYxNDQ5YzAzZDQzNTY1NqFmRmlsZUF0gnggcmZjcy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3MubWR4KDFlMTU2ODg2MTViODIyY2I0YjBjODI0OGZmMTQ0OWMwM2Q0MzU2NTZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZLDVln3M="
 }
@@ -34,7 +34,7 @@ Draft RFC 1 denotational companion: Day is an indexed process bicategory—or ca
   ],
   "rev": "223mt7kuqqqsa",
   "seq": 1,
-  "of": 9,
+  "of": 11,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZE9wZW5lY2l0ZXOB2CpYJQABcRIgh58z++sg1UPST/skF5RDUC3HQ4ApJ5zctdhYT/WoEeNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgxZTE1Njg4NjE1YjgyMmNiNGIwYzgyNDhmZjE0NDljMDNkNDM1NjU2aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSw1a1qV"
 }
 ---
@@ -52,7 +52,7 @@ Draft RFC 1 denotational companion: Day is an indexed process bicategory—or ca
   "cites": [],
   "rev": "223mt7kurcnzq",
   "seq": 2,
-  "of": 9,
+  "of": 11,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgxZTE1Njg4NjE1YjgyMmNiNGIwYzgyNDhmZjE0NDljMDNkNDM1NjU2aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSw1dE+O"
 }
 ---
@@ -72,7 +72,7 @@ Draft RFC 1 denotational companion: Day is an indexed process bicategory—or ca
   ],
   "rev": "223mt7newjf7c",
   "seq": 3,
-  "of": 9,
+  "of": 11,
   "text_len": 185,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgh58z++sg1UPST/skF5RDUC3HQ4ApJ5zctdhYT/WoEeNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCgwYTE4NjBiODhkYjNlZjAwNzllZjVkZWMwYTdkOWU0OGNmZjBkMDUxoWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoMGExODYwYjg4ZGIzZWYwMDc5ZWY1ZGVjMGE3ZDllNDhjZmYwZDA1MWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlks1cesOw=="
 }
@@ -93,7 +93,7 @@ Correct the companion's bridge diagram to use core-TeX \overset{B}{\rightsquigar
   "cites": [],
   "rev": "223mt7nex3mvf",
   "seq": 4,
-  "of": 9,
+  "of": 11,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYTE4NjBiODhkYjNlZjAwNzllZjVkZWMwYTdkOWU0OGNmZjBkMDUxaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSzV0MsA"
 }
 ---
@@ -113,7 +113,7 @@ Correct the companion's bridge diagram to use core-TeX \overset{B}{\rightsquigar
   ],
   "rev": "223mt7nu3rh3m",
   "seq": 5,
-  "of": 9,
+  "of": 11,
   "text_len": 229,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgW0101mgL8BtwKiQCZyxg8uBTMrcQaPqK9z1qwrh7sqRmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCg5ODg5NmIzMjI5NDZjNWI4Njk3Y2NjMGYxZWM3MDBiMjllNzk2MDg3oWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoOTg4OTZiMzIyOTQ2YzViODY5N2NjYzBmMWVjNzAwYjI5ZTc5NjA4N2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlks9Buzzg=="
 }
@@ -134,7 +134,7 @@ Correct the opening realization diagram to display the equipment square explicit
   "cites": [],
   "rev": "223mt7nu4dtm5",
   "seq": 6,
-  "of": 9,
+  "of": 11,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg5ODg5NmIzMjI5NDZjNWI4Njk3Y2NjMGYxZWM3MDBiMjllNzk2MDg3aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWSz0JOXb"
 }
 ---
@@ -154,7 +154,7 @@ Correct the opening realization diagram to display the equipment square explicit
   ],
   "rev": "223mt7oizqoel",
   "seq": 7,
-  "of": 9,
+  "of": 11,
   "text_len": 232,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghvnYExs4SdoLD8i8qM8Dva8/quZYYu6qP1VS3S3cWY1mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCg0MzA1OTFlYzJmMWI5OWY5YTQ2ODBkMzUyNjkxMGE5ZTlhMmJmNTlioWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoNDMwNTkxZWMyZjFiOTlmOWE0NjgwZDM1MjY5MTBhOWU5YTJiZjU5Yml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlktHftQ5w=="
 }
@@ -175,7 +175,48 @@ Restructure the RFC 1 denotational companion as a dependency-ordered definition�
   "cites": [],
   "rev": "223mt7oj2dpwp",
   "seq": 8,
-  "of": 9,
+  "of": 11,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0MzA1OTFlYzJmMWI5OWY5YTQ2ODBkMzUyNjkxMGE5ZTlhMmJmNTliaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWS0eBNcq"
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreidypozq3oukvjshclp5u42u56hchojrbk6764qqx2v3kb3t3zvccy",
+  "sig": "7ddb0a7fbc637cf8c530ff7f4178c53e7a1cd3b1ee83e0098a06bc4544f7d766043cc56bbc30c54d3ab70fffe1475dd6ffec9a81c2b5b1dbd874884e060dde7c",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "rfc/1/denotational-semantics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreiafrquwoerg3uxr4zajiowpvqo2yxjwsjx5kh5a2cyquhj3t5gxhu"
+  ],
+  "rev": "223mt7oo5pdru",
+  "seq": 9,
+  "of": 11,
+  "text_len": 181,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBYwpZxIm3S8eZAlDrPrB2sXTaSb9UfoNCxCh07n01z1mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCg0ODcyOTg2YmNlZjNkN2M5MjA3NDVjYTNlZGQ5NmFlYmFmMTExZjUyoWZGaWxlQXSCeCByZmNzLzEvZGVub3RhdGlvbmFsLXNlbWFudGljcy5tZHgoNDg3Mjk4NmJjZWYzZDdjOTIwNzQ1Y2EzZWRkOTZhZWJhZjExMWY1Mml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlktKDqmhQ=="
+}
+---
+
+Replace unsupported MathJax multicolumn notation with an ordinary typed pseudofunctor comparison display showing both the composite reindexing path and the coherent comparison cell.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreic62kwrps36yoxfploxacofsffjkf4w3p4jg55dkmbibuso3taypu",
+  "sig": "7d6a7d283b14c7c4688d66152257c559ffba7dc993c7bd2612d79dcda45cc98e1d949491a83db36fab119227db2a56698c3efcfa15b7381a3cab9ed595b7431d",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "rfc/1/denotational-semantics"
+  },
+  "kind": "publication",
+  "cites": [],
+  "rev": "223mt7oo6dbqo",
+  "seq": 10,
+  "of": 11,
+  "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4HHJmYy8xL2Rlbm90YXRpb25hbC1zZW1hbnRpY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0ODcyOTg2YmNlZjNkN2M5MjA3NDVjYTNlZGQ5NmFlYmFmMTExZjUyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWS0oRJ5o"
 }
 ---
