@@ -816,6 +816,84 @@ are inspectable. The stable commitment is the two-lever architecture and the
 use of descent obstruction—not a premature claim that ordinary sheaf
 cohomology computes every realization problem.
 
+### Definition 10.9 — Effective realization fragment
+
+An effective realization fragment $\mathfrak R$ chooses finite or otherwise
+computable presentations of the relevant frames, processes, predicates,
+2-cells, covers, and descent data. One candidate implementation language is a
+polynomial-functor calculus: process interfaces become polynomial shapes and
+positions, bridge composition becomes substitution, and wiring or interaction
+is represented by the corresponding polynomial operations. This document does
+not require that particular realization.
+
+For inputs inside $\mathfrak R$, an ideal realization procedure has the typed
+output
+
+$$
+\operatorname{realize}_{\mathfrak R}(A,f_0,T)=
+\begin{cases}
+(B,\eta,\delta) & \text{a bridge, realization cell, and descent data},\\
+o_T & \text{a certified obstruction in the fragment},\\
+\mathsf{unknown} & \text{the fragment proves neither conclusion}.
+\end{cases}
+$$
+
+The third result is mandatory. Failure of bounded search is not an obstruction
+proof, and absence of a proof in $\mathfrak R$ is not global unattainability.
+
+### Definition 10.10 — Provability ledger
+
+Every algorithmic component declares the fragment and judgment for which it is
+sound, complete, or terminating. The resulting ledger distinguishes at least:
+
+- decidable boundary typing and polynomial composition;
+- sound local assessment procedures whose completeness may be unknown;
+- finite-cover descent checks with an explicit coherence bound;
+- obstruction calculations for a named coefficient theory and degree range;
+- bounded bridge synthesis, which may return $\mathsf{unknown}$; and
+- comparisons between sites or topologies for which preservation of $T$ has
+  itself been witnessed.
+
+These declarations enumerate the specific provability bounds of the system.
+They also identify restricted fragments in which stronger conclusions—such as
+termination, completeness of synthesis, effective descent, or vanishing of all
+relevant obstructions—actually admit proofs.
+
+### Proposition sketch 10.11 — A constructive capability compiler
+
+Suppose $\mathfrak R$ has effective composition, reindexing, local assessment,
+descent, and a complete obstruction theory for a declared class of teloi. Then
+within that class, realization can be treated as compilation from
+$(A,f_0,T,J_T)$ to either a certified construction or a certified obstruction.
+Furthermore, comparison maps can expose candidate repairs that add translation
+guarantees, local realizers, or defensible covers.
+
+### Proof sketch
+
+Effective local search enumerates candidate bridges and cells. Decidable
+descent verifies whether compatible local candidates glue. Completeness of the
+chosen obstruction theory makes a remaining nonvanishing class a certificate
+rather than a search timeout. Functorial comparisons show how changing the
+agent system or site maps that class. A repair is certified only when the
+comparison sends the obstruction to zero and preserves the materiality of
+$T$; otherwise it remains a heuristic proposal.
+
+### Philosophical consequence 10.12 — Day as a calculus of collective agency
+
+At its maximal effective realization, Day is not merely a workflow scheduler.
+It calculates a conservative boundary between attainable, obstructed, and
+presently undecidable collective action. It can synthesize constructions
+inside a proved fragment, localize implementation frustration to missing
+processes, translations, gluing data, or coherence, and state which extension
+of an agent system would enlarge its attainability envelope.
+
+This replaces an undifferentiated “no plan found” with one of three accountable
+claims: a witness-bearing realization, a fragment-relative impossibility
+certificate, or an explicit provability boundary. The philosophical commitment
+is not that all agency becomes decidable. It is that every automated assertion
+of capability or incapability should expose the semantic fragment that makes
+the assertion valid.
+
 ## 11. Concrete operational instances
 
 ### Instance 11.1 — Present identity telos
