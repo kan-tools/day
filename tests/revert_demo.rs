@@ -316,6 +316,38 @@ fn verify_refutes_a_trailer_that_does_not_hold_and_touches_nothing() {
     );
 }
 
+/// A later commit may repair the named test's historical baseline without
+/// invalidating what the older fix demonstrated. Verification first tries the
+/// trailer's own tree, then retries the same patch against audited HEAD only
+/// for BASELINE-RED; every other could-not-check outcome still fails closed.
+#[test]
+fn verify_retries_a_historically_red_baseline_against_audited_head() {
+    let s = Scratch::new(
+        BUGGY,
+        FIXED,
+        "#[test]\nfn demo_test() { assert_eq!(scratch::answer(), 3); }\n",
+    );
+    s.git(&["add", "-A"]);
+    s.git(&[
+        "commit",
+        "-qm",
+        "fix the answer\n\nDemonstrated-by: revert=HEAD tests=t::demo_test \
+         outcome=DEMONSTRATED",
+    ]);
+    let demonstrated = s.git(&["rev-parse", "HEAD"]);
+
+    std::fs::write(s.root().join("tests/t.rs"), ASSERTS_THE_FIX).unwrap();
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", "repair the historical test baseline"]);
+
+    let (text, ok) = s.run(&["--verify", demonstrated.trim()]);
+    assert!(ok, "the repaired current baseline must re-derive: {text}");
+    assert!(
+        text.contains("historical baseline is red") && text.contains("DEMONSTRATED"),
+        "the verifier must disclose the fallback and still prove the reversion: {text}"
+    );
+}
+
 /// AC-10 — **a trailer that does not parse is refused**, rather than being read
 /// as an absent one.
 ///

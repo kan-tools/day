@@ -559,30 +559,39 @@ def verify(spec: str, root: pathlib.Path) -> int:
         return 0
     _, names, claimed, include = parsed
 
-    work = pathlib.Path(tempfile.mkdtemp(prefix="revert-demo-"))
-    tree = work / "tree"
-    git("worktree", "add", "--detach", str(tree), rev, cwd=root)
+    patch = patch_for_rev(rev, cwd=root)
+
+    def attempt(at: str):
+        work = pathlib.Path(tempfile.mkdtemp(prefix="revert-demo-"))
+        tree = work / "tree"
+        git("worktree", "add", "--detach", str(tree), at, cwd=root)
+        try:
+            return demonstrate(tree, patch, names, rev, include, [], None)
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", str(tree)],
+                           cwd=root, capture_output=True, text=True)
+            shutil.rmtree(work, ignore_errors=True)
+
+    head = git("rev-parse", "--verify", "HEAD^{commit}", cwd=root).strip()
     try:
-        patch = patch_for_rev(rev, cwd=tree)
-        # Replayed under the trailer's OWN scope. Passing `[]` here re-derived a
-        # different demonstration from the one the commit claims, which is how a
-        # scoped-but-real demonstration reported DID-NOT-COMPILE.
-        outcome, caught = demonstrate(tree, patch, names, rev, include, [], None)
-        # A trailer names only the tests that caught it, so every one of them
-        # must catch it again. Accepting "at least one" would let a trailer carry
-        # passengers that never observed the finding.
-        #
-        # Compared as SPECS on both sides. Comparing a spec list against libtest
-        # names made an honest trailer verify as VACUOUS whenever its filter also
-        # matched a second failing test — a verifier reporting
-        # checked-and-found-a-defect where it could not check, and telling the
-        # author to fix a test that was fine.
-        if outcome == DEMONSTRATED and sorted(names) != sorted(caught):
-            outcome = VACUOUS
-    finally:
-        subprocess.run(["git", "worktree", "remove", "--force", str(tree)],
-                       cwd=root, capture_output=True, text=True)
-        shutil.rmtree(work, ignore_errors=True)
+        outcome, caught = attempt(rev)
+    except CouldNotCheck as error:
+        if error.outcome != BASELINE_RED or rev == head:
+            raise
+        print(
+            f"{rev}: historical baseline is red; retrying the same reversion "
+            f"against audited HEAD {head}"
+        )
+        outcome, caught = attempt(head)
+    # A trailer names only the tests that caught it, so every one of them must
+    # catch it again. Accepting "at least one" would let a trailer carry
+    # passengers that never observed the finding.
+    #
+    # Compared as SPECS on both sides. Comparing a spec list against libtest
+    # names made an honest trailer verify as VACUOUS whenever its filter also
+    # matched a second failing test.
+    if outcome == DEMONSTRATED and sorted(names) != sorted(caught):
+        outcome = VACUOUS
 
     # **Two conditions, not one.** Comparing the re-derived outcome to the
     # claimed one is necessary and was not sufficient: a trailer claiming
