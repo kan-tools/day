@@ -1114,6 +1114,85 @@ fn denotational_publication_resolves_and_rejects_hostile_mutations() {
     );
 }
 
+/// GitHub Actions checks out `https://github.com/kan-tools/day` while ordinary
+/// local clones commonly retain the equivalent `.git` suffix. Publication
+/// identity must canonicalize that transport spelling without accepting a
+/// different repository.
+#[test]
+fn publication_checkers_accept_githubs_suffixless_origin() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let checkout = dir.path().join("day");
+    let cloned = Command::new("git")
+        .args(["clone", "--quiet", "--no-local"])
+        .arg(repo_root())
+        .arg(&checkout)
+        .status()
+        .expect("git clone should run");
+    assert!(
+        cloned.success(),
+        "the publication fixture clone must succeed"
+    );
+    let configured = Command::new("git")
+        .args([
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/kan-tools/day",
+        ])
+        .current_dir(&checkout)
+        .status()
+        .expect("git remote set-url should run");
+    assert!(
+        configured.success(),
+        "the suffixless CI origin must be installed"
+    );
+
+    for checker in [
+        "scripts/check-rfc0-publication.py",
+        "scripts/check-rfc1-denotational-publication.py",
+    ] {
+        std::fs::copy(repo_root().join(checker), checkout.join(checker))
+            .expect("the checker under test should replace the committed fixture copy");
+        let out = Command::new(checkout.join(checker))
+            .current_dir(&checkout)
+            .output()
+            .expect("the publication checker should run");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            out.status.success(),
+            "{checker} must accept GitHub's suffixless spelling of the same repository:\n{text}"
+        );
+    }
+}
+
+/// RFC lifecycle mutation tests must continue to mutate after a proposal moves
+/// from Draft to Review; otherwise the acceptance checks silently become
+/// vacuous at the exact lifecycle transition they exist to protect.
+#[test]
+fn rfc_acceptance_self_tests_survive_the_review_transition() {
+    let out = Command::new("bash")
+        .args(["scripts/check-rfcs-adrs.sh", "--self-test"])
+        .current_dir(repo_root())
+        .output()
+        .expect("the RFC self-test should run");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success()
+            && text.contains("accepted-metadata mutation rejected")
+            && text.contains("forged-review mutation rejected")
+            && text.contains("short-review mutation rejected"),
+        "acceptance mutations must still fire while RFC 0 is in Review:\n{text}"
+    );
+}
+
 /// RFC 1 AC-10 — incorporated notation must remain type-distinct, and every
 /// unresolved formal choice introduced by the companion must remain visible in
 /// RFC 1's authoritative unresolved-question census.

@@ -21,6 +21,13 @@ def require(condition, message):
         raise InvalidPublication(message)
 
 
+def normalize_remote(origin):
+    origin = origin.rstrip("/")
+    if origin.startswith("https://github.com/") and not origin.endswith(".git"):
+        origin += ".git"
+    return origin
+
+
 def canonical_origin(checkout):
     origin = subprocess.run(
         ["git", "remote", "get-url", "origin"],
@@ -43,7 +50,7 @@ def canonical_origin(checkout):
             capture_output=True,
             text=True,
         ).stdout.strip()
-    return origin
+    return normalize_remote(origin)
 
 
 def require_projection(checkout, vector):

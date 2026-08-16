@@ -19,6 +19,13 @@ def require(condition, message):
         raise InvalidPublication(message)
 
 
+def normalize_remote(origin):
+    origin = origin.rstrip("/")
+    if origin.startswith("https://github.com/") and not origin.endswith(".git"):
+        origin += ".git"
+    return origin
+
+
 def canonical_origin(checkout):
     origin = subprocess.run(["git", "remote", "get-url", "origin"], cwd=checkout, check=True, capture_output=True, text=True).stdout.strip()
     seen = set()
@@ -29,7 +36,7 @@ def canonical_origin(checkout):
         require(candidate not in seen and candidate.is_dir(), "repository origin chain is invalid")
         seen.add(candidate)
         origin = subprocess.run(["git", "remote", "get-url", "origin"], cwd=candidate, check=True, capture_output=True, text=True).stdout.strip()
-    return origin
+    return normalize_remote(origin)
 
 
 def validate(vector, checkout, claims, repository_origin):
