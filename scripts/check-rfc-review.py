@@ -42,17 +42,18 @@ if file not in {entry["path"] for entry in pr.get("files", [])}:
 head_oid = pr.get("headRefOid")
 if not re.fullmatch(r"[0-9a-f]{40}", head_oid or ""):
     fail("Discussion pull request has no readable head commit")
-query = "query($owner:String!,$name:String!,$oid:GitObjectID!){repository(owner:$owner,name:$name){object(oid:$oid){... on Commit{oid pushedDate}}}}"
 try:
-    pushed = json.loads(subprocess.run(
-        ["gh", "api", "graphql", "-f", f"query={query}", "-F", "owner=kan-tools", "-F", "name=day", "-F", f"oid={head_oid}"],
+    timeline = json.loads(subprocess.run(
+        ["gh", "api", f"repos/kan-tools/day/issues/{match.group(1)}/timeline", "--paginate"],
         check=True, capture_output=True, text=True,
-    ).stdout)["data"]["repository"]["object"]
-except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError):
-    fail("proposal head push time is not readable")
-if pushed.get("oid") != head_oid or not pushed.get("pushedDate"):
-    fail("proposal head has no server-recorded push time")
-review_anchor = max(timestamp(pr["createdAt"]), timestamp(pushed["pushedDate"]))
+    ).stdout)
+except (subprocess.CalledProcessError, json.JSONDecodeError):
+    fail("proposal timeline is not readable")
+head_event = next((event for event in timeline if event.get("event") == "committed" and event.get("sha") == head_oid), None)
+verification = (head_event or {}).get("verification", {})
+if not verification.get("verified") or not verification.get("verified_at"):
+    fail("proposal head lacks a server-timestamped verified commit event")
+review_anchor = max(timestamp(pr["createdAt"]), timestamp(verification["verified_at"]))
 if start < review_anchor:
     fail("review clock starts before the proposal head reached GitHub")
 if end > datetime.datetime.now(datetime.timezone.utc):

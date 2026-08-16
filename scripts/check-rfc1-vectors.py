@@ -96,11 +96,20 @@ def validate(data):
     require(set(witness) == required_witness, "witness vector census changed")
     require(len(witness_cases) == len(witness), "witness case IDs are duplicated")
     for case_id in ("artifact-two-evidence", "shared-evidence-reuse"):
+        require(set(witness[case_id]) == {"id", "evidence_cids", "artifact", "independent_observations"}, f"evidence case shape changed: {case_id}")
         require(isinstance(witness[case_id].get("artifact"), str) and witness[case_id]["artifact"], f"artifact address absent: {case_id}")
         require(isinstance(witness[case_id].get("evidence_cids"), list) and all(isinstance(cid, str) and cid for cid in witness[case_id]["evidence_cids"]), f"evidence CIDs malformed: {case_id}")
+        require(len(witness[case_id]["evidence_cids"]) == 2, f"evidence case must have two uses: {case_id}")
         observed = len(set(witness[case_id]["evidence_cids"]))
         require(witness[case_id]["independent_observations"] == observed, f"wrong evidence independence: {case_id}")
+    require(witness["artifact-two-evidence"]["artifact"] == witness["shared-evidence-reuse"]["artifact"], "artifact identity differs between reuse examples")
+    require(witness["artifact-two-evidence"]["independent_observations"] == 2, "distinct evidence case is not independent")
+    require(witness["shared-evidence-reuse"]["independent_observations"] == 1, "shared evidence case is not reuse")
     for case_id in required_witness - {"artifact-two-evidence", "shared-evidence-reuse"}:
+        require(set(witness[case_id]) == {"id", "relationship", "components", "expected"}, f"witness case shape changed: {case_id}")
+        for component in witness[case_id].get("components", []):
+            require(set(component) == {"name", "outcome", "coordinate"}, f"component shape changed: {case_id}")
+            require(isinstance(component.get("name"), str) and component["name"], f"component name absent: {case_id}")
         require(witness[case_id]["expected"] == witness_outcome(witness[case_id]), f"wrong witness result: {case_id}")
 
     migration = {case["id"]: case for case in data.get("migration_cases", [])}
@@ -110,7 +119,17 @@ def validate(data):
         "forgotten-coordinate": "lossy", "incomparable-frames": "incomparable",
     }
     require(set(migration) == set(expected_migration), "migration vector census changed")
+    require(len(data.get("migration_cases", [])) == len(migration), "migration case IDs are duplicated")
+    expected_details = {
+        "invertible-reindexing": ({"telos", "evidence", "procedure", "assessment", "witness", "atom", "bridge", "realization"}, set()),
+        "unsupported-procedure": ({"telos", "evidence", "artifact-coordinate"}, {"procedure", "assessment-outcome", "certificate"}),
+        "lax-comparison": ({"evidence", "individual-components"}, {"monoidal-equivalence", "assembled-witness"}),
+        "successful-gluing": ({"shared-coordinate", "component-assessments", "assembled-witness"}, set()),
+        "forgotten-coordinate": ({"component-assessments"}, {"shared-coordinate", "gluing-proof", "assembled-witness"}),
+        "incomparable-frames": (set(), {"all-cross-frame-judgments"}),
+    }
     for case_id, expected in expected_migration.items():
+        require(set(migration[case_id]) == {"id", "comparison", "procedure", "coordinates", "transported", "lost", "expected"}, f"migration case shape changed: {case_id}")
         require(migration[case_id]["expected"] == expected, f"wrong migration fixture: {case_id}")
         require(migration[case_id]["expected"] == migration_outcome(migration[case_id]), f"wrong migration result: {case_id}")
         require(isinstance(migration[case_id].get("transported"), list) and isinstance(migration[case_id].get("lost"), list), f"migration detail absent: {case_id}")
@@ -119,6 +138,7 @@ def validate(data):
         lost = migration[case_id]["lost"]
         require(all(isinstance(item, str) and item in migration_vocabulary for item in transported + lost), f"unknown migration detail: {case_id}")
         require(len(set(transported)) == len(transported) and len(set(lost)) == len(lost) and not set(transported) & set(lost), f"migration detail overlaps or duplicates: {case_id}")
+        require((set(transported), set(lost)) == expected_details[case_id], f"migration transport/loss semantics changed: {case_id}")
         if expected == "equivalent":
             require(transported and not lost, f"equivalent migration lacks transport or reports loss: {case_id}")
         else:
@@ -141,6 +161,12 @@ def self_test(data):
         ("duplicate-witness-id", lambda d: d["witness_cases"].append(copy.deepcopy(d["witness_cases"][0]))),
         ("invented-migration-detail", lambda d: next(c for c in d["migration_cases"] if c["id"] == "lax-comparison")["lost"].append("invented")),
         ("empty-equivalent-transport", lambda d: next(c for c in d["migration_cases"] if c["id"] == "invertible-reindexing").update(transported=[])),
+        ("empty-evidence-set", lambda d: next(c for c in d["witness_cases"] if c["id"] == "artifact-two-evidence").update(evidence_cids=[])),
+        ("reuse-became-independent", lambda d: next(c for c in d["witness_cases"] if c["id"] == "shared-evidence-reuse").update(evidence_cids=["cid-a", "cid-b"], independent_observations=2)),
+        ("invented-evidence-expected", lambda d: next(c for c in d["witness_cases"] if c["id"] == "artifact-two-evidence").update(expected="invented")),
+        ("absent-legacy-name", lambda d: next(c for c in d["witness_cases"] if c["id"] == "legacy-flat")["components"][0].update(name=None)),
+        ("duplicate-migration-id", lambda d: d["migration_cases"].append(copy.deepcopy(d["migration_cases"][0]))),
+        ("reversed-migration-detail", lambda d: next(c for c in d["migration_cases"] if c["id"] == "forgotten-coordinate").update(transported=["shared-coordinate", "gluing-proof", "assembled-witness"], lost=["component-assessments"])),
     ]
     for name, mutate in mutations:
         candidate = copy.deepcopy(data)
