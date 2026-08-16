@@ -96,6 +96,11 @@ questions, evidence, validation, or CI. A substantive change restarts the
 review period and invalidates earlier override reactions; editorial corrections
 do not.
 
+`rfcs/maintainers.txt` is the review-override maintainer registry. The
+validator anchors its clock to the proposal PR's latest commit (a conservative
+machine-checkable restart), and an override must name that commit and have a
+post-commit rocket reaction from every registered maintainer.
+
 `Implemented` requires linked shipped evidence. Acceptance is a decision about
 the contract, not a claim that the implementation exists.
 

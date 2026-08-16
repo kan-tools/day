@@ -43,15 +43,7 @@ check_rfc_shape() {
       [[ "$review_end" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "$file is $status but Review-period-ends is not RFC3339 UTC"
       override=$(field_value "$file" Review-override)
       [[ "$override" == None || "$override" =~ ^unanimous:https://github\.com/kan-tools/day/pull/[0-9]+@[0-9a-f]{40}$ ]] || fail "$file is $status but Review-override is malformed"
-      python3 - "$review_start" "$review_end" "$override" <<'PY' || fail "$file is $status without an elapsed 72-hour review or structured override"
-import datetime, sys
-start = datetime.datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
-end = datetime.datetime.strptime(sys.argv[2], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
-elapsed = end - start >= datetime.timedelta(hours=72)
-raise SystemExit(0 if end <= datetime.datetime.now(datetime.timezone.utc) and (elapsed or sys.argv[3] != "None") else 1)
-PY
-      changed_files=$(gh pr diff "$discussion" --name-only 2>/dev/null) || fail "$file is $status but its Discussion pull request is not readable"
-      grep -Fqx "$file" <<< "$changed_files" || fail "$file is $status but its Discussion pull request does not contain the RFC file"
+      scripts/check-rfc-review.py "$file" "$discussion" "$review_start" "$review_end" "$override" || fail "$file is $status without verifiable review evidence"
       ;;
   esac
 }
@@ -72,6 +64,8 @@ check_rfc_shape rfcs/template.md
 check_adr_shape adrs/template.md
 [[ -x scripts/check-rfc1-vectors.py ]] || fail 'scripts/check-rfc1-vectors.py is not executable'
 [[ -x scripts/check-rfc0-publication.py ]] || fail 'scripts/check-rfc0-publication.py is not executable'
+[[ -x scripts/check-rfc-review.py ]] || fail 'scripts/check-rfc-review.py is not executable'
+[[ -s rfcs/maintainers.txt ]] || fail 'rfcs/maintainers.txt is absent or empty'
 if [[ ${DAY_RFC_PUBLICATION_SKIP:-0} != 1 ]]; then scripts/check-rfc0-publication.py; fi
 scripts/check-rfc1-vectors.py rfcs/vectors/1-process-model.json
 if rg -q '^- Kan-claim:' rfcs/*.md adrs/*.md; then fail 'normative RFC bytes contain a claim-CID backlink'; fi
@@ -146,7 +140,7 @@ if [[ ${1:-} == --self-test ]]; then
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected accepted-metadata 'Discussion is not a day pull-request address'
   reset_fixture; mv "$fixture/rfcs/1-frame-indexed-process-model.md" "$fixture/rfcs/2-frame-indexed-process-model.md"; perl -0pi -e 's/# RFC 1:/# RFC 2:/' "$fixture/rfcs/2-frame-indexed-process-model.md"; perl -0pi -e 's/RFC 1: Frame-indexed process model\]\(1-frame-indexed-process-model\.md\)/RFC 2: Frame-indexed process model](2-frame-indexed-process-model.md)/' "$fixture/rfcs/README.md"; perl -0pi -e 's/^1\t1-frame-indexed-process-model\.md/2\t2-frame-indexed-process-model.md/m' "$fixture/rfcs/numbers.tsv"; expect_rejected historical-renumber 'historical RFC allocation changed: 1 -> 1-frame-indexed-process-model.md'
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/; s/- Discussion: Not opened/- Discussion: x/; s/- Review-period-ends: Not scheduled/- Review-period-ends: not-a-date/; s/- Review-override: None/- Review-override: forged/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected forged-review 'Discussion is not a day pull-request address'
-  reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/; s|- Discussion: Not opened|- Discussion: https://github.com/kan-tools/day/pull/7|; s/- Review-started-at: Not scheduled/- Review-started-at: 2026-08-01T00:00:00Z/; s/- Review-period-ends: Not scheduled/- Review-period-ends: 2026-08-01T01:00:00Z/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected short-review 'without an elapsed 72-hour review'
+  reset_fixture; perl -0pi -e 's/- Status: Draft/- Status: Accepted/; s|- Discussion: Not opened|- Discussion: https://github.com/kan-tools/day/pull/7|; s/- Review-started-at: Not scheduled/- Review-started-at: 2026-08-01T00:00:00Z/; s/- Review-period-ends: Not scheduled/- Review-period-ends: 2026-08-01T01:00:00Z/' "$fixture/rfcs/0-rfc-and-adr-process.md"; perl -0pi -e 's/0-rfc-and-adr-process.md\) — Draft/0-rfc-and-adr-process.md) — Accepted/' "$fixture/rfcs/README.md"; expect_rejected short-review 'fewer than 72 review hours elapsed'
   reset_fixture; perl -0pi -e 's/- Profile-relationship: approximation/- Profile-relationship: full-implementation/' "$fixture/rfcs/1-frame-indexed-process-model.md"; expect_rejected profile-relationship 'unrecognized Profile-relationship: full-implementation'
   reset_fixture; perl -0pi -e 's/"expected": "not-certified"/"expected": "certified"/' "$fixture/rfcs/vectors/1-process-model.json"; expect_rejected coherence-vector 'wrong witness result: coordinate-mismatch'
   reset_fixture; perl -0pi -e 's/- Status: Draft/- Kan-claim: bafyrecursive\n- Status: Draft/' "$fixture/rfcs/0-rfc-and-adr-process.md"; expect_rejected recursive-publication 'normative RFC bytes contain a claim-CID backlink'
