@@ -1169,6 +1169,30 @@ fn publication_checkers_accept_githubs_suffixless_origin() {
     }
 }
 
+/// The ordinary push suite exercises the current published-claim tree format;
+/// the compatibility matrix separately preserves the oldest supported CLI
+/// pairing. Pinning ordinary CI to the floor made a fresh clone unreadable as
+/// soon as kan's publication layout advanced while its CLI stayed compatible.
+#[test]
+fn ordinary_ci_uses_the_newest_measured_kan() {
+    let matrix = read("tests/fixtures/kan-compat.tsv");
+    let newest = matrix
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let tag = fields.next()?;
+            (fields.next()? == "ok").then_some(tag)
+        })
+        .last()
+        .expect("the compatibility matrix must contain an ok row");
+    let ci = read(".github/workflows/ci.yml");
+    assert!(
+        ci.contains(&format!("KAN_TAG: {newest}")),
+        "ordinary CI must use newest measured kan {newest}; the compatibility matrix owns the older floor"
+    );
+}
+
 /// RFC lifecycle mutation tests must continue to mutate after a proposal moves
 /// from Draft to Review; otherwise the acceptance checks silently become
 /// vacuous at the exact lifecycle transition they exist to protect.

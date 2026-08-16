@@ -9,9 +9,11 @@ env:
   # kan's default branch: CI must fail because *day* changed, and an unpinned
   # dependency turns an unrelated kan commit into a red build here.
   #
-  # `.github/workflows/kan-compat.yml` is what covers the *other* versions —
-  # this pin is the one pairing every push checks.
-  KAN_TAG: v0.9.1-beta.1
+  # `.github/workflows/kan-compat.yml` is what preserves the older supported
+  # floor. This push-wide integration pin follows the newest measured `ok`
+  # release because fresh-clone checks also exercise kan's current published
+  # claim-tree format, not only day's backward-compatible CLI reads.
+  KAN_TAG: v0.13.0-beta.1
 
 jobs:
   behaviour-diff:
@@ -86,8 +88,8 @@ jobs:
           # the newest read-contract behaviour day depends on is tested
           # nowhere on push — a silent skip wearing a different hat, guarded
           # for the same reason the `kan --version` assertion above exists.
-          # v0.9.1-beta.1 has roles (they landed in kan v0.8); if a future pin
-          # predates them, this says so instead of the cell quietly skipping.
+          # The current pin has roles (they landed in kan v0.8); if a future pin
+          # regresses them, this says so instead of the cell quietly skipping.
           # `--help` is the probe because it proves the verb exists without
           # executing a write: measured, it exits 0 where the verb exists and
           # 2 where it does not, and it cannot hang on an identity store.
