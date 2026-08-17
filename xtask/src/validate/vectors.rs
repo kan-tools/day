@@ -83,8 +83,8 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     where
         E: de::Error,
     {
-        const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
-        if !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&value) {
+        const MAX_JCS_INTEGER: i64 = 9_007_199_254_740_992;
+        if !(-MAX_JCS_INTEGER..=MAX_JCS_INTEGER).contains(&value) {
             return Err(E::custom("integer is outside the I-JSON safe range"));
         }
         Ok(Value::Number(value.into()))
@@ -94,8 +94,8 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     where
         E: de::Error,
     {
-        const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-        if value > MAX_SAFE_INTEGER {
+        const MAX_JCS_INTEGER: u64 = 9_007_199_254_740_992;
+        if value > MAX_JCS_INTEGER {
             return Err(E::custom("integer is outside the I-JSON safe range"));
         }
         Ok(Value::Number(value.into()))
@@ -110,11 +110,19 @@ impl<'de> Visitor<'de> for IJsonVisitor {
             .ok_or_else(|| E::custom("number is not finite IEEE-754"))
     }
 
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> {
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        require_ijson_string::<E>(value)?;
         Ok(Value::String(value.to_owned()))
     }
 
-    fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        require_ijson_string::<E>(&value)?;
         Ok(Value::String(value))
     }
 
@@ -135,6 +143,7 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     {
         let mut values = Map::new();
         while let Some(key) = object.next_key::<String>()? {
+            require_ijson_string::<A::Error>(&key)?;
             if values.contains_key(&key) {
                 return Err(de::Error::custom(format!(
                     "duplicate JSON property name: {key}"
@@ -143,6 +152,18 @@ impl<'de> Visitor<'de> for IJsonVisitor {
             values.insert(key, object.next_value_seed(IJsonSeed)?);
         }
         Ok(Value::Object(values))
+    }
+}
+
+fn require_ijson_string<E: de::Error>(value: &str) -> Result<(), E> {
+    let contains_noncharacter = value.chars().any(|character| {
+        let codepoint = character as u32;
+        (0xfdd0..=0xfdef).contains(&codepoint) || codepoint & 0xffff >= 0xfffe
+    });
+    if contains_noncharacter {
+        Err(E::custom("string contains an I-JSON noncharacter"))
+    } else {
+        Ok(())
     }
 }
 
@@ -366,7 +387,9 @@ fn validate_certificate_case(
     )?;
     require(
         declaration_digest == expected_declaration_digest,
-        "certificate declaration digest does not match canonical declaration bytes",
+        format!(
+            "certificate declaration digest does not match canonical declaration bytes: expected {expected_declaration_digest}, got {declaration_digest}"
+        ),
     )?;
     let procedure = object(
         declaration.get("procedure_spec"),

@@ -1284,6 +1284,15 @@ fn rfc1_vector_loader_rejects_ambiguous_jcs_input() {
             ),
             "integer is outside the I-JSON safe range",
         ),
+        (
+            "unicode-noncharacter.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"forbidden\": \"\\uFFFF\",",
+                1,
+            ),
+            "string contains an I-JSON noncharacter",
+        ),
     ];
     let dir = tempfile::tempdir().unwrap();
     for (name, hostile, expected) in cases {
