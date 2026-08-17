@@ -1,6 +1,6 @@
 # RFC 1: Frame-indexed process model
 
-- Status: Draft
+- Status: Review
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: Not opened
@@ -605,7 +605,7 @@ accepted RFC and naming the semantic obligation it implements.
 
 ## Implementation status
 
-Draft. Current day partially implements operational profile v1 but uses older
+Review. Current day partially implements operational profile v1 but uses older
 rendering and flat witness assembly. No claim is made that the denotational
 target is implemented. Acceptance precedes the v0.13 implementation restart;
 implementation work will be decomposed into issues after review.
