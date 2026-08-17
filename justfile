@@ -40,6 +40,14 @@ check-rfc *args:
 demonstrate *args:
     cargo run -p xtask -- evidence revert {{args}}
 
+# Account for every commit in a range under the demonstration rule.
+census-demonstrations *args:
+    cargo run -p xtask -- census demonstrations {{args}}
+
+# Account for every review finding on a kan subject.
+census-findings subject *args:
+    cargo run -p xtask -- census findings {{subject}} {{args}}
+
 # List the exact checks in a validation profile.
 list-profile profile="ci":
     cargo run -p xtask -- validate profile {{profile}} --list
