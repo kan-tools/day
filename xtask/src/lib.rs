@@ -3,13 +3,16 @@ pub mod command;
 pub mod evidence;
 pub mod outcome;
 pub mod profile;
+pub mod release;
 pub mod validate;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use capability::process::{Process, ProcessRequest};
-use command::{CensusCommand, EvidenceCommand, TrailingArgs, ValidateCommand, Xtask};
+use command::{
+    CensusCommand, EvidenceCommand, ReleaseCommand, TrailingArgs, ValidateCommand, Xtask,
+};
 use outcome::{CouldNotCheck, Finding, Outcome};
 
 pub fn run(cli: Xtask, root: &Path, process: &dyn Process) -> Outcome<()> {
@@ -17,6 +20,17 @@ pub fn run(cli: Xtask, root: &Path, process: &dyn Process) -> Outcome<()> {
         Xtask::Validate { command } => run_validate(command, root, process),
         Xtask::Evidence { command } => run_evidence(command, root, process),
         Xtask::Census { command } => run_census(command, root, process),
+        Xtask::Release { command } => run_release(command, root),
+    }
+}
+
+fn run_release(command: ReleaseCommand, root: &Path) -> Outcome<()> {
+    match command {
+        ReleaseCommand::VerifyV013 { manifest } => release::v013::verify_manifest(root, &manifest),
+        ReleaseCommand::GradeAskmeV013 { bundle } => release::v013::grade_askme(root, &bundle),
+        ReleaseCommand::GradeReconstructionV013 { bundle } => {
+            release::v013::grade_reconstruction(root, &bundle)
+        }
     }
 }
 

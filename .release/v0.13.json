@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "release": "v0.13.0-beta.1",
+  "issues": [93, 143, 152, 193, 195, 204],
+  "workflows": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/agent-plugins.yml",
+    ".github/workflows/kan-compat.yml",
+    ".github/workflows/migration-matrix.yml",
+    ".github/workflows/askme-behavioral-trial.yml",
+    ".github/workflows/workflow-reconstruction-trial.yml"
+  ],
+  "evidence_protocols": [
+    ".release/protocols/askme-v1.json",
+    ".release/protocols/reconstruction-v1.json"
+  ],
+  "publication_artifacts": [
+    ".github/workflows/release.yml",
+    "git-tag",
+    "crates-io-package",
+    "github-release",
+    "kan-release-claim"
+  ]
+}

@@ -1,0 +1,51 @@
+name: v0.13 workflow reconstruction trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact prepared v0.13 candidate commit
+        required: true
+        type: string
+      evidence_ref:
+        description: Immutable commit containing the reviewed real-work bundle
+        required: true
+        type: string
+      manifest_path:
+        description: Reconstruction manifest path within the evidence commit
+        required: true
+        default: manifest.json
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Materialize only the addressed evidence commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+          evidence="$RUNNER_TEMP/reconstruction-evidence"
+          mkdir "$evidence"
+          git archive --format=tar "${{ inputs.evidence_ref }}" | tar -x -C "$evidence"
+          test -f "$evidence/${{ inputs.manifest_path }}"
+          test "${{ inputs.manifest_path }}" = manifest.json
+      - name: Derive the reconstruction verdict and every removal control
+        run: |
+          set -euo pipefail
+          cargo run --locked -p xtask -- release grade-reconstruction-v013 \
+            "$RUNNER_TEMP/reconstruction-evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v013-reconstruction-${{ inputs.candidate_sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/reconstruction-evidence
+          if-no-files-found: error

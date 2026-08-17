@@ -31,6 +31,23 @@ pub enum Xtask {
         #[command(subcommand)]
         command: CensusCommand,
     },
+    Release {
+        #[command(subcommand)]
+        command: ReleaseCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReleaseCommand {
+    /// Verify the v0.13 manifest equals the repository's typed contract
+    VerifyV013 {
+        #[arg(default_value = ".release/v0.13.json")]
+        manifest: PathBuf,
+    },
+    /// Grade a v0.13 /askme evidence bundle from raw scenario transcripts
+    GradeAskmeV013 { bundle: PathBuf },
+    /// Verify a v0.13 reconstruction bundle and execute its removal controls
+    GradeReconstructionV013 { bundle: PathBuf },
 }
 
 #[derive(Debug, Subcommand)]

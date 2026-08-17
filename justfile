@@ -32,6 +32,18 @@ format-check:
 release-check:
     cargo run -p xtask -- validate profile release
 
+# Verify the committed v0.13 instance equals the independently typed contract.
+verify-v013-contract:
+    cargo run -p xtask -- release verify-v013
+
+# Grade a raw v0.13 /askme evidence bundle.
+grade-v013-askme bundle:
+    cargo run -p xtask -- release grade-askme-v013 {{bundle}}
+
+# Grade a v0.13 fresh-session reconstruction bundle and its removal controls.
+grade-v013-reconstruction bundle:
+    cargo run -p xtask -- release grade-reconstruction-v013 {{bundle}}
+
 # RFC and ADR validation.
 check-rfc *args:
     cargo run -p xtask -- validate rfc {{args}}

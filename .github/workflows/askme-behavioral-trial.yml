@@ -1,0 +1,89 @@
+name: v0.13 askme behavioral trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact prepared v0.13 candidate commit
+        required: true
+        type: string
+      model:
+        description: Exact Codex model used by the preregistered trial
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  real-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require the exact immutable candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+          test "$(git status --porcelain)" = ""
+          test "${#CANDIDATE}" = 40
+        env:
+          CANDIDATE: ${{ inputs.candidate_sha }}
+      - name: Build candidate and install its tested dependencies
+        run: |
+          set -euo pipefail
+          cargo build --locked --bin day
+          cargo install kan --version 0.13.0-beta.1 --locked
+          npm install --global @openai/codex@0.147.0
+      - name: Authenticate the real harness
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OPENAI_API_KEY"
+          printenv OPENAI_API_KEY | codex login --with-api-key
+          codex login status
+      - name: Install only the candidate askme skill
+        run: |
+          set -euo pipefail
+          export CODEX_HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$CODEX_HOME/skills/askme"
+          cp skills/askme/SKILL.md "$CODEX_HOME/skills/askme/SKILL.md"
+          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
+      - name: Run preregistered multi-turn scenarios and derive verdicts
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/askme-evidence"
+          python3 scripts/run-v013-askme-trial.py \
+            .release/protocols/askme-v1.json \
+            "${{ inputs.candidate_sha }}" "${{ inputs.model }}" "$evidence"
+          cargo run --locked -p xtask -- release grade-askme-v013 "$evidence"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v013-askme-${{ inputs.candidate_sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/askme-evidence
+          if-no-files-found: error
+      - name: Push the immutable raw bundle to a run-specific evidence ref
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/askme-evidence"
+          evidence_repo="$RUNNER_TEMP/evidence-repo"
+          git init -q -b evidence "$evidence_repo"
+          cp -R "$evidence"/. "$evidence_repo"/
+          git -C "$evidence_repo" add .
+          git -C "$evidence_repo" -c user.name=github-actions \
+            -c user.email=github-actions@users.noreply.github.com \
+            commit -qm "evidence: v0.13 askme run ${{ github.run_id }}"
+          git -C "$evidence_repo" remote add origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$evidence_repo" push origin \
+            "HEAD:refs/heads/evidence/v0.13/askme-${{ github.run_id }}"
+          git -C "$evidence_repo" rev-parse HEAD
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

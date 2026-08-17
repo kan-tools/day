@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "id": "day-v0.13-reconstruction-v1",
+  "rubric_version": "reconstruction-rubric-v1",
+  "required_claims": [
+    "stream",
+    "acquired-input",
+    "intervention",
+    "scoped-handoff",
+    "fresh-wakeup"
+  ],
+  "required_coordinates": [
+    "candidate-sha",
+    "stream-subject",
+    "acquired-input-cid",
+    "intervention-cid",
+    "handoff-cid",
+    "suite-commit",
+    "census-base",
+    "census-head",
+    "ci-run-id",
+    "ci-head-sha"
+  ],
+  "removal_controls": [
+    "remove-stream",
+    "remove-acquired-input",
+    "remove-intervention",
+    "remove-handoff",
+    "remove-wakeup",
+    "remove-suite-commit",
+    "remove-census-base",
+    "remove-census-head",
+    "remove-ci-run-id",
+    "remove-ci-head-sha",
+    "change-candidate-sha"
+  ],
+  "constraints": [
+    "the intervention must arise during genuine work and must not be manufactured for the trial",
+    "the fresh wakeup receives no raw transcript",
+    "every required claim is read from kan rather than copied from the trial prompt",
+    "publication behavioral and reconstruction evidence name one candidate SHA"
+  ]
+}

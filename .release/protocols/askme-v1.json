@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "id": "day-v0.13-askme-v1",
+  "rubric_version": "askme-rubric-v1",
+  "skill": "skills/askme/SKILL.md",
+  "scenarios": [
+    {
+      "id": "decision-request-record",
+      "topic": "choose whether the sample service should retry writes",
+      "turns": ["Reliability matters more than latency.", "Treat idempotency as given; the service already has request keys.", "Skip", "Use two bounded retries.", "Yes, record it."],
+      "adaptive_signals": [["reliability", "latency"], ["idempotency", "request keys"], [], ["two", "bounded", "retries"]],
+      "expect": {"adaptive_follow_up": true, "record": true, "classifications": ["fact", "decision", "material-effect"]}
+    },
+    {
+      "id": "factual-request-decline",
+      "topic": "capture constraints for the sample parser",
+      "turns": ["It must accept UTF-8 and inputs are at most 1 MiB.", "The limit comes from the public API contract.", "We do not know the malformed-input rate.", "Add bounded-size validation.", "No, do not record."],
+      "adaptive_signals": [["UTF-8", "1 MiB"], ["API contract", "limit"], ["malformed", "unknown"], ["bounded-size", "validation"]],
+      "expect": {"adaptive_follow_up": true, "record": false, "classifications": ["fact", "unresolved", "material-effect"]}
+    },
+    {
+      "id": "unknown-topic",
+      "topic": "",
+      "turns": ["I want to work through release naming.", "The package is still beta.", "Stop"],
+      "adaptive_signals": [["release", "naming"], ["beta"]],
+      "expect": {"adaptive_follow_up": true, "record": false, "classifications": ["fact"]}
+    },
+    {
+      "id": "skip",
+      "topic": "decide a sample logging level",
+      "turns": ["Make a decision.", "Skip", "Nothing remains uncertain.", "Use info by default.", "No"],
+      "adaptive_signals": [["decision"], [], ["nothing", "uncertain"], ["info"]],
+      "expect": {"adaptive_follow_up": true, "record": false, "classifications": ["decision"]}
+    },
+    {
+      "id": "early-stop",
+      "topic": "sample deployment question",
+      "turns": ["Stop"],
+      "adaptive_signals": [],
+      "expect": {"adaptive_follow_up": false, "record": false, "classifications": []}
+    },
+    {
+      "id": "context-free-repo",
+      "topic": "identify a useful next experiment",
+      "turns": ["Find out whether users understand the empty state.", "No repository context is available.", "Whether five users are enough remains open.", "Run a small comprehension test.", "No"],
+      "adaptive_signals": [["users", "empty state"], ["context", "unavailable"], ["five", "open"], ["comprehension", "test"]],
+      "expect": {"adaptive_follow_up": true, "record": false, "classifications": ["fact", "decision", "unresolved", "material-effect"]}
+    },
+    {
+      "id": "explicit-decline",
+      "topic": "sample API naming",
+      "turns": ["Choose a name.", "Existing clients use fetch_item.", "Migration timing is unresolved.", "Keep fetch_item for now.", "Decline recording."],
+      "adaptive_signals": [["name"], ["fetch_item", "clients"], ["migration", "unresolved"], ["fetch_item"]],
+      "expect": {"adaptive_follow_up": true, "record": false, "classifications": ["fact", "decision", "unresolved", "material-effect"]}
+    }
+  ],
+  "global_checks": [
+    "at-most-one-question-per-assistant-turn",
+    "next-question-uses-prior-answer",
+    "skip-is-not-consent",
+    "stop-ends-questioning",
+    "summary-separates-four-buckets",
+    "record-command-only-after-explicit-yes",
+    "decline-appends-nothing",
+    "raw-transcript-is-not-recorded"
+  ]
+}
