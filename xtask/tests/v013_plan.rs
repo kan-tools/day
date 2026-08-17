@@ -11,6 +11,7 @@ const SOURCE: &str =
     "35c991c3b5949caf8ef1e8f71f9b6d47a1ae1ddf:rfcs/1-frame-indexed-process-model.md";
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const PLAN: &str = "fixture plan\n35c991c3b5949caf8ef1e8f71f9b6d47a1ae1ddf:rfcs/1-frame-indexed-process-model.md\n";
+type ManifestMutation = (&'static str, fn(&mut serde_json::Value));
 
 fn executable(path: &Path, text: &str) {
     std::fs::write(path, text).unwrap();
@@ -29,6 +30,23 @@ fn run(root: &Path, path: &Path) -> Output {
         )
         .output()
         .unwrap()
+}
+
+fn write_manifest(root: &Path, manifest: &serde_json::Value) {
+    std::fs::write(
+        root.join(".release/v0.13-plan.json"),
+        serde_json::to_vec_pretty(manifest).unwrap(),
+    )
+    .unwrap();
+}
+
+fn assert_rejected(root: &Path, bin: &Path, label: &str) {
+    let output = run(root, bin);
+    assert!(
+        !output.status.success(),
+        "{label} mutation was accepted: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 #[test]
@@ -59,11 +77,7 @@ fn cid_rooted_plan_resolution_checks_the_claim_artifact_and_bytes() {
         "artifact": {"commit": COMMIT, "path": ".design/v0.13-workflow-ergonomics.md", "sha256": digest},
         "published_file": ".claims/plan.md"
     });
-    std::fs::write(
-        root.path().join(".release/v0.13-plan.json"),
-        serde_json::to_vec_pretty(&manifest).unwrap(),
-    )
-    .unwrap();
+    write_manifest(root.path(), &manifest);
     let claim = serde_json::json!({
         "claims": [{
             "cid": CID,
@@ -94,14 +108,43 @@ fn cid_rooted_plan_resolution_checks_the_claim_artifact_and_bytes() {
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("Plan resolved"));
 
-    let mut changed = manifest;
-    changed["artifact"]["sha256"] = "0".repeat(64).into();
+    let mutations: [ManifestMutation; 7] = [
+        ("cid", |value| value["cid"] = "bafy-wrong".into()),
+        ("subject", |value| value["subject"] = "wrong".into()),
+        ("RFC result", |value| {
+            value["rfc_result"] = "bafy-wrong".into()
+        }),
+        ("normative source", |value| {
+            value["normative_source"] = "wrong".into()
+        }),
+        ("commit", |value| {
+            value["artifact"]["commit"] = "b".repeat(40).into()
+        }),
+        ("path", |value| value["artifact"]["path"] = "wrong".into()),
+        ("digest", |value| {
+            value["artifact"]["sha256"] = "0".repeat(64).into()
+        }),
+    ];
+    for (label, mutate) in mutations {
+        let mut changed = manifest.clone();
+        mutate(&mut changed);
+        write_manifest(root.path(), &changed);
+        assert_rejected(root.path(), &bin, label);
+    }
+
+    write_manifest(root.path(), &manifest);
     std::fs::write(
-        root.path().join(".release/v0.13-plan.json"),
-        serde_json::to_vec_pretty(&changed).unwrap(),
+        root.path().join(".design/v0.13-workflow-ergonomics.md"),
+        "mutated mirror\n",
     )
     .unwrap();
-    let output = run(root.path(), &bin);
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("digest differs"));
+    assert_rejected(root.path(), &bin, "current mirror bytes");
+
+    std::fs::write(
+        root.path().join(".design/v0.13-workflow-ergonomics.md"),
+        PLAN,
+    )
+    .unwrap();
+    std::fs::write(root.path().join(".claims/plan.md"), "wrong published claim").unwrap();
+    assert_rejected(root.path(), &bin, "published claim presence");
 }
