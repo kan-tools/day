@@ -42,6 +42,13 @@ case "$tag" in
   *) die "tag must look like v<major>.<minor>.<patch>[-pre]; got '$tag'" ;;
 esac
 
+# v0.13 qualifies one externally witnessed candidate SHA and must tag that SHA
+# unchanged. The historical cutter below measures and commits rows during the
+# ceremony, so it cannot implement that contract.
+if [ "$tag" = "v0.13.0-beta.1" ]; then
+  exec "$(dirname "$0")/cut-v013-candidate.sh" "$tag"
+fi
+
 command -v kan >/dev/null 2>&1 || die "kan is not on PATH; the release claim cannot be recorded"
 command -v day >/dev/null 2>&1 || die "day is not on PATH; run 'cargo install --path .' first"
 # Guarded like the others. Without this, a missing jq exits under `set -e` with
