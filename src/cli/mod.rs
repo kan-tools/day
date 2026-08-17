@@ -712,7 +712,8 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         // Always exit 0: a hook that can fail a session is a blocking hook
         // by another name. Errors are printed as context, not raised.
         Command::Hook { event } => {
-            match hooks::dispatch(&event, &client, &cwd) {
+            let input = (event == "session-start").then(hook_input).flatten();
+            match hooks::dispatch_with_input(&event, &client, &cwd, input.as_deref()) {
                 Ok(text) => print!("{text}"),
                 Err(e) => println!("## day\n\n{e}"),
             }
@@ -1113,6 +1114,22 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             Ok(ExitCode::SUCCESS)
         }
     }
+}
+
+/// Reads optional hook metadata without ever waiting on a person's terminal.
+/// Claude Code pipes JSON; direct invocations and older harnesses retain the
+/// historical no-source behavior. A malformed payload is handed to the hook
+/// dispatcher, which degrades it to unknown rather than failing the session.
+fn hook_input() -> Option<String> {
+    use std::io::{IsTerminal, Read};
+
+    let mut stdin = std::io::stdin();
+    if stdin.is_terminal() {
+        return None;
+    }
+    let mut buf = String::new();
+    stdin.read_to_string(&mut buf).ok()?;
+    (!buf.trim().is_empty()).then_some(buf)
 }
 
 /// The directory the status line should read its cache from.

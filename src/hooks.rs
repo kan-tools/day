@@ -31,7 +31,20 @@ const TELOS_EXCERPT: usize = 240;
 ///
 /// fallback: hook-degrades-when-kan-cannot-read
 pub fn session_start(client: &KanClient, root: &Path) -> String {
+    session_start_with_source(client, root, None)
+}
+
+/// [`session_start`] with the harness's declared SessionStart source.
+///
+/// Only `compact` changes the framing today. The underlying reads stay the
+/// same: this is a prompt to reconstruct from the durable record after context
+/// loss, not a second inference system or a claim that day knows what the
+/// compacted session was doing (day#93).
+pub fn session_start_with_source(client: &KanClient, root: &Path, source: Option<&str>) -> String {
     let mut out = String::from("## day — process layer\n\n");
+    if source == Some("compact") {
+        out.push_str(POST_COMPACTION);
+    }
 
     if let Err(e) = client.probe() {
         out.push_str(&format!(
@@ -90,6 +103,11 @@ pub fn session_start(client: &KanClient, root: &Path) -> String {
     out.push_str(&projected.render());
     out
 }
+
+const POST_COMPACTION: &str = "Post-compaction reorientation: earlier working context was \
+summarized. Before continuing, re-read the active design or handoff, verify its factual \
+coordinates against the current record, and treat the summary as a pointer rather than \
+evidence. The process context below is freshly read for this repository.\n\n";
 
 /// Shown in place of [`PRACTICE`] when a project replaced it. The
 /// replacement is visible in the thing being replaced: transparency rather
@@ -696,8 +714,32 @@ const SAFETY: &str = "\nOperational safety for this session:\n\
 /// Which harness events day answers. Kept as an explicit list so an unknown
 /// event is a clear error rather than silent empty output.
 pub fn dispatch(event: &str, client: &KanClient, root: &Path) -> Result<String, UnknownEvent> {
+    dispatch_with_input(event, client, root, None)
+}
+
+/// Dispatches a hook with the harness JSON delivered on stdin.
+///
+/// Invalid, empty, or unrelated input deliberately means "no known source"
+/// and preserves the historical output. Hook metadata is advisory context;
+/// losing it must not make a session fail.
+pub fn dispatch_with_input(
+    event: &str,
+    client: &KanClient,
+    root: &Path,
+    input: Option<&str>,
+) -> Result<String, UnknownEvent> {
     match event {
-        "session-start" => Ok(session_start(client, root)),
+        "session-start" => {
+            let source = input
+                .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+                .and_then(|value| {
+                    value
+                        .get("source")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                });
+            Ok(session_start_with_source(client, root, source.as_deref()))
+        }
         "session-notice" => Ok(session_notice(client, root)),
         "user-prompt" => Ok(user_prompt(client, root)),
         "session-end" => Ok(session_end(client)),

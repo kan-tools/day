@@ -130,6 +130,8 @@ Deliberately small. The theory is ambitious; the tool is not.
   versus separately signed source provenance; neither is automatic.
 - **`day hook session-start`** — the harness integration. Injects the teloi in
   play, the declared atoms, what's still open, and any drift warnings — and
+  after a Claude Code compaction, explicitly redirects the session to re-read
+  and verify the durable record before continuing — and
   renders the **footer** the status line shows: position (`☀️ atom: build`),
   repo/branch/sync/checkout context, the signing role, and one message tray.
   Emoji unless a knowable negative (non-UTF-8 locale, `TERM=dumb`, `NO_COLOR`)

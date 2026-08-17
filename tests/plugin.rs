@@ -69,6 +69,10 @@ fn ac5_shipped_hooks_declare_no_blocking_decisions() {
             "day's hooks must stay advisory; found blocking construct {forbidden:?} in hooks.json"
         );
     }
+    assert!(
+        !events.contains_key("PreCompact"),
+        "day#93 reacts to SessionStart source=compact; it must not register the blocking-capable PreCompact event"
+    );
 }
 
 #[test]

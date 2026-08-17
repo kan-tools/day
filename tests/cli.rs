@@ -6,7 +6,8 @@
 
 mod common;
 
-use std::process::Command;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 use common::{atom_claim, claim, missing_kan, write_kan_stub, write_stub_withheld};
 
@@ -17,6 +18,30 @@ fn day(dir: &std::path::Path, kan: &std::path::Path, args: &[&str]) -> std::proc
         .env("DAY_KAN_BIN", kan)
         .output()
         .expect("failed to run day")
+}
+
+fn day_with_stdin(
+    dir: &std::path::Path,
+    kan: &std::path::Path,
+    args: &[&str],
+    input: &str,
+) -> std::process::Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(args)
+        .current_dir(dir)
+        .env("DAY_KAN_BIN", kan)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run day");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
 }
 
 #[test]
@@ -255,6 +280,65 @@ fn ac6_session_start_hook_lists_recorded_telos_subjects() {
     assert!(
         stdout.contains("legible to an agent"),
         "should surface the telos text: {stdout}"
+    );
+}
+
+#[test]
+fn day_93_compaction_redirects_to_the_record_but_startup_and_bad_input_do_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim(
+            "telos/context",
+            "bafyreitelos",
+            "Durable context survives a session boundary.",
+        )],
+    );
+
+    let compact = day_with_stdin(
+        dir.path(),
+        &kan,
+        &["hook", "session-start"],
+        r#"{"source":"compact"}"#,
+    );
+    let startup = day_with_stdin(
+        dir.path(),
+        &kan,
+        &["hook", "session-start"],
+        r#"{"source":"startup"}"#,
+    );
+    let malformed = day_with_stdin(dir.path(), &kan, &["hook", "session-start"], "not json");
+
+    for out in [&compact, &startup, &malformed] {
+        assert!(out.status.success(), "hooks remain advisory and infallible");
+        assert!(
+            String::from_utf8_lossy(&out.stdout).contains("telos/context"),
+            "source handling must not replace the underlying record reads"
+        );
+    }
+    let compact = String::from_utf8_lossy(&compact.stdout);
+    assert!(
+        compact.contains("Post-compaction reorientation"),
+        "{compact}"
+    );
+    assert!(
+        compact.contains("re-read the active design or handoff"),
+        "{compact}"
+    );
+    assert!(
+        compact.contains("summary as a pointer rather than evidence"),
+        "{compact}"
+    );
+
+    for ordinary in [&startup, &malformed] {
+        assert!(
+            !String::from_utf8_lossy(&ordinary.stdout).contains("Post-compaction"),
+            "startup and unreadable metadata preserve the ordinary framing"
+        );
+    }
+    assert_eq!(
+        startup.stdout, malformed.stdout,
+        "unreadable hook metadata must be byte-identical to the ordinary startup fallback"
     );
 }
 
