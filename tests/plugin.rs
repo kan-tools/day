@@ -356,6 +356,26 @@ fn day_152_handoff_measurements_keep_their_original_scope() {
 }
 
 #[test]
+fn day_204_both_list_paths_call_the_shared_stream_report() {
+    for skill in ["handoff", "wakeup"] {
+        let text =
+            std::fs::read_to_string(repo_root().join(format!("skills/{skill}/SKILL.md"))).unwrap();
+        assert!(
+            text.contains("day stream list"),
+            "{skill} kept a prose fold"
+        );
+        assert!(
+            text.contains("do not reimplement its fold"),
+            "{skill} does not preserve the one-fold boundary"
+        );
+        assert!(
+            text.contains("branch, worktree") && text.contains("staleness"),
+            "{skill} may infer state the stream report cannot establish"
+        );
+    }
+}
+
+#[test]
 fn ac8_the_review_atom_declares_all_four_verdicts() {
     let text =
         std::fs::read_to_string(repo_root().join("skills/adversarial-review/SKILL.md")).unwrap();

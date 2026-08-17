@@ -116,6 +116,10 @@ Deliberately small. The theory is ambitious; the tool is not.
   upstream atoms produce.
 - **`day next <atom>`** — what the graph says follows this step, and what it
   needs. Ask this instead of assuming a fixed pipeline.
+- **`day stream list`** — one bulk-read inventory of visible live handoff
+  streams, with claim counts, bounded previews, and timestamps when known.
+  Withheld, unaccounted, or failed published reads make completeness explicit;
+  it never guesses another stream's branch, worktree, position, or staleness.
 - **`day design check`** — validates a design document against the schema
   your project declared in kan.
 - **`day design record`** / **`day review record`** — append the claim chain

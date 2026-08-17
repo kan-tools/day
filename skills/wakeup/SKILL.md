@@ -75,7 +75,9 @@ now**, and the output says which is which.
   the human.
 - `/wakeup <thread>` — wake into `agents/handoff/<thread>`.
 - `/wakeup --list` — show which handoff threads exist and when each was last
-  written.
+  written by running `day stream list`, then stop. Return its completeness
+  warnings unchanged; do not reimplement its fold or infer branch, worktree,
+  position, or staleness.
 
 ### Phase 1: Read the handoff
 

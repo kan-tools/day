@@ -176,6 +176,7 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
     for expected in [
         "doctor",
         "session_context",
+        "stream_list",
         "design_check",
         "next",
         "bridge_check",
@@ -220,6 +221,36 @@ async fn ac11_lists_tools_and_the_doctor_tool_matches_the_cli() {
         "the MCP tool and the CLI verb must return the same report"
     );
     assert!(text.contains("composition: ok"), "got: {text}");
+
+    let cli = std::process::Command::new(env!("CARGO_BIN_EXE_day"))
+        .args(["stream", "list"])
+        .current_dir(dir.path())
+        .env("DAY_KAN_BIN", &kan)
+        .output()
+        .expect("failed to run day stream list");
+    let cli_stream = String::from_utf8_lossy(&cli.stdout).into_owned();
+
+    stdin
+        .write_all(
+            send(json!({
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "tools/call",
+                "params": {"name": "stream_list", "arguments": {}}
+            }))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let call = recv!();
+    let text = call["result"]["content"][0]["text"]
+        .as_str()
+        .expect("stream_list should return text content");
+    assert_eq!(
+        text.trim(),
+        cli_stream.trim(),
+        "the MCP stream_list tool and CLI verb must return the same report"
+    );
 
     // The other half of AC-10, which the adversarial review found was
     // claimed but never asserted: design_check must agree with its CLI verb

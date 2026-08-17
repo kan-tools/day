@@ -517,6 +517,8 @@ print(json.dumps({
     "v": 1,
     "trust": {"base": "Solo", "authors": []},
     "excluded_by_trust": withheld,
+    "published_read_error_count": 0,
+    "published_read_errors": [],
     "subjects": entries,
 }))
 "#;

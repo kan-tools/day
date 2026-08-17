@@ -146,6 +146,9 @@ pub enum Command {
     /// Validate and record design documents
     #[command(subcommand)]
     Design(DesignAction),
+    /// Inspect the visible live handoff streams without inferring their position
+    #[command(subcommand)]
+    Stream(StreamAction),
     /// Record an adversarial-review verdict
     #[command(subcommand)]
     Review(ReviewAction),
@@ -361,6 +364,12 @@ pub enum ReviewAction {
         #[arg(long, required = true)]
         cites: Vec<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum StreamAction {
+    /// List visible live handoff streams from one bulk kan read
+    List,
 }
 
 pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
@@ -710,6 +719,10 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         }) => {
             let cid = crate::record::review(&client, &subject, &verdict, &rationale, &cites)?;
             println!("recorded verdict on `{subject}` ({cid})");
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Stream(StreamAction::List) => {
+            print!("{}", crate::stream::list(&client)?.render());
             Ok(ExitCode::SUCCESS)
         }
         Command::Next { atom } => match crate::record::next(&client, &atom) {

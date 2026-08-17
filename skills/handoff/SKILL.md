@@ -91,8 +91,8 @@ Write the handoff for this thread onto `agents/handoff/<thread>`.
 
 - `/handoff <thread>` — write onto `agents/handoff/<thread>`.
 - `/handoff --list` — show which handoff threads exist and when each was last
-  written, then stop. Read them from `kan show --all --json` and filter to
-  subjects under `agents/handoff/`, the same way `/wakeup --list` does.
+  written, then stop. Run `day stream list` and return its report unchanged;
+  do not reimplement its fold or infer branch, worktree, position, or staleness.
 - `/handoff` with no argument — use the thread **this session woke into**, if
   `/wakeup` established one. If it did not, **ask which thread, and wait.**
 

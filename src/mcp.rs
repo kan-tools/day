@@ -75,6 +75,15 @@ impl DayServer {
     }
 
     #[tool(
+        description = "List the visible live handoff streams from one bulk kan read: visible claim count, bounded preview, and last recorded timestamp when every claim is timestamped. Reports withheld, unaccounted, missing, and failed published-read diagnostics explicitly; never infers branch, worktree, position, or staleness."
+    )]
+    async fn stream_list(&self) -> Result<String, ErrorData> {
+        crate::stream::list(&self.client())
+            .map(|report| report.render())
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))
+    }
+
+    #[tool(
         description = "Validate a design document against this project's live design-doc schema (declared in kan): required sections, requirement and acceptance-criterion counts, every requirement covered by a criterion, placeholder text, referenced file paths existing, and unresolved open questions. Reports findings; changes nothing."
     )]
     async fn design_check(
@@ -195,7 +204,8 @@ impl ServerHandler for DayServer {
              read that state: doctor verifies kan is reachable and that the live atom \
              vocabulary composes, next reports what follows an atom, design_check \
              validates a design document, bridge_check computes whether a plan could \
-             reach its target, and session_context returns the teloi, atoms, open \
+             reach its target, stream_list inventories visible live handoff streams \
+             without inferring their position, and session_context returns the teloi, atoms, open \
              subjects, and drift warnings in play. All are advisory — day reports \
              drift, it never blocks an action, and it does not track whether planned \
              steps have happened. Realizability as reported is frame-internal only. \

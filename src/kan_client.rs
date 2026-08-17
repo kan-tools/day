@@ -195,6 +195,15 @@ pub struct Claim {
     pub recorded_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedReadDiagnostics {
+    /// `None` means the kan response omitted the field, not zero.
+    pub count: Option<u64>,
+    /// Compact JSON for each diagnostic. `None` means the list field was
+    /// omitted; `Some(vec![])` is the distinct, checked-clean state.
+    pub errors: Option<Vec<String>>,
+}
+
 /// A named read whose absence is only usable after visibility was considered.
 ///
 /// The enum is deliberately exhaustive. A caller written for the old
@@ -254,6 +263,11 @@ struct ShowAllEnvelope {
     /// because a stub validates day against day's own idea of kan's CLI.
     #[serde(default)]
     excluded_by_trust: u64,
+    /// Failures while ingesting tracked `.claims/` files. These are `Option`
+    /// rather than defaulted because absence is not a clean zero: an older kan
+    /// that omits the diagnostics cannot establish a complete inventory.
+    published_read_error_count: Option<u64>,
+    published_read_errors: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -364,6 +378,8 @@ pub struct KanClient {
     /// every kan subprocess, so reads cannot manufacture absence and writes
     /// cannot be silently redirected to a different Git anchor.
     workspace_mismatch: std::cell::RefCell<Option<Option<PathBuf>>>,
+    published_read_error_count: std::cell::Cell<Option<u64>>,
+    published_read_errors: std::cell::RefCell<Option<Vec<String>>>,
 }
 
 impl KanClient {
@@ -413,6 +429,8 @@ impl KanClient {
             trust_withheld_unattributed: std::cell::Cell::new(0),
             returned_subjects: std::cell::RefCell::new(Vec::new()),
             workspace_mismatch: std::cell::RefCell::new(None),
+            published_read_error_count: std::cell::Cell::new(None),
+            published_read_errors: std::cell::RefCell::new(None),
         }
     }
 
@@ -433,6 +451,8 @@ impl KanClient {
             trust_withheld_total: std::cell::Cell::new(0),
             trust_withheld_unattributed: std::cell::Cell::new(0),
             returned_subjects: std::cell::RefCell::new(Vec::new()),
+            published_read_error_count: std::cell::Cell::new(None),
+            published_read_errors: std::cell::RefCell::new(None),
         }
     }
 
@@ -566,6 +586,8 @@ impl KanClient {
         self.trust_withheld_total.set(0);
         self.trust_withheld_unattributed.set(0);
         self.returned_subjects.borrow_mut().clear();
+        self.published_read_error_count.set(None);
+        *self.published_read_errors.borrow_mut() = None;
     }
 
     /// kan's version, via `kan --version`, or `None` when it cannot be
@@ -672,6 +694,13 @@ impl KanClient {
         let envelope: ShowAllEnvelope = parse(&out, &args)?;
         check_shape(envelope.v, &args)?;
 
+        self.published_read_error_count
+            .set(envelope.published_read_error_count);
+        *self.published_read_errors.borrow_mut() = envelope
+            .published_read_errors
+            .as_ref()
+            .map(|errors| errors.iter().map(serde_json::Value::to_string).collect());
+
         // day#120, keyed on the two shapes kan actually emits — measured
         // against 0.11.0-beta.1 and pinned in `tests/kan_conformance.rs`, after
         // a first attempt keyed on a third shape that does not occur.
@@ -743,6 +772,16 @@ impl KanClient {
     /// into a third call.
     pub fn unaccounted_subjects(&self) -> Vec<String> {
         self.unaccounted.borrow().clone()
+    }
+
+    /// Published-claim ingestion diagnostics from the bulk-read envelope.
+    /// Missing fields remain missing; callers must not round them to a clean
+    /// zero merely because an older kan did not report them.
+    pub fn published_read_diagnostics(&self) -> PublishedReadDiagnostics {
+        PublishedReadDiagnostics {
+            count: self.published_read_error_count.get(),
+            errors: self.published_read_errors.borrow().clone(),
+        }
     }
 
     /// This workspace's identity, via `kan identity did`.

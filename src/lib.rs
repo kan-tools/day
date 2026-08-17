@@ -34,6 +34,7 @@ pub mod probe;
 pub mod record;
 pub mod schema;
 pub mod status;
+pub mod stream;
 pub mod telos;
 pub mod tension;
 pub mod vocabulary;
