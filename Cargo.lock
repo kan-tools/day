@@ -1058,6 +1058,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "day",
  "num-bigint",
  "serde",
  "serde_json",
