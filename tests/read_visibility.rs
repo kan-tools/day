@@ -121,8 +121,8 @@ fn migrated_read_site_census_is_pinned() {
     }
     let (show_sites, fenced_sites) = count(&root);
     assert_eq!(
-        show_sites, 15,
-        "a direct read site was added or removed; audit its visibility decision"
+        show_sites, 16,
+        "a direct read site was added or removed; audit its visibility decision (the sixteenth is stream::scopes, which distinguishes absent, withheld, and indeterminate reads)"
     );
     assert_eq!(
         fenced_sites, 11,
