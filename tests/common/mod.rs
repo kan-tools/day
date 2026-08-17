@@ -667,8 +667,7 @@ impl ScratchCrate {
     /// code itself, not a boolean.
     pub fn run_script_code(&self, script: &str, args: &[&str]) -> (String, Option<i32>) {
         let path = repo_root().join("scripts").join(script);
-        let out = std::process::Command::new("python3")
-            .arg(&path)
+        let out = std::process::Command::new(&path)
             .args(args)
             .current_dir(self.root())
             // A scratch crate must build into its OWN tree, whatever the
@@ -685,7 +684,7 @@ impl ScratchCrate {
             // there.
             .env_remove("CARGO_TARGET_DIR")
             .output()
-            .expect("python3 should be runnable");
+            .expect("the repository harness should be runnable");
         (
             format!(
                 "{}{}",

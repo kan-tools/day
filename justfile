@@ -40,6 +40,10 @@ check-rfc *args:
 demonstrate *args:
     cargo run -p xtask -- evidence revert {{args}}
 
+# Run one mutation; pass path, anchor, replacement, and display name.
+mutate *args:
+    cargo run -p xtask -- evidence mutate {{args}}
+
 # Account for every commit in a range under the demonstration rule.
 census-demonstrations *args:
     cargo run -p xtask -- census demonstrations {{args}}
