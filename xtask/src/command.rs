@@ -12,10 +12,8 @@ pub struct Cli {
 
 impl Cli {
     pub fn root(&self) -> Result<PathBuf, String> {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(PathBuf::from)
-            .ok_or_else(|| "xtask manifest has no repository parent".to_owned())
+        std::env::current_dir()
+            .map_err(|error| format!("could not determine the caller's working directory: {error}"))
     }
 }
 
