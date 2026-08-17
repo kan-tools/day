@@ -504,6 +504,10 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         "the verifier must install and prove the newest measured kan is present; kan-backed tests cannot re-derive from a red missing-reader baseline"
     );
     assert!(
+        yaml.contains("GH_TOKEN: ${{ github.token }}"),
+        "demonstrated tests may run accepted-RFC validation; the verifier must provide the same read-only GitHub authority as ordinary CI or report a red baseline before applying any revert"
+    );
+    assert!(
         yaml.contains("could not compute a merge base") && yaml.contains("exit 1"),
         "a job that cannot build its commit range must fail rather than pass \
          with nothing to do — could-not-check outranks checked-and-clean, and a \
@@ -513,6 +517,12 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         yaml.contains("github.event.pull_request.head.sha"),
         "on a pull_request the default checkout is the MERGE commit, whose \
          message carries no trailer; the job must verify what was written"
+    );
+    assert!(
+        yaml.contains("grep '^Accounts-for:'")
+            && yaml.contains("git rev-parse \"${named}^{commit}\"")
+            && yaml.contains("if [ \"$accounted\" = \"true\" ]"),
+        "the verifier must honor append-only Accounts-for corrections just as the census does; otherwise an exempt malformed historical trailer can make every later head permanently red"
     );
     // **The trigger set, positively.** A trigger whose commit range is always
     // empty is a green job that checked nothing: after a merge,
@@ -1247,6 +1257,81 @@ fn rfc_acceptance_self_tests_survive_the_review_transition() {
             && text.contains("short-review mutation rejected"),
         "acceptance mutations must still fire while RFC 0 is in Review:\n{text}"
     );
+}
+
+/// RFC 8785 canonicalization starts from I-JSON. Duplicate names and integers
+/// that cannot be represented exactly in the interoperable IEEE-754 range must
+/// be rejected before `serde_json::Value` can collapse or round them.
+#[test]
+fn rfc1_vector_loader_rejects_ambiguous_jcs_input() {
+    let source = read("rfcs/vectors/1-process-model.json");
+    let cases = [
+        (
+            "duplicate-name.json",
+            source.replacen(
+                "\"subject\": \"telos/releasable\",",
+                "\"subject\": \"telos/attacker\",\n      \"subject\": \"telos/releasable\",",
+                1,
+            ),
+            "duplicate JSON property name: subject",
+        ),
+        (
+            "unsafe-integer.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"unsafe\": 9007199254740993,",
+                1,
+            ),
+            "integer is not exactly representable as IEEE-754",
+        ),
+        (
+            "saturating-u64-integer.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"unsafe\": 18446744073709551615,",
+                1,
+            ),
+            "integer is not exactly representable as IEEE-754",
+        ),
+        (
+            "rounded-large-integer.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"unsafe\": 295147905179352825857,",
+                1,
+            ),
+            "integer is not exactly representable as IEEE-754",
+        ),
+        (
+            "unicode-noncharacter.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"forbidden\": \"\\uFFFF\",",
+                1,
+            ),
+            "string contains an I-JSON noncharacter",
+        ),
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    for (name, hostile, expected) in cases {
+        let path = dir.path().join(name);
+        std::fs::write(&path, hostile).unwrap();
+        let out = Command::new("cargo")
+            .args(["run", "--quiet", "-p", "xtask", "--", "validate", "vectors"])
+            .arg(&path)
+            .current_dir(repo_root())
+            .output()
+            .expect("the RFC 1 vector checker should run");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            !out.status.success() && text.contains(expected),
+            "{name} must be rejected as non-I-JSON for the intended reason:\n{text}"
+        );
+    }
 }
 
 /// RFC 1 AC-10 — incorporated notation must remain type-distinct, and every

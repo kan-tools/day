@@ -1,11 +1,11 @@
 # RFC 1: Frame-indexed process model
 
-- Status: Draft
+- Status: Review
 - Authors: day maintainers
 - Created: 2026-08-15
-- Discussion: Not opened
-- Review-started-at: Not scheduled
-- Review-period-ends: Not scheduled
+- Discussion: https://github.com/kan-tools/day/pull/224
+- Review-started-at: 2026-08-17T05:40:00Z
+- Review-period-ends: 2026-08-20T05:40:00Z
 - Review-override: None
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative
 - Superseded-by: None
@@ -204,12 +204,15 @@ A sufficient witness system has the displayed soundness direction. A necessary
 system has the reverse direction. An exact observational presentation has an
 equivalence. Missing a sufficient certificate does not refute the telos.
 
-The three relationships are discriminated by finite truth-value examples. If
-$\lVert W\rVert=\{s_1\}$ and $\operatorname{Obs}(T)=\{s_1,s_2\}$, inclusion
-$\lVert W\rVert\hookrightarrow\operatorname{Obs}(T)$ is sufficient but not
-necessary. Reversing those sets gives a necessary but not sufficient system.
-Equal sets with mutually inverse inclusions give an exact system. These
-examples select directionality only; profile v1 implements the sufficient case.
+The three relationships are discriminated in the finite poset
+$0<1$, regarded as a category with a unique arrow $x\to y$ exactly when
+$x\le y$. Taking $\lVert W\rVert=0$ and
+$\operatorname{Obs}(T)=1$ is sufficient but not necessary: the forward arrow
+exists and the reverse does not. Reversing the values is necessary but not
+sufficient. Equal values give identity arrows in both directions and hence an
+exact system. Arbitrary nonempty sets are not used for this distinction,
+because functions can exist in both directions without expressing the intended
+logical order. Profile v1 implements only the sufficient case.
 
 Candidate assembly operations include Day convolution for juxtaposed witness
 semantics and relative or promonoidal convolution for components constrained to
@@ -256,6 +259,9 @@ Profile v1 has exactly one implicit local frame: the current repository,
 checkout, kan view, acting identity, environment, and invocation scope as day
 can read them. Every assessment MUST identify itself as single-frame. Profile
 v1 defines no explicit frame identifier, transport, or reconciliation verb.
+Serialized repository and commit fields are assessment provenance, not an
+equality key for this larger context. Even equal serialized fields do not prove
+that two assessments inhabit the same frame.
 
 ### Durable representation
 
@@ -271,17 +277,42 @@ A `telos/<slug>` subject carries the current telos declaration and a
 relationship field is a **legacy flat component report**. It does not state a
 logical relationship to the telos and cannot produce a telos certificate.
 
-Profile v1 adds one explicit declaration shape:
+Profile v1 adds one explicit declaration shape. Its assembly and procedure are
+fixed before component results exist:
 
 ```day-telos
-{"_version":3,"witnesses":["candidate","tests"],"relationship":"sufficient"}
+{
+  "_version": 3,
+  "subject": "telos/releasable",
+  "relationship": "sufficient",
+  "components": [
+    {"name": "candidate", "coordinates": ["candidate"]},
+    {"name": "tests", "coordinates": ["candidate"]}
+  ],
+  "assembly": {
+    "kind": "all",
+    "shared_coordinates": [
+      {"name": "candidate", "components": ["candidate", "tests"]}
+    ]
+  },
+  "procedure_spec": {
+    "repository": "REPO", "commit": "OID", "path": "PATH",
+    "sha256": "HEX", "version": "VERSION"
+  }
+}
 ```
 
-`_version` MUST be `3`, `witnesses` MUST be a nonempty array of distinct
-project witness names, and `relationship` MUST be `sufficient`. Unknown keys
-MUST be preserved by rewriting tools. `necessary` and `exact` are reserved;
-profile-v1 readers MUST report them as unsupported rather than guess an
-algorithm. Failure to obtain a sufficient certificate never refutes a telos.
+`_version` MUST be `3`; `subject` MUST equal the containing telos subject;
+`components` MUST be a nonempty array of distinct project witness names and
+their required coordinate names; `assembly.kind` MUST be `all`; and every
+shared-coordinate constraint MUST name declared components that require that
+coordinate. `relationship` MUST be `sufficient`. `procedure_spec` is an exact
+repository artifact address: canonical repository, full commit, path,
+lowercase SHA-256 digest, and nonempty schema version. It MUST resolve to those
+bytes from a fresh clone. Unknown keys MUST be preserved by rewriting tools.
+`necessary` and `exact` are reserved; profile-v1 readers MUST report them as
+unsupported rather than guess an algorithm. Failure to obtain a sufficient
+certificate never refutes a telos.
 
 ### Evidence and assessments
 
@@ -295,27 +326,36 @@ preserved but have no profile-v1 semantics):
 {
   "_version": 1,
   "frame": {"kind": "implicit-local", "repository": "REPO", "commit": "OID"},
-  "procedure": {"id": "PROC", "version": "VERSION"},
+  "procedure_spec": {"repository": "REPO", "commit": "OID", "path": "PATH", "sha256": "HEX", "version": "VERSION"},
   "scope": {"subject": "SUBJECT"},
   "evidence": [
     {"cid": "CID", "role": "ROLE", "artifact": {"repository": "REPO", "commit": "OID", "path": "PATH", "sha256": "HEX"}}
   ],
-  "witness_system": {
-    "telos": "TELOS",
-    "relationship": "sufficient",
-    "components": ["candidate", "tests"],
-    "correspondence": [{"coordinate": "candidate", "value": "VALUE", "components": ["candidate", "tests"]}]
-  },
+  "witness_system": {"subject": "TELOS", "declaration_sha256": "HEX"},
+  "components": [
+    {"name": "candidate", "outcome": "material", "evidence_cids": ["CID-A"], "coordinates": {"candidate": "VALUE"}},
+    {"name": "tests", "outcome": "material", "evidence_cids": ["CID-B"], "coordinates": {"candidate": "VALUE"}}
+  ],
   "outcome": "certified",
   "limitations": []
 }
 ```
 
 Required scalar strings MUST be nonempty. `commit` is the full repository
-object ID and `sha256` is lowercase hexadecimal. Component names MUST be
-distinct and equal the declared telos witnesses. Each correspondence names a
-nonempty component subset and one exact value; certification requires every
-named component assessment to carry that value. `outcome` is one of
+object ID and `sha256` is lowercase hexadecimal. Certificate bytes contain no
+freshness assertion: once stored, a certificate is historical evidence. Only
+the operation that executes the declared procedure may produce a current
+verdict; reading a Result claim never does. The procedure address MUST exactly
+equal the predeclared address and the witness-system subject and digest MUST
+bind the declaration bytes used.
+`declaration_sha256` is the lowercase SHA-256 of the declaration object encoded
+with the JSON Canonicalization Scheme (RFC 8785), so independent readers hash
+the same bytes.
+Component names MUST be distinct and equal the declared components. Every
+component records one closed probe outcome, at least one evidence CID present
+in the certificate evidence array, and every coordinate required by its
+declaration. Certification enforces the predeclared shared-coordinate
+constraints by exact canonical JSON scalar equality. `outcome` is one of
 `certified`, `not-certified`, or `uncheckable`. Legacy Results remain readable
 but are not profile-v1 certificates. Kan supplies claim attribution and
 provenance outside this block; day MUST preserve that distinction.
@@ -332,11 +372,12 @@ not-run execution, timeout, and error. Could-not-check outcomes outrank
 checked-and-clean. A command requires explicit `--run`, uses argv without a
 shell, is bounded, and is unavailable through MCP.
 
-Where witness components share a coordinate, the `correspondence` entries above
-MUST name that coordinate, its exact value, and every constrained component.
-Independent component success without matching correspondence cannot certify
-the assembled witness system. Empty correspondence is valid only when the
-procedure declares the components independent in its versioned specification.
+Where witness components share a coordinate, the declaration's assembly entry
+MUST name that coordinate and every constrained component. The certificate
+supplies the observed value separately for each component. Independent
+component success without exact equality cannot certify the assembled witness
+system. An empty shared-coordinate array is valid only when the addressed
+procedure specification declares the components independent.
 
 ### Atoms
 
@@ -393,7 +434,7 @@ execution specifications requires a later RFC.
 | Assessment | probe execution plus optional Result | procedure outcome and some scope | full dependent assessment object |
 | Certificate | Result claim | durable attribution and cited evidence | canonical realization-cell encoding |
 | Witness | project name resolved to a probe | project vocabulary and operational evaluator | witness concept independent of evaluator |
-| Witness system | explicit sufficient list plus correspondence | components, relationship, exact shared values | alternatives and general coherence diagrams |
+| Witness system | predeclared sufficient components, assembly constraints, and procedure address | components, relationship, exact evidence/coordinate bindings | alternatives and general coherence diagrams |
 | Probe | built-in probe specification and bounded run | declared procedure and finite outcome | the witness-bearing relation itself |
 | Atom 1-cell | `day-atom` block | input/output names and graph relations | process semantics and execution binding |
 | Bridge composite | `day-bridge` expression | typeability and coarse availability | realization cell and execution trace |
@@ -418,7 +459,7 @@ No profile-v1 command may claim more than the corresponding `Preserved` column.
 | `day-atom.done` | completion witness system | witness names | atom applicability or telos truth |
 | `day-bridge` sequence / `&` / `\|` | horizontal, monoidal, and alternative composition | conservative type propagation | realization or execution trace |
 | `day-telos` legacy list | observational components | component identities and results | logical sufficiency |
-| `day-telos` v3 sufficient list | witness-to-telos soundness map | one-way certification relationship | necessity, exactness, or refutation |
+| `day-telos` v3 sufficient declaration | witness-to-telos soundness map | predeclared components, assembly, and procedure | necessity, exactness, or refutation |
 | `day-witness` path/tag/claim/every/absent/command | probes of witness-bearing | evaluator specification | witness identity with its evaluator |
 | `MATERIAL` / `MISSING` / `VACUOUS` | checked bearing sample | checked component result | telos truth or falsity |
 | `ERROR` / `NOT RUN` / `TIMEOUT` | unavailable bearing sample | reason evaluation was unavailable | checked failure |
@@ -455,18 +496,21 @@ places remains reuse of one claim, not two independent observations.
 
 ### Assessment and certification
 
-1. Identify the implicit frame and assessment scope.
-2. Resolve the telos relationship. For an unversioned legacy list, stop after
+1. Identify the implicit frame and assessment scope. Never import a stored
+   verdict as the current result; a current result requires a fresh procedure
+   execution. Report a repository or commit mismatch as provenance mismatch.
+2. Resolve the telos relationship and the exact procedure-spec artifact. For an unversioned legacy list, stop after
    rendering component probe results and label the aggregate `COMPONENT REPORT`.
    Refuse unsupported versions and `necessary` or `exact` relationships.
 3. Resolve each witness name to its probe without identifying the two.
 4. Report executable probes before authorization; execute commands only under
    explicit bounded authorization.
 5. Preserve material, missing, vacuous, unavailable, and error outcomes.
-6. For an explicit sufficient system, require every component to be material
-   and enforce every exact correspondence value before assembly.
+6. For an explicit sufficient system, bind each declared component to its
+   closed outcome, evidence CIDs, and required coordinate values. Require every
+   component to be material and enforce the predeclared assembly constraints.
 7. Render a sufficient coherent assembly as `CERTIFIED`; render checked
-   absence, vacuity, or correspondence mismatch as `NOT CERTIFIED`; render
+   absence, vacuity, or shared-coordinate mismatch as `NOT CERTIFIED`; render
    not-run, timeout, error, unreadable input, or unavailable evaluation as
    `UNCHECKABLE`. Profile v1 has no `REFUTED` outcome.
 8. Record a certificate only through an explicit kan Result write carrying its
@@ -474,9 +518,12 @@ places remains reuse of one claim, not two independent observations.
 
 ### Frame migration
 
-Profile v1 performs none. A reader encountering evidence or an assessment from
-another frame MUST report that transport has not been established rather than
-copy its rendered verdict.
+Profile v1 performs none. Repository and commit disclose provenance but do not
+decide frame equality. A reader MUST render every stored assessment as
+historical evidence and MUST NOT copy its verdict into a current assessment,
+even when those fields match. When they differ from the current checkout, the
+reader additionally reports a provenance mismatch. Only a fresh execution of
+the addressed procedure can produce a current-frame verdict.
 
 ## Authority and trust model
 
@@ -563,10 +610,18 @@ and are validated by `scripts/check-rfc1-vectors.py`. They cover:
    forgotten gluing coordinate, and incomparable frames.
 10. A legacy `day-telos` block rendered as a flat component report rather than
    silently strengthened.
+11. The normative v3 declaration and certificate shapes, including exact
+    procedure addressing, per-component outcomes, evidence-CID bindings,
+    coordinate bindings, predeclared assembly, and derived certification.
+12. Stored same-provenance and mismatched-provenance assessments remaining
+    historical, contrasted with a fresh assessment that may certify.
+13. Sufficient-only, necessary-only, and exact relationships in the finite
+    poset $0<1$, with arrow existence derived from order.
 
 Every migration vector names both what transported and what was lost. The
 checker derives composition boundaries, pasting compatibility, witness
-coherence, and migration classification from vector data rather than accepting
+coherence, certificate outcomes, historical-read treatment, relationship
+direction, and migration classification from vector data rather than accepting
 precomputed labels.
 
 ## Unresolved questions
@@ -605,7 +660,7 @@ accepted RFC and naming the semantic obligation it implements.
 
 ## Implementation status
 
-Draft. Current day partially implements operational profile v1 but uses older
+Review. Current day partially implements operational profile v1 but uses older
 rendering and flat witness assembly. No claim is made that the denotational
 target is implemented. Acceptance precedes the v0.13 implementation restart;
 implementation work will be decomposed into issues after review.

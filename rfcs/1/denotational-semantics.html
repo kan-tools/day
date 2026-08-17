@@ -61,17 +61,17 @@
   </header>
   <main>
 <h1 id="day-as-an-indexed-process-equipment">Day as an indexed process equipment</h1>
-<p>Status: normative denotational companion to Draft RFC 1</p>
+<p>Status: normative denotational companion to Review RFC 1</p>
 <p>This document is incorporated by the <code>Denotational target</code> section of <a href="../1-frame-indexed-process-model.md"><code>RFC 1</code></a>. RFC 1 remains authoritative for lifecycle, operational-profile, and conflict-resolution questions. The adjacent HTML file is a derivative reading copy; this Markdown-with-LaTeX file is the claim-addressed source.</p>
 <h2 id="1-thesis-and-reading-discipline">1. Thesis and reading discipline</h2>
 <p>Day is an indexed process bicategory—or, more precisely, a candidate symmetric monoidal equipment—fibred over frames. Teloi are frame-dependent predicates, atoms are process 1-cells, bridges are composites of atoms, and realizability is witnessed by 2-cells relating a present predicate to the predicate induced by a bridge and a target telos.</p>
-<p>The essential picture in a frame $f$ is the equipment square</p>
+<p>The essential picture in a frame $f$ is the following globular equipment cell; its vertical boundaries are identities, while its horizontal source and target are predicates:</p>
 <div class="math">\[\begin{array}{ccccc}
-X_0 & \overset{\;B\;}{\rightsquigarrow} & X_n
+X_0 & \overset{\;P_0\;}{\rightsquigarrow} & I
   & \qquad & \eta:P_0\Longrightarrow T\odot B\\[4pt]
-{\scriptstyle P_0}\Downarrow & \underset{\eta}{\Rightarrow} &
-  \Downarrow{\scriptstyle T} & & \\[2pt]
-I & = & I & &
+{\scriptstyle 1_{X_0}}\downarrow & \underset{\eta}{\Rightarrow} &
+  \downarrow{\scriptstyle 1_I} & & \\[2pt]
+X_0 & \underset{\;T\odot B\;}{\rightsquigarrow} & I & &
 \end{array}\]</div>
 <p>Here $P_0:X_0\rightsquigarrow I$ describes the presently inhabited region, $B:X_0\rightsquigarrow X_n$ is a bridge, and $T:X_n\rightsquigarrow I$ is the target telos. Composition is written right-to-left, so $T\odot B:X_0\rightsquigarrow I$ is the target predicate induced at the source boundary by $B$.</p>
 <p>The presentation uses three strengths of statement. A definition fixes an intended type. A proposition follows from assumptions stated here and receives a proof sketch. An open obligation names structure still required before a claim becomes a settled theorem. Suggestive notation therefore does not quietly decide the tensor, enrichment, or exact equipment.</p>
@@ -133,11 +133,11 @@ X_0\rightsquigarrow X_n.\]</div>
 <h3 id="proposition-4-4-identity-attainment" class="proposition">Proposition 4.4 — Identity attainment</h3>
 <p>If a cell $\eta_0:P_0\Rightarrow T$ exists, the empty bridge realizes $T$ from $P_0$.</p>
 <div class="math">\[\begin{array}{ccccc}
-X & \xrightarrow{\;1_X\;} & X
+X & \overset{\;P_0\;}{\rightsquigarrow} & I
   & \qquad & \eta_0:P_0\Rightarrow T\odot1_X\cong T\\[4pt]
-{\scriptstyle P_0}\Downarrow & \underset{\eta_0}{\Rightarrow} &
-  \Downarrow{\scriptstyle T} & & \\[2pt]
-I & = & I. & &
+{\scriptstyle 1_X}\downarrow & \underset{\eta_0}{\Rightarrow} &
+  \downarrow{\scriptstyle 1_I} & & \\[2pt]
+X & \underset{\;T\odot1_X\;}{\rightsquigarrow} & I. & &
 \end{array}\]</div>
 <h3 id="proof-sketch" class="proof">Proof sketch</h3>
 <p>Whisker $\eta_0$ by the horizontal unit and compose with the right unitor $T\odot1_X\cong T$ in the required orientation. This uses the equipment's unit law and does not identify $P_0$, $T$, and $1_X$.</p>
@@ -146,14 +146,16 @@ I & = & I. & &
 <div class="math">\[\eta_1:P_0\Rightarrow P_1\odot A_1,
 \qquad
 \eta_2:P_1\Rightarrow P_2\odot A_2.\]</div>
-<p>Their boundaries form the pasted diagram</p>
-<div class="math">\[\begin{array}{ccccc}
-X_0 & \xrightarrow{\;A_1\;} & X_1
-    & \xrightarrow{\;A_2\;} & X_2\\[3pt]
-{\scriptstyle P_0}\Downarrow & \underset{\eta_1}{\Rightarrow} &
-{\scriptstyle P_1}\Downarrow & \underset{\eta_2}{\Rightarrow} &
-\Downarrow{\scriptstyle P_2}\\[2pt]
-I & = & I & = & I.
+<p>After whiskering the second cell by $A_1$, their globular boundaries form the vertically pasted diagram</p>
+<div class="math">\[\begin{array}{ccc}
+X_0 & \overset{\;P_0\;}{\rightsquigarrow} & I\\[3pt]
+{\scriptstyle 1_{X_0}}\downarrow & \underset{\eta_1}{\Rightarrow} &
+\downarrow{\scriptstyle 1_I}\\[2pt]
+X_0 & \overset{\;P_1\odot A_1\;}{\rightsquigarrow} & I\\[3pt]
+{\scriptstyle 1_{X_0}}\downarrow &
+\underset{\eta_2\ast A_1}{\Rightarrow} &
+\downarrow{\scriptstyle 1_I}\\[2pt]
+X_0 & \underset{\;P_2\odot A_2\odot A_1\;}{\rightsquigarrow} & I.
 \end{array}\]</div>
 <p>Whiskering $\eta_2$ by $A_1$ and vertically composing gives</p>
 <div class="math">\[P_0
@@ -237,7 +239,7 @@ a\ \mathrm{exists}
 <h3 id="proof-sketch" class="proof">Proof sketch</h3>
 <p>The first claim is application of $\alpha_T$ at $E$. The second would require a refutation map, excluded-middle structure, or an exact presentation. None follows from a one-way natural transformation. “Not certified” is not “refuted.”</p>
 <h3 id="example-6-6-finite-truth-value-models" class="example">Example 6.6 — Finite truth-value models</h3>
-<p>Take $\mathcal V_f=\mathbf{Set}$ and suppress $E$. If $\lVert W\rVert=\{s_1\}$ and $\operatorname{Obs}(T)=\{s_1,s_2\}$, inclusion is sufficient but not necessary. Reversing the sets is necessary but not sufficient. Equal sets with identity maps give an exact presentation. These examples select direction without pretending profile v1 implements all three relationships.</p>
+<p>Take $\mathcal V_f$ to be the finite poset $0&lt;1$, regarded as a category with a unique arrow $x\to y$ exactly when $x\le y$, and suppress $E$. If $\lVert W\rVert=0$ and $\operatorname{Obs}(T)=1$, the forward arrow exists but the reverse does not, so the system is sufficient but not necessary. Reversing the values gives only the reverse arrow, hence necessary but not sufficient. Equal values give identity arrows both ways and an exact presentation. Unlike arbitrary nonempty finite sets, this category makes absence of the reverse transformation inspectable. These examples select direction without pretending profile v1 implements all three relationships.</p>
 <h2 id="7-witness-assembly-and-convolution">7. Witness assembly and convolution</h2>
 <h3 id="definition-7-1-evidence-tensor" class="definition">Definition 7.1 — Evidence tensor</h3>
 <p>Suppose evidence contexts carry a monoidal product $(\mathcal E_f,\otimes_f,I_f)$. The tensor says how evidence diagrams coexist. Cartesian product permits unrestricted copying and deletion. A resource-sensitive tensor may forbid them. A gluing tensor may require equality on a shared boundary. The tensor changes what a composite witness means.</p>

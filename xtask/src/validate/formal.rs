@@ -62,6 +62,34 @@ pub fn validate(rfc: &str, companion: &str) -> Result<(), String> {
             format!("RFC 1 unresolved-question table lacks: {choice}"),
         )?;
     }
+    require(
+        companion.contains(r"{\scriptstyle 1_{X_0}}\downarrow")
+            && companion.contains(r"{\scriptstyle 1_X}\downarrow")
+            && companion.contains(r"\downarrow{\scriptstyle 1_I}"),
+        "realization, identity, and pasting diagrams must be globular cells",
+    )?;
+    let compact = companion
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+    for predicate in ["P_0", "P_1", "P_2", "T"] {
+        require(
+            !compact.contains(&format!(r"{{\scriptstyle{predicate}}}\Downarrow"))
+                && !compact.contains(&format!(r"\Downarrow{{\scriptstyle{predicate}}}")),
+            format!("horizontal predicate {predicate} appears as a vertical boundary"),
+        )?;
+    }
+    require(
+        companion.contains(r"\underset{\eta_2\ast A_1}{\Rightarrow}")
+            && companion.contains(r"P_2\odot A_2\odot A_1\;}{\rightsquigarrow}"),
+        "two-atom pasting must whisker into a globular vertical composite",
+    )?;
+    require(
+        rfc.contains("finite poset")
+            && companion.contains(r"finite poset $0<1$")
+            && companion.contains("the reverse does not"),
+        "witness relationship examples must discriminate arrow direction",
+    )?;
     Ok(())
 }
 
@@ -73,6 +101,20 @@ fn run_self_test(rfc: &str, companion: &str) -> Result<(), String> {
         let name = format!("missing-{}", choice.to_lowercase().replace(' ', "-"));
         reject_mutation(&name, &candidate, companion)?;
     }
+    let ill_typed = companion.replacen(
+        r"{\scriptstyle 1_{X_0}}\downarrow",
+        r"{\scriptstyle P_0}\Downarrow",
+        1,
+    );
+    reject_mutation("ill-typed-equipment-square", rfc, &ill_typed)?;
+    let ill_typed_pasting = companion.replacen(
+        r"{\scriptstyle 1_{X_0}}\downarrow & \underset{\eta_1}{\Rightarrow}",
+        r"{\scriptstyle P_0}\Downarrow & \underset{\eta_1}{\Rightarrow}",
+        1,
+    );
+    reject_mutation("ill-typed-pasting-square", rfc, &ill_typed_pasting)?;
+    let set_example = companion.replacen(r"finite poset $0<1$", r"category $\mathbf{Set}$", 1);
+    reject_mutation("non-discriminating-set-example", rfc, &set_example)?;
     Ok(())
 }
 

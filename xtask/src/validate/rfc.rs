@@ -717,11 +717,7 @@ fn mutate_fixture(root: &Path, label: &str) -> Result<(), CheckError> {
             &root.join("rfcs/README.md"),
             "\n- [RFC 99: Stale](99-stale.md) — Draft\n",
         ),
-        "status-mismatch" => replace(
-            &root.join("rfcs/README.md"),
-            "1-frame-indexed-process-model.md) — Draft",
-            "1-frame-indexed-process-model.md) — Accepted",
-        ),
+        "status-mismatch" => mutate_index_status(&root.join("rfcs/README.md")),
         "heading-number" => replace(
             &root.join("rfcs/1-frame-indexed-process-model.md"),
             "# RFC 1: Frame-indexed",
@@ -797,8 +793,8 @@ fn mutate_fixture(root: &Path, label: &str) -> Result<(), CheckError> {
         ),
         "coherence-vector" => replace(
             &root.join("rfcs/vectors/1-process-model.json"),
-            "\"expected\": \"not-certified\"",
-            "\"expected\": \"certified\"",
+            "\"outcome\": \"not-certified\",\n          \"limitations\": [\"shared coordinate candidate does not match\"]",
+            "\"outcome\": \"certified\",\n          \"limitations\": [\"shared coordinate candidate does not match\"]",
         ),
         "recursive-publication" => replace(
             &root.join("rfcs/0-rfc-and-adr-process.md"),
@@ -830,6 +826,29 @@ fn replace_override_none(path: &Path) -> Result<(), CheckError> {
         .to_owned();
     replace(path, &line, "- Review-override: None")
 }
+fn mutate_index_status(path: &Path) -> Result<(), CheckError> {
+    let source = read_path(path)?;
+    let line = source
+        .lines()
+        .find(|line| {
+            line.starts_with("- [RFC 1:") && line.contains("](1-frame-indexed-process-model.md) — ")
+        })
+        .ok_or_else(|| {
+            finding(format!(
+                "self-test could not find RFC 1 index row in {}",
+                path.display()
+            ))
+        })?;
+    let (prefix, current) = line
+        .rsplit_once(" — ")
+        .ok_or_else(|| finding("RFC 1 index row has no status separator"))?;
+    let mismatched = if current == "Accepted" {
+        "Draft"
+    } else {
+        "Accepted"
+    };
+    replace(path, line, &format!("{prefix} — {mismatched}"))
+}
 fn append(path: &Path, text: &str) -> Result<(), CheckError> {
     use std::io::Write;
     let mut file = std::fs::OpenOptions::new()
@@ -852,7 +871,7 @@ fn expected_error(label: &str) -> &str {
         "historical-renumber" => "historical RFC allocation changed",
         "short-review" => "fewer than 72 review hours elapsed",
         "profile-relationship" => "unrecognized Profile-relationship",
-        "coherence-vector" => "wrong witness result: coordinate-mismatch",
+        "coherence-vector" => "certificate outcome is not derived",
         "recursive-publication" => "normative RFC bytes contain a claim-CID backlink",
         "denotational-source" => "missing RFC 1 denotational companion source",
         "denotational-math" => "denotational HTML lacks MathJax rendering",

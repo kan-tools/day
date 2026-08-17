@@ -1,8 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
+use std::fmt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
+use num_bigint::BigUint;
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 
 use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
@@ -22,20 +27,211 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
         Ok(source) => source,
         Err(error) => return failed(format!("{}: {error}", path.display())),
     };
-    let data: Value = match serde_json::from_str(&source) {
+    let data = match parse_ijson(&source) {
         Ok(data) => data,
         Err(error) => return failed(error.to_string()),
     };
-    if let Err(detail) = validate(&data) {
+    if let Err(detail) = validate_all(&data, &root) {
         return failed(detail);
     }
     if self_test {
-        if let Err(detail) = run_self_test(&data) {
+        if let Err(detail) = run_self_test(&data, &root) {
             return failed(detail);
         }
     }
     println!("RFC 1 vectors: valid");
     Outcome::Passed(())
+}
+
+fn parse_ijson(source: &str) -> Result<Value, String> {
+    require_exact_integer_tokens(source)?;
+    let mut deserializer = serde_json::Deserializer::from_str(source);
+    let value = IJsonSeed
+        .deserialize(&mut deserializer)
+        .map_err(|error| error.to_string())?;
+    deserializer.end().map_err(|error| error.to_string())?;
+    Ok(value)
+}
+
+fn require_exact_integer_tokens(source: &str) -> Result<(), String> {
+    let bytes = source.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'"' {
+            index += 1;
+            while index < bytes.len() {
+                match bytes[index] {
+                    b'\\' => index = (index + 2).min(bytes.len()),
+                    b'"' => {
+                        index += 1;
+                        break;
+                    }
+                    _ => index += 1,
+                }
+            }
+            continue;
+        }
+        if bytes[index] != b'-' && !bytes[index].is_ascii_digit() {
+            index += 1;
+            continue;
+        }
+
+        let start = index;
+        if bytes[index] == b'-' {
+            index += 1;
+        }
+        while index < bytes.len() && bytes[index].is_ascii_digit() {
+            index += 1;
+        }
+        let mut integer_token = true;
+        if index < bytes.len() && bytes[index] == b'.' {
+            integer_token = false;
+            index += 1;
+            while index < bytes.len() && bytes[index].is_ascii_digit() {
+                index += 1;
+            }
+        }
+        if index < bytes.len() && matches!(bytes[index], b'e' | b'E') {
+            integer_token = false;
+            index += 1;
+            if index < bytes.len() && matches!(bytes[index], b'+' | b'-') {
+                index += 1;
+            }
+            while index < bytes.len() && bytes[index].is_ascii_digit() {
+                index += 1;
+            }
+        }
+        if !integer_token {
+            continue;
+        }
+
+        let token = &source[start..index];
+        let magnitude = token.strip_prefix('-').unwrap_or(token);
+        let Some(integer) = BigUint::parse_bytes(magnitude.as_bytes(), 10) else {
+            continue;
+        };
+        if integer == BigUint::default() {
+            continue;
+        }
+        let bits = integer.bits();
+        let significant_bits = bits - integer.trailing_zeros().unwrap_or(0);
+        if bits > 1024 || significant_bits > 53 {
+            return Err(format!(
+                "integer is not exactly representable as IEEE-754: {token}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+struct IJsonSeed;
+
+impl<'de> DeserializeSeed<'de> for IJsonSeed {
+    type Value = Value;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(IJsonVisitor)
+    }
+}
+
+struct IJsonVisitor;
+
+impl<'de> Visitor<'de> for IJsonVisitor {
+    type Value = Value;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("I-JSON without duplicate property names or unsafe integers")
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+        Ok(Value::Bool(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Value::Number(value.into()))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Value::Number(value.into()))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        serde_json::Number::from_f64(value)
+            .map(Value::Number)
+            .ok_or_else(|| E::custom("number is not finite IEEE-754"))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        require_ijson_string::<E>(value)?;
+        Ok(Value::String(value.to_owned()))
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        require_ijson_string::<E>(&value)?;
+        Ok(Value::String(value))
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element_seed(IJsonSeed)? {
+            values.push(value);
+        }
+        Ok(Value::Array(values))
+    }
+
+    fn visit_map<A>(self, mut object: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut values = Map::new();
+        while let Some(key) = object.next_key::<String>()? {
+            require_ijson_string::<A::Error>(&key)?;
+            if values.contains_key(&key) {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON property name: {key}"
+                )));
+            }
+            values.insert(key, object.next_value_seed(IJsonSeed)?);
+        }
+        Ok(Value::Object(values))
+    }
+}
+
+fn require_ijson_string<E: de::Error>(value: &str) -> Result<(), E> {
+    let contains_noncharacter = value.chars().any(|character| {
+        let codepoint = character as u32;
+        (0xfdd0..=0xfdef).contains(&codepoint) || codepoint & 0xffff >= 0xfffe
+    });
+    if contains_noncharacter {
+        Err(E::custom("string contains an I-JSON noncharacter"))
+    } else {
+        Ok(())
+    }
 }
 
 fn parse_args(args: &[OsString]) -> Result<(Option<PathBuf>, bool), String> {
@@ -55,7 +251,7 @@ fn parse_args(args: &[OsString]) -> Result<(Option<PathBuf>, bool), String> {
 
 pub fn validate(data: &Value) -> Result<(), String> {
     require(
-        data.get("version").and_then(Value::as_i64) == Some(2),
+        data.get("version").and_then(Value::as_i64) == Some(3),
         "unsupported vector version",
     )?;
     let composition = object(data.get("composition"), "composition is absent")?;
@@ -194,7 +390,398 @@ pub fn validate(data: &Value) -> Result<(), String> {
     )?;
 
     validate_witnesses(data)?;
+    validate_certificate_profile(data)?;
+    validate_frame_reads(data)?;
+    validate_relationship_examples(data)?;
     validate_migrations(data)
+}
+
+fn validate_all(data: &Value, root: &Path) -> Result<(), String> {
+    validate(data)?;
+    validate_resolved_procedure(data, root)
+}
+
+fn validate_certificate_profile(data: &Value) -> Result<(), String> {
+    let profile = object(
+        data.get("certificate_profile"),
+        "certificate profile is absent",
+    )?;
+    let declaration = object(
+        profile.get("declaration"),
+        "certificate declaration is absent",
+    )?;
+    require(
+        declaration.get("_version") == Some(&json!(3))
+            && string(declaration.get("relationship")) == Some("sufficient"),
+        "unsupported certificate declaration",
+    )?;
+    let declaration_bytes = serde_json_canonicalizer::to_vec(declaration)
+        .map_err(|error| format!("could not canonicalize declaration: {error}"))?;
+    let declaration_digest = format!("{:x}", Sha256::digest(&declaration_bytes));
+    let cases = array(profile.get("cases"), "certificate cases are absent")?;
+    let by_id = cases_by_id(cases, "certificate case ID is absent")?;
+    require(
+        by_id.keys().copied().collect::<BTreeSet<_>>()
+            == BTreeSet::from(["certified", "coordinate-mismatch"]),
+        "certificate case census changed",
+    )?;
+    for case in cases {
+        validate_certificate_case(
+            declaration,
+            object(Some(case), "certificate case malformed")?,
+            &declaration_digest,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_certificate_case(
+    declaration: &Map<String, Value>,
+    case: &Map<String, Value>,
+    expected_declaration_digest: &str,
+) -> Result<(), String> {
+    let certificate = object(case.get("certificate"), "certificate is absent")?;
+    let subject = required_string(declaration.get("subject"), "declaration subject is absent")?;
+    require(
+        nested(certificate, "scope", "subject").and_then(Value::as_str) == Some(subject)
+            && nested(certificate, "witness_system", "subject").and_then(Value::as_str)
+                == Some(subject),
+        "certificate is not bound to its declaration",
+    )?;
+    let declaration_digest = required_string(
+        nested(certificate, "witness_system", "declaration_sha256"),
+        "declaration digest is absent",
+    )?;
+    require(
+        declaration_digest == expected_declaration_digest,
+        format!(
+            "certificate declaration digest does not match canonical declaration bytes: expected {expected_declaration_digest}, got {declaration_digest}"
+        ),
+    )?;
+    let procedure = object(
+        declaration.get("procedure_spec"),
+        "procedure specification is absent",
+    )?;
+    validate_artifact_address(procedure, "procedure specification", true)?;
+    require(
+        certificate.get("procedure_spec") == declaration.get("procedure_spec"),
+        "certificate procedure specification does not match its declaration",
+    )?;
+    let declared_components = array(declaration.get("components"), "declared components absent")?;
+    let assessed_components = array(certificate.get("components"), "component outcomes absent")?;
+    require(
+        !declared_components.is_empty() && declared_components.len() == assessed_components.len(),
+        "declared and assessed component census disagree",
+    )?;
+    let evidence = array(
+        certificate.get("evidence"),
+        "certificate evidence is absent",
+    )?;
+    let evidence_cids = evidence
+        .iter()
+        .map(|item| required_string(item.get("cid"), "evidence CID is absent"))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    require(
+        evidence_cids.len() == evidence.len(),
+        "evidence CIDs are duplicated",
+    )?;
+    for item in evidence {
+        validate_artifact_address(
+            object(item.get("artifact"), "evidence artifact is absent")?,
+            "evidence artifact",
+            false,
+        )?;
+    }
+    let assessed = assessed_components
+        .iter()
+        .map(|item| {
+            let component = object(Some(item), "component assessment is malformed")?;
+            let name = required_string(component.get("name"), "component name is absent")?;
+            let outcome = required_string(component.get("outcome"), "component outcome is absent")?;
+            require(
+                [
+                    "material", "missing", "vacuous", "timeout", "error", "not-run",
+                ]
+                .contains(&outcome),
+                "unknown component outcome",
+            )?;
+            let bindings = string_array(
+                component.get("evidence_cids"),
+                "component evidence bindings are absent",
+            )?;
+            require(
+                !bindings.is_empty()
+                    && bindings
+                        .iter()
+                        .all(|cid| evidence_cids.contains(cid.as_str())),
+                "component cites unbound evidence",
+            )?;
+            Ok((name, component))
+        })
+        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    require(
+        assessed.len() == assessed_components.len(),
+        "component assessments are duplicated",
+    )?;
+    for item in declared_components {
+        let declared = object(Some(item), "declared component is malformed")?;
+        let name = required_string(declared.get("name"), "declared component name is absent")?;
+        let assessed = assessed
+            .get(name)
+            .ok_or("undeclared or missing component outcome")?;
+        let coordinates = object(
+            assessed.get("coordinates"),
+            "component coordinates are absent",
+        )?;
+        for coordinate in string_array(
+            declared.get("coordinates"),
+            "declared component coordinates are absent",
+        )? {
+            required_string(
+                coordinates.get(&coordinate),
+                format!("component coordinate is absent: {name}/{coordinate}"),
+            )?;
+        }
+    }
+    let assembly = object(
+        declaration.get("assembly"),
+        "assembly declaration is absent",
+    )?;
+    require(
+        string(assembly.get("kind")) == Some("all"),
+        "unsupported assembly kind",
+    )?;
+    let mut coherent = true;
+    for constraint in array(
+        assembly.get("shared_coordinates"),
+        "shared-coordinate declaration is absent",
+    )? {
+        let constraint = object(
+            Some(constraint),
+            "shared-coordinate declaration is malformed",
+        )?;
+        let coordinate = required_string(constraint.get("name"), "coordinate name is absent")?;
+        let names = string_array(
+            constraint.get("components"),
+            "coordinate components are absent",
+        )?;
+        require(!names.is_empty(), "coordinate component set is empty")?;
+        let values = names
+            .iter()
+            .map(|name| {
+                assessed
+                    .get(name.as_str())
+                    .and_then(|item| item.get("coordinates"))
+                    .and_then(|map| map.get(coordinate))
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| format!("shared coordinate is unbound: {name}/{coordinate}"))
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        coherent &= values.len() == 1;
+    }
+    let derived = if assessed.values().any(|item| {
+        matches!(
+            string(item.get("outcome")),
+            Some("timeout" | "error" | "not-run")
+        )
+    }) {
+        "uncheckable"
+    } else if coherent
+        && assessed
+            .values()
+            .all(|item| string(item.get("outcome")) == Some("material"))
+    {
+        "certified"
+    } else {
+        "not-certified"
+    };
+    require(
+        string(certificate.get("outcome")) == Some(derived)
+            && string(case.get("expected")) == Some(derived),
+        "certificate outcome is not derived from component assessments",
+    )
+}
+
+fn validate_artifact_address(
+    address: &Map<String, Value>,
+    label: &str,
+    require_version: bool,
+) -> Result<(), String> {
+    for field in ["repository", "path"] {
+        required_string(address.get(field), format!("{label} {field} is absent"))?;
+    }
+    if require_version {
+        required_string(address.get("version"), format!("{label} version is absent"))?;
+    }
+    let commit = required_string(address.get("commit"), format!("{label} commit is absent"))?;
+    let digest = required_string(address.get("sha256"), format!("{label} digest is absent"))?;
+    require(
+        commit.len() == 40 && commit.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        format!("{label} commit is not a full object ID"),
+    )?;
+    require(
+        digest.len() == 64
+            && digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+        format!("{label} digest is not lowercase SHA-256"),
+    )
+}
+
+fn validate_resolved_procedure(data: &Value, root: &Path) -> Result<(), String> {
+    let declaration = object(
+        data.pointer("/certificate_profile/declaration"),
+        "certificate declaration is absent",
+    )?;
+    let address = object(
+        declaration.get("procedure_spec"),
+        "procedure specification is absent",
+    )?;
+    let repository = required_string(address.get("repository"), "procedure repository absent")?;
+    let remote = Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("could not resolve procedure repository: {error}"))?;
+    require(
+        remote.status.success(),
+        "could not resolve procedure repository",
+    )?;
+    require(
+        normalized_repository(std::str::from_utf8(&remote.stdout).unwrap_or_default())
+            == normalized_repository(repository),
+        "procedure repository does not match the current repository",
+    )?;
+    let commit = required_string(address.get("commit"), "procedure commit absent")?;
+    let path = required_string(address.get("path"), "procedure path absent")?;
+    let object = format!("{commit}:{path}");
+    let resolved = Command::new("git")
+        .args(["show", &object])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("could not resolve procedure bytes: {error}"))?;
+    require(
+        resolved.status.success(),
+        "procedure artifact does not resolve at its declared commit and path",
+    )?;
+    let actual_digest = format!("{:x}", Sha256::digest(&resolved.stdout));
+    require(
+        string(address.get("sha256")) == Some(actual_digest.as_str()),
+        "resolved procedure digest does not match its address",
+    )?;
+    let procedure: Value = serde_json::from_slice(&resolved.stdout)
+        .map_err(|error| format!("resolved procedure is not JSON: {error}"))?;
+    require(
+        procedure.get("version") == address.get("version")
+            && procedure.get("relationship") == declaration.get("relationship"),
+        "resolved procedure version or relationship disagrees with the declaration",
+    )?;
+    let procedure_components = string_array(
+        procedure.get("components"),
+        "resolved procedure components are absent",
+    )?;
+    let declared_components = array(declaration.get("components"), "declared components absent")?
+        .iter()
+        .map(|component| {
+            required_string(component.get("name"), "declared component absent").map(str::to_owned)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    require(
+        procedure_components == declared_components
+            && procedure.get("assembly") == declaration.get("assembly"),
+        "resolved procedure components or assembly disagree with the declaration",
+    )
+}
+
+fn normalized_repository(value: &str) -> &str {
+    value.trim().trim_end_matches('/').trim_end_matches(".git")
+}
+
+fn validate_frame_reads(data: &Value) -> Result<(), String> {
+    let cases = array(data.get("frame_read_cases"), "frame read cases are absent")?;
+    let by_id = cases_by_id(cases, "frame read case ID is absent")?;
+    require(
+        by_id.keys().copied().collect::<BTreeSet<_>>()
+            == BTreeSet::from([
+                "same-provenance-stored",
+                "different-provenance-stored",
+                "same-provenance-fresh",
+            ]),
+        "frame read case census changed",
+    )?;
+    for value in cases {
+        let case = object(Some(value), "frame read case is malformed")?;
+        let operation = required_string(case.get("operation"), "frame operation is absent")?;
+        let derived = match operation {
+            "read-stored-certificate" => {
+                if case.get("certificate_provenance") == case.get("current") {
+                    "historical-only"
+                } else {
+                    "provenance-mismatch"
+                }
+            }
+            "execute-declared-procedure" => {
+                require(
+                    case.get("certificate_provenance").is_none(),
+                    "fresh execution cannot be asserted by stored certificate bytes",
+                )?;
+                "certified"
+            }
+            _ => return Err("unknown frame operation".into()),
+        };
+        require(
+            string(case.get("expected")) == Some(derived),
+            "stored verdict was transported into the current frame",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_relationship_examples(data: &Value) -> Result<(), String> {
+    let cases = array(
+        data.get("relationship_examples"),
+        "relationship examples are absent",
+    )?;
+    let by_id = cases_by_id(cases, "relationship example ID is absent")?;
+    require(
+        by_id.keys().copied().collect::<BTreeSet<_>>()
+            == BTreeSet::from(["sufficient-only", "necessary-only", "exact"]),
+        "relationship example census changed",
+    )?;
+    for value in cases {
+        let case = object(Some(value), "relationship example is malformed")?;
+        require(
+            string(case.get("category")) == Some("finite-poset"),
+            "relationship example is not direction-discriminating",
+        )?;
+        let assembly = case
+            .get("assembly_rank")
+            .and_then(Value::as_i64)
+            .ok_or("assembly rank absent")?;
+        let observation = case
+            .get("observation_rank")
+            .and_then(Value::as_i64)
+            .ok_or("observation rank absent")?;
+        let forward = assembly <= observation;
+        let reverse = observation <= assembly;
+        let relationship = if forward && reverse {
+            "exact"
+        } else if forward {
+            "sufficient"
+        } else if reverse {
+            "necessary"
+        } else {
+            "incomparable"
+        };
+        require(
+            case.get("forward") == Some(&Value::Bool(forward))
+                && case.get("reverse") == Some(&Value::Bool(reverse))
+                && string(case.get("relationship")) == Some(relationship),
+            "relationship direction does not follow the finite poset",
+        )?;
+    }
+    Ok(())
 }
 
 fn validate_witnesses(data: &Value) -> Result<(), String> {
@@ -204,7 +791,6 @@ fn validate_witnesses(data: &Value) -> Result<(), String> {
         "artifact-two-evidence",
         "shared-evidence-reuse",
         "independent-components",
-        "coordinate-mismatch",
         "missing-sufficient",
         "unavailable-sufficient",
         "legacy-flat",
@@ -559,8 +1145,8 @@ fn migration_outcome(case: &Map<String, Value>) -> Result<String, String> {
     .into())
 }
 
-fn run_self_test(data: &Value) -> Result<(), String> {
-    const NAMES: [&str; 20] = [
+fn run_self_test(data: &Value, root: &Path) -> Result<(), String> {
+    const NAMES: [&str; 36] = [
         "composition-boundary",
         "coherence",
         "claim-reuse",
@@ -581,11 +1167,27 @@ fn run_self_test(data: &Value) -> Result<(), String> {
         "absent-legacy-name",
         "duplicate-migration-id",
         "reversed-migration-detail",
+        "missing-certificate-outcome",
+        "undeclared-certificate-component",
+        "unbound-component-evidence",
+        "missing-shared-coordinate",
+        "post-result-assembly-change",
+        "procedure-path-mismatch",
+        "procedure-repository-mismatch",
+        "procedure-commit-mismatch",
+        "procedure-digest-mismatch",
+        "procedure-version-mismatch",
+        "stale-declaration-digest",
+        "unresolved-procedure",
+        "stored-verdict-transport",
+        "hidden-provenance-mismatch",
+        "set-relationship-example",
+        "reversed-poset-direction",
     ];
     for name in NAMES {
         let mut candidate = data.clone();
         mutate(&mut candidate, name)?;
-        if validate(&candidate).is_ok() {
+        if validate_all(&candidate, root).is_ok() {
             return Err(format!("self-test accepted mutation: {name}"));
         }
     }
@@ -597,8 +1199,14 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
         "composition-boundary" => data
             .pointer_mut("/composition/atoms/1/source")
             .map(|v| *v = json!("WRONG")),
-        "coherence" => field_mut(data, "witness_cases", "coordinate-mismatch", "expected")
-            .map(|v| *v = json!("certified")),
+        "coherence" => {
+            let Some(outcome) = data.pointer_mut("/certificate_profile/cases/1/certificate/outcome") else {
+                return Err("self-test could not find mismatch certificate outcome".into());
+            };
+            *outcome = json!("certified");
+            data.pointer_mut("/certificate_profile/cases/1/expected")
+                .map(|v| *v = json!("certified"))
+        }
         "claim-reuse" => field_mut(
             data,
             "witness_cases",
@@ -703,6 +1311,89 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
             *value = json!(["shared-coordinate", "gluing-proof", "assembled-witness"]);
             field_mut(data, "migration_cases", "forgotten-coordinate", "lost")
                 .map(|v| *v = json!(["component-assessments"]))
+        }
+        "missing-certificate-outcome" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/0/outcome")
+            .map(|v| *v = Value::Null),
+        "undeclared-certificate-component" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/0/name")
+            .map(|v| *v = json!("invented")),
+        "unbound-component-evidence" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/0/evidence_cids/0")
+            .map(|v| *v = json!("cid-absent")),
+        "missing-shared-coordinate" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/1/coordinates/candidate")
+            .map(|v| *v = Value::Null),
+        "post-result-assembly-change" => data
+            .pointer_mut(
+                "/certificate_profile/declaration/assembly/shared_coordinates/0/components/1",
+            )
+            .map(|v| *v = json!("invented")),
+        "procedure-path-mismatch" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/path")
+            .map(|v| *v = json!("procedures/other.json")),
+        "procedure-repository-mismatch" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/repository")
+            .map(|v| *v = json!("https://example.invalid/other")),
+        "procedure-commit-mismatch" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/commit")
+            .map(|v| *v = json!("2222222222222222222222222222222222222222")),
+        "procedure-digest-mismatch" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/sha256")
+            .map(|v| {
+                *v = json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+            }),
+        "procedure-version-mismatch" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/version")
+            .map(|v| *v = json!("2")),
+        "stale-declaration-digest" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/witness_system/declaration_sha256")
+            .map(|v| *v = json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")),
+        "unresolved-procedure" => {
+            let replacement = json!({"repository":"https://github.com/kan-tools/day","commit":"2222222222222222222222222222222222222222","path":"missing-procedure.json","sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","version":"1"});
+            let Some(declared) = data.pointer_mut("/certificate_profile/declaration/procedure_spec") else {
+                return Err("self-test could not find declared procedure".into());
+            };
+            *declared = replacement.clone();
+            for index in 0..2 {
+                let Some(address) = data.pointer_mut(&format!("/certificate_profile/cases/{index}/certificate/procedure_spec")) else {
+                    return Err("self-test could not find certificate procedure".into());
+                };
+                *address = replacement.clone();
+            }
+            let declaration = data.pointer("/certificate_profile/declaration").ok_or("self-test could not find declaration")?;
+            let bytes = serde_json_canonicalizer::to_vec(declaration)
+                .map_err(|error| error.to_string())?;
+            let digest = format!("{:x}", Sha256::digest(bytes));
+            for index in 0..2 {
+                let Some(binding) = data.pointer_mut(&format!("/certificate_profile/cases/{index}/certificate/witness_system/declaration_sha256")) else {
+                    return Err("self-test could not find declaration binding".into());
+                };
+                *binding = json!(digest);
+            }
+            Some(())
+        }
+        "stored-verdict-transport" => field_mut(
+            data,
+            "frame_read_cases",
+            "same-provenance-stored",
+            "expected",
+        )
+        .map(|v| *v = json!("certified")),
+        "hidden-provenance-mismatch" => field_mut(
+            data,
+            "frame_read_cases",
+            "different-provenance-stored",
+            "expected",
+        )
+        .map(|v| *v = json!("historical-only")),
+        "set-relationship-example" => {
+            field_mut(data, "relationship_examples", "sufficient-only", "category")
+                .map(|v| *v = json!("Set"))
+        }
+        "reversed-poset-direction" => {
+            field_mut(data, "relationship_examples", "sufficient-only", "reverse")
+                .map(|v| *v = json!(true))
         }
         _ => None,
     }
@@ -816,7 +1507,7 @@ mod tests {
             &std::fs::read_to_string(root.join("rfcs/vectors/1-process-model.json")).unwrap(),
         )
         .unwrap();
-        validate(&data).unwrap();
-        run_self_test(&data).unwrap();
+        validate_all(&data, root).unwrap();
+        run_self_test(&data, root).unwrap();
     }
 }
