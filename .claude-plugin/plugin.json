@@ -1,6 +1,6 @@
 {
   "name": "day",
-  "version": "0.12.2",
+  "version": "0.13.0-beta.1",
   "author": { "name": "Maxine Levesque" },
   "description": "Structured process layer for AI-assisted development: teloi, composable process atoms, and drift assessment, all recorded in kan.",
   "repository": "https://github.com/kan-tools/day"

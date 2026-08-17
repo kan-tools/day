@@ -110,7 +110,7 @@ STUB
 chmod +x "$WORK/kan-stub.sh"
 
 cd "$WORK"
-git init -q . && git commit -q --allow-empty -m init
+git init -q . && git -c commit.gpgsign=false commit -q --allow-empty -m init
 
 out="$(DAY_KAN_BIN="$WORK/kan-stub.sh" "$BIN" doctor 2>&1)"
 code=$?

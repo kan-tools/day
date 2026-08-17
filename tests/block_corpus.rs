@@ -65,6 +65,11 @@ fn current_corpus_capture_isolated_commit_ignores_maintainer_signing_policy() {
     )
     .unwrap();
     assert!(script.contains("git -c commit.gpgsign=false commit"));
+    let migration = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/run-migration-cell.sh"),
+    )
+    .unwrap();
+    assert!(migration.contains("git -c commit.gpgsign=false commit"));
 }
 
 struct Captured {
