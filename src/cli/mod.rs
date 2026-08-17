@@ -101,6 +101,8 @@ pub enum Error {
     Status(#[from] crate::status::Error),
     #[error(transparent)]
     Events(#[from] crate::events::Error),
+    #[error(transparent)]
+    Stream(#[from] crate::stream::ScopeError),
 }
 
 #[derive(Debug, Parser)]
@@ -378,6 +380,12 @@ pub enum ReviewAction {
 pub enum StreamAction {
     /// List visible live handoff streams from one bulk kan read
     List,
+    /// Print a handoff's recorded measurement scopes without retargeting them
+    Scopes {
+        /// Handoff thread name under agents/handoff/
+        #[arg(default_value = "main")]
+        thread: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -870,6 +878,10 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         }
         Command::Stream(StreamAction::List) => {
             print!("{}", crate::stream::list(&client)?.render());
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Stream(StreamAction::Scopes { thread }) => {
+            print!("{}", crate::stream::scopes(&client, &thread)?);
             Ok(ExitCode::SUCCESS)
         }
         Command::Next { atom } => match crate::record::next(&client, &atom) {

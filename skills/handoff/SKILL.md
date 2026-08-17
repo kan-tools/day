@@ -83,6 +83,23 @@ If any coordinate cannot be read, write that the measurement is UNCHECKABLE
 and why. Do not replace a failed coordinate read with the current branch,
 current HEAD, current default census range, or newest CI run.
 
+When at least one scoped measurement is recorded, put the machine-readable
+coordinates in exactly one fenced block as well as explaining their meaning in
+prose. Use argument arrays, not a shell command string, so the next session can
+reconstruct the exact invocation without reparsing quoting:
+
+````markdown
+```day-handoff-scopes
+{"_version":1,"suites":[{"argv":["cargo","test","--workspace"],"commit":"<full-sha>","tree_clean":true}],"censuses":[{"base":"<full-base>","head":"<full-head>","unaccounted":0}],"ci":[{"provider":"github-actions","workflow":"CI","run_id":123,"head_sha":"<full-sha>","conclusion":"success"}]}
+```
+````
+
+Omit a measurement array entry when no result of that type is asserted. Do not
+encode an unavailable coordinate as an empty string or zero: state that result
+as UNCHECKABLE in prose instead. Before recording, run `day stream scopes` on a
+scratch fixture or validate the JSON shape through the shipped tests if the
+block was assembled mechanically; malformed scope data is worse than no scope.
+
 ## Your task
 
 Write the handoff for this thread onto `agents/handoff/<thread>`.
@@ -158,7 +175,8 @@ Structure that makes the round trip work:
 1. **State, with how it was verified.** Branch, HEAD, CI, suite, census, tree.
    Suite claims name their exact command and commit; census claims name exact
    base and head SHAs; CI claims name provider run ID and head SHA. Each is a
-   claim the paired skill can check without consulting a moving default.
+   claim the paired skill can check without consulting a moving default. Put
+   those same coordinates in the `day-handoff-scopes` block above.
 2. **The decision a reader needs** to understand the work — the one or two
    choices without which the next step looks arbitrary. Not a changelog.
 3. **What is next, in order**, and why that order. If something was promoted or

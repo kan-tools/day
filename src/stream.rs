@@ -7,9 +7,166 @@
 use std::collections::BTreeMap;
 
 use crate::kan_client::{Claim, Error, KanClient, PublishedReadDiagnostics};
+use crate::{atoms, kan_client::Read};
 
 const PREFIX: &str = "agents/handoff/";
 const PREVIEW_CHARS: usize = 120;
+pub const HANDOFF_SCOPES_FENCE: &str = "day-handoff-scopes";
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HandoffScopes {
+    #[serde(default)]
+    pub suites: Vec<SuiteScope>,
+    #[serde(default)]
+    pub censuses: Vec<CensusScope>,
+    #[serde(default)]
+    pub ci: Vec<CiScope>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SuiteScope {
+    pub argv: Vec<String>,
+    pub commit: String,
+    pub tree_clean: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CensusScope {
+    pub base: String,
+    pub head: String,
+    pub unaccounted: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiScope {
+    pub provider: String,
+    pub workflow: String,
+    pub run_id: u64,
+    pub head_sha: String,
+    pub conclusion: String,
+}
+
+impl crate::atoms::Versioned for HandoffScopes {
+    const SUPPORTED_VERSION: u64 = 1;
+    const FENCE: &'static str = HANDOFF_SCOPES_FENCE;
+
+    fn validate(&self) -> Result<(), String> {
+        for suite in &self.suites {
+            if suite.argv.is_empty() || suite.argv.iter().any(|part| part.trim().is_empty()) {
+                return Err("every suite scope requires a nonempty argv".into());
+            }
+            full_sha("suite commit", &suite.commit)?;
+        }
+        for census in &self.censuses {
+            full_sha("census base", &census.base)?;
+            full_sha("census head", &census.head)?;
+        }
+        for ci in &self.ci {
+            for (field, value) in [
+                ("CI provider", ci.provider.as_str()),
+                ("CI workflow", ci.workflow.as_str()),
+                ("CI conclusion", ci.conclusion.as_str()),
+            ] {
+                if value.trim().is_empty() {
+                    return Err(format!("{field} must not be empty"));
+                }
+            }
+            if ci.run_id == 0 {
+                return Err("CI run ID must be nonzero".into());
+            }
+            full_sha("CI head SHA", &ci.head_sha)?;
+        }
+        Ok(())
+    }
+}
+
+fn full_sha(field: &str, value: &str) -> Result<(), String> {
+    if value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(format!("{field} must be a full 40-hex commit SHA"))
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ScopeError {
+    #[error(transparent)]
+    Kan(#[from] crate::kan_client::Error),
+    #[error("handoff `{0}` is not visible")]
+    Missing(String),
+    #[error("handoff `{0}` is not fully visible, so its newest claim cannot be selected")]
+    Incomplete(String),
+    #[error("handoff `{subject}` has an invalid measurement block: {source}")]
+    Block {
+        subject: String,
+        #[source]
+        source: atoms::BlockError,
+    },
+}
+
+/// Render only the immutable coordinates carried by the newest visible
+/// handoff. This intentionally does not consult HEAD: advancing or merging the
+/// working branch cannot retarget a recorded measurement.
+pub fn scopes(client: &KanClient, name: &str) -> Result<String, ScopeError> {
+    let subject = format!("{PREFIX}{name}");
+    let claims = match client.show(&subject)? {
+        Read::Present(claims) => claims,
+        Read::Absent => return Err(ScopeError::Missing(subject)),
+        Read::Withheld { .. } | Read::Indeterminate { .. } => {
+            return Err(ScopeError::Incomplete(subject))
+        }
+    };
+    let claim = claims
+        .last()
+        .ok_or_else(|| ScopeError::Missing(subject.clone()))?;
+    let Some(text) = claim.text.as_deref() else {
+        return Ok(format!(
+            "UNCHECKABLE: `{subject}` has no narrative measurement scope; do not substitute current HEAD, a default census range, or the newest CI run\n"
+        ));
+    };
+    let Some(parsed) = atoms::extract_fenced::<HandoffScopes>(text) else {
+        return Ok(format!(
+            "UNCHECKABLE: `{subject}` is a legacy unscoped handoff; do not substitute current HEAD, a default census range, or the newest CI run\n"
+        ));
+    };
+    let scopes = parsed.map_err(|source| ScopeError::Block {
+        subject: subject.clone(),
+        source,
+    })?;
+    let mut out = format!(
+        "measurement scopes from `{subject}` (claim {})\n",
+        claim.cid
+    );
+    for suite in scopes.suites {
+        let argv = serde_json::to_string(&suite.argv).expect("suite argv serializes");
+        let status = if suite.tree_clean {
+            "scoped"
+        } else {
+            "UNCHECKABLE: recorded tree was dirty"
+        };
+        out.push_str(&format!(
+            "suite: {status}; commit={}; argv={argv}\n",
+            suite.commit
+        ));
+    }
+    for census in scopes.censuses {
+        out.push_str(&format!(
+            "census: scoped; base={}; head={}; expected_unaccounted={}; replay=`just census-demonstrations {}..{}`\n",
+            census.base, census.head, census.unaccounted, census.base, census.head
+        ));
+    }
+    for ci in scopes.ci {
+        out.push_str(&format!(
+            "ci: scoped; provider={}; workflow={}; run_id={}; head_sha={}; conclusion={}; replay=`gh run view {} --json databaseId,headSha,conclusion,workflowName,url`\n",
+            ci.provider, ci.workflow, ci.run_id, ci.head_sha, ci.conclusion, ci.run_id
+        ));
+    }
+    Ok(out)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stream {
@@ -180,6 +337,7 @@ fn preview(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::atoms::Versioned;
 
     fn claim(text: &str, recorded_at: Option<i64>) -> Claim {
         Claim {
@@ -272,5 +430,33 @@ mod tests {
         let rendered = preview(&text);
         assert!(rendered.ends_with('…'));
         assert_eq!(rendered.chars().count(), PREVIEW_CHARS + 1);
+    }
+
+    #[test]
+    fn handoff_scope_blocks_require_immutable_coordinates() {
+        let valid = HandoffScopes {
+            suites: vec![SuiteScope {
+                argv: vec!["cargo".into(), "test".into()],
+                commit: "a".repeat(40),
+                tree_clean: true,
+            }],
+            censuses: vec![CensusScope {
+                base: "b".repeat(40),
+                head: "c".repeat(40),
+                unaccounted: 0,
+            }],
+            ci: vec![CiScope {
+                provider: "github-actions".into(),
+                workflow: "CI".into(),
+                run_id: 42,
+                head_sha: "d".repeat(40),
+                conclusion: "success".into(),
+            }],
+        };
+        assert!(valid.validate().is_ok());
+
+        let mut abbreviated = valid.clone();
+        abbreviated.suites[0].commit = "abc1234".into();
+        assert!(abbreviated.validate().unwrap_err().contains("full 40-hex"));
     }
 }

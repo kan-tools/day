@@ -102,6 +102,14 @@ now**, and the output says which is which.
    README, recent commits — and to write the first handoff at the end of the
    session. A repo with no handoff is the normal first-time state, not an error.
 
+4. **Resolve its measurement coordinates through day.** Run `day stream scopes
+   <thread>`. This reads the same newest visible handoff through the bulk kan
+   path. A structured handoff prints the exact suite argv/commit, census
+   base/head, and CI run/head it recorded. A legacy handoff prints
+   `UNCHECKABLE`; preserve that classification. This command deliberately does
+   not read current HEAD, so advancing or merging the branch cannot silently
+   retarget any measurement.
+
 ### Phase 2: Verify what it asserts
 
 **This is the phase that earns the command.** Go through the handoff's factual
