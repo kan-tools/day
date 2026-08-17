@@ -21,7 +21,7 @@ pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()>
     let (span, commits) = resolved;
     if commits.is_empty() {
         println!("NOTHING-TO-CHECK: no commits in {span}");
-        return Outcome::CouldNotCheck(CouldNotCheck::with_exit_code(
+        return Outcome::CouldNotCheck(CouldNotCheck::reported(
             format!("no commits in {span}"),
             NOTHING_TO_CHECK,
         ));
@@ -73,7 +73,7 @@ pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()>
             "\nUNACCOUNTED: these commits carry no demonstration and state no reason. \
              A docs-only commit needs one too — this repo executes its own documentation."
         );
-        Outcome::Finding(Finding::new("one or more commits are unaccounted"))
+        Outcome::Finding(Finding::reported("one or more commits are unaccounted"))
     }
 }
 

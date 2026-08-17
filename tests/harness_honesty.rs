@@ -1622,8 +1622,7 @@ fn the_finding_census_separates_unaccounted_from_could_not_check() {
         std::fs::write(&kan, format!("#!/bin/sh\ncat <<'JSON'\n{body}\nJSON\n")).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&kan, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let out = Command::new("python3")
-            .arg(&script)
+        let out = Command::new(&script)
             .arg("s")
             .current_dir(dir.path())
             .env(
@@ -1635,7 +1634,7 @@ fn the_finding_census_separates_unaccounted_from_could_not_check() {
                 ),
             )
             .output()
-            .expect("python3 should be runnable");
+            .expect("the finding census shim should be runnable");
         (
             out.status.code(),
             String::from_utf8_lossy(&out.stdout).to_string(),
@@ -1693,8 +1692,7 @@ fn the_finding_census_separates_unaccounted_from_could_not_check() {
     std::fs::write(&kan, "#!/bin/sh\necho boom >&2\nexit 3\n").unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&kan, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let out = Command::new("python3")
-        .arg(&script)
+    let out = Command::new(&script)
         .arg("s")
         .current_dir(dir.path())
         .env(

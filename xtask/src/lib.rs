@@ -98,7 +98,7 @@ fn run_census(command: CensusCommand, root: &Path, process: &dyn Process) -> Out
             evidence::demonstration_census::run(root, process, &args)
         }
         CensusCommand::Findings(TrailingArgs { args }) => {
-            run_legacy(root, process, "scripts/finding-census.py", args)
+            evidence::finding_census::run(root, process, &args)
         }
     }
 }

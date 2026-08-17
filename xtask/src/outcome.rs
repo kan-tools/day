@@ -15,6 +15,7 @@ impl<T> Outcome<T> {
 pub struct Finding {
     pub detail: String,
     pub exit_code: u8,
+    pub reported: bool,
 }
 
 impl Finding {
@@ -22,6 +23,15 @@ impl Finding {
         Self {
             detail: detail.into(),
             exit_code: 1,
+            reported: false,
+        }
+    }
+
+    pub fn reported(detail: impl Into<String>) -> Self {
+        Self {
+            detail: detail.into(),
+            exit_code: 1,
+            reported: true,
         }
     }
 }
@@ -30,6 +40,7 @@ impl Finding {
 pub struct CouldNotCheck {
     pub detail: String,
     pub exit_code: u8,
+    pub reported: bool,
 }
 
 impl CouldNotCheck {
@@ -37,6 +48,7 @@ impl CouldNotCheck {
         Self {
             detail: detail.into(),
             exit_code: 2,
+            reported: false,
         }
     }
 
@@ -44,6 +56,15 @@ impl CouldNotCheck {
         Self {
             detail: detail.into(),
             exit_code,
+            reported: false,
+        }
+    }
+
+    pub fn reported(detail: impl Into<String>, exit_code: u8) -> Self {
+        Self {
+            detail: detail.into(),
+            exit_code,
+            reported: true,
         }
     }
 }

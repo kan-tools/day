@@ -18,11 +18,13 @@ fn main() -> ExitCode {
     match xtask::run(cli.command, &root, &SystemProcess) {
         Outcome::Passed(()) => ExitCode::SUCCESS,
         Outcome::Finding(finding) => {
-            eprintln!("FINDING: {}", finding.detail);
+            if !finding.reported {
+                eprintln!("FINDING: {}", finding.detail);
+            }
             ExitCode::from(finding.exit_code)
         }
         Outcome::CouldNotCheck(unknown) => {
-            if unknown.exit_code != 3 {
+            if !unknown.reported {
                 eprintln!("COULD-NOT-CHECK: {}", unknown.detail);
             }
             ExitCode::from(unknown.exit_code)
