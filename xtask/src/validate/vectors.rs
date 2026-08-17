@@ -1,8 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -24,7 +26,7 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
         Ok(source) => source,
         Err(error) => return failed(format!("{}: {error}", path.display())),
     };
-    let data: Value = match serde_json::from_str(&source) {
+    let data = match parse_ijson(&source) {
         Ok(data) => data,
         Err(error) => return failed(error.to_string()),
     };
@@ -38,6 +40,110 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
     }
     println!("RFC 1 vectors: valid");
     Outcome::Passed(())
+}
+
+fn parse_ijson(source: &str) -> Result<Value, serde_json::Error> {
+    let mut deserializer = serde_json::Deserializer::from_str(source);
+    let value = IJsonSeed.deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(value)
+}
+
+struct IJsonSeed;
+
+impl<'de> DeserializeSeed<'de> for IJsonSeed {
+    type Value = Value;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(IJsonVisitor)
+    }
+}
+
+struct IJsonVisitor;
+
+impl<'de> Visitor<'de> for IJsonVisitor {
+    type Value = Value;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("I-JSON without duplicate property names or unsafe integers")
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+        Ok(Value::Bool(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+        if !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&value) {
+            return Err(E::custom("integer is outside the I-JSON safe range"));
+        }
+        Ok(Value::Number(value.into()))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+        if value > MAX_SAFE_INTEGER {
+            return Err(E::custom("integer is outside the I-JSON safe range"));
+        }
+        Ok(Value::Number(value.into()))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        serde_json::Number::from_f64(value)
+            .map(Value::Number)
+            .ok_or_else(|| E::custom("number is not finite IEEE-754"))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> {
+        Ok(Value::String(value.to_owned()))
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+        Ok(Value::String(value))
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element_seed(IJsonSeed)? {
+            values.push(value);
+        }
+        Ok(Value::Array(values))
+    }
+
+    fn visit_map<A>(self, mut object: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut values = Map::new();
+        while let Some(key) = object.next_key::<String>()? {
+            if values.contains_key(&key) {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON property name: {key}"
+                )));
+            }
+            values.insert(key, object.next_value_seed(IJsonSeed)?);
+        }
+        Ok(Value::Object(values))
+    }
 }
 
 fn parse_args(args: &[OsString]) -> Result<(Option<PathBuf>, bool), String> {

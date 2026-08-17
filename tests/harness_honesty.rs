@@ -1259,6 +1259,54 @@ fn rfc_acceptance_self_tests_survive_the_review_transition() {
     );
 }
 
+/// RFC 8785 canonicalization starts from I-JSON. Duplicate names and integers
+/// that cannot be represented exactly in the interoperable IEEE-754 range must
+/// be rejected before `serde_json::Value` can collapse or round them.
+#[test]
+fn rfc1_vector_loader_rejects_ambiguous_jcs_input() {
+    let source = read("rfcs/vectors/1-process-model.json");
+    let cases = [
+        (
+            "duplicate-name.json",
+            source.replacen(
+                "\"subject\": \"telos/releasable\",",
+                "\"subject\": \"telos/attacker\",\n      \"subject\": \"telos/releasable\",",
+                1,
+            ),
+            "duplicate JSON property name: subject",
+        ),
+        (
+            "unsafe-integer.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"unsafe\": 9007199254740993,",
+                1,
+            ),
+            "integer is outside the I-JSON safe range",
+        ),
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    for (name, hostile, expected) in cases {
+        let path = dir.path().join(name);
+        std::fs::write(&path, hostile).unwrap();
+        let out = Command::new("cargo")
+            .args(["run", "--quiet", "-p", "xtask", "--", "validate", "vectors"])
+            .arg(&path)
+            .current_dir(repo_root())
+            .output()
+            .expect("the RFC 1 vector checker should run");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            !out.status.success() && text.contains(expected),
+            "{name} must be rejected as non-I-JSON for the intended reason:\n{text}"
+        );
+    }
+}
+
 /// RFC 1 AC-10 — incorporated notation must remain type-distinct, and every
 /// unresolved formal choice introduced by the companion must remain visible in
 /// RFC 1's authoritative unresolved-question census.
