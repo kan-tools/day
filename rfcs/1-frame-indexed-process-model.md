@@ -3,9 +3,9 @@
 - Status: Review
 - Authors: day maintainers
 - Created: 2026-08-15
-- Discussion: Not opened
-- Review-started-at: Not scheduled
-- Review-period-ends: Not scheduled
+- Discussion: https://github.com/kan-tools/day/pull/224
+- Review-started-at: 2026-08-17T04:05:00Z
+- Review-period-ends: 2026-08-20T04:05:00Z
 - Review-override: None
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative
 - Superseded-by: None
