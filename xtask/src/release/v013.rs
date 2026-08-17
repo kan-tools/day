@@ -3,6 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::capability::process::{Process, ProcessRequest};
 use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
 pub const VERSION: &str = "v0.13.0-beta.1";
@@ -20,6 +21,7 @@ pub const EVIDENCE_PROTOCOLS: &[&str] = &[
     ".release/protocols/reconstruction-v1.json",
 ];
 pub const PUBLICATION_ARTIFACTS: &[&str] = &[
+    ".release/v0.13-plan.json",
     ".github/workflows/release.yml",
     "git-tag",
     "crates-io-package",
@@ -98,6 +100,168 @@ pub fn verify_manifest(root: &Path, path: &Path) -> Outcome<()> {
         PUBLICATION_ARTIFACTS.len()
     );
     Outcome::Passed(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanManifest {
+    schema: u64,
+    cid: String,
+    subject: String,
+    rfc_result: String,
+    normative_source: String,
+    artifact: PlanArtifact,
+    published_file: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanArtifact {
+    commit: String,
+    path: String,
+    sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct KanShow {
+    claims: Vec<KanPlanClaim>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct KanPlanClaim {
+    cid: String,
+    kind: String,
+    subject: String,
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    cites: Vec<String>,
+    #[serde(default)]
+    artifacts: Vec<String>,
+}
+
+pub fn verify_plan(root: &Path, manifest_path: &Path, process: &dyn Process) -> Outcome<()> {
+    let manifest_path = root.join(manifest_path);
+    let manifest: PlanManifest =
+        match read(&manifest_path).and_then(|bytes| json(&manifest_path, &bytes)) {
+            Ok(manifest) => manifest,
+            Err(error) => return Outcome::Finding(Finding::new(error)),
+        };
+    let kan = ProcessRequest::new("kan", ["show", manifest.subject.as_str(), "--json"], root);
+    let kan = match process.run(&kan) {
+        Ok(output) if output.status == 0 => output.stdout,
+        Ok(output) => {
+            return Outcome::CouldNotCheck(CouldNotCheck::new(format!(
+                "could not resolve v0.13 Plan through kan (exit {}): {}",
+                output.status, output.stderr
+            )))
+        }
+        Err(error) => return Outcome::CouldNotCheck(CouldNotCheck::new(error)),
+    };
+    let show: KanShow = match serde_json::from_str(&kan) {
+        Ok(show) => show,
+        Err(error) => {
+            return Outcome::CouldNotCheck(CouldNotCheck::new(format!(
+                "kan returned an unreadable Plan view: {error}"
+            )))
+        }
+    };
+    let claim = match show.claims.iter().find(|claim| claim.cid == manifest.cid) {
+        Some(claim) => claim,
+        None => {
+            return Outcome::Finding(Finding::new(format!(
+                "published kan view does not contain selected Plan CID {}",
+                manifest.cid
+            )))
+        }
+    };
+    let artifact_spec = format!("{}:{}", manifest.artifact.commit, manifest.artifact.path);
+    let git = ProcessRequest::new("git", ["show", artifact_spec.as_str()], root);
+    let artifact = match process.run(&git) {
+        Ok(output) if output.status == 0 => output.stdout.into_bytes(),
+        Ok(output) => {
+            return Outcome::Finding(Finding::new(format!(
+                "Plan artifact `{artifact_spec}` does not resolve (exit {}): {}",
+                output.status, output.stderr
+            )))
+        }
+        Err(error) => return Outcome::CouldNotCheck(CouldNotCheck::new(error)),
+    };
+    let current = match read(&root.join(&manifest.artifact.path)) {
+        Ok(current) => current,
+        Err(error) => return Outcome::Finding(Finding::new(error)),
+    };
+    let published = match read(&root.join(&manifest.published_file)) {
+        Ok(published) => published,
+        Err(error) => return Outcome::Finding(Finding::new(error)),
+    };
+    match validate_plan(&manifest, claim, &artifact, &current, &published) {
+        Ok(()) => {
+            println!(
+                "v0.13 Plan resolved: cid={} subject={} artifact={artifact_spec} sha256={}",
+                manifest.cid, manifest.subject, manifest.artifact.sha256
+            );
+            Outcome::Passed(())
+        }
+        Err(error) => Outcome::Finding(Finding::new(error)),
+    }
+}
+
+fn validate_plan(
+    manifest: &PlanManifest,
+    claim: &KanPlanClaim,
+    artifact: &[u8],
+    current: &[u8],
+    published: &[u8],
+) -> Result<(), String> {
+    if manifest.schema != 1 {
+        return Err("Plan resolver manifest has unsupported schema".into());
+    }
+    full_sha("Plan artifact commit", &manifest.artifact.commit)?;
+    if manifest.subject != "v0.13-workflow-ergonomics"
+        || manifest.rfc_result != "bafyreiciww5vnalro4sfzw5l36kj6qcgttgns52tm5oqwsh2v47otrq3ua"
+        || manifest.normative_source
+            != "35c991c3b5949caf8ef1e8f71f9b6d47a1ae1ddf:rfcs/1-frame-indexed-process-model.md"
+        || manifest.artifact.path != ".design/v0.13-workflow-ergonomics.md"
+    {
+        return Err("Plan resolver manifest changed a closed v0.13 identity coordinate".into());
+    }
+    if claim.cid != manifest.cid
+        || claim.kind != "Plan"
+        || claim.subject != manifest.subject
+        || !claim.cites.contains(&manifest.rfc_result)
+        || !claim
+            .text
+            .as_deref()
+            .is_some_and(|text| text.contains(&manifest.normative_source))
+    {
+        return Err(
+            "selected claim does not match the Plan CID/subject/RFC/source contract".into(),
+        );
+    }
+    let commit = format!("Commit(\"{}\")", manifest.artifact.commit);
+    let file = format!(
+        "FileAt(\"{}\", \"{}\")",
+        manifest.artifact.path, manifest.artifact.commit
+    );
+    if !claim.artifacts.contains(&commit) || !claim.artifacts.contains(&file) {
+        return Err("selected Plan does not carry the exact commit and FileAt artifacts".into());
+    }
+    if digest(artifact) != manifest.artifact.sha256 {
+        return Err("resolved Plan artifact digest differs from the manifest".into());
+    }
+    if artifact != current {
+        return Err(
+            "current compatibility mirror is not byte-identical to the Plan artifact".into(),
+        );
+    }
+    if Some(artifact) != claim.text.as_deref().map(str::as_bytes) {
+        return Err("Plan narrative is not byte-identical to its addressed artifact".into());
+    }
+    if !String::from_utf8_lossy(published).contains(&manifest.cid) {
+        return Err("tracked published claim file does not contain the selected Plan CID".into());
+    }
+    Ok(())
 }
 
 const ASKME_PROTOCOL: &str = ".release/protocols/askme-v1.json";

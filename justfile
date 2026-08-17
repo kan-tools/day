@@ -36,6 +36,10 @@ release-check:
 verify-v013-contract:
     cargo run -p xtask -- release verify-v013
 
+# Resolve the authoritative v0.13 Plan CID through kan and its exact git artifact.
+verify-v013-plan:
+    cargo run -p xtask -- release verify-plan-v013
+
 # Grade a raw v0.13 /askme evidence bundle.
 grade-v013-askme bundle:
     cargo run -p xtask -- release grade-askme-v013 {{bundle}}

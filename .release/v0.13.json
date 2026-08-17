@@ -15,6 +15,7 @@
     ".release/protocols/reconstruction-v1.json"
   ],
   "publication_artifacts": [
+    ".release/v0.13-plan.json",
     ".github/workflows/release.yml",
     "git-tag",
     "crates-io-package",
