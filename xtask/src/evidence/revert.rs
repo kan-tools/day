@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use crate::capability::process::{Process, ProcessOutput, ProcessRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilePatch {
@@ -18,6 +21,315 @@ pub struct FilteredPatch {
     pub text: String,
     pub report: Vec<String>,
     pub touched: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Demonstration {
+    pub caught: Vec<String>,
+    pub outcome: DemonstrationOutcome,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DemonstrationOutcome {
+    Demonstrated,
+    Vacuous,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevertError {
+    pub outcome: &'static str,
+    pub detail: String,
+}
+
+pub struct DemonstrateRequest<'a> {
+    pub patch: &'a str,
+    pub names: &'a [String],
+    pub label: &'a str,
+    pub include: &'a [String],
+    pub exclude: &'a [String],
+    pub target_dir: Option<&'a Path>,
+}
+
+impl RevertError {
+    fn new(outcome: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            outcome,
+            detail: detail.into(),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct TestSelection {
+    ran: BTreeSet<String>,
+    failed: BTreeSet<String>,
+}
+
+pub fn demonstrate(
+    root: &Path,
+    process: &dyn Process,
+    request: DemonstrateRequest<'_>,
+) -> Result<Demonstration, RevertError> {
+    let filtered = filter_patch(request.patch, root, request.include, request.exclude);
+    println!("What would be reverted ({}):", request.label);
+    for line in &filtered.report {
+        println!("{line}");
+    }
+    if filtered.text.trim().is_empty() {
+        return Err(RevertError::new(
+            "REVERT-FAILED",
+            "nothing left to revert once the test half was excluded. Either the change is test-only, or --include/--exclude excluded the fix.",
+        ));
+    }
+
+    let baseline = run_tests(root, process, request.names, request.target_dir)?;
+    require_ran(request.names, &baseline, "baseline")?;
+    let already_failed = baseline
+        .values()
+        .flat_map(|selection| selection.failed.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if !already_failed.is_empty() {
+        return Err(RevertError::new(
+            "BASELINE-RED",
+            format!(
+                "already failing before the revert: {already_failed:?}. A demonstration against a red baseline reports the strongest possible result for the wrong reason."
+            ),
+        ));
+    }
+
+    let snapshot = Snapshot::take(root, &filtered.touched)?;
+    let apply = ProcessRequest::new("git", ["apply", "-R", "--unidiff-zero", "-"], root)
+        .with_stdin(filtered.text.into_bytes());
+    let applied = process
+        .run(&apply)
+        .map_err(|error| RevertError::new("REVERT-FAILED", error));
+    let result = match applied {
+        Err(error) => Err(error),
+        Ok(output) if output.status != 0 => Err(RevertError::new(
+            "REVERT-FAILED",
+            format!("the reverse patch did not apply: {}", output.stderr.trim()),
+        )),
+        Ok(_) => {
+            let under_revert = run_tests(root, process, request.names, request.target_dir)?;
+            require_ran(request.names, &under_revert, "under revert")?;
+            let caught = under_revert
+                .iter()
+                .filter(|(_, selection)| {
+                    !selection.ran.is_empty() && selection.ran.is_subset(&selection.failed)
+                })
+                .map(|(name, _)| name.clone())
+                .collect::<Vec<_>>();
+            Ok(Demonstration {
+                outcome: if caught.is_empty() {
+                    DemonstrationOutcome::Vacuous
+                } else {
+                    DemonstrationOutcome::Demonstrated
+                },
+                caught,
+            })
+        }
+    };
+
+    snapshot.restore()?;
+    let after_restore = run_tests(root, process, request.names, request.target_dir)?;
+    let still_failed = after_restore
+        .values()
+        .flat_map(|selection| selection.failed.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if !still_failed.is_empty() {
+        return Err(RevertError::new(
+            "NOT-RESTORED",
+            format!("the named tests do not pass again after restoring: {still_failed:?}"),
+        ));
+    }
+    result
+}
+
+struct Snapshot {
+    root: PathBuf,
+    files: Vec<(String, Option<SavedFile>)>,
+    active: bool,
+}
+
+struct SavedFile {
+    bytes: Vec<u8>,
+    mode: u32,
+}
+
+impl Snapshot {
+    fn take(root: &Path, touched: &[String]) -> Result<Self, RevertError> {
+        let mut files = Vec::new();
+        for relative in touched {
+            let path = root.join(relative);
+            let saved = if path.exists() {
+                Some(SavedFile {
+                    bytes: std::fs::read(&path).map_err(|error| {
+                        RevertError::new("REVERT-FAILED", format!("{}: {error}", path.display()))
+                    })?,
+                    mode: mode(&path)?,
+                })
+            } else {
+                None
+            };
+            files.push((relative.clone(), saved));
+        }
+        Ok(Self {
+            root: root.to_path_buf(),
+            files,
+            active: true,
+        })
+    }
+
+    fn restore(mut self) -> Result<(), RevertError> {
+        restore_files(&self.root, &self.files)?;
+        self.active = false;
+        Ok(())
+    }
+}
+
+impl Drop for Snapshot {
+    fn drop(&mut self) {
+        if self.active {
+            if let Err(error) = restore_files(&self.root, &self.files) {
+                eprintln!("NOT-RESTORED: {}", error.detail);
+            }
+        }
+    }
+}
+
+fn restore_files(root: &Path, files: &[(String, Option<SavedFile>)]) -> Result<(), RevertError> {
+    for (relative, saved) in files {
+        let path = root.join(relative);
+        match saved {
+            None => {
+                if path.exists() {
+                    std::fs::remove_file(&path).map_err(|error| {
+                        RevertError::new("NOT-RESTORED", format!("{}: {error}", path.display()))
+                    })?;
+                }
+            }
+            Some(saved) => {
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|error| {
+                        RevertError::new("NOT-RESTORED", format!("{}: {error}", parent.display()))
+                    })?;
+                }
+                std::fs::write(&path, &saved.bytes).map_err(|error| {
+                    RevertError::new("NOT-RESTORED", format!("{}: {error}", path.display()))
+                })?;
+                set_mode(&path, saved.mode)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn mode(path: &Path) -> Result<u32, RevertError> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|metadata| metadata.permissions().mode())
+        .map_err(|error| RevertError::new("REVERT-FAILED", format!("{}: {error}", path.display())))
+}
+
+#[cfg(unix)]
+fn set_mode(path: &Path, value: u32) -> Result<(), RevertError> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(value))
+        .map_err(|error| RevertError::new("NOT-RESTORED", format!("{}: {error}", path.display())))
+}
+
+#[cfg(not(unix))]
+fn mode(_path: &Path) -> Result<u32, RevertError> {
+    Ok(0)
+}
+
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _value: u32) -> Result<(), RevertError> {
+    Ok(())
+}
+
+fn run_tests(
+    root: &Path,
+    process: &dyn Process,
+    specs: &[String],
+    target_dir: Option<&Path>,
+) -> Result<BTreeMap<String, TestSelection>, RevertError> {
+    let mut results = BTreeMap::new();
+    for spec in specs {
+        let (args, _) = cargo_args(spec);
+        let mut build_args = args[..args.len() - 1].to_vec();
+        build_args.push("--no-run".into());
+        let build = cargo(root, process, build_args, target_dir)?;
+        if build.status != 0 {
+            return Err(RevertError::new(
+                "DID-NOT-COMPILE",
+                "the tree does not build, so the named tests could not run",
+            ));
+        }
+        let output = cargo(root, process, args, target_dir)?;
+        results.insert(spec.clone(), parse_test_selection(&output));
+    }
+    Ok(results)
+}
+
+fn cargo(
+    root: &Path,
+    process: &dyn Process,
+    args: Vec<String>,
+    target_dir: Option<&Path>,
+) -> Result<ProcessOutput, RevertError> {
+    let mut request = ProcessRequest::new("cargo", args, root);
+    if let Some(target) = target_dir {
+        request = request.with_env("CARGO_TARGET_DIR", target.as_os_str());
+    }
+    process
+        .run(&request)
+        .map_err(|error| RevertError::new("DID-NOT-COMPILE", error))
+}
+
+fn parse_test_selection(output: &ProcessOutput) -> TestSelection {
+    let mut selection = TestSelection::default();
+    for line in format!("{}{}", output.stdout, output.stderr).lines() {
+        let Some(rest) = line.strip_prefix("test ") else {
+            continue;
+        };
+        let Some((name, verdict)) = rest.rsplit_once(" ... ") else {
+            continue;
+        };
+        if verdict == "ok" || verdict == "FAILED" {
+            selection.ran.insert(name.to_owned());
+            if verdict == "FAILED" {
+                selection.failed.insert(name.to_owned());
+            }
+        }
+    }
+    selection
+}
+
+fn require_ran(
+    specs: &[String],
+    results: &BTreeMap<String, TestSelection>,
+    when: &str,
+) -> Result<(), RevertError> {
+    let missing = specs
+        .iter()
+        .filter(|spec| {
+            results
+                .get(*spec)
+                .is_none_or(|selection| selection.ran.is_empty())
+        })
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(RevertError::new(
+            "NO-SUCH-TEST",
+            format!(
+                "{when}: no test matched {missing:?}. A filter that matches nothing exits 0, so this can never be read as a pass."
+            ),
+        ))
+    }
 }
 
 pub fn split_files(patch: &str) -> Vec<FilePatch> {
