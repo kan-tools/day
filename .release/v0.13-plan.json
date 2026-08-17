@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "cid": "bafyreigtlu7ehhggfwia2mjvxkcore5a26vkxnwibjs5dmlntgmqhuthga",
+  "cid": "bafyreihvbdeikkphy62x2msms6y3yfe34e5clrqn3ef7txuh7c2eea5bxi",
   "subject": "v0.13-workflow-ergonomics",
   "rfc_result": "bafyreiciww5vnalro4sfzw5l36kj6qcgttgns52tm5oqwsh2v47otrq3ua",
   "normative_source": "35c991c3b5949caf8ef1e8f71f9b6d47a1ae1ddf:rfcs/1-frame-indexed-process-model.md",
   "artifact": {
-    "commit": "758d3679d9f15589ce1eb2d1940b96000181850f",
+    "commit": "37a59f223f13cf7ba608971596198306b98f6994",
     "path": ".design/v0.13-workflow-ergonomics.md",
-    "sha256": "9867bc2618369a15609c1f76da96d0a5199c2ecc61de4991c2ca9bacc318edd9"
+    "sha256": "47a87c0e5abbad9e38d8f2483a7e0048c02754075ca03584422d91d5b2403b81"
   },
   "published_file": ".claims/v0.13-workflow-ergonomics/zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn.md"
 }

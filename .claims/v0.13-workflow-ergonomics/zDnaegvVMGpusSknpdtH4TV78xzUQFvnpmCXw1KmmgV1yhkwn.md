@@ -11,7 +11,7 @@
   "cites": [],
   "rev": "223mt33hjfkur",
   "seq": 0,
-  "of": 108,
+  "of": 111,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkIWvXC3w=="
 }
@@ -34,7 +34,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt33hjsnxb",
   "seq": 1,
-  "of": 108,
+  "of": 111,
   "text_len": 659,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiDrel7Tl++W8/lObVDn87zTaJD6AQ8ZSY6MZbYHOS70mWZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDVkNmMwY2M4Zjg3MTA5ZTI1MWI5MTNiYzdmMmFhOGQzZTdmY2JlM2Zpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZCFr8Tzg="
 }
@@ -55,7 +55,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt33hk3tn5",
   "seq": 2,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXgiUmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljc2xzdWJqZWN0X2tpbmRkSWRlYWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbAOX4"
 }
 ---
@@ -75,7 +75,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt33hkrve2",
   "seq": 3,
-  "of": 108,
+  "of": 111,
   "text_len": 177,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbC+zO"
 }
@@ -98,7 +98,7 @@ RQ-1: The cycle ships both the complete workflow-visibility set—stream view, g
   ],
   "rev": "223mt33hl6t36",
   "seq": 4,
-  "of": 108,
+  "of": 111,
   "text_len": 111,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbEmOt"
 }
@@ -121,7 +121,7 @@ RQ-2: #196 and #152 are release blockers and land before the new recording affor
   ],
   "rev": "223mt33hllqag",
   "seq": 5,
-  "of": 108,
+  "of": 111,
   "text_len": 100,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbGNhV"
 }
@@ -144,7 +144,7 @@ RQ-3: Success requires a real-cycle dogfood and later reconstruction, not featur
   ],
   "rev": "223mt33hlyo75",
   "seq": 6,
-  "of": 108,
+  "of": 111,
   "text_len": 191,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbH1Ar"
 }
@@ -167,7 +167,7 @@ RQ-4: `/askme` is a general facility for convenient semi-structured information 
   ],
   "rev": "223mt33hmfm6r",
   "seq": 7,
-  "of": 108,
+  "of": 111,
   "text_len": 261,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBo2dfogMpKZZoImXZP6jPoUjIAXdxZrGaaSanScOiyFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQhbJcgd"
 }
@@ -190,7 +190,7 @@ RQ-5: Trigger-scoped practice injection (#198) and the design-integrity and voca
   ],
   "rev": "223mt3eidzgkh",
   "seq": 8,
-  "of": 108,
+  "of": 111,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg63pe05fvlvP5Tm1Q5/O802iQ+gEPGUmOjGW2Bzku9JlmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQqcn7GZ"
 }
@@ -214,7 +214,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt3eiefkye",
   "seq": 9,
-  "of": 108,
+  "of": 111,
   "text_len": 659,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiAKVSQtVlecO39p3DEYghO71WCxdBhONfkB+/CjO8Ejx9gqWCUAAXESIAaNnX6IDKSmWaCJl2T+oz6FIyAF3cWaxmmkmp0nDoshZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkKnKXDWw=="
 }
@@ -235,7 +235,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt3eieoimu",
   "seq": 10,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXgiUmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljc2xzdWJqZWN0X2tpbmRkSWRlYWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQqcqjnr"
 }
 ---
@@ -255,7 +255,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt3emmel4y",
   "seq": 11,
-  "of": 108,
+  "of": 111,
   "text_len": 23162,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiCq16tomK5GUG2txO1t9z+XcQbAUsiZuR++OtOYLRw5+mZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDVkNmMwY2M4Zjg3MTA5ZTI1MWI5MTNiYzdmMmFhOGQzZTdmY2JlM2Zpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZCqUlQ+I="
 }
@@ -711,7 +711,7 @@ None.
   ],
   "rev": "223mt3enkbclb",
   "seq": 12,
-  "of": 108,
+  "of": 111,
   "text_len": 338,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg9QlgWwb7G87rxSKNqh7EuqJGxgw1jcsCb41B9PYvcD5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQqnA6G4"
 }
@@ -734,7 +734,7 @@ The v0.13 roadmap source of truth is the GitHub milestone plus day/kan claims, n
   ],
   "rev": "223mt3lpdj32y",
   "seq": 13,
-  "of": 108,
+  "of": 111,
   "text_len": 338,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg9QlgWwb7G87rxSKNqh7EuqJGxgw1jcsCb41B9PYvcD5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxql4Ou"
 }
@@ -757,7 +757,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — The roadmap is pointe
   ],
   "rev": "223mt3lq2kcst",
   "seq": 14,
-  "of": 108,
+  "of": 111,
   "text_len": 503,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsCCKm"
 }
@@ -780,7 +780,7 @@ F1 BLOCKING — The kan/milestone-only roadmap is not a first-class design-doc s
   ],
   "rev": "223mt3lq2wfjg",
   "seq": 15,
-  "of": 108,
+  "of": 111,
   "text_len": 472,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsDi18"
 }
@@ -803,7 +803,7 @@ F2 BLOCKING — The exact-trialed-commit release boundary conflicts with scripts
   ],
   "rev": "223mt3lq3cmu3",
   "seq": 16,
-  "of": 108,
+  "of": 111,
   "text_len": 449,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsFErO"
 }
@@ -826,7 +826,7 @@ F3 BLOCKING — The telos requires a fresh session to reconstruct what /askme ac
   ],
   "rev": "223mt3lq3oy35",
   "seq": 17,
-  "of": 108,
+  "of": 111,
   "text_len": 441,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsGney"
 }
@@ -849,7 +849,7 @@ F4 BLOCKING — AC-3/4 and AC-7/8/9 require behavioral execution of Markdown ski
   ],
   "rev": "223mt3lq437pe",
   "seq": 18,
-  "of": 108,
+  "of": 111,
   "text_len": 369,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsIJY6"
 }
@@ -872,7 +872,7 @@ F5 BLOCKING — AC-2 contradicts the supported kan range. tests/fixtures/kan-com
   ],
   "rev": "223mt3lq4higv",
   "seq": 19,
-  "of": 108,
+  "of": 111,
   "text_len": 367,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsJrkt"
 }
@@ -895,7 +895,7 @@ F6 BLOCKING — REQ-3 promises every thread and newest timestamp although src/ka
   ],
   "rev": "223mt3lq4turq",
   "seq": 20,
-  "of": 108,
+  "of": 111,
   "text_len": 338,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsLOqI"
 }
@@ -918,7 +918,7 @@ F7 BLOCKING — REQ-8 asks who classified an intervention while AC-10 only prese
   ],
   "rev": "223mt3lq5ad7s",
   "seq": 21,
-  "of": 108,
+  "of": 111,
   "text_len": 420,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgE7EPJmOXLmlX/Rrcpe5rCs35X/PKzTjKQw/r5KjOlbhmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQxsMyRI"
 }
@@ -939,7 +939,7 @@ F8 BLOCKING — Issue and release-gate scope are incoherent. Issue #193 still sp
   "cites": [],
   "rev": "223mt3lqct6nu",
   "seq": 22,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkMbIySCw=="
 }
 ---
@@ -959,7 +959,7 @@ F8 BLOCKING — Issue and release-gate scope are incoherent. Issue #193 still sp
   ],
   "rev": "223mt3th2qyg7",
   "seq": 23,
-  "of": 108,
+  "of": 111,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgClUkLVZXnDt/adwxGIITu9VgsXQYTjX5AfvwozvBI8dmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aC3kY"
 }
@@ -983,7 +983,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt3th35exf",
   "seq": 24,
-  "of": 108,
+  "of": 111,
   "text_len": 731,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDshdaN5rV4tyVgYGUZVlyecDSQcCjyRrcUmFe3WVH7xtgqWCUAAXESIKrXq2iYrkZQba3E7W33P5dxBsBSyJm5H74605gtHDn6ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNWQ2YzBjYzhmODcxMDllMjUxYjkxM2JjN2YyYWE4ZDNlN2ZjYmUzZml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkOWhGrPA=="
 }
@@ -1004,7 +1004,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt3th3giux",
   "seq": 25,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCAxbHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDVkNmMwY2M4Zjg3MTA5ZTI1MWI5MTNiYzdmMmFhOGQzZTdmY2JlM2Zpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZDloWOvA="
 }
 ---
@@ -1024,7 +1024,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt3th42h25",
   "seq": 26,
-  "of": 108,
+  "of": 111,
   "text_len": 141,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwIMFzbcVltOtFlE4Mf08IrF0X0nEArDiGPC+ap44jTNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aIDOI"
 }
@@ -1047,7 +1047,7 @@ RQ-6: Stream listing promises visible live threads only and exposes unknown time
   ],
   "rev": "223mt3th4gqlq",
   "seq": 27,
-  "of": 108,
+  "of": 111,
   "text_len": 171,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwIMFzbcVltOtFlE4Mf08IrF0X0nEArDiGPC+ap44jTNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aJlnI"
 }
@@ -1070,7 +1070,7 @@ RQ-7: The claim signer is the intervention classifier. Human direction reported 
   ],
   "rev": "223mt3th4syej",
   "seq": 28,
-  "of": 108,
+  "of": 111,
   "text_len": 214,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgwIMFzbcVltOtFlE4Mf08IrF0X0nEArDiGPC+ap44jTNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ZDZjMGNjOGY4NzEwOWUyNTFiOTEzYmM3ZjJhYThkM2U3ZmNiZTNmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5aLHjf"
 }
@@ -1094,7 +1094,7 @@ RQ-8: #193's declarable prompts remain #194; v0.13 ships fixed prompting and exp
   ],
   "rev": "223mt3tiijx44",
   "seq": 29,
-  "of": 108,
+  "of": 111,
   "text_len": 19515,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDAgwXNtxWW060WUTgx/TwisXRfScQCsOIY8L5qnjiNM9gqWCUAAXESIBOxDyZjly5pV/0a3KXuawrN+V/zys04ykMP6+SozpW4ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoYTZkNDBmY2UyMTQwMDBhYmU0MWExMDgwMzVjYzZmMjM3MDUyNGQzMqFmRmlsZUF0gngkLmRlc2lnbi92MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzLm1keChhNmQ0MGZjZTIxNDAwMGFiZTQxYTEwODAzNWNjNmYyMzcwNTI0ZDMyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5c5/PG"
 }
@@ -1469,7 +1469,7 @@ None.
   "cites": [],
   "rev": "223mt3tin7e47",
   "seq": 30,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChhNmQ0MGZjZTIxNDAwMGFiZTQxYTEwODAzNWNjNmYyMzcwNTI0ZDMyaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ5dMqfX"
 }
 ---
@@ -1489,7 +1489,7 @@ None.
   ],
   "rev": "223mt3uumkwgk",
   "seq": 31,
-  "of": 108,
+  "of": 111,
   "text_len": 354,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg1TFOu/iV393HblgkmSDzsLgWXHVfzuos3Ez56l9k4eBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ61KG6o"
 }
@@ -1512,7 +1512,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — Correction round 1 ma
   ],
   "rev": "223mt3uv7nmd4",
   "seq": 32,
-  "of": 108,
+  "of": 111,
   "text_len": 453,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62Wci2"
 }
@@ -1535,7 +1535,7 @@ ROUND-1 F1 BLOCKING — AC-12/15/16 require verified behavioral and reconstructi
   ],
   "rev": "223mt3uva2mly",
   "seq": 33,
-  "of": 108,
+  "of": 111,
   "text_len": 309,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62YEnT"
 }
@@ -1558,7 +1558,7 @@ ROUND-1 F2 BLOCKING — REQ-12 requires every behavioral and reconstruction tria
   ],
   "rev": "223mt3uvahnht",
   "seq": 34,
-  "of": 108,
+  "of": 111,
   "text_len": 320,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62Zs1O"
 }
@@ -1581,7 +1581,7 @@ ROUND-1 F3 BLOCKING — REQ-16 and AC-16 make the intervention CID optional, whi
   ],
   "rev": "223mt3uvauurv",
   "seq": 35,
-  "of": 108,
+  "of": 111,
   "text_len": 436,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62bWqR"
 }
@@ -1604,7 +1604,7 @@ ROUND-1 F4 BLOCKING — Plan-to-mirror bytes verify locally, but origin has no c
   ],
   "rev": "223mt3uvbbtca",
   "seq": 36,
-  "of": 108,
+  "of": 111,
   "text_len": 381,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62c+Sb"
 }
@@ -1627,7 +1627,7 @@ ROUND-1 F5 BLOCKING — REQ-14 forbids an unspecified check set, but no authorit
   ],
   "rev": "223mt3uvboxtv",
   "seq": 37,
-  "of": 108,
+  "of": 111,
   "text_len": 392,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62enbP"
 }
@@ -1650,7 +1650,7 @@ ROUND-1 F6 BLOCKING — Stream honest-read design omits kan RFC1 published_read_
   ],
   "rev": "223mt3uvc436o",
   "seq": 38,
-  "of": 108,
+  "of": 111,
   "text_len": 396,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgnGaOz/N1SGPaydzS9rPDFwq7HfJVhej9r2Uow/GpVbZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWQ62gQQt"
 }
@@ -1671,7 +1671,7 @@ ROUND-1 F7 BLOCKING — RFC1 concepts are separated correctly, but AC-3 merely r
   "cites": [],
   "rev": "223mt3uvcjbrv",
   "seq": 39,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoN2E2NjZhYjQ5NzE5MTE3NzNjMjM5M2ZlOTVhZDUwYTkwZWM5YjcxYWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkOtoeekQ=="
 }
 ---
@@ -1691,7 +1691,7 @@ ROUND-1 F7 BLOCKING — RFC1 concepts are separated correctly, but AC-3 merely r
   ],
   "rev": "223mt5ez6swyo",
   "seq": 40,
-  "of": 108,
+  "of": 111,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg7IXWjea1eLclYGBlGVZcnnA0kHAo8ka3FJhXt1lR+8ZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+THKc"
 }
@@ -1715,7 +1715,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mt5ez7act2",
   "seq": 41,
-  "of": 108,
+  "of": 111,
   "text_len": 731,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiDdcKjz1sqmYeBoJaGtqbSlDP2Mp4PXunzdTfkUPfSkStgqWCUAAXESIMCDBc23FZbTrRZRODH9PCKxdF9JxAKw4hjwvmqeOI0zZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoN2E2NjZhYjQ5NzE5MTE3NzNjMjM5M2ZlOTVhZDUwYTkwZWM5YjcxYWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABlkavlMirA=="
 }
@@ -1736,7 +1736,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mt5ez7jld6",
   "seq": 42,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCAxbHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDdhNjY2YWI0OTcxOTExNzczYzIzOTNmZTk1YWQ1MGE5MGVjOWI3MWFpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZGr5XxLY="
 }
 ---
@@ -1756,7 +1756,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mt5eza7aoz",
   "seq": 43,
-  "of": 108,
+  "of": 111,
   "text_len": 227,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+Ypoz"
 }
@@ -1779,7 +1779,7 @@ RQ-9: Supersedes the earlier RQ-1 wording: designs become published kan Plan cla
   ],
   "rev": "223mt5ezamgpv",
   "seq": 44,
-  "of": 108,
+  "of": 111,
   "text_len": 199,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+aTJJ"
 }
@@ -1802,7 +1802,7 @@ RQ-10: Supersedes the earlier RQ-2 wording: releases use prepare, trial, and pub
   ],
   "rev": "223mt5ezazmkf",
   "seq": 45,
-  "of": 108,
+  "of": 111,
   "text_len": 171,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+b8mX"
 }
@@ -1825,7 +1825,7 @@ RQ-11: Supersedes the earlier RQ-3 wording: `/askme` records nothing automatical
   ],
   "rev": "223mt5ezbgsr5",
   "seq": 46,
-  "of": 108,
+  "of": 111,
   "text_len": 165,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+dmJ3"
 }
@@ -1848,7 +1848,7 @@ RQ-12: Supersedes the earlier RQ-4 wording: deterministic tests cover executable
   ],
   "rev": "223mt5ezbtwkf",
   "seq": 47,
-  "of": 108,
+  "of": 111,
   "text_len": 183,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+fPGf"
 }
@@ -1871,7 +1871,7 @@ RQ-13: Supersedes the earlier RQ-5 wording: #196 targets accepted kan RFC1 and w
   ],
   "rev": "223mt5ezcbax2",
   "seq": 48,
-  "of": 108,
+  "of": 111,
   "text_len": 188,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+g5s1"
 }
@@ -1894,7 +1894,7 @@ RQ-14: Supersedes the correction-round RQ-6 wording: stream listing promises vis
   ],
   "rev": "223mt5ezcoo2s",
   "seq": 49,
-  "of": 108,
+  "of": 111,
   "text_len": 218,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+ik+l"
 }
@@ -1917,7 +1917,7 @@ RQ-15: Supersedes the correction-round RQ-7 wording: the claim signer is the int
   ],
   "rev": "223mt5ezd3ypk",
   "seq": 50,
-  "of": 108,
+  "of": 111,
   "text_len": 261,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgMmm5E14T1vt47CaPv/A0BoYYvNwjt4lnw1VL5Bs855xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3YTY2NmFiNDk3MTkxMTc3M2MyMzkzZmU5NWFkNTBhOTBlYzliNzFhaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRq+kPpE"
 }
@@ -1941,7 +1941,7 @@ RQ-16: Supersedes the correction-round RQ-8 wording: #193's declarable prompts r
   ],
   "rev": "223mt5f24euvf",
   "seq": 51,
-  "of": 108,
+  "of": 111,
   "text_len": 25831,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiAyabkTXhPW+3jsJo+/8DQGhhi83CO3iWfDVUvkGzznnNgqWCUAAXESIJxmjs/zdUhj2snc0vazwxcKux3yVYXo/a9lKMPxqVW2ZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoYTU1YjIwOThiMjdjNGRmM2Q2YjI3MGQ1MmIxYjM2Mzk3MmU3ZjJlMKFmRmlsZUF0gngkLmRlc2lnbi92MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzLm1keChhNTViMjA5OGIyN2M0ZGYzZDZiMjcwZDUyYjFiMzYzOTcyZTdmMmUwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRrAJWrv"
 }
@@ -2412,7 +2412,7 @@ None.
   "cites": [],
   "rev": "223mt5f2egm6j",
   "seq": 52,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChhNTViMjA5OGIyN2M0ZGYzZDZiMjcwZDUyYjFiMzYzOTcyZTdmMmUwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWRrApkgg"
 }
 ---
@@ -2432,7 +2432,7 @@ None.
   ],
   "rev": "223mtc4hyg444",
   "seq": 53,
-  "of": 108,
+  "of": 111,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg3XCo89bKpmHgaCWhram0pQz9jKeD17p83U35FD30pEpmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCb5gfF"
 }
@@ -2456,7 +2456,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mtc4hz4pbb",
   "seq": 54,
-  "of": 108,
+  "of": 111,
   "text_len": 1038,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiBv3zDSkMb3Ajdbny1uw5Qkw9KbpbYt57m+7do0m89+SdgqWCUAAXESIDJpuRNeE9b7eOwmj7/wNAaGGLzcI7eJZ8NVS+QbPOecZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoYjUzM2JlODhiNTg0N2FlNTNiMTY5MTk5Y2NhMWRkMDRhNTI3OTUzMGl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllAm/FUbQ=="
 }
@@ -2477,7 +2477,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mtc4hzkoxr",
   "seq": 55,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCAzbHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KGI1MzNiZTg4YjU4NDdhZTUzYjE2OTE5OWNjYTFkZDA0YTUyNzk1MzBpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZQJv4U0c="
 }
 ---
@@ -2497,7 +2497,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mtc4i35bhx",
   "seq": 56,
-  "of": 108,
+  "of": 111,
   "text_len": 330,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghv1FX0kNh6XSgbrrqy0uq+yUICzqEJ5K2uOax/ehoCJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCcEZ1D"
 }
@@ -2520,7 +2520,7 @@ RQ-17: Accepted RFC 1 Result `bafyreiciww5vnalro4sfzw5l36kj6qcgttgns52tm5oqwsh2v
   ],
   "rev": "223mtc4i3tngm",
   "seq": 57,
-  "of": 108,
+  "of": 111,
   "text_len": 308,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghv1FX0kNh6XSgbrrqy0uq+yUICzqEJ5K2uOax/ehoCJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCcHM0a"
 }
@@ -2543,7 +2543,7 @@ RQ-18: Supersedes the legacy two-witness release reading: v0.13 uses a predeclar
   ],
   "rev": "223mtc4i4k3kb",
   "seq": 58,
-  "of": 108,
+  "of": 111,
   "text_len": 170,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghv1FX0kNh6XSgbrrqy0uq+yUICzqEJ5K2uOax/ehoCJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCcKAWR"
 }
@@ -2566,7 +2566,7 @@ RQ-19: Release, trial, reconstruction, grading, and final assessment execution r
   ],
   "rev": "223mtc4i5aqpw",
   "seq": 59,
-  "of": 108,
+  "of": 111,
   "text_len": 219,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghv1FX0kNh6XSgbrrqy0uq+yUICzqEJ5K2uOax/ehoCJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCcM1pB"
 }
@@ -2589,7 +2589,7 @@ RQ-20: `.release/v0.13.json` is an instance, not its own authority. A typed `xta
   ],
   "rev": "223mtc4i5xgtc",
   "seq": 60,
-  "of": 108,
+  "of": 111,
   "text_len": 189,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIghv1FX0kNh6XSgbrrqy0uq+yUICzqEJ5K2uOax/ehoCJmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCcPrKy"
 }
@@ -2610,7 +2610,7 @@ RQ-21: RFC 1's seven deferred implementation areas are tracked by #227 through #
   "cites": [],
   "rev": "223mtc4ics73r",
   "seq": 61,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCcjBOP"
 }
 ---
@@ -2630,7 +2630,7 @@ RQ-21: RFC 1's seven deferred implementation areas are tracked by #227 through #
   ],
   "rev": "223mtc4j7u42r",
   "seq": 62,
-  "of": 108,
+  "of": 111,
   "text_len": 35592,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiBv3zDSkMb3Ajdbny1uw5Qkw9KbpbYt57m+7do0m89+SWZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOCoWZDb21taXR4KGI1MzNiZTg4YjU4NDdhZTUzYjE2OTE5OWNjYTFkZDA0YTUyNzk1MzChZkZpbGVBdIJ4JC5kZXNpZ24vdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljcy5tZHgoYjUzM2JlODhiNTg0N2FlNTNiMTY5MTk5Y2NhMWRkMDRhNTI3OTUzMGl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllAnl0HiQ=="
 }
@@ -3245,7 +3245,7 @@ None.
   "cites": [],
   "rev": "223mtc4jdo3bw",
   "seq": 63,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChiNTMzYmU4OGI1ODQ3YWU1M2IxNjkxOTljY2ExZGQwNGE1Mjc5NTMwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUCemgSJ"
 }
 ---
@@ -3265,7 +3265,7 @@ None.
   ],
   "rev": "223mtc5bd726p",
   "seq": 64,
-  "of": 108,
+  "of": 111,
   "text_len": 201,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgb98w0pDG9wI3W58tbsOUJMPSm6W2Lee5vu3aNJvPfklmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChkOTc0NmIxNGUwZjE1NDcxNTA2MzAwNTc0ZDJiOGZlYWYxOGMyYzMxaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUDOkoAh"
 }
@@ -3289,7 +3289,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mtc5bdvpyi",
   "seq": 65,
-  "of": 108,
+  "of": 111,
   "text_len": 1123,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiA7nx5YGl+/pFkEPypybCo/QtX+z0ga/jgMLIN0AHwGQdgqWCUAAXESIIb9RV9JDYel0oG666stLqvslCAs6hCeStrjmsf3oaAiZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoZDk3NDZiMTRlMGYxNTQ3MTUwNjMwMDU3NGQyYjhmZWFmMThjMmMzMWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllAzp3XWQ=="
 }
@@ -3310,7 +3310,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   "cites": [],
   "rev": "223mtc5bedobn",
   "seq": 66,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCA0bHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KGQ5NzQ2YjE0ZTBmMTU0NzE1MDYzMDA1NzRkMmI4ZmVhZjE4YzJjMzFpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZQM6k0IQ="
 }
 ---
@@ -3330,7 +3330,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13`
   ],
   "rev": "223mtc5bfuzzz",
   "seq": 67,
-  "of": 108,
+  "of": 111,
   "text_len": 246,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg1kTMcCxHTVuJ1KrCeiMuonud4SUVnqrQEc+w/CtxSwZmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChkOTc0NmIxNGUwZjE1NDcxNTA2MzAwNTc0ZDJiOGZlYWYxOGMyYzMxaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUDOvX+M"
 }
@@ -3353,7 +3353,7 @@ RQ-22: The v1.0 non-author/third-party bar is the deliberate pass inward toward 
   ],
   "rev": "223mtc5bloep3",
   "seq": 68,
-  "of": 108,
+  "of": 111,
   "text_len": 34914,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiA7nx5YGl+/pFkEPypybCo/QtX+z0ga/jgMLIN0AHwGQWZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOCoWZDb21taXR4KGQ5NzQ2YjE0ZTBmMTU0NzE1MDYzMDA1NzRkMmI4ZmVhZjE4YzJjMzGhZkZpbGVBdIJ4JC5kZXNpZ24vdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljcy5tZHgoZDk3NDZiMTRlMGYxNTQ3MTUwNjMwMDU3NGQyYjhmZWFmMThjMmMzMWl3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllAzxoqGg=="
 }
@@ -3958,7 +3958,7 @@ None.
   "cites": [],
   "rev": "223mtc5bp6gxt",
   "seq": 69,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChkOTc0NmIxNGUwZjE1NDcxNTA2MzAwNTc0ZDJiOGZlYWYxOGMyYzMxaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUDPUjNE"
 }
 ---
@@ -3978,7 +3978,7 @@ None.
   ],
   "rev": "223mtck7htduk",
   "seq": 70,
-  "of": 108,
+  "of": 111,
   "text_len": 237,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgL/4LV+0RpBms9kFti4sjk9KM1re3FOTEMutLsiLsq75mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQK3KbO"
 }
@@ -4001,7 +4001,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — Raw transcripts can b
   ],
   "rev": "223mtcka2vyr4",
   "seq": 71,
-  "of": 108,
+  "of": 111,
   "text_len": 291,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgUH0HCSdGZ25aW6sjVRc0h0kn9rI77nG2lN1rs6Xy1ShmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQMDfp2"
 }
@@ -4024,7 +4024,7 @@ BLOCKING: day acquired-input record rejects only an unsupported --transcript opt
   ],
   "rev": "223mtcka3pukl",
   "seq": 72,
-  "of": 108,
+  "of": 111,
   "text_len": 275,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgUH0HCSdGZ25aW6sjVRc0h0kn9rI77nG2lN1rs6Xy1ShmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQMGumZ"
 }
@@ -4047,7 +4047,7 @@ MATERIAL: #152 has no moving-HEAD round-trip fixture or executable legacy-unscop
   ],
   "rev": "223mtcka4ifuc",
   "seq": 73,
-  "of": 108,
+  "of": 111,
   "text_len": 395,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgUH0HCSdGZ25aW6sjVRc0h0kn9rI77nG2lN1rs6Xy1ShmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQMJy7U"
 }
@@ -4070,7 +4070,7 @@ MATERIAL: authoritative Plan bafyreibp7yfvp3iruqm2z5sbnwfywi4t2kgnnn5xctsmimxljo
   ],
   "rev": "223mtcka5bdsb",
   "seq": 74,
-  "of": 108,
+  "of": 111,
   "text_len": 325,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgUH0HCSdGZ25aW6sjVRc0h0kn9rI77nG2lN1rs6Xy1ShmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQMM6aT"
 }
@@ -4093,7 +4093,7 @@ MATERIAL: /askme adaptive behavior, no-context usefulness, skip, stop, decline, 
   ],
   "rev": "223mtcka5zhub",
   "seq": 75,
-  "of": 108,
+  "of": 111,
   "text_len": 297,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgUH0HCSdGZ25aW6sjVRc0h0kn9rI77nG2lN1rs6Xy1ShmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQMP7bR"
 }
@@ -4116,7 +4116,7 @@ MATERIAL: intervention coverage is incomplete: production Source has only report
   ],
   "rev": "223mtcka6rkva",
   "seq": 76,
-  "of": 108,
+  "of": 111,
   "text_len": 390,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgUH0HCSdGZ25aW6sjVRc0h0kn9rI77nG2lN1rs6Xy1ShmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgwYWQ2YzRmMmViMjU0MzAzZjNhY2NmZjA3M2ExMGM1MzFjOTNiZmJiaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUQMS8Lu"
 }
@@ -4137,7 +4137,7 @@ MATERIAL: the full correction-round-4 release contract is not present on this br
   "cites": [],
   "rev": "223mtckaggw6r",
   "seq": 77,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoMGFkNmM0ZjJlYjI1NDMwM2YzYWNjZmYwNzNhMTBjNTMxYzkzYmZiYml3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllEDMZwJA=="
 }
 ---
@@ -4157,7 +4157,7 @@ MATERIAL: the full correction-round-4 release contract is not present on this br
   ],
   "rev": "223mtclwsqnp4",
   "seq": 78,
-  "of": 108,
+  "of": 111,
   "text_len": 17602,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4HYKlglAAFxEiBItbtWgXF3JFzbq9+Un0BGnMzZd1NnXQtI+q8+6cYboGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOCoWZDb21taXR4KGYyNTgwODBhMmRlZTU5ZTQ1ZmE5YzM3YmE2ZTY0MDhjYjJmMTA5MzehZkZpbGVBdIJ4JC5kZXNpZ24vdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljcy5tZHgoZjI1ODA4MGEyZGVlNTllNDVmYTljMzdiYTZlNjQwOGNiMmYxMDkzN2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllEeYtOHw=="
 }
@@ -4494,7 +4494,7 @@ None.
   "cites": [],
   "rev": "223mtclwwxw37",
   "seq": 79,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChmMjU4MDgwYTJkZWU1OWU0NWZhOWMzN2JhNmU2NDA4Y2IyZjEwOTM3aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUR5zu+0"
 }
 ---
@@ -4515,7 +4515,7 @@ None.
   ],
   "rev": "223mtcm2nvnta",
   "seq": 80,
-  "of": 108,
+  "of": 111,
   "text_len": 17603,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiBItbtWgXF3JFzbq9+Un0BGnMzZd1NnXQtI+q8+6cYboNgqWCUAAXESIOHtdQWsTc3EqIxCf0jkThZbbtlGy5D0WB269JNBOiAxZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoZjI1ODA4MGEyZGVlNTllNDVmYTljMzdiYTZlNjQwOGNiMmYxMDkzN6FmRmlsZUF0gngkLmRlc2lnbi92MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzLm1keChmMjU4MDgwYTJkZWU1OWU0NWZhOWMzN2JhNmU2NDA4Y2IyZjEwOTM3aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUSBPc6l"
 }
@@ -4853,7 +4853,7 @@ None.
   "cites": [],
   "rev": "223mtcm2sushg",
   "seq": 81,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChmMjU4MDgwYTJkZWU1OWU0NWZhOWMzN2JhNmU2NDA4Y2IyZjEwOTM3aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUSBjWE1"
 }
 ---
@@ -4874,7 +4874,7 @@ None.
   ],
   "rev": "223mtcniq52ys",
   "seq": 82,
-  "of": 108,
+  "of": 111,
   "text_len": 17603,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4LYKlglAAFxEiBItbtWgXF3JFzbq9+Un0BGnMzZd1NnXQtI+q8+6cYboNgqWCUAAXESIKB5L9oNykcZkY9Q3+CQUGlaU/Fb0mNSnUKM8IMXJWvsZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4KhZkNvbW1pdHgoZjMwOTQzMTBmMjNiMzUxNGFmMmMzYWJkNzQzZDlkYTFkZDE3N2U0N6FmRmlsZUF0gngkLmRlc2lnbi92MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzLm1keChmMzA5NDMxMGYyM2IzNTE0YWYyYzNhYmQ3NDNkOWRhMWRkMTc3ZTQ3aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUTdYYIT"
 }
@@ -5212,7 +5212,7 @@ None.
   "cites": [],
   "rev": "223mtcniqxiyl",
   "seq": 83,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChmMzA5NDMxMGYyM2IzNTE0YWYyYzNhYmQ3NDNkOWRhMWRkMTc3ZTQ3aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUTdbrtQ"
 }
 ---
@@ -5232,7 +5232,7 @@ None.
   ],
   "rev": "223mtcoapzvt7",
   "seq": 84,
-  "of": 108,
+  "of": 111,
   "text_len": 240,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgrw59fagOzSXQYoWY7RJaKiiGfl/J+QUi1p3tve67+FNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0NTdmZTQyZTcwYmE0Yzg4MzIwZDYxMzQ5NjQ5YTM1ODVmMzlkOGVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUUNX+6w"
 }
@@ -5255,7 +5255,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — Cold hostile probes c
   ],
   "rev": "223mtcoaxhbgq",
   "seq": 85,
-  "of": 108,
+  "of": 111,
   "text_len": 130,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg+ce64CSGrXph+mWNjXPxT8AQWU4P95nEwjvPtA+G+j5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0NTdmZTQyZTcwYmE0Yzg4MzIwZDYxMzQ5NjQ5YTM1ODVmMzlkOGVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUUN1p0h"
 }
@@ -5278,7 +5278,7 @@ Reconstruction grading accepted arbitrary token-containing text instead of parse
   ],
   "rev": "223mtcoay77nb",
   "seq": 86,
-  "of": 108,
+  "of": 111,
   "text_len": 129,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg+ce64CSGrXph+mWNjXPxT8AQWU4P95nEwjvPtA+G+j5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0NTdmZTQyZTcwYmE0Yzg4MzIwZDYxMzQ5NjQ5YTM1ODVmMzlkOGVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUUN4pXy"
 }
@@ -5301,7 +5301,7 @@ Transcript rejection admitted named-speaker dialogue such as Alice:/Bob: because
   ],
   "rev": "223mtcoaywxce",
   "seq": 87,
-  "of": 108,
+  "of": 111,
   "text_len": 114,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg+ce64CSGrXph+mWNjXPxT8AQWU4P95nEwjvPtA+G+j5mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0NTdmZTQyZTcwYmE0Yzg4MzIwZDYxMzQ5NjQ5YTM1ODVmMzlkOGVjaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUUN7nST"
 }
@@ -5322,7 +5322,7 @@ The askme evidence manifest omitted raw Codex JSONL digests and normalized faile
   "cites": [],
   "rev": "223mtcob6pwxl",
   "seq": 88,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWZTdGF0dXOhZXZhbHVlZ0Jsb2NrZWRlY2l0ZXOAZmF1dGhvcqJjZGlkeDlkaWQ6a2V5OnpEbmFlZ3ZWTUdwdXNTa25wZHRINFRWNzh4elVRRnZucG1DWHcxS21tZ1YxeWhrd25lYWdlbnT2Z3N1YmplY3ShZUxvY2FseBl2MC4xMy13b3JrZmxvdy1lcmdvbm9taWNzaWFydGlmYWN0c4GhZkNvbW1pdHgoNDU3ZmU0MmU3MGJhNGM4ODMyMGQ2MTM0OTY0OWEzNTg1ZjM5ZDhlY2l3b3Jrc3BhY2WhaVdvcmtzcGFjZXhANjYwMmZmZmUzOTcyYzgzODNjYzE2ZGZmNzM3YmFkYTI5MTVjZjJlNGU5OGI5OGNkOTU0NzBiYjYwYmRhYTE3M2tyZWNvcmRlZF9hdBsABllFDkrzPg=="
 }
 ---
@@ -5342,7 +5342,7 @@ The askme evidence manifest omitted raw Codex JSONL digests and normalized faile
   ],
   "rev": "223mtcqobrtd7",
   "seq": 89,
-  "of": 108,
+  "of": 111,
   "text_len": 297,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgrw59fagOzSXQYoWY7RJaKiiGfl/J+QUi1p3tve67+FNmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChkZWNhMjA1ZDMwMDYxOWNmNmNiMjU5NjY0ODJiZDQ5MGViODNjZDhmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUWoe+S/"
 }
@@ -5365,7 +5365,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — Cold review round 2: 
   ],
   "rev": "223mtcqozfa4b",
   "seq": 90,
-  "of": 108,
+  "of": 111,
   "text_len": 200,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgO58eWBpfv6RZBD8qcmwqP0LV/s9IGv44DCyDdAB8BkFmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0ZWY1YzIzMWRiOWZkNGU2MWVmZDlhOTUyYmNjNWZmNDY2OWExZTE1aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUWp9ZfX"
 }
@@ -5391,7 +5391,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mtcqp24ypl",
   "seq": 91,
-  "of": 108,
+  "of": 111,
   "text_len": 856,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4TYKlglAAFxEiDiqa+nhX2ZHf/4ZNja3itE1ToZTVGoflesn9DLxEfe99gqWCUAAXESINZEzHAsR01bidSqwnojLqJ7neElFZ6q0BHPsPwrcUsG2CpYJQABcRIgSLW7VoFxdyRc26vflJ9ARpzM2XdTZ10LSPqvPunGG6DYKlglAAFxEiCgeS/aDcpHGZGPUN/gkFBpWlPxW9JjUp1CjPCDFyVr7GZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDRlZjVjMjMxZGI5ZmQ0ZTYxZWZkOWE5NTJiY2M1ZmY0NjY5YTFlMTVpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRaoBej8="
 }
@@ -5412,7 +5412,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13.
   "cites": [],
   "rev": "223mtcqp2lhaj",
   "seq": 92,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCA1bHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDRlZjVjMjMxZGI5ZmQ0ZTYxZWZkOWE5NTJiY2M1ZmY0NjY5YTFlMTVpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRaoItGo="
 }
 ---
@@ -5430,7 +5430,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13.
   "cites": [],
   "rev": "223mtcqpoonog",
   "seq": 93,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0ZWY1YzIzMWRiOWZkNGU2MWVmZDlhOTUyYmNjNWZmNDY2OWExZTE1aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUWrSk4a"
 }
 ---
@@ -5452,7 +5452,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13.
   ],
   "rev": "223mtcqqmk5qv",
   "seq": 94,
-  "of": 108,
+  "of": 111,
   "text_len": 18095,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4PYKlglAAFxEiD5sfFqvnGhdcwxBtaSg4WRrtYFbMzTUWSNkZGWTTOLrNgqWCUAAXESIEi1u1aBcXckXNur35SfQEaczNl3U2ddC0j6rz7pxhug2CpYJQABcRIgoHkv2g3KRxmRj1Df4JBQaVpT8VvSY1KdQozwgxcla+xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCg0ZWY1YzIzMWRiOWZkNGU2MWVmZDlhOTUyYmNjNWZmNDY2OWExZTE1oWZGaWxlQXSCeCQuZGVzaWduL3YwLjEzLXdvcmtmbG93LWVyZ29ub21pY3MubWR4KDRlZjVjMjMxZGI5ZmQ0ZTYxZWZkOWE5NTJiY2M1ZmY0NjY5YTFlMTVpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRa0oDl4="
 }
@@ -5796,7 +5796,7 @@ None.
   "cites": [],
   "rev": "223mtcqqwls77",
   "seq": 95,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg0ZWY1YzIzMWRiOWZkNGU2MWVmZDlhOTUyYmNjNWZmNDY2OWExZTE1aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUWtyOAv"
 }
 ---
@@ -5816,7 +5816,7 @@ None.
   ],
   "rev": "223mtcs3kp5hd",
   "seq": 96,
-  "of": 108,
+  "of": 111,
   "text_len": 324,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgBDQRPs2GvERew1r+pVGkMqkqx+T+J6+ldK9pzJvnYstmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg4YzZlMTUzMjJmZmZlNDlmOTg2ZGY0MTY4YWQ1YmI2OGE1NDVkOTgzaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUYDCo00"
 }
@@ -5841,7 +5841,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — Cold review round 3: 
   ],
   "rev": "223mtcs4kg2zl",
   "seq": 97,
-  "of": 108,
+  "of": 111,
   "text_len": 18303,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4PYKlglAAFxEiAENBE+zYa8RF7DWv6lUaQyqSrH5P4nr6V0r2nMm+diy9gqWCUAAXESIEi1u1aBcXckXNur35SfQEaczNl3U2ddC0j6rz7pxhug2CpYJQABcRIgoHkv2g3KRxmRj1Df4JBQaVpT8VvSY1KdQozwgxcla+xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eChhYzRkZjNiOWJlZDM4YTg0YjA4ZjMxOTBiZjNiZmY4ZmM3NjZjM2EwoWZGaWxlQXSCeCQuZGVzaWduL3YwLjEzLXdvcmtmbG93LWVyZ29ub21pY3MubWR4KGFjNGRmM2I5YmVkMzhhODRiMDhmMzE5MGJmM2JmZjhmYzc2NmMzYTBpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRgUGA20="
 }
@@ -6187,7 +6187,7 @@ None.
   "cites": [],
   "rev": "223mtcs4y5gff",
   "seq": 98,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eChhYzRkZjNiOWJlZDM4YTg0YjA4ZjMxOTBiZjNiZmY4ZmM3NjZjM2EwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUYF4bD1"
 }
 ---
@@ -6207,7 +6207,7 @@ None.
   ],
   "rev": "223mtcthxwsz4",
   "seq": 99,
-  "of": 108,
+  "of": 111,
   "text_len": 200,
   "content": "p2Rib2R5oWtPYnNlcnZhdGlvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg4qmvp4V9mR3/+GTY2t4rRNU6GU1RqH5XrJ/Qy8RH3vdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUZb3l+s"
 }
@@ -6232,7 +6232,7 @@ design doc .design/v0.13-workflow-ergonomics.md checked against the live design-
   ],
   "rev": "223mtcthyxohr",
   "seq": 100,
-  "of": 108,
+  "of": 111,
   "text_len": 796,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4PYKlglAAFxEiAmUUdoTyUki7vwVx2vunFSp3MnadPEsgzgv1ZY6rop19gqWCUAAXESIPmx8Wq+caF1zDEG1pKDhZGu1gVszNNRZI2RkZZNM4us2CpYJQABcRIgSLW7VoFxdyRc26vflJ9ARpzM2XdTZ10LSPqvPunGG6BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUZb7tEj"
 }
@@ -6253,7 +6253,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13.
   "cites": [],
   "rev": "223mtcthzkwlf",
   "seq": 101,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWdTdWJqZWN0omV0aXRsZXg2UmVsZWFzZTogdjAuMTMgd29ya2Zsb3cgZXJnb25vbWljcywgY29ycmVjdGlvbiByb3VuZCA1bHN1YmplY3Rfa2luZGRJZGVhZWNpdGVzgGZhdXRob3KiY2RpZHg5ZGlkOmtleTp6RG5hZWd2Vk1HcHVzU2tucGR0SDRUVjc4eHpVUUZ2bnBtQ1h3MUttbWdWMXloa3duZWFnZW509mdzdWJqZWN0oWVMb2NhbHgZdjAuMTMtd29ya2Zsb3ctZXJnb25vbWljc2lhcnRpZmFjdHOBoWZDb21taXR4KDc1OGQzNjc5ZDlmMTU1ODljZTFlYjJkMTk0MGI5NjAwMDE4MTg1MGZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRlv4caU="
 }
 ---
@@ -6271,7 +6271,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13.
   "cites": [],
   "rev": "223mtcti7za65",
   "seq": 102,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUZcX5eM"
 }
 ---
@@ -6291,7 +6291,7 @@ v0.13-workflow-ergonomics design (.design/v0.13-workflow-ergonomics.md): `v0.13.
   ],
   "rev": "223mtctjypajt",
   "seq": 103,
-  "of": 108,
+  "of": 111,
   "text_len": 436,
   "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIgCHYloXrdbR3GfER+lnJsL7uiES+NA48ABHg2S2PBvN1mYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUZf6pmD"
 }
@@ -6316,7 +6316,7 @@ adversarial review of v0.13-workflow-ergonomics: BLOCK — Round 4 found punctua
   ],
   "rev": "223mtctk7d5il",
   "seq": 104,
-  "of": 108,
+  "of": 111,
   "text_len": 19294,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4PYKlglAAFxEiAmUUdoTyUki7vwVx2vunFSp3MnadPEsgzgv1ZY6rop19gqWCUAAXESIEi1u1aBcXckXNur35SfQEaczNl3U2ddC0j6rz7pxhug2CpYJQABcRIg2Q+YFK3SUWk0dq0xapXSrdl/ZXwYmKi28n6sX1JQoTdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmoWZGaWxlQXSCeCQuZGVzaWduL3YwLjEzLXdvcmtmbG93LWVyZ29ub21pY3MubWR4KDc1OGQzNjc5ZDlmMTU1ODljZTFlYjJkMTk0MGI5NjAwMDE4MTg1MGZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRmBUjU4="
 }
@@ -6675,7 +6675,7 @@ None.
   "cites": [],
   "rev": "223mtctkdegel",
   "seq": 105,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUZglTDZ"
 }
 ---
@@ -6697,7 +6697,7 @@ None.
   ],
   "rev": "223mtctky7sfn",
   "seq": 106,
-  "of": 108,
+  "of": 111,
   "text_len": 19295,
   "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4PYKlglAAFxEiAmUUdoTyUki7vwVx2vunFSp3MnadPEsgzgv1ZY6rop19gqWCUAAXESIEi1u1aBcXckXNur35SfQEaczNl3U2ddC0j6rz7pxhug2CpYJQABcRIg2Q+YFK3SUWk0dq0xapXSrdl/ZXwYmKi28n6sX1JQoTdmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmoWZGaWxlQXSCeCQuZGVzaWduL3YwLjEzLXdvcmtmbG93LWVyZ29ub21pY3MubWR4KDc1OGQzNjc5ZDlmMTU1ODljZTFlYjJkMTk0MGI5NjAwMDE4MTg1MGZpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRmHi4O8="
 }
@@ -7057,7 +7057,422 @@ None.
   "cites": [],
   "rev": "223mtctl4f35m",
   "seq": 107,
-  "of": 108,
+  "of": 111,
   "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg3NThkMzY3OWQ5ZjE1NTg5Y2UxZWIyZDE5NDBiOTYwMDAxODE4NTBmaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUZiJYP8"
+}
+---
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreiem2o2pq5ojc5kmnd7jf2hyntf6bsdmrndw3w5ksyqptsuez7sdvq",
+  "sig": "fa88c6847042b63afe0b8657afcb3ac59f7c07e5018a6081a4245497d179022e3a10ca7f23b4b428ce760823963629820a1bf1dae6076eb8d6b12d70c1dd42e2",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "decision",
+  "cites": [
+    "bafyreigtlu7ehhggfwia2mjvxkcore5a26vkxnwibjs5dmlntgmqhuthga"
+  ],
+  "rev": "223mtcvfxwymh",
+  "seq": 108,
+  "of": 111,
+  "text_len": 477,
+  "content": "p2Rib2R5oWhEZWNpc2lvbqFkdGV4dGBlY2l0ZXOB2CpYJQABcRIg010+Q5zGLZANMTW6hOiToNeqq7bICmXRsW2ZmQPSZzBmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCg1ODE3MmNlZjMwYzJmNzllYzVlMGYzNmE4ZDcyZjA1MjFmNTM1NmEwaXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUbX3nnY"
+}
+---
+
+adversarial review of v0.13-workflow-ergonomics: BLOCK — Round 5 found compact Unicode-dash dialogue still appendable while ordinary labeled summaries were falsely rejected; grader origin checks did not bind the kan-tools/day repository and exact workflow file; Codex item IDs could change type across one lifecycle; and reconstruction ran recovered suite commands from the evidence checkout rather than proving the candidate checkout. A new fix and cold review are required.
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreihvbdeikkphy62x2msms6y3yfe34e5clrqn3ef7txuh7c2eea5bxi",
+  "sig": "5efcc3b7ef4ea6c70a8bb184770f9899d4253c4cfb0eac178d29f76a419a2cf05d8aec62ccda59cd5c6690fe4cf2a0d34cdcfd0add3e0c4ff889cdde102aaa96",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "plan",
+  "cites": [
+    "bafyreigtlu7ehhggfwia2mjvxkcore5a26vkxnwibjs5dmlntgmqhuthga",
+    "bafyreiciww5vnalro4sfzw5l36kj6qcgttgns52tm5oqwsh2v47otrq3ua",
+    "bafyreiem2o2pq5ojc5kmnd7jf2hyntf6bsdmrndw3w5ksyqptsuez7sdvq"
+  ],
+  "rev": "223mtcvrkvdmr",
+  "seq": 109,
+  "of": 111,
+  "text_len": 19988,
+  "content": "p2Rib2R5oWRQbGFuoWR0ZXh0YGVjaXRlc4PYKlglAAFxEiDTXT5DnMYtkA0xNbqE6JOg16qrtsgKZdGxbZmZA9JnMNgqWCUAAXESIEi1u1aBcXckXNur35SfQEaczNl3U2ddC0j6rz7pxhug2CpYJQABcRIgjNO0+HXJF1TGj+kuj4bMvgyGyLR23bqpYg+cqEz+Q6xmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgqFmQ29tbWl0eCgzN2E1OWYyMjNmMTNjZjdiYTYwODk3MTU5NjE5ODMwNmI5OGY2OTk0oWZGaWxlQXSCeCQuZGVzaWduL3YwLjEzLXdvcmtmbG93LWVyZ29ub21pY3MubWR4KDM3YTU5ZjIyM2YxM2NmN2JhNjA4OTcxNTk2MTk4MzA2Yjk4ZjY5OTRpd29ya3NwYWNloWlXb3Jrc3BhY2V4QDY2MDJmZmZlMzk3MmM4MzgzY2MxNmRmZjczN2JhZGEyOTE1Y2YyZTRlOThiOThjZDk1NDcwYmI2MGJkYWExNzNrcmVjb3JkZWRfYXQbAAZZRu8NpdE="
+}
+---
+
+# Release: v0.13 workflow ergonomics, correction round 5
+
+## Summary
+
+`v0.13.0-beta.1` is a six-issue workflow-ergonomics candidate: #93, #143,
+#152, #193, #195, and #204. It makes interrupted work cheaper to recover and
+human direction more precise to record without turning day into a tracker or a
+transcript. The release distinguishes post-compaction startup, retains the
+newest bounded practice, gives handoff measurements immutable executable
+coordinates, inventories visible handoff streams from one honest bulk read,
+ships general `/askme`, and records acquired input and interventions only at an
+explicit write boundary.
+
+Accepted RFC 1 Result
+`bafyreiciww5vnalro4sfzw5l36kj6qcgttgns52tm5oqwsh2v47otrq3ua`, addressing
+`35c991c3b5949caf8ef1e8f71f9b6d47a1ae1ddf:rfcs/1-frame-indexed-process-model.md`,
+is the normative semantic constraint. This Plan must cite that Result directly;
+mentioning it in prose is not a graph edge. The candidate does not claim RFC 1
+profile certification. In particular, #196 is deferred until kan exposes the
+accepted RFC's principal, verification-method, capability, and view surfaces;
+day will not standardize legacy roles as a substitute.
+
+This correction supersedes correction-round-4 Plan
+`bafyreibp7yfvp3iruqm2z5sbnwfywi4t2kgnnn5xctsmimxljozcf3flxy` and responds to
+BLOCK verdict `bafyreicqpudqsj2gm5xfuw5lenkronehjet7nmr35zy3nfg5noz2l4wvfa`.
+Round 4 correctly narrowed generic RFC work, but still called unavailable #196
+a release blocker, relied on static handoff and `/askme` checks, admitted a raw
+transcript through accepted fields, covered only part of the intervention
+matrix, and described release machinery that did not exist. Round 5 makes the
+candidate boundary equal the implementation and moves the unavailable or
+noncritical remainder forward visibly.
+
+The work serves `telos/legible-process`, `telos/honest-reads`,
+`telos/affordance-not-enforcement`, `telos/v1.0`, and release target
+`telos/v0.13-workflow-ergonomics`.
+
+## Requirements
+
+- REQ-1: The authoritative Plan is a published kan `Plan` claim that directly
+  cites the accepted RFC 1 Result. It names the exact normative source, subject,
+  committed `.design/v0.13-workflow-ergonomics.md` mirror, mirror commit, and
+  mirror digest. The compatibility mirror supplies bytes to today's tooling;
+  the Plan CID supplies identity and review selection.
+
+- REQ-2: A repository-owned resolver must start from the selected Plan CID and
+  recover its published claim, subject, RFC Result citation, source coordinate,
+  exact commit/path, digest, and byte-identical mirror. Mutating any one of
+  those fields must fail; no newest-file fallback is permitted.
+
+- REQ-3: The typed candidate boundary is exactly issues 93, 143, 152, 193, 195,
+  and 204. `xtask` owns the canonical set. `.release/v0.13.json` is an instance
+  that must equal that set and its workflow, protocol, and publication-artifact
+  sets exactly. The enclosing candidate SHA is supplied externally because a
+  commit cannot honestly contain its own hash.
+
+- REQ-4: `/handoff` records suite argv/full commit, census base/head/count, and
+  CI provider/workflow/run/head/conclusion in a versioned
+  `day-handoff-scopes` block. `day stream scopes` reads the newest visible
+  handoff and emits only those coordinates without consulting current HEAD.
+  `/wakeup` replays them. A moving-HEAD/merge fixture must keep byte-identical
+  coordinates, and legacy unscoped prose must remain `UNCHECKABLE` (#152).
+
+- REQ-5: `day stream list` derives visible live `agents/handoff/*` subjects
+  from one bulk kan read and reports visible claim counts, bounded previews,
+  and timestamps only when established. Withheld, unaccounted, missing, or
+  failed published-read diagnostics make completeness explicit. CLI, MCP, and
+  both list skills consume the same pure report (#204).
+
+- REQ-6: `/askme` is a general non-atom affordance that establishes a topic,
+  asks one adaptive question at a time, distinguishes supplied facts,
+  decisions, unresolved items, and material effect, honors skip and stop, and
+  asks explicit consent before recording. Declarable prompts remain #194
+  (#193).
+
+- REQ-7: Acquired-input and intervention writes are ordinary validated kan
+  Observations. They preserve subject, actual signer, basis, material effect,
+  and reported, separately authenticated, or signer-as-source provenance.
+  All five fixed intervention kinds support the same-actor case. Multi-speaker
+  transcript-shaped content is rejected inside every accepted narrative field,
+  including compact colon, bracketed-speaker, and spaced or compact Unicode
+  dash-dialogue forms. The approximation distinguishes speaker roles/proper
+  names from ordinary structured labels such as Decision/Effect and
+  Risk/Mitigation; malformed or ambiguous requests append nothing (#193, #195).
+
+- REQ-8: Practice projection keeps the newest eligible items under its cap
+  (#143). Session-start treats `source=compact` as a distinct advisory
+  reorientation that points back to the durable record, while ordinary or
+  malformed input remains byte-identical to normal startup. No blocking
+  `PreCompact` hook is registered (#93).
+
+- REQ-9: Deterministic tests cover parsing, serialization, provenance,
+  transcript refusal, non-mutation, bulk-read completeness, structured handoff
+  scopes, compaction, practice order, and package parity. Every behavioral fix
+  carries revert evidence. Static keyword checks describe prompt contracts only
+  and never claim model behavior.
+
+- REQ-10: `.release/protocols/askme-v1.json` preregisters decision, factual,
+  unknown-topic, skip, early-stop, context-free, explicit-record, and decline
+  paths. A real multi-turn Codex runner records raw JSONL, exact user and
+  assistant turns, command observations, kan before/after reads, candidate,
+  model, pinned harness version, GitHub run, and file digests. Authentication,
+  skill installation, and execution share one isolated `CODEX_HOME`. The public
+  grader is authoritative only inside `kan-tools/day` on `github.com`, from the
+  exact registered workflow file and `workflow_dispatch` event at that candidate
+  and run. It requires closed, type-stable thread/turn/item lifecycle ordering
+  and recomputes each outcome from addressed typed Codex events; changing a
+  transcript while updating its digest must still fail the rubric when behavior
+  changes.
+
+- REQ-11: `.release/protocols/reconstruction-v1.json` requires a genuine
+  stream, acquired-input claim, non-manufactured qualifying intervention,
+  scoped handoff, and fresh wakeup without the transcript. The evidence source
+  is an immutable commit containing signed published kan claims and reviewed
+  coordinates. One pinned project principal must sign an explicit review claim
+  citing the acquired input, intervention, and handoff. The workflow itself
+  launches the fresh Codex session from the clean candidate checkout while a
+  narrow wrapper routes kan reads to the evidence checkout. Its typed raw-event
+  bundle must independently show exact successful `git rev-parse HEAD` and
+  empty `git status --porcelain` commands before exact recovered suite, census,
+  and CI invocations. Comments, shell prefixes, wrong item types, and output-only
+  lookalikes do not certify a recheck. Every removal and wrong-candidate control
+  is then derived from that authenticated bundle.
+
+- REQ-12: Candidate qualification requires the exact workflows named by the
+  typed contract to succeed at the externally supplied candidate SHA. Askme raw
+  evidence is uploaded and pushed to an immutable run-specific evidence ref;
+  reconstruction accepts only a full immutable evidence commit, re-reads its
+  published claims through kan under the pinned project review principal, and
+  generates the fresh wakeup inside the candidate workflow. Missing, malformed,
+  unreadable, wrong-SHA, pre-authored, or skipped evidence is not success.
+
+- REQ-13: Candidate preparation updates Cargo, lockfile, plugin/install/docs,
+  changelog, roadmap, and the generated current block corpus before the sole
+  candidate commit. Existing publication automation must tag that exact clean
+  candidate without a post-trial source commit. Post-publication verification
+  binds release workflow, tag, crate, GitHub Release, and release claim to that
+  candidate. This is a project release result, not a generic RFC certificate.
+
+- REQ-14: #196, #194, #234, trigger-scoped practice, design-integrity and
+  vocabulary work, and RFC rollout #227–#233 remain visible beyond v0.13.
+  Changing milestone placement cannot change RFC 1's accepted bytes. #196
+  remains blocked rather than falling back to legacy roles.
+
+## Acceptance Criteria
+
+- [ ] AC-1: (REQ-1, REQ-2) The published round-5 Plan directly cites accepted
+      RFC 1 Result, and the resolver recovers its exact subject, source,
+      commit/path, digest, and byte-identical mirror by Plan CID.
+
+- [ ] AC-2: (REQ-1, REQ-2) Resolver mutations of CID, subject, RFC Result,
+      source, commit, path, digest, or bytes each fail rather than selecting a
+      different claim or file.
+
+- [ ] AC-3: (REQ-3, REQ-12) `just verify-v013-contract` proves the committed
+      manifest equals the typed issue/workflow/protocol/artifact contract.
+      Removing or adding any member on either side fails.
+
+- [ ] AC-4: (REQ-4) A structured handoff scope survives an actual branch
+      advance and merge byte-identically; the paired legacy handoff reports
+      `UNCHECKABLE` and explicitly refuses current defaults.
+
+- [ ] AC-5: (REQ-5) Stream fixtures cover live/superseded/retracted/unrelated
+      claims, timestamps, withheld and unaccounted subjects, missing and
+      nonzero published-read diagnostics, and CLI/MCP parity through one fold.
+
+- [ ] AC-6: (REQ-6, REQ-9) Static `/askme` tests cover the one-question,
+      classification, skip, stop, and consent contract while scratch-log tests
+      prove decline and early stop append nothing.
+
+- [ ] AC-7: (REQ-7) Acquired-input fixtures cover reported, separately signed,
+      and signer-as-provider sources. Intervention fixtures cover all five kinds
+      for signer-as-source plus agent-reported and separately signed human
+      sources. Provenance cannot be promoted by prose.
+
+- [ ] AC-8: (REQ-7) A transcript smuggled through `--fact` or another accepted
+      narrative field is rejected with an invariant-specific error and no
+      append, including compact-colon, bracketed-speaker, and spaced/compact
+      Unicode-dash variants. Ordinary Decision/Effect, Risk/Mitigation, and RFC
+      source/scope summaries remain accepted. Malformed and ambiguous source
+      requests likewise append nothing.
+
+- [ ] AC-9: (REQ-8) Newest-practice retention and compact-versus-startup tests
+      pass, malformed hook input equals ordinary startup, and plugin wiring has
+      no `PreCompact` registration.
+
+- [ ] AC-10: (REQ-9) Focused tests and strict lint pass, each implementation
+      correction is demonstrated under revert, and the final full `just ci`
+      plus commit census is green at one clean candidate.
+
+- [ ] AC-11: (REQ-10) The preregistered real-harness workflow runs every exact
+      scenario at the candidate SHA. The grader rejects missing scenarios,
+      mismatched candidate/protocol/digests, multiple questions, nonadaptive
+      follow-ups, continued questioning after stop, recording without explicit
+      yes, mutation after decline, transcript content in durable claims, or a
+      raw event stream outside the pinned type-stable lifecycle, or a grader
+      origin outside the exact repository/workflow-file/event tuple. The
+      authenticated Codex home is the same isolated home used for every scenario.
+
+- [ ] AC-12: (REQ-11) Reconstruction succeeds only when the fresh wakeup and
+      bulk kan read contain the required stream, three CIDs, and every immutable
+      suite/census/CI coordinate, and its raw events show the exact recovered
+      verification commands completing successfully from an independently
+      rechecked clean checkout at the candidate SHA. All twelve registered
+      removal/wrong-candidate controls are derived by the grader and fail.
+
+- [ ] AC-13: (REQ-12, REQ-13) Every required workflow concludes success at the
+      candidate. Publication creates no source commit and post-publication
+      verification resolves workflow, tag, installed crate, GitHub Release,
+      release claim, behavioral evidence, and reconstruction evidence to that
+      same SHA.
+
+- [ ] AC-14: (REQ-14) The roadmap and live issue tracker remove deferred work
+      from the v0.13 milestone without closing it. #196 remains visibly blocked
+      on kan RFC 1 rather than marked implemented.
+
+## Architecture
+
+### Claim-addressed Plan compatibility
+
+The committed `.design` file remains the byte source current day validation
+understands. A full-text kan Plan cites RFC 1 and carries an exact `FileAt`
+artifact coordinate. `kan publish` makes the claim available in `.claims/`.
+The v0.13 resolver is repository-owned release verification: it begins from an
+explicit Plan CID, verifies the published envelope and citation, reads
+`git show <commit>:<path>`, checks the digest, and compares the mirror bytes.
+It never scans for the newest design.
+
+`day design record --cites <cid>` also supports direct normative citations for
+ordinary summarized design passes. The normative CID list appears in Plan text
+identity so a repeat can distinguish an older uncited Plan from the governed
+one.
+
+### Honest handoff reads
+
+`src/stream.rs` owns both inventory and the versioned scope block. Inventory is
+a view-bounded fold. Scope rendering is deliberately independent of git HEAD:
+it exposes the coordinates the handoff asserted so `/wakeup` can replay them.
+This division avoids executing arbitrary command strings while still making
+retargeting impossible; suite commands are stored as argv arrays.
+
+### Explicit human-direction records
+
+`skills/askme/SKILL.md` owns conversational policy. `src/events.rs` owns only
+the explicit durable schemas and append boundary. The envelope signer is always
+`recorded_by`; `Source::Recorder` must equal it, `Reported` authenticates no
+third party, and `AuthenticatedClaim` derives its principal from a separately
+signed visible claim. Transcript rejection is a schema invariant as well as a
+CLI check, so hand-written blocks cannot bypass it.
+
+### Candidate evidence planes
+
+Deterministic Rust tests establish code behavior and non-mutation. The askme
+workflow establishes model behavior through real multi-turn sessions. Its raw
+evidence lives outside the candidate on a run-specific evidence ref. The
+reconstruction workflow consumes an addressed reviewed real-work source commit,
+verifies its signed kan overlay, and itself runs the transcript-free fresh
+session that produces the graded bundle. Both use graders in `xtask`; neither
+trusts a stored `passed` string or a pre-authored wakeup assertion.
+
+Review verdicts remain Decision evidence on the reviewed subject, but the
+shared vocabulary fold excludes the stable `adversarial review of …` form from
+declaration and practice-content roles. A verdict therefore cannot replace the
+telos statement that future sessions are supposed to evaluate.
+
+The manifest contains only stable contract membership. Candidate SHA, workflow
+run IDs, evidence commits, and publication coordinates are external evidence:
+putting the candidate's own SHA inside its tree or an evidence commit's own SHA
+inside itself would demand a cryptographic fixed point, not better provenance.
+
+### Delivery order
+
+1. Land deterministic feature fixes and their revert demonstrations.
+2. Land the typed contract, protocols, real-harness runner, graders, workflows,
+   and removal controls.
+3. Correct and publish this Plan with a direct RFC 1 citation; commit and test
+   the CID-rooted resolver.
+4. Reconcile the live milestone, leaving the six candidate issues and moving
+   the rest forward without closing them.
+5. Finish version/docs/corpus preparation, run `just ci`, and commit the sole
+   candidate.
+6. Push the candidate and require every contract workflow at its exact SHA.
+7. Run the real askme protocol, then genuine-work reconstruction when a
+   qualifying intervention exists; do not manufacture one to clear the gate.
+8. Run a fresh cold review. Fix and re-review any BLOCK or REDIRECT finding.
+9. Publish the unchanged candidate and run fresh post-publication verification.
+
+## Resolved Questions
+
+- RQ-1: The v0.13 boundary is exactly #93, #143, #152, #193, #195, and #204.
+- RQ-2: #196 moves forward because its accepted upstream surface is absent;
+  legacy identity roles are not an RFC 1 implementation.
+- RQ-3: Handoff scopes are a typed block rendered by `day stream scopes`; the
+  read command does not execute arbitrary claim-provided commands.
+- RQ-4: `/askme` remains a general driver affordance, not an atom or automatic
+  recorder. Declarable questions remain #194.
+- RQ-5: The recorder can be the authenticated provider/source because the
+  claim envelope signs that statement; decoded blocks require equality with
+  `recorded_by`.
+- RQ-6: Transcript refusal applies inside accepted fields, not only to an
+  imaginary `--transcript` flag.
+- RQ-7: Real model behavior is evidenced by preregistered external bundles and
+  derived graders; static skill scans claim only deterministic structure.
+- RQ-8: The candidate manifest cannot contain its own commit SHA. The workflow
+  invocation and resulting run/evidence claims bind external coordinates.
+- RQ-9: v0.13 evidence is a repository-specific release result constrained by
+  RFC 1, not a generic profile certificate.
+- RQ-10: Process-aware retrieval #234 begins the next line; it may use
+  structural eligibility followed by optional semantic ranking, but similarity
+  will not become truth, trust, frame equality, or witness satisfaction.
+- RQ-11: Explicit opt-in recording remains the durable half of `/askme`; a
+  completed conversation alone records nothing.
+- RQ-12: Deterministic tests and real-harness trials remain separate evidence
+  planes and are labelled as such.
+- RQ-13: Superseded by RQ-2: #196 waits for accepted RFC 1 implementation and
+  no compatibility fallback is a release feature.
+- RQ-14: Stream completeness still includes withheld, unaccounted, missing,
+  and failed published-read diagnostics.
+- RQ-15: Intervention claims still preserve actual signer and distinguish
+  reported from authenticated sources; signer-as-source is the added case.
+- RQ-16: Fixed `/askme` prompting and intervention kinds ship; declarable
+  variants remain behind shared vocabulary/preferences work.
+- RQ-17: Accepted RFC 1 Result and its exact source remain normative even where
+  implementation obligations are deferred.
+- RQ-18: v0.13 still does not claim generic profile-v1 realization or
+  certification.
+- RQ-19: Release, trial, reconstruction, grading, and verification remain
+  repository-owned rather than public day verbs.
+- RQ-20: `.release/v0.13.json` remains an instance of the independently typed
+  contract, not its own authority.
+- RQ-21: #227–#233 remain the seven explicit accepted-RFC rollout records;
+  milestone movement cannot revise accepted semantics.
+- RQ-22: The v1.0 non-author/third-project bar remains the deliberate deeper
+  semantics pass after the v0.13 ergonomics boundary.
+
+## Open Questions
+
+None.
+
+## Out of Scope
+
+- Implementing kan RFC 1 or legacy-role approximations for #196.
+- Generic RFC 1 profile declarations, realizations, or certificates.
+- Process-aware embedding retrieval and progressive disclosure (#234).
+- Declarable `/askme` prompts (#194) or project-defined intervention kinds.
+- Automatic acquired-input/intervention recording or raw transcripts in kan.
+- Trigger-scoped practice, design-integrity, vocabulary-pack, and #227–#233
+  implementation work.
+- Calling a candidate released before real-harness, reconstruction,
+  cold-review, and post-publication coordinates are actually available.
+
+***8<***
+---
+{
+  "v": 3,
+  "cid": "bafyreigdpygmypwjdkjmiz2l3rdutjk3rdndnrhl7vina3xwhgafioqumy",
+  "sig": "2a8931242accb8c7ee87824b7d53a4f94e6830e14bd2c269cdef7dd522fc0cf415ba58b4bf025b812c1c7779b48bf63217f3b005e36f9fca767a9f32c99b3eee",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "subject": {
+    "local": "v0.13-workflow-ergonomics"
+  },
+  "kind": "publication",
+  "cites": [],
+  "rev": "223mtcvrp7agj",
+  "seq": 110,
+  "of": 111,
+  "content": "p2Rib2R5oWtQdWJsaWNhdGlvbqFlbGF5ZXJnR2l0VHJlZWVjaXRlc4BmYXV0aG9yomNkaWR4OWRpZDprZXk6ekRuYWVndlZNR3B1c1NrbnBkdEg0VFY3OHh6VVFGdm5wbUNYdzFLbW1nVjF5aGt3bmVhZ2VudPZnc3ViamVjdKFlTG9jYWx4GXYwLjEzLXdvcmtmbG93LWVyZ29ub21pY3NpYXJ0aWZhY3RzgaFmQ29tbWl0eCgzN2E1OWYyMjNmMTNjZjdiYTYwODk3MTU5NjE5ODMwNmI5OGY2OTk0aXdvcmtzcGFjZaFpV29ya3NwYWNleEA2NjAyZmZmZTM5NzJjODM4M2NjMTZkZmY3MzdiYWRhMjkxNWNmMmU0ZTk4Yjk4Y2Q5NTQ3MGJiNjBiZGFhMTcza3JlY29yZGVkX2F0GwAGWUbvUpkP"
 }
 ---
