@@ -101,6 +101,7 @@ def main():
         run(["git", "commit", "-qm", "scratch", "--allow-empty"], repo, os.environ.copy())
 
         command_log = scenario_dir / "commands.log"
+        command_log.write_text("")
         wrapper_dir = scenario_dir / "bin"
         wrapper_dir.mkdir()
         wrapper = wrapper_dir / "day"
@@ -191,6 +192,10 @@ def main():
                     }
                     for path in raw_files
                 ],
+                "command_log": {
+                    "path": str(command_log.relative_to(output_dir)),
+                    "sha256": sha256(command_log),
+                },
                 "kan_before": {
                     "path": str(kan_before.relative_to(output_dir)),
                     "sha256": sha256(kan_before),

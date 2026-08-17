@@ -56,7 +56,15 @@ pub enum ReleaseCommand {
     /// Grade a v0.13 /askme evidence bundle from raw scenario transcripts
     GradeAskmeV013 { bundle: PathBuf },
     /// Verify a v0.13 reconstruction bundle and execute its removal controls
-    GradeReconstructionV013 { bundle: PathBuf },
+    GradeReconstructionV013 {
+        bundle: PathBuf,
+        /// Exact evidence checkout from which the workflow generated the bundle
+        source: PathBuf,
+        /// Candidate SHA supplied by the workflow invocation, not the bundle
+        candidate_sha: String,
+        /// Immutable evidence commit checked out at the bundle path
+        evidence_commit: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]

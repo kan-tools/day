@@ -281,6 +281,7 @@ fn source(
     }
     let description = reported.unwrap_or_default();
     nonempty("reported provider/source", &description)?;
+    reject_transcript("reported provider/source", &description)?;
     Ok(Source::Reported { description })
 }
 
@@ -299,6 +300,7 @@ fn validate_source(source: &Source) -> Result<(), String> {
         if value.trim().is_empty() {
             return Err(format!("{field} must not be empty"));
         }
+        reject_transcript(field, value).map_err(|error| error.to_string())?;
     }
     Ok(())
 }

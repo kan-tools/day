@@ -8,7 +8,11 @@ on:
         required: true
         type: string
       evidence_ref:
-        description: Immutable commit containing the reviewed real-work bundle
+        description: Immutable commit containing reviewed signed real-work claims and coordinates
+        required: true
+        type: string
+      model:
+        description: Exact Codex model used by the fresh wakeup
         required: true
         type: string
       manifest_path:
@@ -29,20 +33,63 @@ jobs:
           ref: ${{ inputs.candidate_sha }}
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build the candidate and install pinned harness dependencies
+        run: |
+          set -euo pipefail
+          cargo build --locked --bin day
+          cargo install kan --version 0.13.0-beta.1 --locked
+          npm install --global @openai/codex@0.147.0
+          echo "$GITHUB_WORKSPACE/target/debug" >> "$GITHUB_PATH"
+      - name: Authenticate the fresh Codex harness
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OPENAI_API_KEY"
+          printenv OPENAI_API_KEY | codex login --with-api-key
+          codex login status
+      - name: Install only the candidate wakeup skill
+        run: |
+          set -euo pipefail
+          export CODEX_HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$CODEX_HOME/skills/wakeup"
+          cp skills/wakeup/SKILL.md "$CODEX_HOME/skills/wakeup/SKILL.md"
+          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
       - name: Materialize only the addressed evidence commit
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
-          evidence="$RUNNER_TEMP/reconstruction-evidence"
-          mkdir "$evidence"
-          git archive --format=tar "${{ inputs.evidence_ref }}" | tar -x -C "$evidence"
-          test -f "$evidence/${{ inputs.manifest_path }}"
+          source="$RUNNER_TEMP/reconstruction-source"
+          test "${#EVIDENCE_REF}" = 40
+          git fetch origin "${{ inputs.evidence_ref }}"
+          resolved="$(git rev-parse FETCH_HEAD^{commit})"
+          test "${#resolved}" = 40
+          test "$resolved" = "$EVIDENCE_REF"
+          git worktree add --detach "$source" "$resolved"
+          test -f "$source/${{ inputs.manifest_path }}"
           test "${{ inputs.manifest_path }}" = manifest.json
+          echo "EVIDENCE_COMMIT=$resolved" >> "$GITHUB_ENV"
+        env:
+          EVIDENCE_REF: ${{ inputs.evidence_ref }}
+      - name: Run a genuinely fresh wakeup with no conversation transcript
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/run-v013-reconstruction-trial.py \
+            "$RUNNER_TEMP/reconstruction-source/${{ inputs.manifest_path }}" \
+            "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
+            "$RUNNER_TEMP/reconstruction-evidence"
       - name: Derive the reconstruction verdict and every removal control
         run: |
           set -euo pipefail
           cargo run --locked -p xtask -- release grade-reconstruction-v013 \
-            "$RUNNER_TEMP/reconstruction-evidence"
+            "$RUNNER_TEMP/reconstruction-evidence" \
+            "$RUNNER_TEMP/reconstruction-source" \
+            "${{ inputs.candidate_sha }}" "$EVIDENCE_COMMIT"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

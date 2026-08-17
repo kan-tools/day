@@ -40,6 +40,7 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
     assert!(runner.contains("assistant_turns"));
     assert!(runner.contains("kan-before.json") && runner.contains("kan-after.json"));
     assert!(runner.contains("raw_events") && runner.contains("sha256(path)"));
+    assert!(runner.contains("command_log") && runner.contains("sha256(command_log)"));
     assert!(runner.contains("kan show --all --json exited"));
     assert!(!runner.contains("return {\"raw\": completed.stderr, \"claims\": 0"));
 }
@@ -48,9 +49,32 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
 fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
     let workflow = text(".github/workflows/workflow-reconstruction-trial.yml");
     assert!(workflow.contains("evidence_ref:"));
-    assert!(workflow.contains("git archive --format=tar"));
+    assert!(workflow.contains("model:"));
+    assert!(workflow.contains("git worktree add --detach"));
+    assert!(workflow.contains("test \"$resolved\" = \"$EVIDENCE_REF\""));
+    assert!(workflow.contains("cargo install kan --version 0.13.0-beta.1 --locked"));
+    assert!(workflow.contains("@openai/codex@0.147.0"));
+    assert!(workflow.contains("run-v013-reconstruction-trial.py"));
+    assert!(workflow.contains("Authenticate the fresh Codex harness"));
     assert!(workflow.contains("grade-reconstruction-v013"));
+    assert!(
+        workflow.contains("${{ inputs.candidate_sha }}") && workflow.contains("$EVIDENCE_COMMIT")
+    );
     assert!(!workflow.contains("echo passed") && !workflow.contains("touch passed"));
+
+    let grader = text("xtask/src/release/v013.rs");
+    assert!(grader.contains("evidence commit has no published signed kan claims"));
+    assert!(
+        grader.contains("addressed kan read differs from kan's authenticated signed-claim view")
+    );
+    assert!(
+        grader.contains("fresh wakeup raw events do not prove the required bulk kan command ran")
+    );
+
+    let runner = text("scripts/run-v013-reconstruction-trial.py");
+    assert!(runner.contains("no prior conversation transcript"));
+    assert!(runner.contains("wakeup-events.jsonl"));
+    assert!(runner.contains("--trust"));
 
     let protocol: serde_json::Value =
         serde_json::from_str(&text(".release/protocols/reconstruction-v1.json")).unwrap();

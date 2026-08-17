@@ -37,9 +37,18 @@ fn run_release(command: ReleaseCommand, root: &Path, process: &dyn Process) -> O
             release::v013::verify_publication(root, &candidate_sha, process)
         }
         ReleaseCommand::GradeAskmeV013 { bundle } => release::v013::grade_askme(root, &bundle),
-        ReleaseCommand::GradeReconstructionV013 { bundle } => {
-            release::v013::grade_reconstruction(root, &bundle)
-        }
+        ReleaseCommand::GradeReconstructionV013 {
+            bundle,
+            source,
+            candidate_sha,
+            evidence_commit,
+        } => release::v013::grade_reconstruction(
+            root,
+            &bundle,
+            &source,
+            &candidate_sha,
+            &evidence_commit,
+        ),
     }
 }
 

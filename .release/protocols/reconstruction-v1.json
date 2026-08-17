@@ -21,6 +21,22 @@
     "ci-run-id",
     "ci-head-sha"
   ],
+  "source_manifest_fields": [
+    "schema",
+    "candidate_sha",
+    "behavioral_candidate_sha",
+    "publication_candidate_sha",
+    "stream_subject",
+    "acquired_input_cid",
+    "intervention_cid",
+    "handoff_cid",
+    "kan_authors",
+    "suite_commit",
+    "census_base",
+    "census_head",
+    "ci_run_id",
+    "ci_head_sha"
+  ],
   "removal_controls": [
     "remove-stream",
     "remove-acquired-input",
@@ -38,8 +54,10 @@
     "the intervention must arise during genuine work and must not be manufactured for the trial",
     "the fresh wakeup receives no raw transcript",
     "every required claim is read from kan rather than copied from the trial prompt",
-    "bulk kan evidence is parsed and each required CID has the expected claim kind subject and versioned block",
-    "fresh wakeup evidence is typed and binds the exact claims and candidate rather than supplying token-bearing prose",
+    "the evidence source is an exact immutable git commit whose published kan claims are signature and CID checked by kan under explicitly named signing principals",
+    "bulk kan evidence is generated from that signed-claim checkout then parsed so each required CID has the expected author kind subject relationship and versioned block",
+    "the workflow itself launches a new Codex session without prior transcript and digest-addresses its typed raw events and exact final message",
+    "fresh wakeup evidence must contain a completed typed agent-message turn and a completed command event for kan show --all --json, binding exact claims and candidate rather than supplying token-bearing prose",
     "publication behavioral and reconstruction evidence name one candidate SHA"
   ]
 }

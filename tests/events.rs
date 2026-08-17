@@ -359,5 +359,29 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         !named_speakers.status.success(),
         "speaker names must not bypass transcript rejection"
     );
+
+    let transcript_source = run(
+        dir.path(),
+        &kan,
+        &[
+            "acquired-input",
+            "record",
+            "work/topic",
+            "--topic",
+            "x",
+            "--reported-provider",
+            "Alice: choose A. Bob: choose B.",
+            "--fact",
+            "A bounded summary.",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(
+        !transcript_source.status.success(),
+        "reported provenance is narrative too and must reject transcript-shaped content"
+    );
     assert!(appends(dir.path()).is_empty());
 }

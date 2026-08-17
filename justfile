@@ -52,9 +52,9 @@ verify-v013-publication candidate:
 grade-v013-askme bundle:
     cargo run -p xtask -- release grade-askme-v013 {{bundle}}
 
-# Grade a v0.13 fresh-session reconstruction bundle and its removal controls.
-grade-v013-reconstruction bundle:
-    cargo run -p xtask -- release grade-reconstruction-v013 {{bundle}}
+# Grade a workflow-generated v0.13 reconstruction bundle against its immutable source checkout.
+grade-v013-reconstruction bundle source candidate evidence_commit:
+    cargo run -p xtask -- release grade-reconstruction-v013 {{bundle}} {{source}} {{candidate}} {{evidence_commit}}
 
 # RFC and ADR validation.
 check-rfc *args:

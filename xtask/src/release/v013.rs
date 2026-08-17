@@ -549,11 +549,12 @@ struct EvidenceFile {
     path: String,
     sha256: String,
     raw_events: Vec<AddressedArtifact>,
+    command_log: AddressedArtifact,
     kan_before: AddressedArtifact,
     kan_after: AddressedArtifact,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AddressedArtifact {
     path: String,
@@ -657,6 +658,7 @@ fn grade_raw_askme_artifacts(
             evidence.id
         ));
     }
+    let mut thread_id: Option<String> = None;
     for (index, (artifact, turn)) in addressed
         .raw_events
         .iter()
@@ -681,16 +683,40 @@ fn grade_raw_askme_artifacts(
             })?;
             values.push(value);
         }
-        if values.is_empty()
-            || !values
-                .iter()
-                .any(|value| json_contains_text(value, turn.trim()))
-        {
-            return Err(format!(
-                "askme scenario `{}` assistant turn {index} is not present in its addressed raw event log",
+        let observed_thread = validate_codex_turn(&values, turn.trim()).map_err(|reason| {
+            format!(
+                "askme scenario `{}` raw Codex event log {index}: {reason}",
                 evidence.id
-            ));
+            )
+        })?;
+        match &thread_id {
+            Some(expected) if expected != observed_thread => {
+                return Err(format!(
+                    "askme scenario `{}` changed Codex thread between turns",
+                    evidence.id
+                ));
+            }
+            None => thread_id = Some(observed_thread.to_owned()),
+            _ => {}
         }
+    }
+    let command_bytes = addressed_bytes(bundle, &addressed.command_log, "day command log")?;
+    let command_text = std::str::from_utf8(&command_bytes)
+        .map_err(|error| format!("day command log is not UTF-8: {error}"))?;
+    let observed_commands = command_text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            line.split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    if observed_commands != evidence.commands {
+        return Err(format!(
+            "askme scenario `{}` synthesized commands differ from the addressed wrapper log",
+            evidence.id
+        ));
     }
     let before = addressed_bytes(bundle, &addressed.kan_before, "kan-before snapshot")?;
     let after = addressed_bytes(bundle, &addressed.kan_after, "kan-after snapshot")?;
@@ -721,17 +747,63 @@ fn addressed_bytes(
     Ok(bytes)
 }
 
-fn json_contains_text(value: &serde_json::Value, expected: &str) -> bool {
-    match value {
-        serde_json::Value::String(value) => value.trim() == expected,
-        serde_json::Value::Array(values) => values
-            .iter()
-            .any(|value| json_contains_text(value, expected)),
-        serde_json::Value::Object(values) => values
-            .values()
-            .any(|value| json_contains_text(value, expected)),
-        _ => false,
+fn validate_codex_turn<'a>(
+    events: &'a [serde_json::Value],
+    expected_message: &str,
+) -> Result<&'a str, String> {
+    let starts = events
+        .iter()
+        .filter(|event| {
+            event.get("type").and_then(serde_json::Value::as_str) == Some("thread.started")
+        })
+        .collect::<Vec<_>>();
+    if starts.len() != 1 {
+        return Err("must contain exactly one `thread.started` event".into());
     }
+    let thread_id = starts[0]
+        .get("thread_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "`thread.started` has no thread identifier".to_string())?;
+    if !events
+        .iter()
+        .any(|event| event.get("type").and_then(serde_json::Value::as_str) == Some("turn.started"))
+        || !events.iter().any(|event| {
+            event.get("type").and_then(serde_json::Value::as_str) == Some("turn.completed")
+        })
+    {
+        return Err("does not contain a complete Codex turn".into());
+    }
+    if events.iter().any(|event| {
+        matches!(
+            event.get("type").and_then(serde_json::Value::as_str),
+            Some("turn.failed" | "error")
+        )
+    }) {
+        return Err("contains a failed Codex turn".into());
+    }
+    let final_message = events
+        .iter()
+        .filter_map(|event| {
+            if event.get("type").and_then(serde_json::Value::as_str) != Some("item.completed")
+                || event
+                    .pointer("/item/type")
+                    .and_then(serde_json::Value::as_str)
+                    != Some("agent_message")
+            {
+                return None;
+            }
+            event
+                .pointer("/item/text")
+                .and_then(serde_json::Value::as_str)
+        })
+        .next_back();
+    if final_message.map(str::trim) != Some(expected_message) {
+        return Err(
+            "final typed `agent_message` does not equal the captured assistant turn".into(),
+        );
+    }
+    Ok(thread_id)
 }
 
 fn kan_snapshot_counts(bytes: &[u8]) -> Result<(u64, Vec<String>), String> {
@@ -863,13 +935,36 @@ struct ReconstructionEvidence {
     intervention_cid: String,
     handoff_cid: String,
     wakeup_evidence_path: String,
+    wakeup_evidence_sha256: String,
+    wakeup_raw_events: AddressedArtifact,
     kan_read_path: String,
+    kan_read_sha256: String,
+    kan_authors: Vec<String>,
     suite_commit: String,
     census_base: String,
     census_head: String,
     ci_run_id: u64,
     ci_head_sha: String,
     fresh_wakeup_had_transcript: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReconstructionSource {
+    schema: u64,
+    candidate_sha: String,
+    behavioral_candidate_sha: String,
+    publication_candidate_sha: String,
+    stream_subject: String,
+    acquired_input_cid: String,
+    intervention_cid: String,
+    handoff_cid: String,
+    kan_authors: Vec<String>,
+    suite_commit: String,
+    census_base: String,
+    census_head: String,
+    ci_run_id: u64,
+    ci_head_sha: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -899,7 +994,13 @@ struct BulkKanSubject {
     claims: Vec<day::kan_client::Claim>,
 }
 
-pub fn grade_reconstruction(root: &Path, bundle: &Path) -> Outcome<()> {
+pub fn grade_reconstruction(
+    root: &Path,
+    bundle: &Path,
+    source: &Path,
+    candidate_sha: &str,
+    evidence_commit: &str,
+) -> Outcome<()> {
     let protocol_path = root.join(RECONSTRUCTION_PROTOCOL);
     let protocol: serde_json::Value =
         match read(&protocol_path).and_then(|bytes| json(&protocol_path, &bytes)) {
@@ -938,12 +1039,18 @@ pub fn grade_reconstruction(root: &Path, bundle: &Path) -> Outcome<()> {
         ));
     }
     let bundle = root.join(bundle);
+    let source = root.join(source);
     let manifest_path = bundle.join("manifest.json");
     let evidence: ReconstructionEvidence =
         match read(&manifest_path).and_then(|bytes| json(&manifest_path, &bytes)) {
             Ok(evidence) => evidence,
             Err(error) => return Outcome::Finding(Finding::new(error)),
         };
+    if let Err(error) =
+        authenticate_reconstruction(&source, &bundle, &evidence, candidate_sha, evidence_commit)
+    {
+        return Outcome::Finding(Finding::new(error));
+    }
     if let Err(error) = validate_reconstruction(&bundle, &evidence) {
         return Outcome::Finding(Finding::new(error));
     }
@@ -960,6 +1067,91 @@ pub fn grade_reconstruction(root: &Path, bundle: &Path) -> Outcome<()> {
         controls.len()
     );
     Outcome::Passed(())
+}
+
+fn authenticate_reconstruction(
+    source: &Path,
+    bundle: &Path,
+    evidence: &ReconstructionEvidence,
+    candidate_sha: &str,
+    evidence_commit: &str,
+) -> Result<(), String> {
+    full_sha("workflow candidate SHA", candidate_sha)?;
+    full_sha("workflow evidence commit", evidence_commit)?;
+    if evidence.candidate_sha != candidate_sha {
+        return Err(
+            "bundle coordinates differ from the candidate and evidence commit supplied by the workflow"
+                .into(),
+        );
+    }
+    let source_manifest_path = source.join("manifest.json");
+    let declared: ReconstructionSource =
+        json(&source_manifest_path, &read(&source_manifest_path)?)?;
+    if declared.schema != evidence.schema
+        || declared.candidate_sha != evidence.candidate_sha
+        || declared.behavioral_candidate_sha != evidence.behavioral_candidate_sha
+        || declared.publication_candidate_sha != evidence.publication_candidate_sha
+        || declared.stream_subject != evidence.stream_subject
+        || declared.acquired_input_cid != evidence.acquired_input_cid
+        || declared.intervention_cid != evidence.intervention_cid
+        || declared.handoff_cid != evidence.handoff_cid
+        || declared.kan_authors != evidence.kan_authors
+        || declared.suite_commit != evidence.suite_commit
+        || declared.census_base != evidence.census_base
+        || declared.census_head != evidence.census_head
+        || declared.ci_run_id != evidence.ci_run_id
+        || declared.ci_head_sha != evidence.ci_head_sha
+    {
+        return Err(
+            "generated bundle rewrote coordinates from the immutable source manifest".into(),
+        );
+    }
+    let head = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(source)
+        .output()
+        .map_err(|error| format!("could not inspect evidence checkout: {error}"))?;
+    if !head.status.success() || String::from_utf8_lossy(&head.stdout).trim() != evidence_commit {
+        return Err("bundle is not the exact immutable evidence commit checkout".into());
+    }
+    if !source.join(".claims").is_dir() {
+        return Err("evidence commit has no published signed kan claims".into());
+    }
+    if evidence.kan_authors.is_empty()
+        || evidence
+            .kan_authors
+            .iter()
+            .any(|author| !author.starts_with("did:key:") || author.len() <= "did:key:".len())
+    {
+        return Err("evidence manifest has no explicit kan signing principals".into());
+    }
+    let mut command = std::process::Command::new("kan");
+    command.args(["show", "--all", "--json"]);
+    for author in &evidence.kan_authors {
+        command.args(["--trust", author]);
+    }
+    let live = command
+        .current_dir(source)
+        .output()
+        .map_err(|error| format!("could not authenticate evidence through kan: {error}"))?;
+    if !live.status.success() {
+        return Err(format!(
+            "kan rejected the published evidence claims: {}",
+            String::from_utf8_lossy(&live.stderr).trim()
+        ));
+    }
+    let live: serde_json::Value = serde_json::from_slice(&live.stdout)
+        .map_err(|error| format!("authenticated kan read was malformed: {error}"))?;
+    let addressed = read(&bundle.join(&evidence.kan_read_path))?;
+    if digest(&addressed) != evidence.kan_read_sha256 {
+        return Err("kan read digest differs from its manifest address".into());
+    }
+    let addressed: serde_json::Value = serde_json::from_slice(&addressed)
+        .map_err(|error| format!("addressed kan read was malformed: {error}"))?;
+    if live != addressed {
+        return Err("addressed kan read differs from kan's authenticated signed-claim view".into());
+    }
+    Ok(())
 }
 
 fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> Result<(), String> {
@@ -1005,6 +1197,15 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
             return Err(format!("{field} is missing"));
         }
     }
+    for (field, cid) in [
+        ("acquired-input CID", &evidence.acquired_input_cid),
+        ("intervention CID", &evidence.intervention_cid),
+        ("handoff CID", &evidence.handoff_cid),
+    ] {
+        if !cid.starts_with("bafy") || cid.len() < 50 {
+            return Err(format!("{field} is not a content-addressed CID"));
+        }
+    }
     if evidence.ci_run_id == 0 {
         return Err("CI run ID is missing".into());
     }
@@ -1014,11 +1215,54 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
     safe_relative(&evidence.wakeup_evidence_path)?;
     safe_relative(&evidence.kan_read_path)?;
     let wakeup_path = bundle.join(&evidence.wakeup_evidence_path);
-    let wakeup: FreshWakeupEvidence = json(&wakeup_path, &read(&wakeup_path)?)?;
+    let wakeup_bytes = read(&wakeup_path)?;
+    if digest(&wakeup_bytes) != evidence.wakeup_evidence_sha256 {
+        return Err("fresh wakeup evidence digest differs from its manifest address".into());
+    }
+    let wakeup: FreshWakeupEvidence = json(&wakeup_path, &wakeup_bytes)?;
     validate_fresh_wakeup(&wakeup, evidence)?;
+    let raw = addressed_bytes(
+        bundle,
+        &evidence.wakeup_raw_events,
+        "fresh wakeup Codex event log",
+    )?;
+    let raw = std::str::from_utf8(&raw)
+        .map_err(|error| format!("fresh wakeup Codex event log is not UTF-8: {error}"))?;
+    let events = raw
+        .lines()
+        .enumerate()
+        .map(|(index, line)| {
+            serde_json::from_str::<serde_json::Value>(line).map_err(|error| {
+                format!(
+                    "fresh wakeup event line {} is malformed: {error}",
+                    index + 1
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_codex_turn(&events, wakeup.rendered_context.trim())?;
+    if !events.iter().any(|event| {
+        event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
+            && event
+                .pointer("/item/type")
+                .and_then(serde_json::Value::as_str)
+                == Some("command_execution")
+            && event
+                .pointer("/item/command")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|command| command.contains("kan show --all --json"))
+    }) {
+        return Err(
+            "fresh wakeup raw events do not prove the required bulk kan command ran".into(),
+        );
+    }
 
     let kan_path = bundle.join(&evidence.kan_read_path);
-    let kan_read: BulkKanRead = json(&kan_path, &read(&kan_path)?)?;
+    let kan_bytes = read(&kan_path)?;
+    if digest(&kan_bytes) != evidence.kan_read_sha256 {
+        return Err("kan read digest differs from its manifest address".into());
+    }
+    let kan_read: BulkKanRead = json(&kan_path, &kan_bytes)?;
     validate_bulk_reconstruction(&kan_read, evidence)?;
     Ok(())
 }
@@ -1088,8 +1332,39 @@ fn validate_bulk_reconstruction(
     let acquired = unique_claim(read, &evidence.acquired_input_cid)?;
     let intervention = unique_claim(read, &evidence.intervention_cid)?;
     let handoff = unique_claim(read, &evidence.handoff_cid)?;
-    validate_event_claim::<day::events::AcquiredInput>(acquired.1, "day-acquired-input")?;
-    validate_event_claim::<day::events::Intervention>(intervention.1, "day-intervention")?;
+    for (label, claim) in [
+        ("acquired-input", acquired.1),
+        ("intervention", intervention.1),
+        ("handoff", handoff.1),
+    ] {
+        if !claim
+            .author
+            .as_ref()
+            .is_some_and(|author| evidence.kan_authors.contains(author))
+        {
+            return Err(format!(
+                "{label} claim is not signed by an explicitly admitted evidence principal"
+            ));
+        }
+    }
+    let acquired_payload =
+        validate_event_claim::<day::events::AcquiredInput>(acquired.1, "day-acquired-input")?;
+    let intervention_payload =
+        validate_event_claim::<day::events::Intervention>(intervention.1, "day-intervention")?;
+    if acquired.0 != acquired_payload.work_subject
+        || intervention.0 != intervention_payload.work_subject
+        || acquired_payload.work_subject != intervention_payload.work_subject
+    {
+        return Err(
+            "acquired-input and intervention blocks are not bound to one real work subject".into(),
+        );
+    }
+    validate_event_source(read, &acquired_payload.provider, &acquired_payload.basis)?;
+    validate_event_source(
+        read,
+        &intervention_payload.source,
+        &intervention_payload.basis,
+    )?;
     if handoff.0 != evidence.stream_subject || handoff.1.kind != "Observation" {
         return Err("handoff CID is not an Observation on the declared stream subject".into());
     }
@@ -1146,7 +1421,7 @@ fn unique_claim<'a>(
 fn validate_event_claim<T: day::atoms::Versioned + serde::de::DeserializeOwned>(
     claim: &day::kan_client::Claim,
     fence: &str,
-) -> Result<(), String> {
+) -> Result<T, String> {
     if claim.kind != "Observation" {
         return Err(format!("{fence} CID is not an Observation"));
     }
@@ -1156,7 +1431,24 @@ fn validate_event_claim<T: day::atoms::Versioned + serde::de::DeserializeOwned>(
         .ok_or_else(|| format!("{fence} claim has no narrative"))?;
     day::atoms::extract_fenced::<T>(text)
         .ok_or_else(|| format!("claim has no `{fence}` block"))?
-        .map_err(|error| format!("`{fence}` block is invalid: {error}"))?;
+        .map_err(|error| format!("`{fence}` block is invalid: {error}"))
+}
+
+fn validate_event_source(
+    read: &BulkKanRead,
+    source: &day::events::Source,
+    basis: &[String],
+) -> Result<(), String> {
+    let day::events::Source::AuthenticatedClaim { principal, claim } = source else {
+        return Ok(());
+    };
+    if !basis.contains(claim) {
+        return Err("authenticated event source is not retained in the event basis".into());
+    }
+    let (_, source_claim) = unique_claim(read, claim)?;
+    if source_claim.author.as_deref() != Some(principal) {
+        return Err("authenticated event source principal differs from its signed claim".into());
+    }
     Ok(())
 }
 
@@ -1351,6 +1643,7 @@ mod tests {
             let path = bundle.path().join(format!("{}.json", scenario.id));
             std::fs::write(&path, serde_json::to_vec_pretty(&evidence).unwrap()).unwrap();
             let mut raw_events = Vec::new();
+            let thread_id = format!("thread-{}", scenario.id);
             for (index, turn) in turns_for_raw.iter().enumerate() {
                 let raw = bundle
                     .path()
@@ -1358,8 +1651,9 @@ mod tests {
                 std::fs::write(
                     &raw,
                     format!(
-                        "{{\"event\":{{\"message\":{}}}}}\n",
-                        serde_json::to_string(turn).unwrap()
+                        "{{\"type\":\"thread.started\",\"thread_id\":{thread}}}\n{{\"type\":\"turn.started\"}}\n{{\"type\":\"item.completed\",\"item\":{{\"id\":\"item-{index}\",\"type\":\"agent_message\",\"text\":{turn}}}}}\n{{\"type\":\"turn.completed\",\"usage\":{{}}}}\n",
+                        thread = serde_json::to_string(&thread_id).unwrap(),
+                        turn = serde_json::to_string(turn).unwrap(),
                     ),
                 )
                 .unwrap();
@@ -1391,11 +1685,22 @@ mod tests {
                     .unwrap(),
             )
             .unwrap();
+            let command_path = bundle.path().join(format!("{}-commands.log", scenario.id));
+            let command_text = if scenario.expect.record {
+                "day acquired-input record\n"
+            } else {
+                ""
+            };
+            std::fs::write(&command_path, command_text).unwrap();
             files.push(serde_json::json!({
                 "id": scenario.id,
                 "path": path.file_name().unwrap().to_str().unwrap(),
                 "sha256": digest(&std::fs::read(&path).unwrap()),
                 "raw_events": raw_events,
+                "command_log": {
+                    "path": command_path.file_name().unwrap().to_str().unwrap(),
+                    "sha256": digest(&std::fs::read(&command_path).unwrap())
+                },
                 "kan_before": {
                     "path": before_path.file_name().unwrap().to_str().unwrap(),
                     "sha256": digest(&std::fs::read(&before_path).unwrap())
@@ -1461,8 +1766,11 @@ mod tests {
         let bundle = tempfile::tempdir().unwrap();
         let candidate = "a".repeat(40);
         let base = "b".repeat(40);
+        let input_cid = format!("bafy{}", "i".repeat(55));
+        let intervention_cid = format!("bafy{}", "j".repeat(55));
+        let handoff_cid = format!("bafy{}", "k".repeat(55));
         let rendered = format!(
-            "agents/handoff/main cid-input cid-intervention cid-handoff {candidate} {base} {candidate} 42 {candidate}"
+            "agents/handoff/main {input_cid} {intervention_cid} {handoff_cid} {candidate} {base} {candidate} 42 {candidate}"
         );
         let wakeup = serde_json::json!({
             "schema": 1,
@@ -1470,7 +1778,7 @@ mod tests {
             "raw_transcript_supplied": false,
             "kan_command": ["kan", "show", "--all", "--json"],
             "stream_subject": "agents/handoff/main",
-            "claims_read": ["cid-input", "cid-intervention", "cid-handoff"],
+            "claims_read": [&input_cid, &intervention_cid, &handoff_cid],
             "candidate_sha": candidate,
             "rendered_context": rendered,
         });
@@ -1479,6 +1787,20 @@ mod tests {
             serde_json::to_vec_pretty(&wakeup).unwrap(),
         )
         .unwrap();
+        let wakeup_bytes = std::fs::read(bundle.path().join("wakeup.json")).unwrap();
+        let raw = [
+            serde_json::json!({"type": "thread.started", "thread_id": "thread-wakeup"}),
+            serde_json::json!({"type": "turn.started"}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-1", "type": "command_execution", "command": "kan show --all --json"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "message-1", "type": "agent_message", "text": rendered}}),
+            serde_json::json!({"type": "turn.completed", "usage": {}}),
+        ]
+        .into_iter()
+        .map(|event| serde_json::to_string(&event).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n")
+            + "\n";
+        std::fs::write(bundle.path().join("wakeup-events.jsonl"), &raw).unwrap();
         let acquired = day::events::AcquiredInput {
             work_subject: "work/main".into(),
             topic: "release".into(),
@@ -1518,11 +1840,11 @@ mod tests {
             "excluded_by_trust": 0,
             "subjects": [
                 {"subject": "work/main", "excluded_by_trust": 0, "claims": [
-                    {"cid": "cid-input", "kind": "Observation", "text": acquired.to_claim_text()},
-                    {"cid": "cid-intervention", "kind": "Observation", "text": intervention.to_claim_text()}
+                    {"cid": &input_cid, "kind": "Observation", "author": "did:key:zFixture", "text": acquired.to_claim_text()},
+                    {"cid": &intervention_cid, "kind": "Observation", "author": "did:key:zFixture", "text": intervention.to_claim_text()}
                 ]},
                 {"subject": "agents/handoff/main", "excluded_by_trust": 0, "claims": [
-                    {"cid": "cid-handoff", "kind": "Observation", "text": handoff_text}
+                    {"cid": &handoff_cid, "kind": "Observation", "author": "did:key:zFixture", "text": handoff_text}
                 ]}
             ]
         });
@@ -1531,17 +1853,25 @@ mod tests {
             serde_json::to_vec_pretty(&kan).unwrap(),
         )
         .unwrap();
+        let kan_bytes = std::fs::read(bundle.path().join("kan.json")).unwrap();
         let evidence = ReconstructionEvidence {
             schema: 1,
             candidate_sha: candidate.clone(),
             behavioral_candidate_sha: candidate.clone(),
             publication_candidate_sha: candidate.clone(),
             stream_subject: "agents/handoff/main".into(),
-            acquired_input_cid: "cid-input".into(),
-            intervention_cid: "cid-intervention".into(),
-            handoff_cid: "cid-handoff".into(),
+            acquired_input_cid: input_cid,
+            intervention_cid,
+            handoff_cid,
             wakeup_evidence_path: "wakeup.json".into(),
+            wakeup_evidence_sha256: digest(&wakeup_bytes),
+            wakeup_raw_events: AddressedArtifact {
+                path: "wakeup-events.jsonl".into(),
+                sha256: digest(raw.as_bytes()),
+            },
             kan_read_path: "kan.json".into(),
+            kan_read_sha256: digest(&kan_bytes),
+            kan_authors: vec!["did:key:zFixture".into()],
             suite_commit: candidate,
             census_base: base,
             census_head: "a".repeat(40),
@@ -1554,12 +1884,70 @@ mod tests {
             .iter()
             .all(|(_, rejected)| *rejected));
 
+        let source = tempfile::tempdir().unwrap();
+        let source_manifest = serde_json::json!({
+            "schema": evidence.schema,
+            "candidate_sha": evidence.candidate_sha,
+            "behavioral_candidate_sha": evidence.behavioral_candidate_sha,
+            "publication_candidate_sha": evidence.publication_candidate_sha,
+            "stream_subject": evidence.stream_subject,
+            "acquired_input_cid": evidence.acquired_input_cid,
+            "intervention_cid": evidence.intervention_cid,
+            "handoff_cid": evidence.handoff_cid,
+            "kan_authors": evidence.kan_authors,
+            "suite_commit": evidence.suite_commit,
+            "census_base": evidence.census_base,
+            "census_head": evidence.census_head,
+            "ci_run_id": evidence.ci_run_id,
+            "ci_head_sha": evidence.ci_head_sha,
+        });
+        std::fs::write(
+            source.path().join("manifest.json"),
+            serde_json::to_vec_pretty(&source_manifest).unwrap(),
+        )
+        .unwrap();
+        for args in [
+            vec!["init", "-q", "-b", "evidence"],
+            vec!["config", "user.name", "fixture"],
+            vec!["config", "user.email", "fixture@example.invalid"],
+            vec!["add", "manifest.json"],
+            vec![
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-qm",
+                "synthetic evidence",
+            ],
+        ] {
+            assert!(std::process::Command::new("git")
+                .args(args)
+                .current_dir(source.path())
+                .status()
+                .unwrap()
+                .success());
+        }
+        let source_head = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(source.path())
+            .output()
+            .unwrap();
+        let source_head = String::from_utf8(source_head.stdout).unwrap();
+        assert!(authenticate_reconstruction(
+            source.path(),
+            bundle.path(),
+            &evidence,
+            &evidence.candidate_sha,
+            source_head.trim(),
+        )
+        .unwrap_err()
+        .contains("no published signed kan claims"));
+
         let wakeup_path = bundle.path().join("wakeup.json");
         let wakeup_bytes = std::fs::read(&wakeup_path).unwrap();
         std::fs::write(&wakeup_path, rendered.as_bytes()).unwrap();
         assert!(validate_reconstruction(bundle.path(), &evidence)
             .unwrap_err()
-            .contains("malformed"));
+            .contains("digest differs"));
         std::fs::write(&wakeup_path, wakeup_bytes).unwrap();
 
         let kan_path = bundle.path().join("kan.json");
@@ -1571,7 +1959,7 @@ mod tests {
         .unwrap();
         assert!(validate_reconstruction(bundle.path(), &evidence)
             .unwrap_err()
-            .contains("malformed"));
+            .contains("digest differs"));
         std::fs::write(&kan_path, kan_bytes).unwrap();
     }
 }
