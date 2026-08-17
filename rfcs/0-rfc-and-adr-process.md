@@ -1,12 +1,12 @@
 # RFC 0: RFC and ADR process
 
-- Status: Review
+- Status: Accepted
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: https://github.com/kan-tools/day/pull/220
-- Review-started-at: 2026-08-16T21:28:27Z
-- Review-period-ends: 2026-08-19T21:33:27Z
-- Review-override: None
+- Review-started-at: 2026-08-16T21:28:40Z
+- Review-period-ends: 2026-08-17T00:22:14Z
+- Review-override: unanimous:https://github.com/kan-tools/day/pull/220@de4becf5ae056bc422e510954d6e6f337ce66736
 - Supersedes: The implicit design and decision process in `CONTRIBUTING.md`
 - Superseded-by: None
 - Profile-relationship: not-applicable
@@ -230,6 +230,6 @@ None.
 
 ## Implementation status
 
-Draft. The accompanying change supplies the file structure, templates,
-validator, contributor guidance, and CI integration. Acceptance and claim
-publication require the review lifecycle above.
+Accepted. The accompanying change supplies the file structure, templates,
+validator, contributor guidance, and CI integration. Claim publication follows
+the merged acceptance commit.
