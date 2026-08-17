@@ -52,7 +52,7 @@ rather than against a summary of them.
 - [ ] The fix ships with a test that fails without it, **in the same commit**,
       verified by reverting the fix — not by a demonstration in a terminal.
 - [ ] `Demonstrated-by:` trailer present
-      (`python3 scripts/revert-demo.py --tests <target>::<test>`), or an
+      (`just demonstrate --tests <target>::<test>`), or an
       exemption stated with the outcome the harness actually reported for it.
 
 ### Boundary

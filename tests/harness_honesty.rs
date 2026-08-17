@@ -494,8 +494,8 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         .next_back()
         .expect("the compatibility matrix must contain an ok row");
     assert!(
-        yaml.contains("scripts/revert-demo.py --verify"),
-        "the job must re-derive with the harness, not read the trailer"
+        yaml.contains("cargo run --quiet -p xtask -- evidence revert --verify"),
+        "the job must re-derive with the native harness, not read the trailer"
     );
     assert!(
         yaml.contains(&format!("KAN_TAG: {newest}"))
