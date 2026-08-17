@@ -117,7 +117,7 @@ jobs:
           for sha in $commits; do
             subject="$(git log -1 --format=%s "$sha")"
             echo "::group::$sha  $subject"
-            if python3 scripts/revert-demo.py --verify "$sha"; then
+            if cargo run --quiet -p xtask -- evidence revert --verify "$sha"; then
               echo "- \`${sha:0:8}\` re-derived — $subject" >> "$GITHUB_STEP_SUMMARY"
             else
               failed="$failed $sha"

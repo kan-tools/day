@@ -1,4 +1,4 @@
-//! `scripts/behaviour-diff.py` — **the harness that answers "did this change
+//! `xtask evidence behaviour-diff` — **the harness that answers "did this change
 //! alter behaviour it was not meant to alter".**
 //!
 //! `mutate.py` and `revert-demo.py` each have tests here for the same reason
@@ -59,15 +59,30 @@ fn diff(args: &[&str]) -> (String, Option<i32>) {
 /// race the other tests in this file — they all shell out to a script that now
 /// builds — and a panic would leave the tree broken for everything after.
 fn diff_with_path(args: &[&str], path_prefix: Option<&Path>) -> (String, Option<i32>) {
-    let mut cmd = Command::new("python3");
-    cmd.arg(repo_root().join("scripts/behaviour-diff.py"))
+    // Build the private repository tool before PATH is replaced. The
+    // `the_head_binary_is_rebuilt_rather_than_reused` case needs a working
+    // xtask and a deliberately broken cargo *inside* the harness.
+    let built = Command::new("cargo")
+        .args(["build", "--quiet", "-p", "xtask"])
+        .current_dir(repo_root())
+        .status()
+        .expect("cargo should build xtask");
+    assert!(
+        built.success(),
+        "xtask must build before its integrity tests run"
+    );
+
+    let mut cmd = Command::new(repo_root().join("target/debug/xtask"));
+    cmd.args(["evidence", "behaviour-diff"])
         .args(args)
         .current_dir(repo_root());
     if let Some(prefix) = path_prefix {
         let existing = std::env::var("PATH").unwrap_or_default();
         cmd.env("PATH", format!("{}:{existing}", prefix.display()));
     }
-    let out = cmd.output().expect("behaviour-diff.py should be runnable");
+    let out = cmd
+        .output()
+        .expect("native behaviour-diff should be runnable");
     (
         String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
         out.status.code(),

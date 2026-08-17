@@ -51,6 +51,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: extractions/setup-just@v2
 
       # Without this, `tests/kan_conformance.rs` SKIPS — it resolves `kan`
       # through PATH and skips when absent, per CLAUDE.md's rule that no test
@@ -113,10 +114,10 @@ jobs:
 
       - name: Validate RFC and ADR structure
         run: |
-          scripts/check-rfcs-adrs.sh
-          scripts/check-rfcs-adrs.sh --self-test
+          just check-rfc
+          just check-rfc --self-test
 
-      - run: cargo build --workspace --all-targets
+      - run: just build
       # `--no-fail-fast` IS LOAD-BEARING, NOT TIDINESS. `cargo test` aborts the
       # whole run at the first failing TARGET, and a bare `cargo test
       # --workspace` therefore reports on a prefix of the suite whose length
@@ -139,9 +140,9 @@ jobs:
       # early-sorting target: with fail-fast, 4 targets ran; with
       # `--no-fail-fast`, 30 ran; **both exited 101**. The build still fails, it
       # just fails having actually looked.
-      - run: cargo test --workspace --no-fail-fast
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo fmt --all -- --check
+      - run: just test
+      - run: just lint
+      - run: just format-check
 
   # Windows proves day's binary and harness-neutral Agent Plugins payload stay
   # portable. Installation guidance is content in skills/install/SKILL.md, not

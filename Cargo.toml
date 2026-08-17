@@ -19,6 +19,10 @@ readme = "README.md"
 keywords = ["agents", "process", "teloi", "workflow", "mcp"]
 categories = ["command-line-utilities", "development-tools"]
 
+[workspace]
+members = [".", "xtask"]
+resolver = "2"
+
 [dependencies]
 clap = { version = "4.6.2", features = ["derive"] }
 rmcp = { version = "2.2.0", features = ["transport-io"] }

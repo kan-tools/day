@@ -1,0 +1,128 @@
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+
+use crate::outcome::{CouldNotCheck, Finding, Outcome};
+
+const REQUIRED_CHOICES: [&str; 4] = [
+    "Epistemic site and telos-relative topology",
+    "Realization prestack, descent, and model structure",
+    "Obstruction coefficients and cohomology theory",
+    "Effective realization fragment and provability ledger",
+];
+
+pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
+    let self_test = match args {
+        [] => false,
+        [flag] if flag == "--self-test" => true,
+        _ => {
+            return Outcome::CouldNotCheck(CouldNotCheck::new(
+                "usage: xtask validate formal [--self-test]",
+            ))
+        }
+    };
+    let root = effective_root(root);
+    let rfc = match read(&root.join("rfcs/1-frame-indexed-process-model.md")) {
+        Ok(source) => source,
+        Err(detail) => return failed(detail),
+    };
+    let companion = match read(&root.join("rfcs/1/denotational-semantics.md")) {
+        Ok(source) => source,
+        Err(detail) => return failed(detail),
+    };
+    if let Err(detail) = validate(&rfc, &companion) {
+        return failed(detail);
+    }
+    if self_test {
+        if let Err(detail) = run_self_test(&rfc, &companion) {
+            return failed(detail);
+        }
+    }
+    println!("RFC 1 formal vocabulary and unresolved obligations: valid");
+    Outcome::Passed(())
+}
+
+pub fn validate(rfc: &str, companion: &str) -> Result<(), String> {
+    require(
+        rfc.contains(r"W_T:\mathcal I_T\to")
+            && companion.contains(r"W_T:\mathcal I_T\longrightarrow"),
+        r"witness diagrams must use the declared indexing category \mathcal I_T",
+    )?;
+    require(
+        !contains_witness_topology_collision(rfc)
+            && !contains_witness_topology_collision(companion),
+        "J_T cannot be both a witness indexing category and a Grothendieck topology",
+    )?;
+    require(
+        companion.contains(r"A Grothendieck topology $J_T$ on $\mathcal C^T_{A,f_0}$"),
+        "the telos-relative Grothendieck topology J_T is absent or renamed inconsistently",
+    )?;
+    for choice in REQUIRED_CHOICES {
+        require(
+            rfc.contains(&format!("| {choice} |")),
+            format!("RFC 1 unresolved-question table lacks: {choice}"),
+        )?;
+    }
+    Ok(())
+}
+
+fn run_self_test(rfc: &str, companion: &str) -> Result<(), String> {
+    let collision = rfc.replacen(r"W_T:\mathcal I_T\to", r"W_T:J_T\to", 1);
+    reject_mutation("witness-topology-collision", &collision, companion)?;
+    for choice in REQUIRED_CHOICES {
+        let candidate = rfc.replacen(&format!("| {choice} |"), "| Removed choice |", 1);
+        let name = format!("missing-{}", choice.to_lowercase().replace(' ', "-"));
+        reject_mutation(&name, &candidate, companion)?;
+    }
+    Ok(())
+}
+
+fn reject_mutation(name: &str, rfc: &str, companion: &str) -> Result<(), String> {
+    if validate(rfc, companion).is_err() {
+        println!("RFC 1 formal-obligation self-test: {name} mutation rejected");
+        Ok(())
+    } else {
+        Err(format!("self-test accepted mutation: {name}"))
+    }
+}
+
+fn contains_witness_topology_collision(source: &str) -> bool {
+    source
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>()
+        .contains("W_T:J_T")
+}
+
+fn require(condition: bool, detail: impl Into<String>) -> Result<(), String> {
+    condition.then_some(()).ok_or_else(|| detail.into())
+}
+
+fn read(path: &Path) -> Result<String, String> {
+    std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+fn effective_root(root: &Path) -> PathBuf {
+    std::env::var_os("DAY_RFC_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.to_path_buf())
+}
+
+fn failed(detail: impl Into<String>) -> Outcome<()> {
+    let detail = detail.into();
+    eprintln!("RFC 1 FORMAL OBLIGATION CHECK FAILED: {detail}");
+    Outcome::Finding(Finding::reported(detail))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_formal_self_test_mutation_is_rejected() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let rfc = read(&root.join("rfcs/1-frame-indexed-process-model.md")).unwrap();
+        let companion = read(&root.join("rfcs/1/denotational-semantics.md")).unwrap();
+        validate(&rfc, &companion).unwrap();
+        run_self_test(&rfc, &companion).unwrap();
+    }
+}
