@@ -1212,6 +1212,10 @@ fn ordinary_ci_uses_the_newest_measured_kan() {
         ci.contains("--tag \"${KAN_TAG}\" --force kan"),
         "a dedicated kan-cache miss must replace any stale kan binary restored by the general Rust cache"
     );
+    assert!(
+        ci.contains("GH_TOKEN: ${{ github.token }}"),
+        "Accepted RFC validation must authenticate gh with GitHub's read-only workflow token"
+    );
 }
 
 /// RFC lifecycle mutation tests must continue to mutate after a proposal moves

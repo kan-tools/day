@@ -5,6 +5,10 @@ on:
   pull_request:
 
 env:
+  # Accepted RFC validation resolves public PR review evidence through `gh`.
+  # GitHub provides this read-only workflow token, but the CLI only consumes it
+  # when it is exported explicitly.
+  GH_TOKEN: ${{ github.token }}
   # The kan the hermetic suite runs against. Pinned rather than tracking
   # kan's default branch: CI must fail because *day* changed, and an unpinned
   # dependency turns an unrelated kan commit into a red build here.
