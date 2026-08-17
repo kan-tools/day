@@ -1282,7 +1282,7 @@ fn rfc1_vector_loader_rejects_ambiguous_jcs_input() {
                 "\"_version\": 3,\n      \"unsafe\": 9007199254740993,",
                 1,
             ),
-            "integer is outside the I-JSON safe range",
+            "integer is not exactly representable as IEEE-754",
         ),
         (
             "unicode-noncharacter.json",

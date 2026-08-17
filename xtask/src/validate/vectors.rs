@@ -83,9 +83,10 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     where
         E: de::Error,
     {
-        const MAX_JCS_INTEGER: i64 = 9_007_199_254_740_992;
-        if !(-MAX_JCS_INTEGER..=MAX_JCS_INTEGER).contains(&value) {
-            return Err(E::custom("integer is outside the I-JSON safe range"));
+        if (value as f64) as i64 != value {
+            return Err(E::custom(
+                "integer is not exactly representable as IEEE-754",
+            ));
         }
         Ok(Value::Number(value.into()))
     }
@@ -94,9 +95,10 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     where
         E: de::Error,
     {
-        const MAX_JCS_INTEGER: u64 = 9_007_199_254_740_992;
-        if value > MAX_JCS_INTEGER {
-            return Err(E::custom("integer is outside the I-JSON safe range"));
+        if (value as f64) as u64 != value {
+            return Err(E::custom(
+                "integer is not exactly representable as IEEE-754",
+            ));
         }
         Ok(Value::Number(value.into()))
     }
