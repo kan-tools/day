@@ -13,12 +13,11 @@ fn root() -> PathBuf {
 }
 
 fn legacy(range: &str) -> Output {
-    Command::new("python3")
-        .arg(root().join("scripts/demonstration-census.py"))
+    Command::new(root().join("scripts/demonstration-census.py"))
         .arg(range)
         .current_dir(root())
         .output()
-        .expect("legacy census should run during its compatibility window")
+        .expect("compatibility shim should run during its compatibility window")
 }
 
 fn native(range: &str) -> Output {
@@ -35,7 +34,8 @@ fn native_census_matches_the_legacy_branch_report() {
     let new = native("main..HEAD");
     assert_eq!(new.status.code(), old.status.code());
     assert_eq!(new.stdout, old.stdout);
-    assert_eq!(new.stderr, old.stderr);
+    assert!(new.stderr.is_empty());
+    assert!(String::from_utf8_lossy(&old.stderr).contains("deprecated:"));
 }
 
 #[test]
@@ -45,7 +45,8 @@ fn native_census_preserves_the_distinct_empty_range_outcome() {
     assert_eq!(old.status.code(), Some(3), "legacy premise");
     assert_eq!(new.status.code(), old.status.code());
     assert_eq!(new.stdout, old.stdout);
-    assert_eq!(new.stderr, old.stderr);
+    assert!(new.stderr.is_empty());
+    assert!(String::from_utf8_lossy(&old.stderr).contains("deprecated:"));
 }
 
 #[test]

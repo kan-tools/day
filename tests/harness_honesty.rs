@@ -1025,11 +1025,10 @@ fn every_census_exit_code_means_something_different_to_the_caller() {
 /// Reports could-not-check rather than passing when the range is empty.
 #[test]
 fn every_commit_is_accounted_for_under_the_demonstration_rule() {
-    let out = Command::new("python3")
-        .arg(repo_root().join("scripts/demonstration-census.py"))
+    let out = Command::new(repo_root().join("scripts/demonstration-census.py"))
         .current_dir(repo_root())
         .output()
-        .expect("python3 should be runnable");
+        .expect("the demonstration census shim should be runnable");
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -1287,12 +1286,11 @@ fn rfc1_formal_vocabulary_and_obligation_census_are_consistent() {
 /// Induced with `HEAD..HEAD`, which is a real range with nothing in it.
 #[test]
 fn the_census_reports_an_empty_range_distinctly() {
-    let out = Command::new("python3")
-        .arg(repo_root().join("scripts/demonstration-census.py"))
+    let out = Command::new(repo_root().join("scripts/demonstration-census.py"))
         .arg("HEAD..HEAD")
         .current_dir(repo_root())
         .output()
-        .expect("python3 should be runnable");
+        .expect("the demonstration census shim should be runnable");
 
     // premise: the range really is empty — otherwise this passes for the
     // ordinary reason that the branch is clean.
@@ -1327,12 +1325,11 @@ fn the_census_reports_an_empty_range_distinctly() {
 /// is a state this repo is never in and every CI run is.
 #[test]
 fn the_census_reports_an_unresolvable_range_as_could_not_check() {
-    let out = Command::new("python3")
-        .arg(repo_root().join("scripts/demonstration-census.py"))
+    let out = Command::new(repo_root().join("scripts/demonstration-census.py"))
         .arg("no-such-ref..HEAD")
         .current_dir(repo_root())
         .output()
-        .expect("python3 should be runnable");
+        .expect("the demonstration census shim should be runnable");
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -1497,12 +1494,11 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     };
     let census = |range: &str| {
-        let out = Command::new("python3")
-            .arg(repo_root().join("scripts/demonstration-census.py"))
+        let out = Command::new(repo_root().join("scripts/demonstration-census.py"))
             .arg(range)
             .current_dir(repo)
             .output()
-            .expect("python3 should be runnable");
+            .expect("the demonstration census shim should be runnable");
         (
             out.status.code(),
             String::from_utf8_lossy(&out.stdout).to_string(),
@@ -2003,76 +1999,28 @@ fn the_cell_does_not_require_gnu_coreutils() {
     );
 }
 
-/// **One trailer, two parsers, and they must accept the same thing.**
+/// **The native census consumes the shared trailer grammar.**
 ///
-/// `scripts/revert-demo.py` writes the `Demonstrated-by:` trailer and verifies
-/// it; `scripts/demonstration-census.py` counts it. Each carries its own
-/// `TRAILER_RE`, and a trailer the counter accepts but the verifier cannot read
-/// is exactly the state that produced the `include=` field: the census reported
-/// a commit demonstrated while `--verify` on the same commit reported
-/// DID-NOT-COMPILE.
-///
-/// Asserted by running both regexes over the same fixtures rather than by
-/// comparing the two source lines, because they are written differently on
-/// purpose — the census does not capture the scope it must nonetheless parse.
+/// The old Python census duplicated `revert-demo.py`'s regex. That is the shape
+/// that let one tool accept a claim the other could not replay. The migrated
+/// census must call the shared Rust parser, and its compatibility file must be
+/// delegation only rather than a third grammar.
 #[test]
-fn both_trailer_grammars_accept_the_same_trailers() {
-    let root = repo_root();
-    let probe = format!(
-        r#"
-import re, sys
-sys.path.insert(0, {scripts:?})
-import importlib.util
-
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-demo = load("demo", {demo:?})
-census = load("census", {census:?})
-
-scoped = "Demonstrated-by: revert=HEAD tests=a::b include=src/lib.rs outcome=DEMONSTRATED"
-plain = "Demonstrated-by: revert=HEAD tests=a::b outcome=DEMONSTRATED"
-junk = "Demonstrated-by: I reverted it and it failed"
-
-for label, text, want in (("scoped", scoped, True), ("plain", plain, True), ("junk", junk, False)):
-    d = bool(demo.TRAILER_RE.search(text))
-    c = bool(census.TRAILER_RE.search(text))
-    print(f"{{label}} demo={{d}} census={{c}} want={{want}}")
-    assert d == want, f"revert-demo disagreed on {{label}}"
-    assert c == want, f"census disagreed on {{label}}"
-print("AGREED")
-"#,
-        scripts = root.join("scripts").display().to_string(),
-        demo = root.join("scripts/revert-demo.py").display().to_string(),
-        census = root
-            .join("scripts/demonstration-census.py")
-            .display()
-            .to_string(),
-    );
-
-    let out = Command::new("python3")
-        .arg("-c")
-        .arg(&probe)
-        .current_dir(&root)
-        // **No `.pyc` litter.** This test imports both scripts as modules, and
-        // CPython writes `scripts/__pycache__/*.pyc` beside them when it does.
-        // Those files made the working tree dirty in CI, and `cargo publish`
-        // refuses a dirty tree — so the release workflow failed at the publish
-        // step for a byproduct of a test, after the tag was already pushed.
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .output()
-        .expect("python3 should be runnable");
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+fn the_native_census_uses_the_shared_trailer_grammar() {
+    let census = read("xtask/src/evidence/demonstration_census.rs");
+    let grammar = read("xtask/src/evidence/trailer.rs");
+    let shim = read("scripts/demonstration-census.py");
+    assert!(
+        census.contains("trailer::parse_message"),
+        "the census must consume the shared parser"
     );
     assert!(
-        text.contains("AGREED"),
-        "the two trailer grammars disagree, so a trailer one tool accepts the \
-         other cannot read:\n{text}"
+        grammar.contains("plain_and_scoped_trailers_share_one_grammar")
+            && grammar.contains("fabricated_or_ambiguous_claims_are_rejected"),
+        "the shared grammar must retain positive and hostile fixtures"
+    );
+    assert!(
+        shim.contains("census demonstrations") && !shim.contains("TRAILER_RE"),
+        "the compatibility path must delegate without retaining policy"
     );
 }
