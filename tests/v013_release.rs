@@ -39,6 +39,9 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
     assert!(runner.contains("\"codex\", \"exec\", \"resume\""));
     assert!(runner.contains("assistant_turns"));
     assert!(runner.contains("kan-before.json") && runner.contains("kan-after.json"));
+    assert!(runner.contains("raw_events") && runner.contains("sha256(path)"));
+    assert!(runner.contains("kan show --all --json exited"));
+    assert!(!runner.contains("return {\"raw\": completed.stderr, \"claims\": 0"));
 }
 
 #[test]

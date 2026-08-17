@@ -335,5 +335,29 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         String::from_utf8_lossy(&transcript.stderr).contains("raw conversation transcript"),
         "the refusal must name the invariant rather than looking like a parse failure"
     );
+
+    let named_speakers = run(
+        dir.path(),
+        &kan,
+        &[
+            "acquired-input",
+            "record",
+            "work/topic",
+            "--topic",
+            "x",
+            "--reported-provider",
+            "human",
+            "--fact",
+            "Alice: choose A. Bob: choose B.",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(
+        !named_speakers.status.success(),
+        "speaker names must not bypass transcript rejection"
+    );
     assert!(appends(dir.path()).is_empty());
 }

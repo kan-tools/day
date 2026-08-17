@@ -62,6 +62,8 @@
     "summary-separates-four-buckets",
     "record-command-only-after-explicit-yes",
     "decline-appends-nothing",
-    "raw-transcript-is-not-recorded"
+    "raw-transcript-is-not-recorded",
+    "raw-event-logs-are-addressed-and-each-assistant-turn-is-derived-from-them",
+    "an-unreadable-kan-snapshot-fails-the-trial-rather-than-reading-as-empty"
   ]
 }

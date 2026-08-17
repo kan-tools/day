@@ -38,6 +38,8 @@
     "the intervention must arise during genuine work and must not be manufactured for the trial",
     "the fresh wakeup receives no raw transcript",
     "every required claim is read from kan rather than copied from the trial prompt",
+    "bulk kan evidence is parsed and each required CID has the expected claim kind subject and versioned block",
+    "fresh wakeup evidence is typed and binds the exact claims and candidate rather than supplying token-bearing prose",
     "publication behavioral and reconstruction evidence name one candidate SHA"
   ]
 }

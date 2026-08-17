@@ -13,7 +13,7 @@ import sys
 def run(argv, cwd, env, output=None):
     completed = subprocess.run(argv, cwd=cwd, env=env, text=True, capture_output=True)
     if output:
-        output.write_text(completed.stdout + completed.stderr)
+        output.write_text(completed.stdout)
     if completed.returncode:
         raise RuntimeError(f"{' '.join(argv)} exited {completed.returncode}: {completed.stderr}")
     return completed.stdout
@@ -46,8 +46,13 @@ def kan_snapshot(cwd, env):
         ["kan", "show", "--all", "--json"], cwd=cwd, env=env, text=True, capture_output=True
     )
     if completed.returncode:
-        return {"raw": completed.stderr, "claims": 0, "texts": []}
-    parsed = json.loads(completed.stdout)
+        raise RuntimeError(
+            f"kan show --all --json exited {completed.returncode}: {completed.stderr}"
+        )
+    try:
+        parsed = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"kan show --all --json returned invalid JSON: {error}") from error
     claims = []
 
     def walk(value):
@@ -170,13 +175,30 @@ def main():
             )
             + "\n"
         )
-        (scenario_dir / "kan-before.json").write_text(before["raw"])
-        (scenario_dir / "kan-after.json").write_text(after["raw"])
+        kan_before = scenario_dir / "kan-before.json"
+        kan_after = scenario_dir / "kan-after.json"
+        kan_before.write_text(before["raw"])
+        kan_after.write_text(after["raw"])
         entries.append(
             {
                 "id": scenario["id"],
                 "path": str(evidence_path.relative_to(output_dir)),
                 "sha256": sha256(evidence_path),
+                "raw_events": [
+                    {
+                        "path": str(path.relative_to(output_dir)),
+                        "sha256": sha256(path),
+                    }
+                    for path in raw_files
+                ],
+                "kan_before": {
+                    "path": str(kan_before.relative_to(output_dir)),
+                    "sha256": sha256(kan_before),
+                },
+                "kan_after": {
+                    "path": str(kan_after.relative_to(output_dir)),
+                    "sha256": sha256(kan_after),
+                },
             }
         )
 

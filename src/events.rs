@@ -338,8 +338,10 @@ fn validate_summaries(field: &'static str, values: &[String]) -> Result<(), Stri
 
 /// Rejects the common durable-transcript failure shape without pretending day
 /// can infer whether arbitrary prose originated in a conversation. Two or more
-/// explicit speaker-turn labels are enough to identify turn-by-turn content;
-/// one label remains valid quoted evidence or ordinary prose.
+/// colon-terminated speaker-like labels are enough to identify turn-by-turn
+/// content. Labels are intentionally not an allowlist: names such as `Alice:`
+/// and `Bob:` are the ordinary way a transcript bypasses role-name matching.
+/// One label remains valid quoted evidence or ordinary prose.
 fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
     let turns = value
         .split_whitespace()
@@ -348,17 +350,13 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
                 matches!(character, '*' | '_' | '`' | ']' | ')')
             });
             let label = word.strip_suffix(':')?;
-            Some(
-                label
-                    .trim_matches(|character: char| !character.is_alphanumeric())
-                    .to_ascii_lowercase(),
-            )
+            Some(label.trim_matches(|character: char| !character.is_alphanumeric()))
         })
         .filter(|label| {
-            matches!(
-                label.as_str(),
-                "human" | "user" | "assistant" | "agent" | "system"
-            )
+            !label.is_empty()
+                && label.len() <= 40
+                && label.chars().all(char::is_alphanumeric)
+                && label.chars().any(char::is_alphabetic)
         })
         .take(2)
         .count();

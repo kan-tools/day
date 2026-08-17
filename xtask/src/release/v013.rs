@@ -548,6 +548,16 @@ struct EvidenceFile {
     id: String,
     path: String,
     sha256: String,
+    raw_events: Vec<AddressedArtifact>,
+    kan_before: AddressedArtifact,
+    kan_after: AddressedArtifact,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AddressedArtifact {
+    path: String,
+    sha256: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -584,7 +594,7 @@ fn grade_askme_inner(root: &Path, bundle: &Path) -> Result<usize, String> {
         || protocol.id != "day-v0.13-askme-v1"
         || protocol.rubric_version != "askme-rubric-v1"
         || protocol.skill != "skills/askme/SKILL.md"
-        || protocol.global_checks.len() != 8
+        || protocol.global_checks.len() != 10
     {
         return Err(
             "askme protocol identity or closed rubric is not the registered v1 shape".into(),
@@ -631,8 +641,123 @@ fn grade_askme_inner(root: &Path, bundle: &Path) -> Result<usize, String> {
         }
         let evidence: AskmeEvidence = json(&path, &bytes)?;
         grade_askme_scenario(expected, &manifest, &evidence)?;
+        grade_raw_askme_artifacts(&bundle, addressed, &evidence)?;
     }
     Ok(protocol.scenarios.len())
+}
+
+fn grade_raw_askme_artifacts(
+    bundle: &Path,
+    addressed: &EvidenceFile,
+    evidence: &AskmeEvidence,
+) -> Result<(), String> {
+    if addressed.raw_events.len() != evidence.assistant_turns.len() {
+        return Err(format!(
+            "askme scenario `{}` does not address one raw event log per assistant turn",
+            evidence.id
+        ));
+    }
+    for (index, (artifact, turn)) in addressed
+        .raw_events
+        .iter()
+        .zip(&evidence.assistant_turns)
+        .enumerate()
+    {
+        let bytes = addressed_bytes(bundle, artifact, "raw Codex event log")?;
+        let raw = std::str::from_utf8(&bytes).map_err(|error| {
+            format!(
+                "askme scenario `{}` raw event log {index} is not UTF-8: {error}",
+                evidence.id
+            )
+        })?;
+        let mut values = Vec::new();
+        for (line_index, line) in raw.lines().enumerate() {
+            let value: serde_json::Value = serde_json::from_str(line).map_err(|error| {
+                format!(
+                    "askme scenario `{}` raw event log {index} line {} is malformed: {error}",
+                    evidence.id,
+                    line_index + 1
+                )
+            })?;
+            values.push(value);
+        }
+        if values.is_empty()
+            || !values
+                .iter()
+                .any(|value| json_contains_text(value, turn.trim()))
+        {
+            return Err(format!(
+                "askme scenario `{}` assistant turn {index} is not present in its addressed raw event log",
+                evidence.id
+            ));
+        }
+    }
+    let before = addressed_bytes(bundle, &addressed.kan_before, "kan-before snapshot")?;
+    let after = addressed_bytes(bundle, &addressed.kan_after, "kan-after snapshot")?;
+    let before = kan_snapshot_counts(&before)?;
+    let after = kan_snapshot_counts(&after)?;
+    if before.0 != evidence.claims_before
+        || after.0 != evidence.claims_after
+        || after.1 != evidence.durable_claim_texts
+    {
+        return Err(format!(
+            "askme scenario `{}` synthesized claim counts/texts differ from addressed kan snapshots",
+            evidence.id
+        ));
+    }
+    Ok(())
+}
+
+fn addressed_bytes(
+    bundle: &Path,
+    artifact: &AddressedArtifact,
+    label: &str,
+) -> Result<Vec<u8>, String> {
+    safe_relative(&artifact.path)?;
+    let bytes = read(&bundle.join(&artifact.path))?;
+    if digest(&bytes) != artifact.sha256 {
+        return Err(format!("{label} digest differs from its manifest address"));
+    }
+    Ok(bytes)
+}
+
+fn json_contains_text(value: &serde_json::Value, expected: &str) -> bool {
+    match value {
+        serde_json::Value::String(value) => value.trim() == expected,
+        serde_json::Value::Array(values) => values
+            .iter()
+            .any(|value| json_contains_text(value, expected)),
+        serde_json::Value::Object(values) => values
+            .values()
+            .any(|value| json_contains_text(value, expected)),
+        _ => false,
+    }
+}
+
+fn kan_snapshot_counts(bytes: &[u8]) -> Result<(u64, Vec<String>), String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| format!("kan snapshot is malformed: {error}"))?;
+    let subjects = value
+        .get("subjects")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "kan snapshot has no subjects array".to_string())?;
+    let mut cids = std::collections::BTreeSet::new();
+    let mut texts = Vec::new();
+    for subject in subjects {
+        let claims = subject
+            .get("claims")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| "kan snapshot subject has no claims array".to_string())?;
+        for claim in claims {
+            if let Some(cid) = claim.get("cid").and_then(serde_json::Value::as_str) {
+                cids.insert(cid.to_owned());
+            }
+            if let Some(text) = claim.get("text").and_then(serde_json::Value::as_str) {
+                texts.push(text.to_owned());
+            }
+        }
+    }
+    Ok((cids.len() as u64, texts))
 }
 
 fn grade_askme_scenario(
@@ -747,6 +872,33 @@ struct ReconstructionEvidence {
     fresh_wakeup_had_transcript: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FreshWakeupEvidence {
+    schema: u64,
+    session_kind: String,
+    raw_transcript_supplied: bool,
+    kan_command: Vec<String>,
+    stream_subject: String,
+    claims_read: Vec<String>,
+    candidate_sha: String,
+    rendered_context: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct BulkKanRead {
+    v: u64,
+    excluded_by_trust: u64,
+    subjects: Vec<BulkKanSubject>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BulkKanSubject {
+    subject: String,
+    excluded_by_trust: u64,
+    claims: Vec<day::kan_client::Claim>,
+}
+
 pub fn grade_reconstruction(root: &Path, bundle: &Path) -> Outcome<()> {
     let protocol_path = root.join(RECONSTRUCTION_PROTOCOL);
     let protocol: serde_json::Value =
@@ -833,9 +985,12 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
     }
     if evidence.candidate_sha != evidence.behavioral_candidate_sha
         || evidence.candidate_sha != evidence.publication_candidate_sha
+        || evidence.candidate_sha != evidence.suite_commit
+        || evidence.candidate_sha != evidence.census_head
+        || evidence.candidate_sha != evidence.ci_head_sha
     {
         return Err(
-            "behavioral, reconstruction, and publication candidate coordinates differ".into(),
+            "behavioral, reconstruction, publication, suite, census, and CI candidate coordinates differ".into(),
         );
     }
     for (field, value) in [
@@ -858,8 +1013,44 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
     }
     safe_relative(&evidence.wakeup_evidence_path)?;
     safe_relative(&evidence.kan_read_path)?;
-    let wakeup = String::from_utf8(read(&bundle.join(&evidence.wakeup_evidence_path))?)
-        .map_err(|error| format!("wakeup evidence is not UTF-8: {error}"))?;
+    let wakeup_path = bundle.join(&evidence.wakeup_evidence_path);
+    let wakeup: FreshWakeupEvidence = json(&wakeup_path, &read(&wakeup_path)?)?;
+    validate_fresh_wakeup(&wakeup, evidence)?;
+
+    let kan_path = bundle.join(&evidence.kan_read_path);
+    let kan_read: BulkKanRead = json(&kan_path, &read(&kan_path)?)?;
+    validate_bulk_reconstruction(&kan_read, evidence)?;
+    Ok(())
+}
+
+fn validate_fresh_wakeup(
+    wakeup: &FreshWakeupEvidence,
+    evidence: &ReconstructionEvidence,
+) -> Result<(), String> {
+    if wakeup.schema != 1
+        || wakeup.session_kind != "fresh"
+        || wakeup.raw_transcript_supplied
+        || wakeup.kan_command != ["kan", "show", "--all", "--json"]
+        || wakeup.stream_subject != evidence.stream_subject
+        || wakeup.candidate_sha != evidence.candidate_sha
+    {
+        return Err("fresh wakeup evidence has the wrong typed invocation or identity".into());
+    }
+    let expected = [
+        evidence.acquired_input_cid.as_str(),
+        evidence.intervention_cid.as_str(),
+        evidence.handoff_cid.as_str(),
+    ]
+    .into_iter()
+    .collect::<std::collections::BTreeSet<_>>();
+    let actual = wakeup
+        .claims_read
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    if actual != expected {
+        return Err("fresh wakeup did not report the exact required claim set".into());
+    }
     for required in [
         evidence.stream_subject.as_str(),
         evidence.acquired_input_cid.as_str(),
@@ -871,23 +1062,101 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         &evidence.ci_run_id.to_string(),
         evidence.ci_head_sha.as_str(),
     ] {
-        if !wakeup.contains(required) {
+        if !wakeup.rendered_context.contains(required) {
             return Err(format!(
-                "fresh wakeup evidence does not reconstruct `{required}`"
+                "fresh wakeup rendered context does not reconstruct `{required}`"
             ));
         }
     }
-    let kan_read = String::from_utf8(read(&bundle.join(&evidence.kan_read_path))?)
-        .map_err(|error| format!("kan evidence is not UTF-8: {error}"))?;
-    for cid in [
-        &evidence.acquired_input_cid,
-        &evidence.intervention_cid,
-        &evidence.handoff_cid,
-    ] {
-        if !kan_read.contains(cid) {
-            return Err(format!("bulk kan evidence does not contain `{cid}`"));
-        }
+    Ok(())
+}
+
+fn validate_bulk_reconstruction(
+    read: &BulkKanRead,
+    evidence: &ReconstructionEvidence,
+) -> Result<(), String> {
+    if read.v != 1 || read.excluded_by_trust != 0 {
+        return Err("bulk kan evidence is unsupported or narrowed by trust".into());
     }
+    if read
+        .subjects
+        .iter()
+        .any(|subject| subject.excluded_by_trust != 0)
+    {
+        return Err("bulk kan evidence contains a partially withheld subject".into());
+    }
+    let acquired = unique_claim(read, &evidence.acquired_input_cid)?;
+    let intervention = unique_claim(read, &evidence.intervention_cid)?;
+    let handoff = unique_claim(read, &evidence.handoff_cid)?;
+    validate_event_claim::<day::events::AcquiredInput>(acquired.1, "day-acquired-input")?;
+    validate_event_claim::<day::events::Intervention>(intervention.1, "day-intervention")?;
+    if handoff.0 != evidence.stream_subject || handoff.1.kind != "Observation" {
+        return Err("handoff CID is not an Observation on the declared stream subject".into());
+    }
+    let text = handoff
+        .1
+        .text
+        .as_deref()
+        .ok_or_else(|| "handoff claim has no narrative".to_string())?;
+    let scopes = day::atoms::extract_fenced::<day::stream::HandoffScopes>(text)
+        .ok_or_else(|| "handoff claim has no day-handoff-scopes block".to_string())?
+        .map_err(|error| format!("handoff scope block is invalid: {error}"))?;
+    if !scopes
+        .suites
+        .iter()
+        .any(|scope| scope.commit == evidence.suite_commit && scope.tree_clean)
+        || !scopes.censuses.iter().any(|scope| {
+            scope.base == evidence.census_base
+                && scope.head == evidence.census_head
+                && scope.unaccounted == 0
+        })
+        || !scopes.ci.iter().any(|scope| {
+            scope.run_id == evidence.ci_run_id
+                && scope.head_sha == evidence.ci_head_sha
+                && scope.conclusion == "success"
+        })
+    {
+        return Err("handoff scopes do not bind the declared suite/census/CI coordinates".into());
+    }
+    Ok(())
+}
+
+fn unique_claim<'a>(
+    read: &'a BulkKanRead,
+    cid: &str,
+) -> Result<(&'a str, &'a day::kan_client::Claim), String> {
+    let mut found = read.subjects.iter().flat_map(|subject| {
+        subject
+            .claims
+            .iter()
+            .filter(move |claim| claim.cid == cid)
+            .map(move |claim| (subject.subject.as_str(), claim))
+    });
+    let claim = found
+        .next()
+        .ok_or_else(|| format!("bulk kan evidence does not contain claim `{cid}`"))?;
+    if found.next().is_some() {
+        return Err(format!(
+            "bulk kan evidence contains claim `{cid}` more than once"
+        ));
+    }
+    Ok(claim)
+}
+
+fn validate_event_claim<T: day::atoms::Versioned + serde::de::DeserializeOwned>(
+    claim: &day::kan_client::Claim,
+    fence: &str,
+) -> Result<(), String> {
+    if claim.kind != "Observation" {
+        return Err(format!("{fence} CID is not an Observation"));
+    }
+    let text = claim
+        .text
+        .as_deref()
+        .ok_or_else(|| format!("{fence} claim has no narrative"))?;
+    day::atoms::extract_fenced::<T>(text)
+        .ok_or_else(|| format!("claim has no `{fence}` block"))?
+        .map_err(|error| format!("`{fence}` block is invalid: {error}"))?;
     Ok(())
 }
 
@@ -1066,6 +1335,8 @@ mod tests {
                     format!("{signals} fact decision unresolved material-effect {buckets}. Record this now?");
                 *assistant_turns.last_mut().unwrap() = "Finished.".into();
             }
+            let turns_for_raw = assistant_turns.clone();
+            let claims_after = if scenario.expect.record { 3 } else { 2 };
             let evidence = serde_json::json!({
                 "schema": 1,
                 "id": scenario.id,
@@ -1074,15 +1345,65 @@ mod tests {
                 "assistant_turns": assistant_turns,
                 "commands": if scenario.expect.record { serde_json::json!([["day", "acquired-input", "record"]]) } else { serde_json::json!([]) },
                 "claims_before": 2,
-                "claims_after": if scenario.expect.record { 3 } else { 2 },
+                "claims_after": claims_after,
                 "durable_claim_texts": ["structured summary only"]
             });
             let path = bundle.path().join(format!("{}.json", scenario.id));
             std::fs::write(&path, serde_json::to_vec_pretty(&evidence).unwrap()).unwrap();
+            let mut raw_events = Vec::new();
+            for (index, turn) in turns_for_raw.iter().enumerate() {
+                let raw = bundle
+                    .path()
+                    .join(format!("{}-events-{index}.jsonl", scenario.id));
+                std::fs::write(
+                    &raw,
+                    format!(
+                        "{{\"event\":{{\"message\":{}}}}}\n",
+                        serde_json::to_string(turn).unwrap()
+                    ),
+                )
+                .unwrap();
+                raw_events.push(serde_json::json!({
+                    "path": raw.file_name().unwrap().to_str().unwrap(),
+                    "sha256": digest(&std::fs::read(&raw).unwrap())
+                }));
+            }
+            let before_path = bundle
+                .path()
+                .join(format!("{}-kan-before.json", scenario.id));
+            let after_path = bundle
+                .path()
+                .join(format!("{}-kan-after.json", scenario.id));
+            let before = serde_json::json!({"subjects": [{"claims": [
+                {"cid": "cid-before-1"}, {"cid": "cid-before-2"}
+            ]}]});
+            let mut after_claims = vec![
+                serde_json::json!({"cid": "cid-before-1", "text": "structured summary only"}),
+                serde_json::json!({"cid": "cid-before-2"}),
+            ];
+            if claims_after == 3 {
+                after_claims.push(serde_json::json!({"cid": "cid-after-3"}));
+            }
+            std::fs::write(&before_path, serde_json::to_vec(&before).unwrap()).unwrap();
+            std::fs::write(
+                &after_path,
+                serde_json::to_vec(&serde_json::json!({"subjects": [{"claims": after_claims}]}))
+                    .unwrap(),
+            )
+            .unwrap();
             files.push(serde_json::json!({
                 "id": scenario.id,
                 "path": path.file_name().unwrap().to_str().unwrap(),
-                "sha256": digest(&std::fs::read(&path).unwrap())
+                "sha256": digest(&std::fs::read(&path).unwrap()),
+                "raw_events": raw_events,
+                "kan_before": {
+                    "path": before_path.file_name().unwrap().to_str().unwrap(),
+                    "sha256": digest(&std::fs::read(&before_path).unwrap())
+                },
+                "kan_after": {
+                    "path": after_path.file_name().unwrap().to_str().unwrap(),
+                    "sha256": digest(&std::fs::read(&after_path).unwrap())
+                }
             }));
         }
         let manifest = serde_json::json!({
@@ -1100,6 +1421,20 @@ mod tests {
         )
         .unwrap();
         assert!(grade_askme_inner(root, bundle.path()).is_ok());
+
+        let manifest_value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(bundle.path().join("manifest.json")).unwrap())
+                .unwrap();
+        let raw_relative = manifest_value["scenarios"][0]["raw_events"][0]["path"]
+            .as_str()
+            .unwrap();
+        let raw_path = bundle.path().join(raw_relative);
+        let raw_original = std::fs::read(&raw_path).unwrap();
+        std::fs::write(&raw_path, b"{}\n").unwrap();
+        assert!(grade_askme_inner(root, bundle.path())
+            .unwrap_err()
+            .contains("raw Codex event log digest differs"));
+        std::fs::write(&raw_path, raw_original).unwrap();
 
         let first = &protocol.scenarios[0];
         let path = bundle.path().join(format!("{}.json", first.id));
@@ -1126,15 +1461,74 @@ mod tests {
         let bundle = tempfile::tempdir().unwrap();
         let candidate = "a".repeat(40);
         let base = "b".repeat(40);
-        let head = "c".repeat(40);
-        let ci = "d".repeat(40);
-        let wakeup = format!(
-            "agents/handoff/main cid-input cid-intervention cid-handoff {candidate} {base} {head} 42 {ci}"
+        let rendered = format!(
+            "agents/handoff/main cid-input cid-intervention cid-handoff {candidate} {base} {candidate} 42 {candidate}"
         );
-        std::fs::write(bundle.path().join("wakeup.txt"), wakeup).unwrap();
+        let wakeup = serde_json::json!({
+            "schema": 1,
+            "session_kind": "fresh",
+            "raw_transcript_supplied": false,
+            "kan_command": ["kan", "show", "--all", "--json"],
+            "stream_subject": "agents/handoff/main",
+            "claims_read": ["cid-input", "cid-intervention", "cid-handoff"],
+            "candidate_sha": candidate,
+            "rendered_context": rendered,
+        });
+        std::fs::write(
+            bundle.path().join("wakeup.json"),
+            serde_json::to_vec_pretty(&wakeup).unwrap(),
+        )
+        .unwrap();
+        let acquired = day::events::AcquiredInput {
+            work_subject: "work/main".into(),
+            topic: "release".into(),
+            provider: day::events::Source::Recorder {
+                principal: "did:key:zFixture".into(),
+            },
+            recorded_by: "did:key:zFixture".into(),
+            facts: vec!["candidate exists".into()],
+            decisions: vec![],
+            unresolved: vec![],
+            material_effect: "qualifies reconstruction".into(),
+            basis: vec!["cid-basis".into()],
+        };
+        let intervention = day::events::Intervention {
+            work_subject: "work/main".into(),
+            kind: day::events::InterventionKind::Approval,
+            summary: "operator approved the direction".into(),
+            material_effect: "continued the release work".into(),
+            source: day::events::Source::Recorder {
+                principal: "did:key:zFixture".into(),
+            },
+            recorded_by: "did:key:zFixture".into(),
+            basis: vec!["cid-basis".into()],
+        };
+        let scopes = serde_json::json!({
+            "_version": 1,
+            "suites": [{"argv": ["cargo", "test"], "commit": candidate, "tree_clean": true}],
+            "censuses": [{"base": base, "head": candidate, "unaccounted": 0}],
+            "ci": [{"provider": "github-actions", "workflow": "CI", "run_id": 42, "head_sha": candidate, "conclusion": "success"}],
+        });
+        let handoff_text = format!(
+            "Scoped handoff.\n\n```day-handoff-scopes\n{}\n```\n",
+            serde_json::to_string(&scopes).unwrap()
+        );
+        let kan = serde_json::json!({
+            "v": 1,
+            "excluded_by_trust": 0,
+            "subjects": [
+                {"subject": "work/main", "excluded_by_trust": 0, "claims": [
+                    {"cid": "cid-input", "kind": "Observation", "text": acquired.to_claim_text()},
+                    {"cid": "cid-intervention", "kind": "Observation", "text": intervention.to_claim_text()}
+                ]},
+                {"subject": "agents/handoff/main", "excluded_by_trust": 0, "claims": [
+                    {"cid": "cid-handoff", "kind": "Observation", "text": handoff_text}
+                ]}
+            ]
+        });
         std::fs::write(
             bundle.path().join("kan.json"),
-            "cid-input cid-intervention cid-handoff",
+            serde_json::to_vec_pretty(&kan).unwrap(),
         )
         .unwrap();
         let evidence = ReconstructionEvidence {
@@ -1146,18 +1540,38 @@ mod tests {
             acquired_input_cid: "cid-input".into(),
             intervention_cid: "cid-intervention".into(),
             handoff_cid: "cid-handoff".into(),
-            wakeup_evidence_path: "wakeup.txt".into(),
+            wakeup_evidence_path: "wakeup.json".into(),
             kan_read_path: "kan.json".into(),
             suite_commit: candidate,
             census_base: base,
-            census_head: head,
+            census_head: "a".repeat(40),
             ci_run_id: 42,
-            ci_head_sha: ci,
+            ci_head_sha: "a".repeat(40),
             fresh_wakeup_had_transcript: false,
         };
         assert!(validate_reconstruction(bundle.path(), &evidence).is_ok());
         assert!(reconstruction_controls(bundle.path(), &evidence)
             .iter()
             .all(|(_, rejected)| *rejected));
+
+        let wakeup_path = bundle.path().join("wakeup.json");
+        let wakeup_bytes = std::fs::read(&wakeup_path).unwrap();
+        std::fs::write(&wakeup_path, rendered.as_bytes()).unwrap();
+        assert!(validate_reconstruction(bundle.path(), &evidence)
+            .unwrap_err()
+            .contains("malformed"));
+        std::fs::write(&wakeup_path, wakeup_bytes).unwrap();
+
+        let kan_path = bundle.path().join("kan.json");
+        let kan_bytes = std::fs::read(&kan_path).unwrap();
+        std::fs::write(
+            &kan_path,
+            b"cid-input cid-intervention cid-handoff agents/handoff/main",
+        )
+        .unwrap();
+        assert!(validate_reconstruction(bundle.path(), &evidence)
+            .unwrap_err()
+            .contains("malformed"));
+        std::fs::write(&kan_path, kan_bytes).unwrap();
     }
 }
