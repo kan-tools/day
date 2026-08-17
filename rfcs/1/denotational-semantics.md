@@ -226,16 +226,19 @@ $$
 \eta_2:P_1\Rightarrow P_2\odot A_2.
 $$
 
-Their boundaries form the pasted diagram
+After whiskering the second cell by $A_1$, their globular boundaries form the
+vertically pasted diagram
 
 $$
-\begin{array}{ccccc}
-X_0 & \xrightarrow{\;A_1\;} & X_1
-    & \xrightarrow{\;A_2\;} & X_2\\[3pt]
-{\scriptstyle P_0}\Downarrow & \underset{\eta_1}{\Rightarrow} &
-{\scriptstyle P_1}\Downarrow & \underset{\eta_2}{\Rightarrow} &
-\Downarrow{\scriptstyle P_2}\\[2pt]
-I & = & I & = & I.
+\begin{array}{ccc}
+X_0 & \overset{\;P_0\;}{\rightsquigarrow} & I\\[3pt]
+{\scriptstyle 1_{X_0}}\downarrow & \underset{\eta_1}{\Rightarrow} &
+\downarrow{\scriptstyle 1_I}\\[2pt]
+X_0 & \overset{\;P_1\odot A_1\;}{\rightsquigarrow} & I\\[3pt]
+{\scriptstyle 1_{X_0}}\downarrow &
+\underset{\eta_2\ast A_1}{\Rightarrow} &
+\downarrow{\scriptstyle 1_I}\\[2pt]
+X_0 & \underset{\;P_2\odot A_2\odot A_1\;}{\rightsquigarrow} & I.
 \end{array}
 $$
 

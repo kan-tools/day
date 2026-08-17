@@ -1,8 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 
 use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
@@ -26,11 +28,11 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
         Ok(data) => data,
         Err(error) => return failed(error.to_string()),
     };
-    if let Err(detail) = validate(&data) {
+    if let Err(detail) = validate_all(&data, &root) {
         return failed(detail);
     }
     if self_test {
-        if let Err(detail) = run_self_test(&data) {
+        if let Err(detail) = run_self_test(&data, &root) {
             return failed(detail);
         }
     }
@@ -200,6 +202,11 @@ pub fn validate(data: &Value) -> Result<(), String> {
     validate_migrations(data)
 }
 
+fn validate_all(data: &Value, root: &Path) -> Result<(), String> {
+    validate(data)?;
+    validate_resolved_procedure(data, root)
+}
+
 fn validate_certificate_profile(data: &Value) -> Result<(), String> {
     let profile = object(
         data.get("certificate_profile"),
@@ -209,12 +216,37 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
         profile.get("declaration"),
         "certificate declaration is absent",
     )?;
-    let certificate = object(profile.get("certificate"), "certificate is absent")?;
     require(
         declaration.get("_version") == Some(&json!(3))
             && string(declaration.get("relationship")) == Some("sufficient"),
         "unsupported certificate declaration",
     )?;
+    let declaration_bytes = serde_json::to_vec(declaration)
+        .map_err(|error| format!("could not canonicalize declaration: {error}"))?;
+    let declaration_digest = format!("{:x}", Sha256::digest(&declaration_bytes));
+    let cases = array(profile.get("cases"), "certificate cases are absent")?;
+    let by_id = cases_by_id(cases, "certificate case ID is absent")?;
+    require(
+        by_id.keys().copied().collect::<BTreeSet<_>>()
+            == BTreeSet::from(["certified", "coordinate-mismatch"]),
+        "certificate case census changed",
+    )?;
+    for case in cases {
+        validate_certificate_case(
+            declaration,
+            object(Some(case), "certificate case malformed")?,
+            &declaration_digest,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_certificate_case(
+    declaration: &Map<String, Value>,
+    case: &Map<String, Value>,
+    expected_declaration_digest: &str,
+) -> Result<(), String> {
+    let certificate = object(case.get("certificate"), "certificate is absent")?;
     let subject = required_string(declaration.get("subject"), "declaration subject is absent")?;
     require(
         nested(certificate, "scope", "subject").and_then(Value::as_str) == Some(subject)
@@ -227,11 +259,8 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
         "declaration digest is absent",
     )?;
     require(
-        declaration_digest.len() == 64
-            && declaration_digest
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
-        "declaration digest is not lowercase SHA-256",
+        declaration_digest == expected_declaration_digest,
+        "certificate declaration digest does not match canonical declaration bytes",
     )?;
     let procedure = object(
         declaration.get("procedure_spec"),
@@ -242,11 +271,6 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
         certificate.get("procedure_spec") == declaration.get("procedure_spec"),
         "certificate procedure specification does not match its declaration",
     )?;
-    require(
-        certificate.get("fresh_assessment") == Some(&Value::Bool(true)),
-        "certificate was not produced by a fresh assessment",
-    )?;
-
     let declared_components = array(declaration.get("components"), "declared components absent")?;
     let assessed_components = array(certificate.get("components"), "component outcomes absent")?;
     require(
@@ -331,6 +355,7 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
         string(assembly.get("kind")) == Some("all"),
         "unsupported assembly kind",
     )?;
+    let mut coherent = true;
     for constraint in array(
         assembly.get("shared_coordinates"),
         "shared-coordinate declaration is absent",
@@ -357,7 +382,7 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
                     .ok_or_else(|| format!("shared coordinate is unbound: {name}/{coordinate}"))
             })
             .collect::<Result<BTreeSet<_>, _>>()?;
-        require(values.len() == 1, "shared-coordinate mismatch")?;
+        coherent &= values.len() == 1;
     }
     let derived = if assessed.values().any(|item| {
         matches!(
@@ -366,9 +391,10 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
         )
     }) {
         "uncheckable"
-    } else if assessed
-        .values()
-        .all(|item| string(item.get("outcome")) == Some("material"))
+    } else if coherent
+        && assessed
+            .values()
+            .all(|item| string(item.get("outcome")) == Some("material"))
     {
         "certified"
     } else {
@@ -376,7 +402,7 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
     };
     require(
         string(certificate.get("outcome")) == Some(derived)
-            && string(profile.get("expected")) == Some(derived),
+            && string(case.get("expected")) == Some(derived),
         "certificate outcome is not derived from component assessments",
     )
 }
@@ -407,6 +433,75 @@ fn validate_artifact_address(
     )
 }
 
+fn validate_resolved_procedure(data: &Value, root: &Path) -> Result<(), String> {
+    let declaration = object(
+        data.pointer("/certificate_profile/declaration"),
+        "certificate declaration is absent",
+    )?;
+    let address = object(
+        declaration.get("procedure_spec"),
+        "procedure specification is absent",
+    )?;
+    let repository = required_string(address.get("repository"), "procedure repository absent")?;
+    let remote = Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("could not resolve procedure repository: {error}"))?;
+    require(
+        remote.status.success(),
+        "could not resolve procedure repository",
+    )?;
+    require(
+        normalized_repository(std::str::from_utf8(&remote.stdout).unwrap_or_default())
+            == normalized_repository(repository),
+        "procedure repository does not match the current repository",
+    )?;
+    let commit = required_string(address.get("commit"), "procedure commit absent")?;
+    let path = required_string(address.get("path"), "procedure path absent")?;
+    let object = format!("{commit}:{path}");
+    let resolved = Command::new("git")
+        .args(["show", &object])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("could not resolve procedure bytes: {error}"))?;
+    require(
+        resolved.status.success(),
+        "procedure artifact does not resolve at its declared commit and path",
+    )?;
+    let actual_digest = format!("{:x}", Sha256::digest(&resolved.stdout));
+    require(
+        string(address.get("sha256")) == Some(actual_digest.as_str()),
+        "resolved procedure digest does not match its address",
+    )?;
+    let procedure: Value = serde_json::from_slice(&resolved.stdout)
+        .map_err(|error| format!("resolved procedure is not JSON: {error}"))?;
+    require(
+        procedure.get("version") == address.get("version")
+            && procedure.get("relationship") == declaration.get("relationship"),
+        "resolved procedure version or relationship disagrees with the declaration",
+    )?;
+    let procedure_components = string_array(
+        procedure.get("components"),
+        "resolved procedure components are absent",
+    )?;
+    let declared_components = array(declaration.get("components"), "declared components absent")?
+        .iter()
+        .map(|component| {
+            required_string(component.get("name"), "declared component absent").map(str::to_owned)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    require(
+        procedure_components == declared_components
+            && procedure.get("assembly") == declaration.get("assembly"),
+        "resolved procedure components or assembly disagree with the declaration",
+    )
+}
+
+fn normalized_repository(value: &str) -> &str {
+    value.trim().trim_end_matches('/').trim_end_matches(".git")
+}
+
 fn validate_frame_reads(data: &Value) -> Result<(), String> {
     let cases = array(data.get("frame_read_cases"), "frame read cases are absent")?;
     let by_id = cases_by_id(cases, "frame read case ID is absent")?;
@@ -421,17 +516,23 @@ fn validate_frame_reads(data: &Value) -> Result<(), String> {
     )?;
     for value in cases {
         let case = object(Some(value), "frame read case is malformed")?;
-        let same = case.get("stored") == case.get("current");
-        let fresh = case
-            .get("fresh_assessment")
-            .and_then(Value::as_bool)
-            .ok_or("fresh-assessment flag absent")?;
-        let derived = if !same {
-            "provenance-mismatch"
-        } else if fresh {
-            "certified"
-        } else {
-            "historical-only"
+        let operation = required_string(case.get("operation"), "frame operation is absent")?;
+        let derived = match operation {
+            "read-stored-certificate" => {
+                if case.get("certificate_provenance") == case.get("current") {
+                    "historical-only"
+                } else {
+                    "provenance-mismatch"
+                }
+            }
+            "execute-declared-procedure" => {
+                require(
+                    case.get("certificate_provenance").is_none(),
+                    "fresh execution cannot be asserted by stored certificate bytes",
+                )?;
+                "certified"
+            }
+            _ => return Err("unknown frame operation".into()),
         };
         require(
             string(case.get("expected")) == Some(derived),
@@ -494,7 +595,6 @@ fn validate_witnesses(data: &Value) -> Result<(), String> {
         "artifact-two-evidence",
         "shared-evidence-reuse",
         "independent-components",
-        "coordinate-mismatch",
         "missing-sufficient",
         "unavailable-sufficient",
         "legacy-flat",
@@ -849,8 +949,8 @@ fn migration_outcome(case: &Map<String, Value>) -> Result<String, String> {
     .into())
 }
 
-fn run_self_test(data: &Value) -> Result<(), String> {
-    const NAMES: [&str; 34] = [
+fn run_self_test(data: &Value, root: &Path) -> Result<(), String> {
+    const NAMES: [&str; 36] = [
         "composition-boundary",
         "coherence",
         "claim-reuse",
@@ -881,6 +981,8 @@ fn run_self_test(data: &Value) -> Result<(), String> {
         "procedure-commit-mismatch",
         "procedure-digest-mismatch",
         "procedure-version-mismatch",
+        "stale-declaration-digest",
+        "unresolved-procedure",
         "stored-verdict-transport",
         "hidden-provenance-mismatch",
         "set-relationship-example",
@@ -889,7 +991,7 @@ fn run_self_test(data: &Value) -> Result<(), String> {
     for name in NAMES {
         let mut candidate = data.clone();
         mutate(&mut candidate, name)?;
-        if validate(&candidate).is_ok() {
+        if validate_all(&candidate, root).is_ok() {
             return Err(format!("self-test accepted mutation: {name}"));
         }
     }
@@ -901,8 +1003,14 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
         "composition-boundary" => data
             .pointer_mut("/composition/atoms/1/source")
             .map(|v| *v = json!("WRONG")),
-        "coherence" => field_mut(data, "witness_cases", "coordinate-mismatch", "expected")
-            .map(|v| *v = json!("certified")),
+        "coherence" => {
+            let Some(outcome) = data.pointer_mut("/certificate_profile/cases/1/certificate/outcome") else {
+                return Err("self-test could not find mismatch certificate outcome".into());
+            };
+            *outcome = json!("certified");
+            data.pointer_mut("/certificate_profile/cases/1/expected")
+                .map(|v| *v = json!("certified"))
+        }
         "claim-reuse" => field_mut(
             data,
             "witness_cases",
@@ -1009,16 +1117,16 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
                 .map(|v| *v = json!(["component-assessments"]))
         }
         "missing-certificate-outcome" => data
-            .pointer_mut("/certificate_profile/certificate/components/0/outcome")
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/0/outcome")
             .map(|v| *v = Value::Null),
         "undeclared-certificate-component" => data
-            .pointer_mut("/certificate_profile/certificate/components/0/name")
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/0/name")
             .map(|v| *v = json!("invented")),
         "unbound-component-evidence" => data
-            .pointer_mut("/certificate_profile/certificate/components/0/evidence_cids/0")
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/0/evidence_cids/0")
             .map(|v| *v = json!("cid-absent")),
         "missing-shared-coordinate" => data
-            .pointer_mut("/certificate_profile/certificate/components/1/coordinates/candidate")
+            .pointer_mut("/certificate_profile/cases/0/certificate/components/1/coordinates/candidate")
             .map(|v| *v = Value::Null),
         "post-result-assembly-change" => data
             .pointer_mut(
@@ -1026,22 +1134,48 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
             )
             .map(|v| *v = json!("invented")),
         "procedure-path-mismatch" => data
-            .pointer_mut("/certificate_profile/certificate/procedure_spec/path")
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/path")
             .map(|v| *v = json!("procedures/other.json")),
         "procedure-repository-mismatch" => data
-            .pointer_mut("/certificate_profile/certificate/procedure_spec/repository")
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/repository")
             .map(|v| *v = json!("https://example.invalid/other")),
         "procedure-commit-mismatch" => data
-            .pointer_mut("/certificate_profile/certificate/procedure_spec/commit")
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/commit")
             .map(|v| *v = json!("2222222222222222222222222222222222222222")),
         "procedure-digest-mismatch" => data
-            .pointer_mut("/certificate_profile/certificate/procedure_spec/sha256")
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/sha256")
             .map(|v| {
                 *v = json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
             }),
         "procedure-version-mismatch" => data
-            .pointer_mut("/certificate_profile/certificate/procedure_spec/version")
+            .pointer_mut("/certificate_profile/cases/0/certificate/procedure_spec/version")
             .map(|v| *v = json!("2")),
+        "stale-declaration-digest" => data
+            .pointer_mut("/certificate_profile/cases/0/certificate/witness_system/declaration_sha256")
+            .map(|v| *v = json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")),
+        "unresolved-procedure" => {
+            let replacement = json!({"repository":"https://github.com/kan-tools/day","commit":"2222222222222222222222222222222222222222","path":"missing-procedure.json","sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","version":"1"});
+            let Some(declared) = data.pointer_mut("/certificate_profile/declaration/procedure_spec") else {
+                return Err("self-test could not find declared procedure".into());
+            };
+            *declared = replacement.clone();
+            for index in 0..2 {
+                let Some(address) = data.pointer_mut(&format!("/certificate_profile/cases/{index}/certificate/procedure_spec")) else {
+                    return Err("self-test could not find certificate procedure".into());
+                };
+                *address = replacement.clone();
+            }
+            let declaration = data.pointer("/certificate_profile/declaration").ok_or("self-test could not find declaration")?;
+            let bytes = serde_json::to_vec(declaration).map_err(|error| error.to_string())?;
+            let digest = format!("{:x}", Sha256::digest(bytes));
+            for index in 0..2 {
+                let Some(binding) = data.pointer_mut(&format!("/certificate_profile/cases/{index}/certificate/witness_system/declaration_sha256")) else {
+                    return Err("self-test could not find declaration binding".into());
+                };
+                *binding = json!(digest);
+            }
+            Some(())
+        }
         "stored-verdict-transport" => field_mut(
             data,
             "frame_read_cases",
@@ -1176,7 +1310,7 @@ mod tests {
             &std::fs::read_to_string(root.join("rfcs/vectors/1-process-model.json")).unwrap(),
         )
         .unwrap();
-        validate(&data).unwrap();
-        run_self_test(&data).unwrap();
+        validate_all(&data, root).unwrap();
+        run_self_test(&data, root).unwrap();
     }
 }

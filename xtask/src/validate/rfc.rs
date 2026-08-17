@@ -793,8 +793,8 @@ fn mutate_fixture(root: &Path, label: &str) -> Result<(), CheckError> {
         ),
         "coherence-vector" => replace(
             &root.join("rfcs/vectors/1-process-model.json"),
-            "\"expected\": \"not-certified\"",
-            "\"expected\": \"certified\"",
+            "\"outcome\": \"not-certified\",\n          \"limitations\": [\"shared coordinate candidate does not match\"]",
+            "\"outcome\": \"certified\",\n          \"limitations\": [\"shared coordinate candidate does not match\"]",
         ),
         "recursive-publication" => replace(
             &root.join("rfcs/0-rfc-and-adr-process.md"),
@@ -871,7 +871,7 @@ fn expected_error(label: &str) -> &str {
         "historical-renumber" => "historical RFC allocation changed",
         "short-review" => "fewer than 72 review hours elapsed",
         "profile-relationship" => "unrecognized Profile-relationship",
-        "coherence-vector" => "wrong witness result: coordinate-mismatch",
+        "coherence-vector" => "certificate outcome is not derived",
         "recursive-publication" => "normative RFC bytes contain a claim-CID backlink",
         "denotational-source" => "missing RFC 1 denotational companion source",
         "denotational-math" => "denotational HTML lacks MathJax rendering",

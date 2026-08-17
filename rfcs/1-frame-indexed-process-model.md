@@ -4,8 +4,8 @@
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: https://github.com/kan-tools/day/pull/224
-- Review-started-at: 2026-08-17T05:00:00Z
-- Review-period-ends: 2026-08-20T05:00:00Z
+- Review-started-at: 2026-08-17T05:20:00Z
+- Review-period-ends: 2026-08-20T05:20:00Z
 - Review-override: None
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative
 - Superseded-by: None
@@ -326,7 +326,6 @@ preserved but have no profile-v1 semantics):
 {
   "_version": 1,
   "frame": {"kind": "implicit-local", "repository": "REPO", "commit": "OID"},
-  "fresh_assessment": true,
   "procedure_spec": {"repository": "REPO", "commit": "OID", "path": "PATH", "sha256": "HEX", "version": "VERSION"},
   "scope": {"subject": "SUBJECT"},
   "evidence": [
@@ -343,10 +342,12 @@ preserved but have no profile-v1 semantics):
 ```
 
 Required scalar strings MUST be nonempty. `commit` is the full repository
-object ID and `sha256` is lowercase hexadecimal. `fresh_assessment` MUST be
-true: stored certificates are historical evidence, never imported current
-verdicts. The procedure address MUST exactly equal the predeclared address and
-the witness-system subject and digest MUST bind the declaration bytes used.
+object ID and `sha256` is lowercase hexadecimal. Certificate bytes contain no
+freshness assertion: once stored, a certificate is historical evidence. Only
+the operation that executes the declared procedure may produce a current
+verdict; reading a Result claim never does. The procedure address MUST exactly
+equal the predeclared address and the witness-system subject and digest MUST
+bind the declaration bytes used.
 `declaration_sha256` is the lowercase SHA-256 of the declaration object encoded
 with the JSON Canonicalization Scheme (RFC 8785), so independent readers hash
 the same bytes.

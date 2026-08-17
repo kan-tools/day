@@ -23,7 +23,6 @@
     {"id": "artifact-two-evidence", "evidence_cids": ["cid-a", "cid-b"], "artifact": "sha256:artifact", "independent_observations": 2},
     {"id": "shared-evidence-reuse", "evidence_cids": ["cid-a", "cid-a"], "artifact": "sha256:artifact", "independent_observations": 1},
     {"id": "independent-components", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}, {"name": "tests", "outcome": "material", "coordinate": "candidate-1"}], "expected": "certified"},
-    {"id": "coordinate-mismatch", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}, {"name": "tests", "outcome": "material", "coordinate": "candidate-2"}], "expected": "not-certified"},
     {"id": "missing-sufficient", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "missing", "coordinate": "candidate-1"}], "expected": "not-certified"},
     {"id": "unavailable-sufficient", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "timeout", "coordinate": "candidate-1"}], "expected": "uncheckable"},
     {"id": "legacy-flat", "relationship": "unspecified", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "component-report"},
@@ -42,30 +41,55 @@
       "assembly": {"kind": "all", "shared_coordinates": [{"name": "candidate", "components": ["candidate", "tests"]}]},
       "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "rfcs/vectors/procedures/releasable-v1.json", "sha256": "c9dfd138754450cc0f29544f9b8ef6a8f07c28a30b36a99d27bf58ded48a75fc", "version": "1"}
     },
-    "certificate": {
-      "_version": 1,
-      "frame": {"kind": "implicit-local", "repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1"},
-      "fresh_assessment": true,
-      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "rfcs/vectors/procedures/releasable-v1.json", "sha256": "c9dfd138754450cc0f29544f9b8ef6a8f07c28a30b36a99d27bf58ded48a75fc", "version": "1"},
-      "scope": {"subject": "telos/releasable"},
-      "evidence": [
-        {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
-        {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
-      ],
-      "witness_system": {"subject": "telos/releasable", "declaration_sha256": "1013bea9bd360bc794b2e8fccf0fd82ec85b233ac576f5b9b11c48851ea3ead6"},
-      "components": [
-        {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
-        {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-1"}}
-      ],
-      "outcome": "certified",
-      "limitations": []
-    },
-    "expected": "certified"
+    "cases": [
+      {
+        "id": "certified",
+        "certificate": {
+          "_version": 1,
+          "frame": {"kind": "implicit-local", "repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1"},
+          "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "rfcs/vectors/procedures/releasable-v1.json", "sha256": "c9dfd138754450cc0f29544f9b8ef6a8f07c28a30b36a99d27bf58ded48a75fc", "version": "1"},
+          "scope": {"subject": "telos/releasable"},
+          "evidence": [
+            {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+            {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+          ],
+          "witness_system": {"subject": "telos/releasable", "declaration_sha256": "434dd4bbd369631ec441c1efff4ddb0eda7f0a7bcf41a0783f4d4b897b961ae6"},
+          "components": [
+            {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
+            {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-1"}}
+          ],
+          "outcome": "certified",
+          "limitations": []
+        },
+        "expected": "certified"
+      },
+      {
+        "id": "coordinate-mismatch",
+        "certificate": {
+          "_version": 1,
+          "frame": {"kind": "implicit-local", "repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1"},
+          "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "rfcs/vectors/procedures/releasable-v1.json", "sha256": "c9dfd138754450cc0f29544f9b8ef6a8f07c28a30b36a99d27bf58ded48a75fc", "version": "1"},
+          "scope": {"subject": "telos/releasable"},
+          "evidence": [
+            {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+            {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+          ],
+          "witness_system": {"subject": "telos/releasable", "declaration_sha256": "434dd4bbd369631ec441c1efff4ddb0eda7f0a7bcf41a0783f4d4b897b961ae6"},
+          "components": [
+            {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
+            {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-2"}}
+          ],
+          "outcome": "not-certified",
+          "limitations": ["shared coordinate candidate does not match"]
+        },
+        "expected": "not-certified"
+      }
+    ]
   },
   "frame_read_cases": [
-    {"id": "same-provenance-stored", "stored": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "fresh_assessment": false, "expected": "historical-only"},
-    {"id": "different-provenance-stored", "stored": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "2222222222222222222222222222222222222222"}, "fresh_assessment": false, "expected": "provenance-mismatch"},
-    {"id": "same-provenance-fresh", "stored": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "fresh_assessment": true, "expected": "certified"}
+    {"id": "same-provenance-stored", "operation": "read-stored-certificate", "certificate_provenance": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "expected": "historical-only"},
+    {"id": "different-provenance-stored", "operation": "read-stored-certificate", "certificate_provenance": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "2222222222222222222222222222222222222222"}, "expected": "provenance-mismatch"},
+    {"id": "same-provenance-fresh", "operation": "execute-declared-procedure", "current": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "expected": "certified"}
   ],
   "relationship_examples": [
     {"id": "sufficient-only", "category": "finite-poset", "assembly_rank": 0, "observation_rank": 1, "forward": true, "reverse": false, "relationship": "sufficient"},
