@@ -55,6 +55,24 @@ Things that do **not** need this: typo and documentation fixes, a test that
 pins existing behaviour, a fix for an already-filed bug where the fix is
 obvious from the issue.
 
+## When a design becomes an RFC or ADR
+
+A validated `.design/` document is working material. A proposal additionally
+needs an RFC when it changes a public process primitive, durable convention,
+compatibility promise, governance or trust rule, execution-authority boundary,
+or architecture spanning independently changeable components. Copy
+`rfcs/template.md`; [RFC 0](rfcs/0-rfc-and-adr-process.md) defines numbering,
+review, acceptance, publication, and supersession.
+
+An ADR records a decision actually taken. It is appropriate for lasting local
+implementation rationale that does not need a public RFC. An accepted RFC is
+already the governing decision and should not receive a duplicate ADR; an ADR
+is required when implementation materially departs from that RFC.
+
+The merged RFC or ADR file is the normative content. Its published kan claim
+provides durable identity and an exact repository artifact address, not a
+second mutable copy of the document.
+
 ## The two properties a change must not break
 
 These are day's own teloi, recorded in its log as `telos/no-store-of-its-own`

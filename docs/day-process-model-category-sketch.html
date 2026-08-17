@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day Process Model — Category-Theoretic Sketch</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    :root {
+      --paper: #fbfaf6;
+      --ink: #20211f;
+      --muted: #66685f;
+      --rule: #d8d7ce;
+      --accent: #315f58;
+      --accent-soft: #e8f0ed;
+      --code: #f0efe9;
+      --warning: #8a5a1f;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 18px;
+      line-height: 1.68;
+    }
+
+    main {
+      width: min(860px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 72px 0 120px;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.18;
+      letter-spacing: -0.018em;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2.3rem, 6vw, 4.5rem);
+      font-weight: 500;
+    }
+
+    h2 {
+      margin: 3.4rem 0 1rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--rule);
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+
+    h3 {
+      margin: 2rem 0 0.65rem;
+      font-size: 1.2rem;
+    }
+
+    p { margin: 0.75rem 0 1rem; }
+
+    .kicker {
+      margin-bottom: 1rem;
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      max-width: 720px;
+      margin: 0 0 2rem;
+      color: var(--muted);
+      font-size: 1.2rem;
+    }
+
+    .notice {
+      margin: 2rem 0;
+      padding: 1rem 1.2rem;
+      border-left: 4px solid var(--warning);
+      background: #f7efe3;
+    }
+
+    nav {
+      margin: 2.2rem 0 3rem;
+      padding: 1.25rem 1.5rem;
+      border: 1px solid var(--rule);
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    nav strong {
+      display: block;
+      margin-bottom: 0.45rem;
+    }
+
+    nav ol {
+      columns: 2;
+      margin: 0;
+      padding-left: 1.35rem;
+    }
+
+    nav a { color: var(--accent); }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    code {
+      padding: 0.08em 0.28em;
+      border-radius: 3px;
+      background: var(--code);
+      font-size: 0.86em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 1.3rem 0;
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--code);
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+
+    blockquote {
+      margin: 1.4rem 0;
+      padding: 0.15rem 0 0.15rem 1.25rem;
+      border-left: 3px solid var(--accent);
+      color: #343a37;
+      font-size: 1.08rem;
+    }
+
+    ul, ol { padding-left: 1.45rem; }
+    li { margin: 0.35rem 0; }
+
+    .equation-note {
+      margin: 1rem 0;
+      padding: 0.8rem 1rem;
+      border-radius: 5px;
+      background: var(--accent-soft);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.4rem 0;
+      font-size: 0.94rem;
+    }
+
+    th, td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--rule);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .question {
+      margin-top: 3rem;
+      padding: 1.35rem 1.5rem;
+      border: 1px solid #b9cbc6;
+      border-radius: 6px;
+      background: var(--accent-soft);
+    }
+
+    footer {
+      margin-top: 4rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--rule);
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 680px) {
+      body { font-size: 17px; }
+      main { width: min(100% - 28px, 860px); padding-top: 42px; }
+      nav ol { columns: 1; }
+    }
+
+    @media print {
+      body { background: white; font-size: 11pt; }
+      main { width: auto; padding: 0; }
+      nav { display: none; }
+      h2 { break-after: avoid; }
+      pre, blockquote, table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="kicker">Pre-RFC mathematical target</div>
+  <h1>Day’s Process Model</h1>
+  <p class="subtitle">A category-theoretic sketch of frames, artifacts, evidence, assessments, witnesses, probes, teloi, atoms, and bridges.</p>
+
+  <aside class="notice">
+      <strong>Status:</strong> exploratory. This is an initial rendered snapshot of <a href="day-process-model-category-sketch.md"><code>day-process-model-category-sketch.md</code></a>. The Markdown-with-LaTeX file is canonical and now contains later frame-migration and atom/bridge developments not yet regenerated here.
+  </aside>
+
+  <nav aria-label="Contents">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#frames">Frames as dependent contexts</a></li>
+      <li><a href="#teloi">World states and teloi</a></li>
+      <li><a href="#evidence">Artifacts and evidence</a></li>
+      <li><a href="#contexts">Evidence contexts</a></li>
+      <li><a href="#assessments">Assessments</a></li>
+      <li><a href="#witnesses">Witnesses</a></li>
+      <li><a href="#bearing">Witness-bearing</a></li>
+      <li><a href="#convolution">Day convolution</a></li>
+      <li><a href="#atoms">Atoms and bridges</a></li>
+      <li><a href="#coherence">Telos assessment</a></li>
+      <li><a href="#stack">Formal stack</a></li>
+    </ol>
+  </nav>
+
+  <section id="frames">
+    <h2>1. Frames as dependent contexts</h2>
+    <p>Let \(\mathcal F\) be a category of frames. An object \(f\in\mathcal F\) is a frame. A morphism \(u:g\to f\) says that evidence and judgments available in \(f\) can be reinterpreted in \(g\). Each frame has its own internal logic, evidence vocabulary, admissible procedures, and standards of witness-bearing.</p>
+    <p>Rather than one global category of teloi or assessments, we have categories varying over frames:</p>
+    \[
+      \mathcal C:\mathcal F^{op}\to\mathbf{Cat}
+    \]
+    <p>or, more structurally, a fibration:</p>
+    \[
+      p:\int_{\mathcal F}\mathcal C\longrightarrow\mathcal F.
+    \]
+    <p>The fiber \(\mathcal C_f\) contains the things meaningful in frame \(f\). A frame map \(u:g\to f\) induces reindexing:</p>
+    \[
+      u^*:\mathcal C_f\to\mathcal C_g.
+    \]
+    <p>This is the dependent-type reading:</p>
+    <pre>f : Frame
+T : Telos(f)
+W : Witness(f, T)
+A : Assessment(f)</pre>
+    <p>A telos is not merely tagged with a frame. Its type depends on that frame. Transporting it requires an explicit substitution or reindexing operation.</p>
+    <p>The present implementation effectively has one implicit context, \(\Gamma_{\mathrm{local}}:\mathrm{Frame}\), and silently evaluates everything in its fiber. RFC&nbsp;1 should make that approximation explicit.</p>
+  </section>
+
+  <section id="teloi">
+    <h2>2. World states and teloi</h2>
+    <p>Let \(\mathcal S_f\) be the category of world states legible in frame \(f\). Its morphisms are frame-recognized evolutions or refinements of state.</p>
+    <p>A telos is not a target state. It is a frame-relative predicate on states:</p>
+    \[
+      T_f:\mathcal S_f^{op}\to\mathcal V_f,
+    \]
+    <p>where \(\mathcal V_f\) is the frame’s category of truth values, evidence spaces, or modes of support.</p>
+    <p>The “weak equivalence class” claim becomes:</p>
+    \[
+      s\simeq_f s'\implies T_f(s)\simeq T_f(s').
+    \]
+    <p>Thus a telos factors through a localization:</p>
+    \[
+      \mathcal S_f\longrightarrow\mathcal S_f[W_f^{-1}],
+    \]
+    <p>where \(W_f\) is the frame’s chosen class of weak equivalences. “A state of the world up to weak equivalence” becomes an invariant predicate on the localized state category.</p>
+  </section>
+
+  <section id="evidence">
+    <h2>3. Artifacts and evidence</h2>
+    <p>Artifacts remain external:</p>
+    \[
+      a\in\mathcal A_{\mathrm{world}}.
+    \]
+    <p>Day and kan do not need to contain \(a\). They may only know an address or handle referring to it.</p>
+    <p>Evidence is a typed, attributable presentation of an artifact within a frame. A rough dependent form is:</p>
+    \[
+      e:\mathrm{Evidence}_f(P,a),
+    \]
+    <p>where \(f\) is the frame, \(P\) is the proposition or evidential role, \(a\) is the artifact being made legible, and \(e\) carries provenance, scope, and an address.</p>
+    <p>This permits one artifact to support multiple evidence claims, contradictory evidence claims about one artifact, an artifact to exist without being evidence, and an evidence claim to be validly authored but inadmissible in a frame.</p>
+    <div class="equation-note">Kan stores the presentation; day interprets its process role.</div>
+  </section>
+
+  <section id="contexts">
+    <h2>4. Evidence contexts</h2>
+    <p>An assessment rarely uses one evidence claim. Let \(\mathcal E_f\) be a category of frame-local evidence contexts. An object might be a finite, provenance-preserving diagram:</p>
+    \[
+      E=\{e_1,e_2,\ldots,e_n;\text{ relations}\}.
+    \]
+    <p>Morphisms preserve evidential structure while allowing refinement, restriction, or reindexing. The monoidal product combines contexts:</p>
+    \[
+      E_1\otimes_f E_2.
+    \]
+    <p>This should not initially be assumed cartesian. Evidence can be reused cognitively, but provenance-bearing evidence is not freely duplicable or discardable without consequences. Two references to the same claim are not necessarily two independent observations.</p>
+    <p>A promising concrete model has finite evidence diagrams as objects, provenance-preserving union as tensor, the empty context as unit, shared claims glued rather than duplicated, and conflicts retained as structure rather than collapsed. The tensor may therefore resemble a pushout along shared evidence more than ordinary disjoint union.</p>
+  </section>
+
+  <section id="assessments">
+    <h2>5. Assessments</h2>
+    <p>An assessment is a procedure-bearing delineation of evidence in a frame:</p>
+    \[
+      A:\mathrm{Assessment}_f(E,p,\sigma),
+    \]
+    <p>where \(E\) is the selected evidence context, \(p\) is the assessment procedure, \(\sigma\) is the scope, and \(f\) supplies the internal logic.</p>
+    <p>An assessment is closer to the tuple</p>
+    \[
+      (E,\sigma,p,p(E),\text{limitations},\text{provenance})
+    \]
+    <p>than to a verdict. Its procedure must be designed to produce something capable of bearing witness, but the assessment does not certify by itself that it bears a particular witness.</p>
+    <pre>procedure executed successfully
+≠ assessment formed honestly
+≠ assessment bears witness
+≠ telos holds</pre>
+    <p>A durable certificate is a presentation of the assessment:</p>
+    \[
+      c:\mathrm{Certificate}_f(A).
+    \]
+    <p>The certificate is what kan may record.</p>
+  </section>
+
+  <section id="witnesses">
+    <h2>6. Witnesses as observables of a telos</h2>
+    <p>A witness is not a probe. It is a frame-relative description of an observable aspect through which a telos can become evidenced.</p>
+    <p>For a telos \(T\), take a diagram:</p>
+    \[
+      W_T:J_T\to\mathcal W_f.
+    \]
+    <p>Each \(W_T(j)\) describes one evidential concept involved in making \(T\) legible. The shape \(J_T\) carries relationships such as conjunction-like dependency, alternatives, sequencing, shared scope, correspondence, and compatibility constraints.</p>
+    <p>The telos need not equal the limit of this diagram. More cautiously, the diagram is an observational decomposition of \(T\). It may be sufficient but not necessary, necessary but incomplete, an approximation at a declared operational profile, or jointly conservative only under stated assumptions.</p>
+    <blockquote>An incomplete witness system must not redefine the telos to whatever happens to be measurable.</blockquote>
+  </section>
+
+  <section id="bearing">
+    <h2>7. Witness-bearing as an enriched profunctor</h2>
+    <p>Assessments and witnesses need not initially inhabit the same ordinary category. Their most general relationship is an enriched profunctor:</p>
+    \[
+      \mathsf{Bear}_f:
+      \mathsf{Assess}_f^{op}\otimes\mathsf{Witness}_f
+      \to\mathcal V_f.
+    \]
+    <p>For an assessment \(A\) and witness \(W\),</p>
+    \[
+      \mathsf{Bear}_f(A,W)\in\mathcal V_f
+    \]
+    <p>is the structured space of ways \(A\) bears \(W\).</p>
+    <p>This becomes an actual enriched hom when representability is established, perhaps by embedding assessments and witnesses into one enriched category:</p>
+    \[
+      \mathsf{Bear}_f(A,W)
+      \cong
+      \underline{\mathrm{Hom}}_{\mathcal X_f}(A,W).
+    \]
+    <p>A useful trajectory is:</p>
+    <ol>
+      <li>Today: a finite verdict enum.</li>
+      <li>Near term: a structured witness-bearing relation.</li>
+      <li>Later: an enriched profunctor.</li>
+      <li>Stronger result: a representable enriched hom-object.</li>
+    </ol>
+    <p>A probe is an operational procedure</p>
+    \[
+      q_{f,A,W}\leadsto\mathsf{Bear}_f(A,W)
+    \]
+    <p>that computes, samples, or approximates that object. The probe is not the relationship itself. Current outputs such as <code>MATERIAL</code>, <code>MISSING</code>, <code>VACUOUS</code>, <code>ERROR</code>, <code>NOT RUN</code>, and <code>TIMEOUT</code> are coarse observations of \(\mathsf{Bear}_f(A,W)\).</p>
+  </section>
+
+  <section id="convolution">
+    <h2>8. Where Day convolution enters</h2>
+    <p>For each frame, suppose witness semantics are presheaves over evidence contexts:</p>
+    \[
+      F:\mathcal E_f^{op}\to\mathcal V_f.
+    \]
+    <p>Here \(F(E)\) is the structured space of ways evidence context \(E\) can bear a witness. Given the monoidal structure on evidence contexts, Day convolution combines witness semantics:</p>
+    \[
+      (F\star G)(E)
+      =
+      \int^{E_1,E_2}
+      \mathcal E_f(E,E_1\otimes E_2)
+      \otimes
+      F(E_1)
+      \otimes
+      G(E_2).
+    \]
+    <blockquote>To determine how a combined evidence context bears the composite witness, consider all coherent decompositions into contexts bearing the component witnesses.</blockquote>
+    <p>This captures what a flat “all witnesses pass” implementation cannot: evidence may jointly bear witness without partitioning uniquely; one item may participate in several assessments; independent witness components combine monoidally; and the result retains the space of witness-bearing relationships rather than collapsing immediately to a Boolean.</p>
+    <p>Two independent probes can both pass while their evidence fails to compose coherently. If two witness components require the same candidate identity, a trial from one commit and a tag from another provide no coherent gluing map.</p>
+  </section>
+
+  <section id="atoms">
+    <h2>9. Atoms and bridges</h2>
+    <p>For artifact-context types \(X\) and \(Y\), an atom is unlikely to be an ordinary function \(X\to Y\). Execution may be nondeterministic, interactive, multi-actor, or fail to produce an output. A better target is an enriched profunctor:</p>
+    \[
+      A:X\nrightarrow Y.
+    \]
+    <p>Sequential composition is coend composition:</p>
+    \[
+      (B\circ A)(x,z)
+      =
+      \int^y A(x,y)\otimes B(y,z).
+    \]
+    <p>Parallel composition uses the monoidal product:</p>
+    \[
+      A\otimes B:
+      X_1\otimes X_2\nrightarrow Y_1\otimes Y_2.
+    \]
+    <p>A bridge is then a string diagram in the symmetric monoidal bicategory of these profunctor-like processes.</p>
+    <p>This separates two related coend constructions:</p>
+    <ul>
+      <li><strong>Profunctor composition</strong> describes how process possibilities compose through intermediate artifact contexts.</li>
+      <li><strong>Day convolution</strong> describes how witness-bearing semantics compose over combined evidence contexts.</li>
+    </ul>
+  </section>
+
+  <section id="coherence">
+    <h2>10. Telos assessment as coherence</h2>
+    <p>Given a telos witness diagram \(W_T\) and a frame-local assessment context \(A\), assessing the telos should construct:</p>
+    \[
+      \mathsf{Bear}_f(A,W_T)
+    \]
+    <p>with coherence across the diagram. The operational result is not merely</p>
+    \[
+      \bigwedge_j \mathrm{probe}(A,W_T(j)).
+    \]
+    <p>It must preserve shared coordinates and commutative constraints. If two witnesses refer to a candidate SHA, their maps into the shared candidate object must agree.</p>
+    <div class="equation-note">The mismatched-trial-and-tag bug class is a noncommuting diagram, not merely a missing Boolean check.</div>
+  </section>
+
+  <section id="stack">
+    <h2>11. A plausible formal stack</h2>
+    <table>
+      <thead>
+        <tr><th>Role</th><th>Candidate structure</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Frames</td><td>Base category \(\mathcal F\)</td></tr>
+        <tr><td>World states</td><td>Localized category \(\mathcal S_f[W_f^{-1}]\)</td></tr>
+        <tr><td>Values / enrichment</td><td>Frame-local category \(\mathcal V_f\)</td></tr>
+        <tr><td>Evidence contexts</td><td>Symmetric monoidal category \((\mathcal E_f,\otimes_f,I_f)\)</td></tr>
+        <tr><td>Assessments</td><td>Category \(\mathsf{Assess}_f\)</td></tr>
+        <tr><td>Witnesses</td><td>Category \(\mathsf{Witness}_f\)</td></tr>
+        <tr><td>Witness-bearing</td><td>Enriched profunctor \(\mathsf{Bear}_f\)</td></tr>
+        <tr><td>Telos decomposition</td><td>Witness diagram \(J_T\to\mathsf{Witness}_f\)</td></tr>
+        <tr><td>Atoms</td><td>Enriched process profunctors \(X\nrightarrow Y\)</td></tr>
+        <tr><td>Bridges</td><td>String diagrams composed from atoms</td></tr>
+        <tr><td>Witness composition</td><td>Day convolution on \([\mathcal E_f^{op},\mathcal V_f]\)</td></tr>
+      </tbody>
+    </table>
+
+    <aside class="question">
+      <strong>Next question.</strong> What is the monoidal structure on evidence contexts? The current hypothesis is provenance-preserving and non-cartesian: shared evidence is glued, independent evidence is juxtaposed, and duplication does not manufacture independence. The alternative is a more cartesian model in which frame-local evidence is freely reusable.
+    </aside>
+  </section>
+
+  <footer>
+    Initial rendering of the Markdown-with-LaTeX working document for day RFC&nbsp;1. Follow the source link above for the current text. Mathematical notation uses MathJax from jsDelivr and therefore requires network access when first opened.
+  </footer>
+</main>
+</body>
+</html>

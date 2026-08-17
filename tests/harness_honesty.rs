@@ -482,9 +482,26 @@ fn the_review_atom_states_adr_52_and_the_demonstration_rule() {
 #[test]
 fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
     let yaml = read(".github/workflows/revert-demo.yml");
+    let matrix = read("tests/fixtures/kan-compat.tsv");
+    let newest = matrix
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let tag = fields.next()?;
+            (fields.next()? == "ok").then_some(tag)
+        })
+        .next_back()
+        .expect("the compatibility matrix must contain an ok row");
     assert!(
         yaml.contains("scripts/revert-demo.py --verify"),
         "the job must re-derive with the harness, not read the trailer"
+    );
+    assert!(
+        yaml.contains(&format!("KAN_TAG: {newest}"))
+            && yaml.contains("--tag \"${KAN_TAG}\" --force kan")
+            && yaml.contains("test -x \"$(command -v kan)\""),
+        "the verifier must install and prove the newest measured kan is present; kan-backed tests cannot re-derive from a red missing-reader baseline"
     );
     assert!(
         yaml.contains("could not compute a merge base") && yaml.contains("exit 1"),
@@ -1043,6 +1060,216 @@ fn every_commit_is_accounted_for_under_the_demonstration_rule() {
     if let Err(why) = interpret_census(out.status.code(), ahead.trim() == "0") {
         panic!("{why}\n{text}");
     }
+}
+
+/// RFC 1 AC-17 — the derivative HTML is checked against a fresh rendering of
+/// the canonical Markdown. Presence, a source link, and a MathJax script are
+/// not freshness: all three survive when the source changes and the derivative
+/// does not, which is the exact hostile mutation this test drives.
+#[test]
+fn stale_denotational_html_is_rejected() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("scripts")).unwrap();
+    std::fs::create_dir_all(root.join("rfcs/1")).unwrap();
+    std::fs::copy(
+        repo_root().join("scripts/render-denotational-semantics.py"),
+        root.join("scripts/render-denotational-semantics.py"),
+    )
+    .unwrap();
+    std::fs::copy(
+        repo_root().join("rfcs/1/denotational-semantics.md"),
+        root.join("rfcs/1/denotational-semantics.md"),
+    )
+    .unwrap();
+    std::fs::copy(
+        repo_root().join("rfcs/1/denotational-semantics.html"),
+        root.join("rfcs/1/denotational-semantics.html"),
+    )
+    .unwrap();
+    let source = root.join("rfcs/1/denotational-semantics.md");
+    let mut changed = std::fs::read_to_string(&source).unwrap();
+    changed.push_str("\nA hostile source-only mutation.\n");
+    std::fs::write(&source, changed).unwrap();
+
+    let out = Command::new("python3")
+        .args(["scripts/render-denotational-semantics.py", "--check"])
+        .current_dir(root)
+        .output()
+        .expect("python3 should be runnable");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success() && text.contains("is out of date"),
+        "a source-only change must make the freshness check fail for the stated reason:\n{text}"
+    );
+}
+
+/// RFC 1 AC-17 — the companion's real Decision, exact FileAt address, bytes,
+/// repository, projection, and Publication claim all resolve from a no-local
+/// clone. The checker's self-test mutates every coordinate and physically hides
+/// the projection, so a presence-only implementation cannot satisfy this test.
+#[test]
+fn denotational_publication_resolves_and_rejects_hostile_mutations() {
+    let out = Command::new(repo_root().join("scripts/check-rfc1-denotational-publication.py"))
+        .arg("--self-test")
+        .current_dir(repo_root())
+        .output()
+        .expect("the denotational publication checker should run");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success()
+            && text.contains("RFC 1 denotational publication: fresh clone resolved"),
+        "the real publication and every hostile mutation must be checked:\n{text}"
+    );
+}
+
+/// GitHub Actions checks out `https://github.com/kan-tools/day` while ordinary
+/// local clones commonly retain the equivalent `.git` suffix. Publication
+/// identity must canonicalize that transport spelling without accepting a
+/// different repository.
+#[test]
+fn publication_checkers_accept_githubs_suffixless_origin() {
+    let dir = tempfile::tempdir().expect("a scratch dir");
+    let checkout = dir.path().join("day");
+    let cloned = Command::new("git")
+        .args(["clone", "--quiet", "--no-local"])
+        .arg(repo_root())
+        .arg(&checkout)
+        .status()
+        .expect("git clone should run");
+    assert!(
+        cloned.success(),
+        "the publication fixture clone must succeed"
+    );
+    let configured = Command::new("git")
+        .args([
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/kan-tools/day",
+        ])
+        .current_dir(&checkout)
+        .status()
+        .expect("git remote set-url should run");
+    assert!(
+        configured.success(),
+        "the suffixless CI origin must be installed"
+    );
+
+    for checker in [
+        "scripts/check-rfc0-publication.py",
+        "scripts/check-rfc1-denotational-publication.py",
+    ] {
+        std::fs::copy(repo_root().join(checker), checkout.join(checker))
+            .expect("the checker under test should replace the committed fixture copy");
+        let out = Command::new(checkout.join(checker))
+            .current_dir(&checkout)
+            .output()
+            .expect("the publication checker should run");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            out.status.success(),
+            "{checker} must accept GitHub's suffixless spelling of the same repository:\n{text}"
+        );
+    }
+}
+
+/// The ordinary push suite exercises the current published-claim tree format;
+/// the compatibility matrix separately preserves the oldest supported CLI
+/// pairing. Pinning ordinary CI to the floor made a fresh clone unreadable as
+/// soon as kan's publication layout advanced while its CLI stayed compatible.
+#[test]
+fn ordinary_ci_uses_the_newest_measured_kan() {
+    let matrix = read("tests/fixtures/kan-compat.tsv");
+    let newest = matrix
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let tag = fields.next()?;
+            (fields.next()? == "ok").then_some(tag)
+        })
+        .next_back()
+        .expect("the compatibility matrix must contain an ok row");
+    let ci = read(".github/workflows/ci.yml");
+    assert!(
+        ci.contains(&format!("KAN_TAG: {newest}")),
+        "ordinary CI must use newest measured kan {newest}; the compatibility matrix owns the older floor"
+    );
+    assert!(
+        ci.contains("--tag \"${KAN_TAG}\" --force kan"),
+        "a dedicated kan-cache miss must replace any stale kan binary restored by the general Rust cache"
+    );
+}
+
+/// RFC lifecycle mutation tests must continue to mutate after a proposal moves
+/// from Draft to Review; otherwise the acceptance checks silently become
+/// vacuous at the exact lifecycle transition they exist to protect.
+#[test]
+fn rfc_acceptance_self_tests_survive_the_review_transition() {
+    let checker = read("scripts/check-rfcs-adrs.sh");
+    assert!(
+        checker.contains("s/- Authors:/- Kan-claim: bafyrecursive\\n- Authors:/")
+            && checker.contains("grep -Eq '^- Kan-claim:'")
+            && checker.contains("self-test could not construct recursive-publication mutation"),
+        "the recursive-publication guard must be portable, and its mutation must be capture-free and prove that it was constructed"
+    );
+    let out = Command::new("bash")
+        .args(["scripts/check-rfcs-adrs.sh", "--self-test"])
+        .current_dir(repo_root())
+        .output()
+        .expect("the RFC self-test should run");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success()
+            && text.contains("accepted-metadata mutation rejected")
+            && text.contains("forged-review mutation rejected")
+            && text.contains("short-review mutation rejected"),
+        "acceptance mutations must still fire while RFC 0 is in Review:\n{text}"
+    );
+}
+
+/// RFC 1 AC-10 — incorporated notation must remain type-distinct, and every
+/// unresolved formal choice introduced by the companion must remain visible in
+/// RFC 1's authoritative unresolved-question census.
+#[test]
+fn rfc1_formal_vocabulary_and_obligation_census_are_consistent() {
+    let out = Command::new(repo_root().join("scripts/check-rfc1-formal-obligations.py"))
+        .arg("--self-test")
+        .current_dir(repo_root())
+        .output()
+        .expect("the RFC 1 formal-obligation checker should run");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success()
+            && text.contains("witness-topology-collision mutation rejected")
+            && text
+                .contains("missing-epistemic-site-and-telos-relative-topology mutation rejected")
+            && text.contains(
+                "missing-effective-realization-fragment-and-provability-ledger mutation rejected"
+            ),
+        "notation collisions and missing unresolved choices must be rejected:\n{text}"
+    );
 }
 
 /// **An empty range is its own outcome, distinct from could-not-check.**

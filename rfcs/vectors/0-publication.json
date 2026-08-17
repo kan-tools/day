@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "subject": "rfc-fixture/7",
+  "author": "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn",
+  "repository": "https://github.com/kan-tools/day.git",
+  "claim_cid": "bafyreiemmrqou6tijmtv5al6z5dqigdjhexblfr4hwpvlejxanimm3cice",
+  "artifact_commit": "bb71e70a9b41504d5f5f8a108682287b49467a3c",
+  "artifact_path": "rfcs/fixtures/7-accepted-publication.md",
+  "artifact_sha256": "6afd9052b0f0805511d1176d78a90baa36859c6a203a287a107be1b17468b16c",
+  "projection_path": ".claims/rfc-fixture/7",
+  "claim_location": "external",
+  "normative_cid_embedding": "forbidden"
+}

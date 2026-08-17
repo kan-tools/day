@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "composition": {
+    "convention": "right-to-left",
+    "atoms": [
+      {"name": "A1", "source": "X0", "target": "X1"},
+      {"name": "A2", "source": "X1", "target": "X2"}
+    ],
+    "bridge_order": ["A1", "A2"],
+    "present": {"name": "P0", "context": "X0"},
+    "target": {"name": "T", "context": "X2"},
+    "identity": {"name": "1_X0", "source": "X0", "target": "X0"},
+    "local_cells": [
+      {"source_predicate": "P0", "atom": "A1", "target_predicate": "P1", "target_context": "X1", "exists": true},
+      {"source_predicate": "P1", "atom": "A2", "target_predicate": "T", "target_context": "X2", "exists": true}
+    ],
+    "expected_composite": {"source": "X0", "target": "X2"},
+    "expected_realization": "P0 ⇒ T ⊙ (A2 ⊙ A1)",
+    "reversed_realization": {"expression": "P0 ⇒ (A2 ⊙ A1) ⊙ T", "well_typed": false},
+    "typeable_without_realization": {"bridge_order": ["A1", "A2"], "local_cell_exists": [true, false], "expected": "no-realization"}
+  },
+  "witness_cases": [
+    {"id": "artifact-two-evidence", "evidence_cids": ["cid-a", "cid-b"], "artifact": "sha256:artifact", "independent_observations": 2},
+    {"id": "shared-evidence-reuse", "evidence_cids": ["cid-a", "cid-a"], "artifact": "sha256:artifact", "independent_observations": 1},
+    {"id": "independent-components", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}, {"name": "tests", "outcome": "material", "coordinate": "candidate-1"}], "expected": "certified"},
+    {"id": "coordinate-mismatch", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}, {"name": "tests", "outcome": "material", "coordinate": "candidate-2"}], "expected": "not-certified"},
+    {"id": "missing-sufficient", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "missing", "coordinate": "candidate-1"}], "expected": "not-certified"},
+    {"id": "unavailable-sufficient", "relationship": "sufficient", "components": [{"name": "candidate", "outcome": "timeout", "coordinate": "candidate-1"}], "expected": "uncheckable"},
+    {"id": "legacy-flat", "relationship": "unspecified", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "component-report"},
+    {"id": "necessary-unsupported", "relationship": "necessary", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "unsupported"},
+    {"id": "exact-unsupported", "relationship": "exact", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "unsupported"}
+  ],
+  "migration_cases": [
+    {"id": "invertible-reindexing", "comparison": "invertible", "procedure": "supported", "coordinates": "preserved", "transported": ["telos", "evidence", "procedure", "assessment", "witness", "atom", "bridge", "realization"], "lost": [], "expected": "equivalent"},
+    {"id": "unsupported-procedure", "comparison": "invertible", "procedure": "unsupported", "coordinates": "preserved", "transported": ["telos", "evidence", "artifact-coordinate"], "lost": ["procedure", "assessment-outcome", "certificate"], "expected": "lossy"},
+    {"id": "lax-comparison", "comparison": "lax", "procedure": "supported", "coordinates": "preserved", "transported": ["evidence", "individual-components"], "lost": ["monoidal-equivalence", "assembled-witness"], "expected": "lossy"},
+    {"id": "successful-gluing", "comparison": "invertible", "procedure": "supported", "coordinates": "preserved", "transported": ["shared-coordinate", "component-assessments", "assembled-witness"], "lost": [], "expected": "equivalent"},
+    {"id": "forgotten-coordinate", "comparison": "invertible", "procedure": "supported", "coordinates": "forgotten", "transported": ["component-assessments"], "lost": ["shared-coordinate", "gluing-proof", "assembled-witness"], "expected": "lossy"},
+    {"id": "incomparable-frames", "comparison": "absent", "procedure": "supported", "coordinates": "preserved", "transported": [], "lost": ["all-cross-frame-judgments"], "expected": "incomparable"}
+  ]
+}
