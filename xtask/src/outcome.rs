@@ -14,12 +14,14 @@ impl<T> Outcome<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     pub detail: String,
+    pub exit_code: u8,
 }
 
 impl Finding {
     pub fn new(detail: impl Into<String>) -> Self {
         Self {
             detail: detail.into(),
+            exit_code: 1,
         }
     }
 }
@@ -27,12 +29,21 @@ impl Finding {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CouldNotCheck {
     pub detail: String,
+    pub exit_code: u8,
 }
 
 impl CouldNotCheck {
     pub fn new(detail: impl Into<String>) -> Self {
         Self {
             detail: detail.into(),
+            exit_code: 2,
+        }
+    }
+
+    pub fn with_exit_code(detail: impl Into<String>, exit_code: u8) -> Self {
+        Self {
+            detail: detail.into(),
+            exit_code,
         }
     }
 }

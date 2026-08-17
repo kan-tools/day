@@ -20,8 +20,22 @@ impl Process for FixtureProcess {
 #[test]
 fn process_results_remain_three_distinct_states() {
     for (result, expected) in [
-        (Ok(ProcessOutput { status: 0 }), "passed"),
-        (Ok(ProcessOutput { status: 7 }), "finding"),
+        (
+            Ok(ProcessOutput {
+                status: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+            }),
+            "passed",
+        ),
+        (
+            Ok(ProcessOutput {
+                status: 7,
+                stdout: String::new(),
+                stderr: String::new(),
+            }),
+            "finding",
+        ),
         (Err("missing cargo".to_owned()), "could-not-check"),
     ] {
         let process = FixtureProcess {
@@ -72,7 +86,11 @@ fn profiles_reference_only_known_checks_and_release_contains_ci() {
 #[test]
 fn rfc_self_test_is_an_explicit_process_request() {
     let process = FixtureProcess {
-        result: Ok(ProcessOutput { status: 0 }),
+        result: Ok(ProcessOutput {
+            status: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+        }),
         calls: RefCell::new(Vec::new()),
     };
     let outcome = xtask::run(

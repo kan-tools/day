@@ -95,7 +95,7 @@ fn run_evidence(command: EvidenceCommand, root: &Path, process: &dyn Process) ->
 fn run_census(command: CensusCommand, root: &Path, process: &dyn Process) -> Outcome<()> {
     match command {
         CensusCommand::Demonstrations(TrailingArgs { args }) => {
-            run_legacy(root, process, "scripts/demonstration-census.py", args)
+            evidence::demonstration_census::run(root, process, &args)
         }
         CensusCommand::Findings(TrailingArgs { args }) => {
             run_legacy(root, process, "scripts/finding-census.py", args)
@@ -169,11 +169,18 @@ where
     let request = ProcessRequest::new(program, args, root);
     match process.run(&request) {
         Err(error) => Outcome::CouldNotCheck(CouldNotCheck::new(error)),
-        Ok(output) if output.status == 0 => Outcome::Passed(()),
-        Ok(output) => Outcome::Finding(Finding::new(format!(
-            "`{}` exited {}",
-            request.display(),
-            output.status
-        ))),
+        Ok(output) => {
+            print!("{}", output.stdout);
+            eprint!("{}", output.stderr);
+            if output.status == 0 {
+                Outcome::Passed(())
+            } else {
+                Outcome::Finding(Finding::new(format!(
+                    "`{}` exited {}",
+                    request.display(),
+                    output.status
+                )))
+            }
+        }
     }
 }

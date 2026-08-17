@@ -19,11 +19,13 @@ fn main() -> ExitCode {
         Outcome::Passed(()) => ExitCode::SUCCESS,
         Outcome::Finding(finding) => {
             eprintln!("FINDING: {}", finding.detail);
-            ExitCode::from(1)
+            ExitCode::from(finding.exit_code)
         }
         Outcome::CouldNotCheck(unknown) => {
-            eprintln!("COULD-NOT-CHECK: {}", unknown.detail);
-            ExitCode::from(2)
+            if unknown.exit_code != 3 {
+                eprintln!("COULD-NOT-CHECK: {}", unknown.detail);
+            }
+            ExitCode::from(unknown.exit_code)
         }
     }
 }

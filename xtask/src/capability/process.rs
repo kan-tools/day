@@ -34,6 +34,8 @@ impl ProcessRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessOutput {
     pub status: i32,
+    pub stdout: String,
+    pub stderr: String,
 }
 
 pub trait Process {
@@ -44,13 +46,15 @@ pub struct SystemProcess;
 
 impl Process for SystemProcess {
     fn run(&self, request: &ProcessRequest) -> Result<ProcessOutput, String> {
-        let status = Command::new(&request.program)
+        let output = Command::new(&request.program)
             .args(&request.args)
             .current_dir(&request.cwd)
-            .status()
+            .output()
             .map_err(|error| format!("could not run `{}`: {error}", request.display()))?;
         Ok(ProcessOutput {
-            status: status.code().unwrap_or(2),
+            status: output.status.code().unwrap_or(2),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         })
     }
 }
