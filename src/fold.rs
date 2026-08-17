@@ -78,6 +78,13 @@ pub const ASSESSMENT: &str = "Result";
 /// write, and therefore the preferred carrier of a declaration.
 pub const DECISION: &str = "Decision";
 
+/// The stable prefix emitted by `day review record`. A review is a Decision
+/// about a declaration, not a replacement declaration for the reviewed
+/// subject. Reviews deliberately stay on that subject so witness probes can
+/// find them; the declaration fold separates the two roles by their emitted
+/// vocabulary.
+pub const REVIEW_PREFIX: &str = "adversarial review of ";
+
 /// Whether this claim is an assessment *of* the subject rather than a statement
 /// *by* it.
 ///
@@ -86,6 +93,14 @@ pub const DECISION: &str = "Decision";
 /// one place to change if kan's rendering ever moves.
 pub fn is_assessment(claim: &Claim) -> bool {
     claim.kind == ASSESSMENT
+}
+
+pub fn is_review(claim: &Claim) -> bool {
+    claim.kind == DECISION
+        && claim
+            .text
+            .as_deref()
+            .is_some_and(|text| text.starts_with(REVIEW_PREFIX))
 }
 
 /// True when anything on this subject has assessed it.
@@ -124,13 +139,13 @@ pub fn declaration(claims: &[Claim]) -> Option<String> {
     claims
         .iter()
         .rev()
-        .filter(|c| c.kind == DECISION)
+        .filter(|c| c.kind == DECISION && !is_review(c))
         .find_map(prose)
         .or_else(|| {
             claims
                 .iter()
                 .rev()
-                .filter(|c| !is_assessment(c))
+                .filter(|c| !is_assessment(c) && !is_review(c))
                 .find_map(prose)
         })
 }
@@ -141,12 +156,12 @@ pub fn declaration(claims: &[Claim]) -> Option<String> {
 ///
 /// `practice` is the case: each live claim is one projected practice item, so
 /// there is nothing to supersede and no "newest wins". It still must not sweep
-/// up an assessment, which it did — a `kan result practice "…"` was injected
-/// into every session as practice guidance.
+/// up an assessment or review, which would inject evidence *about* practice as
+/// practice guidance.
 pub fn items(claims: &[Claim]) -> impl Iterator<Item = (&Claim, String)> {
     claims
         .iter()
-        .filter(|c| !is_assessment(c))
+        .filter(|c| !is_assessment(c) && !is_review(c))
         .filter_map(|c| prose(c).map(|text| (c, text)))
 }
 
@@ -220,10 +235,28 @@ mod tests {
     }
 
     #[test]
+    fn an_adversarial_review_never_stands_in_for_a_declaration() {
+        let decl = claim(DECISION, "The telos itself.");
+        let review = claim(
+            DECISION,
+            "adversarial review of telos/x: BLOCK — a defect remains",
+        );
+        assert_eq!(
+            declaration(&[decl, review]).as_deref(),
+            Some("The telos itself."),
+            "a review Decision is evidence about the telos, not its declaration"
+        );
+    }
+
+    #[test]
     fn items_accumulate_but_skip_assessments() {
         let claims = [
             claim("Observation", "first practice"),
             claim(ASSESSMENT, "an assessment of practice"),
+            claim(
+                DECISION,
+                "adversarial review of practice: BLOCK — not guidance",
+            ),
             claim("Decision", "second practice"),
         ];
         let got: Vec<String> = items(&claims).map(|(_, text)| text).collect();

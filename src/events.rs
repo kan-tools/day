@@ -342,27 +342,38 @@ fn validate_summaries(field: &'static str, values: &[String]) -> Result<(), Stri
     Ok(())
 }
 
-/// Rejects the common durable-transcript failure shape without pretending day
-/// can infer whether arbitrary prose originated in a conversation. Two or more
-/// colon-terminated speaker-like labels are enough to identify turn-by-turn
-/// content. Labels are intentionally not an allowlist: names such as `Alice:`
-/// and `Bob:` are the ordinary way a transcript bypasses role-name matching.
-/// One label remains valid quoted evidence or ordinary prose.
+/// Rejects common durable-transcript shapes without pretending day can infer
+/// whether arbitrary prose originated in a conversation. Two or more
+/// speaker-like labels are enough to identify turn-by-turn content. Labels are
+/// intentionally not an allowlist: names such as `Alice:` and `[Bob]` are the
+/// ordinary way a transcript bypasses role-name matching. Whitespace after a
+/// colon is not required, and dash-delimited dialogue is covered too. One
+/// label remains valid quoted evidence or ordinary prose.
 fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
-    let turns = value
-        .split_whitespace()
-        .filter_map(|word| {
-            let word = word.trim_end_matches(|character: char| {
-                matches!(character, '*' | '_' | '`' | ']' | ')')
+    let words = value.split_whitespace().collect::<Vec<_>>();
+    let turns = words
+        .iter()
+        .enumerate()
+        .filter(|(index, word)| {
+            let word = word.trim_matches(|character: char| matches!(character, '*' | '_' | '`'));
+            let colon = word
+                .split_once(':')
+                .is_some_and(|(label, _)| speaker_label(label));
+            let bracketed = word
+                .strip_prefix('[')
+                .and_then(|word| word.split_once(']'))
+                .is_some_and(|(label, _)| speaker_label(label));
+            let dashed = words.get(index + 1).is_some_and(|next| {
+                matches!(
+                    next.trim_matches(|character: char| {
+                        matches!(character, '*' | '_' | '`' | ',' | ';')
+                    }),
+                    "-" | "–" | "—"
+                ) && speaker_label(
+                    word.trim_matches(|character: char| !character.is_alphanumeric()),
+                )
             });
-            let label = word.strip_suffix(':')?;
-            Some(label.trim_matches(|character: char| !character.is_alphanumeric()))
-        })
-        .filter(|label| {
-            !label.is_empty()
-                && label.len() <= 40
-                && label.chars().all(char::is_alphanumeric)
-                && label.chars().any(char::is_alphabetic)
+            colon || bracketed || dashed
         })
         .take(2)
         .count();
@@ -371,6 +382,14 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
     } else {
         Ok(())
     }
+}
+
+fn speaker_label(label: &str) -> bool {
+    let label = label.trim_matches(|character: char| !character.is_alphanumeric());
+    !label.is_empty()
+        && label.chars().count() <= 40
+        && label.chars().all(char::is_alphanumeric)
+        && label.chars().any(char::is_alphabetic)
 }
 
 fn fenced<T: Serialize>(opening: &str, fence: &str, value: &T) -> String {

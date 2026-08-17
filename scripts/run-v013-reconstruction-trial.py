@@ -85,7 +85,10 @@ def main():
         "no prior conversation transcript. Perform every required read and verification, "
         "report the result in the skill's required order, and stop. In that report, name the "
         "exact acquired-input, intervention, and handoff CIDs and the exact suite, census, and "
-        "CI coordinates you recovered from the signed claims."
+        "CI coordinates you recovered from the signed claims. Execute `kan show --all --json` "
+        "exactly, execute the recovered suite argv exactly, execute the recovered census as "
+        "`just census-demonstrations BASE..HEAD` exactly, and execute the recovered CI check as "
+        "`gh run view RUN_ID --json headSha,conclusion` exactly; do not wrap or combine them."
     )
     run(
         [

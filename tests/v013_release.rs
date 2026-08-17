@@ -35,6 +35,11 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
     ] {
         assert!(workflow.contains(required), "missing `{required}`");
     }
+    assert!(
+        workflow.find("export CODEX_HOME").unwrap()
+            < workflow.find("codex login --with-api-key").unwrap(),
+        "the isolated home must exist before Codex writes authentication"
+    );
     let runner = text("scripts/run-v013-askme-trial.py");
     assert!(runner.contains("\"codex\", \"exec\""));
     assert!(runner.contains("\"codex\", \"exec\", \"resume\""));
@@ -63,6 +68,11 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
         workflow.contains("${{ inputs.candidate_sha }}") && workflow.contains("$EVIDENCE_COMMIT")
     );
     assert!(!workflow.contains("echo passed") && !workflow.contains("touch passed"));
+    assert!(
+        workflow.find("export CODEX_HOME").unwrap()
+            < workflow.find("codex login --with-api-key").unwrap(),
+        "reconstruction must authenticate the same isolated home it executes from"
+    );
 
     let grader = text("xtask/src/release/v013.rs");
     assert!(grader.contains("evidence commit has no published signed kan claims"));
@@ -76,11 +86,14 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
         grader.contains("fresh wakeup raw events do not prove the required bulk kan command ran")
     );
     assert!(grader.contains("independently recheck suite census and CI scopes"));
+    assert!(grader.contains("command.trim() == expected"));
+    assert!(grader.contains("contains an item lifecycle without completion"));
 
     let runner = text("scripts/run-v013-reconstruction-trial.py");
     assert!(runner.contains("no prior conversation transcript"));
     assert!(runner.contains("wakeup-events.jsonl"));
     assert!(runner.contains("--trust"));
+    assert!(runner.contains("do not wrap or combine them"));
 
     let protocol: serde_json::Value =
         serde_json::from_str(&text(".release/protocols/reconstruction-v1.json")).unwrap();

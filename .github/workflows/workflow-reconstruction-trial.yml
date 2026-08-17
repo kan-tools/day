@@ -48,16 +48,17 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
+          export CODEX_HOME="$RUNNER_TEMP/codex-home"
+          mkdir -p "$CODEX_HOME"
           test -n "$OPENAI_API_KEY"
           printenv OPENAI_API_KEY | codex login --with-api-key
           codex login status
+          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
       - name: Install only the candidate wakeup skill
         run: |
           set -euo pipefail
-          export CODEX_HOME="$RUNNER_TEMP/codex-home"
           mkdir -p "$CODEX_HOME/skills/wakeup"
           cp skills/wakeup/SKILL.md "$CODEX_HOME/skills/wakeup/SKILL.md"
-          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
       - name: Materialize only the addressed evidence commit
         run: |
           set -euo pipefail

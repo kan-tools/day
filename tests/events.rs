@@ -360,6 +360,36 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "speaker names must not bypass transcript rejection"
     );
 
+    for hostile in [
+        "Alice:choose A Bob:choose B",
+        "[Alice] choose A [Bob] choose B",
+        "Alice — choose A; Bob — choose B",
+    ] {
+        let hostile_transcript = run(
+            dir.path(),
+            &kan,
+            &[
+                "acquired-input",
+                "record",
+                "work/topic",
+                "--topic",
+                "x",
+                "--reported-provider",
+                "human",
+                "--fact",
+                hostile,
+                "--material-effect",
+                "y",
+                "--cites",
+                "cid-basis",
+            ],
+        );
+        assert!(
+            !hostile_transcript.status.success(),
+            "punctuation must not make transcript `{hostile}` durable"
+        );
+    }
+
     let transcript_source = run(
         dir.path(),
         &kan,
@@ -414,5 +444,47 @@ fn malformed_or_ambiguous_requests_append_nothing() {
             "{command} must fail for the invariant, not argument parsing"
         );
     }
+
+    let bracketed_source = run(
+        dir.path(),
+        &kan,
+        &[
+            "acquired-input",
+            "record",
+            "work/topic",
+            "--topic",
+            "x",
+            "--reported-provider",
+            "[Alice] choose A [Bob] choose B",
+            "--fact",
+            "summary",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(!bracketed_source.status.success());
+
+    let dashed_subject = run(
+        dir.path(),
+        &kan,
+        &[
+            "intervention",
+            "record",
+            "Alice — choose A; Bob — choose B",
+            "--kind",
+            "approval",
+            "--summary",
+            "summary",
+            "--reported-source",
+            "human",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(!dashed_subject.status.success());
     assert!(appends(dir.path()).is_empty());
 }

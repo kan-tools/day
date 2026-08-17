@@ -613,7 +613,7 @@ fn grade_askme_inner(
         || protocol.id != "day-v0.13-askme-v1"
         || protocol.rubric_version != "askme-rubric-v1"
         || protocol.skill != "skills/askme/SKILL.md"
-        || protocol.global_checks.len() != 10
+        || protocol.global_checks.len() != 11
     {
         return Err(
             "askme protocol identity or closed rubric is not the registered v1 shape".into(),
@@ -821,6 +821,11 @@ fn validate_codex_turn<'a>(
         .and_then(serde_json::Value::as_str)
         != Some("thread.started")
         || events
+            .get(1)
+            .and_then(|event| event.get("type"))
+            .and_then(serde_json::Value::as_str)
+            != Some("turn.started")
+        || events
             .last()
             .and_then(|event| event.get("type"))
             .and_then(serde_json::Value::as_str)
@@ -857,13 +862,48 @@ fn validate_codex_turn<'a>(
     if turn_starts != 1 || turn_completions != 1 {
         return Err("does not contain a complete Codex turn".into());
     }
-    if events.iter().any(|event| {
-        matches!(
-            event.get("type").and_then(serde_json::Value::as_str),
-            Some("turn.failed" | "error")
-        )
-    }) {
-        return Err("contains a failed Codex turn".into());
+    let mut items = std::collections::BTreeMap::<&str, bool>::new();
+    for event in &events[2..events.len() - 1] {
+        let event_type = event
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .expect("top-level event type checked above");
+        if !event_type.starts_with("item.") {
+            return Err("contains a thread/turn event inside the active turn".into());
+        }
+        let id = event
+            .pointer("/item/id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| format!("`{event_type}` has no item identifier"))?;
+        match event_type {
+            "item.started" => {
+                if items.insert(id, false).is_some() {
+                    return Err(format!("item `{id}` starts more than once"));
+                }
+            }
+            "item.updated" => {
+                if items.get(id) != Some(&false) {
+                    return Err(format!(
+                        "item `{id}` is updated outside an active lifecycle"
+                    ));
+                }
+            }
+            "item.completed" => match items.get_mut(id) {
+                Some(completed) if !*completed => *completed = true,
+                Some(_) => return Err(format!("item `{id}` completes more than once")),
+                None => {
+                    // Codex 0.147 emits atomic items (including messages and
+                    // reasoning) as completion-only events. They are a closed
+                    // lifecycle, unlike an update or duplicate completion.
+                    items.insert(id, true);
+                }
+            },
+            _ => unreachable!("allowed item event checked above"),
+        }
+    }
+    if items.values().any(|completed| !completed) {
+        return Err("contains an item lifecycle without completion".into());
     }
     let final_message = events
         .iter()
@@ -1537,10 +1577,13 @@ fn validate_bulk_reconstruction(
     };
     let suite_command = suite.argv.join(" ");
     let census_command = format!(
-        "census-demonstrations {}..{}",
+        "just census-demonstrations {}..{}",
         evidence.census_base, evidence.census_head
     );
-    let ci_command = format!("gh run view {}", evidence.ci_run_id);
+    let ci_command = format!(
+        "gh run view {} --json headSha,conclusion",
+        evidence.ci_run_id
+    );
     if !completed_command(events, &suite_command, &[])
         || !completed_command(events, &census_command, &["unaccounted", "0"])
         || !completed_command(
@@ -1557,7 +1600,7 @@ fn validate_bulk_reconstruction(
     Ok(())
 }
 
-fn completed_command(events: &[serde_json::Value], needle: &str, output: &[&str]) -> bool {
+fn completed_command(events: &[serde_json::Value], expected: &str, output: &[&str]) -> bool {
     events.iter().any(|event| {
         event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
             && event
@@ -1575,7 +1618,7 @@ fn completed_command(events: &[serde_json::Value], needle: &str, output: &[&str]
             && event
                 .pointer("/item/command")
                 .and_then(serde_json::Value::as_str)
-                .is_some_and(|command| command.contains(needle))
+                .is_some_and(|command| command.trim() == expected)
             && event
                 .pointer("/item/aggregated_output")
                 .and_then(serde_json::Value::as_str)
@@ -1917,7 +1960,8 @@ mod tests {
             serde_json::to_vec_pretty(&manifest).unwrap(),
         )
         .unwrap();
-        assert!(grade_askme_inner(root, bundle.path(), None).is_ok());
+        grade_askme_inner(root, bundle.path(), None)
+            .expect("the structurally valid, non-authoritative fixture must grade internally");
         assert!(
             !grade_askme(root, bundle.path(), &candidate, 1).is_passed(),
             "synthetic structural fixtures are never authoritative workflow evidence"
@@ -1927,6 +1971,20 @@ mod tests {
             "invented"
         )
         .is_err());
+        let misordered = [
+            serde_json::json!({"type": "thread.started", "thread_id": "thread"}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "message", "type": "agent_message", "text": "invented"}}),
+            serde_json::json!({"type": "turn.started"}),
+            serde_json::json!({"type": "turn.completed", "usage": {}}),
+        ];
+        assert!(validate_codex_turn(&misordered, "invented").is_err());
+        let unpaired = [
+            serde_json::json!({"type": "thread.started", "thread_id": "thread"}),
+            serde_json::json!({"type": "turn.started"}),
+            serde_json::json!({"type": "item.started", "item": {"id": "message", "type": "agent_message", "text": "invented"}}),
+            serde_json::json!({"type": "turn.completed", "usage": {}}),
+        ];
+        assert!(validate_codex_turn(&unpaired, "invented").is_err());
 
         let manifest_value: serde_json::Value =
             serde_json::from_slice(&std::fs::read(bundle.path().join("manifest.json")).unwrap())
@@ -2091,6 +2149,30 @@ mod tests {
             fresh_wakeup_had_transcript: false,
         };
         assert!(validate_reconstruction(bundle.path(), &evidence).is_ok());
+        let raw_values = raw
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect::<Vec<serde_json::Value>>();
+        assert!(!completed_command(
+            &raw_values,
+            "cargo test",
+            &["definitely absent"]
+        ));
+        let forged = [serde_json::json!({
+            "type": "item.completed",
+            "item": {
+                "id": "forged",
+                "type": "command_execution",
+                "command": "printf ok; # cargo test",
+                "aggregated_output": "ok",
+                "exit_code": 0,
+                "status": "completed"
+            }
+        })];
+        assert!(
+            !completed_command(&forged, "cargo test", &[]),
+            "a comment containing the expected command must not certify execution"
+        );
         assert!(reconstruction_controls(bundle.path(), &evidence)
             .iter()
             .all(|(_, rejected)| *rejected));
