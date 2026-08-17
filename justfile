@@ -48,9 +48,9 @@ verify-v013-candidate candidate:
 verify-v013-publication candidate:
     cargo run -p xtask -- release verify-publication-v013 {{candidate}}
 
-# Grade a raw v0.13 /askme evidence bundle.
-grade-v013-askme bundle:
-    cargo run -p xtask -- release grade-askme-v013 {{bundle}}
+# Grade a workflow-generated v0.13 /askme evidence bundle.
+grade-v013-askme bundle candidate github_run_id:
+    cargo run -p xtask -- release grade-askme-v013 {{bundle}} {{candidate}} {{github_run_id}}
 
 # Grade a workflow-generated v0.13 reconstruction bundle against its immutable source checkout.
 grade-v013-reconstruction bundle source candidate evidence_commit:

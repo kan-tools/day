@@ -383,5 +383,36 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         !transcript_source.status.success(),
         "reported provenance is narrative too and must reject transcript-shaped content"
     );
+
+    for command in ["acquired-input", "intervention"] {
+        let mut args = vec![command, "record", "Alice: choose A. Bob: choose B."];
+        if command == "acquired-input" {
+            args.extend(["--topic", "x", "--fact", "summary"]);
+        } else {
+            args.extend(["--kind", "approval", "--summary", "summary"]);
+        }
+        args.extend([
+            if command == "acquired-input" {
+                "--reported-provider"
+            } else {
+                "--reported-source"
+            },
+            "human",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ]);
+        let transcript_subject = run(dir.path(), &kan, &args);
+        assert!(
+            !transcript_subject.status.success(),
+            "{command} positional work subject must pass the serialized block invariant"
+        );
+        assert!(
+            String::from_utf8_lossy(&transcript_subject.stderr)
+                .contains("raw conversation transcript"),
+            "{command} must fail for the invariant, not argument parsing"
+        );
+    }
     assert!(appends(dir.path()).is_empty());
 }

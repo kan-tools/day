@@ -7,6 +7,7 @@ use crate::capability::process::{Process, ProcessRequest};
 use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
 pub const VERSION: &str = "v0.13.0-beta.1";
+const V013_EVIDENCE_PRINCIPAL: &str = "did:key:zDnaegvVMGpusSknpdtH4TV78xzUQFvnpmCXw1KmmgV1yhkwn";
 pub const ISSUES: &[u64] = &[93, 143, 152, 193, 195, 204];
 pub const WORKFLOWS: &[&str] = &[
     ".github/workflows/ci.yml",
@@ -535,6 +536,7 @@ struct AskmeExpectation {
 struct AskmeManifest {
     schema: u64,
     candidate_sha: String,
+    github_run_id: u64,
     protocol_sha256: String,
     harness: String,
     harness_version: String,
@@ -575,8 +577,20 @@ struct AskmeEvidence {
     durable_claim_texts: Vec<String>,
 }
 
-pub fn grade_askme(root: &Path, bundle: &Path) -> Outcome<()> {
-    match grade_askme_inner(root, bundle) {
+pub fn grade_askme(
+    root: &Path,
+    bundle: &Path,
+    candidate_sha: &str,
+    github_run_id: u64,
+) -> Outcome<()> {
+    if let Err(error) = github_actions_origin(
+        "v0.13 askme behavioral trial",
+        candidate_sha,
+        Some(github_run_id),
+    ) {
+        return Outcome::Finding(Finding::new(error));
+    }
+    match grade_askme_inner(root, bundle, Some((candidate_sha, github_run_id))) {
         Ok(count) => {
             println!(
                 "ASKME MATERIAL: {count} scenario(s) derived cleanly from addressed raw evidence"
@@ -587,7 +601,11 @@ pub fn grade_askme(root: &Path, bundle: &Path) -> Outcome<()> {
     }
 }
 
-fn grade_askme_inner(root: &Path, bundle: &Path) -> Result<usize, String> {
+fn grade_askme_inner(
+    root: &Path,
+    bundle: &Path,
+    workflow: Option<(&str, u64)>,
+) -> Result<usize, String> {
     let protocol_path = root.join(ASKME_PROTOCOL);
     let protocol_bytes = read(&protocol_path)?;
     let protocol: AskmeProtocol = json(&protocol_path, &protocol_bytes)?;
@@ -606,11 +624,21 @@ fn grade_askme_inner(root: &Path, bundle: &Path) -> Result<usize, String> {
     let manifest: AskmeManifest = json(&manifest_path, &read(&manifest_path)?)?;
     full_sha("candidate SHA", &manifest.candidate_sha)?;
     if manifest.schema != 1
-        || manifest.harness.trim().is_empty()
-        || manifest.harness_version.trim().is_empty()
+        || manifest.harness != "codex-cli"
+        || manifest.harness_version != "codex-cli 0.147.0"
         || manifest.model.trim().is_empty()
+        || manifest.github_run_id == 0
     {
-        return Err("askme manifest metadata is incomplete".into());
+        return Err("askme manifest is not from the pinned Codex workflow harness".into());
+    }
+    if let Some((candidate_sha, github_run_id)) = workflow {
+        full_sha("workflow candidate SHA", candidate_sha)?;
+        if manifest.candidate_sha != candidate_sha || manifest.github_run_id != github_run_id {
+            return Err(
+                "askme bundle coordinates differ from the candidate and run supplied by the workflow"
+                    .into(),
+            );
+        }
     }
     if manifest.protocol_sha256 != digest(&protocol_bytes) {
         return Err("askme protocol digest does not address the committed protocol".into());
@@ -751,6 +779,55 @@ fn validate_codex_turn<'a>(
     events: &'a [serde_json::Value],
     expected_message: &str,
 ) -> Result<&'a str, String> {
+    let allowed_events = [
+        "thread.started",
+        "turn.started",
+        "turn.completed",
+        "item.started",
+        "item.updated",
+        "item.completed",
+    ];
+    let allowed_items = [
+        "agent_message",
+        "reasoning",
+        "command_execution",
+        "file_change",
+        "mcp_tool_call",
+        "collab_tool_call",
+        "web_search",
+        "todo_list",
+    ];
+    for event in events {
+        let event_type = event
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "contains an event without a top-level type".to_string())?;
+        if !allowed_events.contains(&event_type) {
+            return Err(format!("contains unsupported Codex event `{event_type}`"));
+        }
+        if event_type.starts_with("item.") {
+            let item_type = event
+                .pointer("/item/type")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| format!("`{event_type}` has no typed item"))?;
+            if !allowed_items.contains(&item_type) {
+                return Err(format!("contains unsupported Codex item `{item_type}`"));
+            }
+        }
+    }
+    if events
+        .first()
+        .and_then(|event| event.get("type"))
+        .and_then(serde_json::Value::as_str)
+        != Some("thread.started")
+        || events
+            .last()
+            .and_then(|event| event.get("type"))
+            .and_then(serde_json::Value::as_str)
+            != Some("turn.completed")
+    {
+        return Err("does not have the pinned Codex event ordering".into());
+    }
     let starts = events
         .iter()
         .filter(|event| {
@@ -765,13 +842,19 @@ fn validate_codex_turn<'a>(
         .and_then(serde_json::Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| "`thread.started` has no thread identifier".to_string())?;
-    if !events
+    let turn_starts = events
         .iter()
-        .any(|event| event.get("type").and_then(serde_json::Value::as_str) == Some("turn.started"))
-        || !events.iter().any(|event| {
+        .filter(|event| {
+            event.get("type").and_then(serde_json::Value::as_str) == Some("turn.started")
+        })
+        .count();
+    let turn_completions = events
+        .iter()
+        .filter(|event| {
             event.get("type").and_then(serde_json::Value::as_str) == Some("turn.completed")
         })
-    {
+        .count();
+    if turn_starts != 1 || turn_completions != 1 {
         return Err("does not contain a complete Codex turn".into());
     }
     if events.iter().any(|event| {
@@ -804,6 +887,29 @@ fn validate_codex_turn<'a>(
         );
     }
     Ok(thread_id)
+}
+
+fn github_actions_origin(
+    workflow: &str,
+    candidate_sha: &str,
+    run_id: Option<u64>,
+) -> Result<(), String> {
+    let actions = std::env::var("GITHUB_ACTIONS").unwrap_or_default();
+    let observed_workflow = std::env::var("GITHUB_WORKFLOW").unwrap_or_default();
+    let observed_sha = std::env::var("GITHUB_SHA").unwrap_or_default();
+    let observed_run = std::env::var("GITHUB_RUN_ID").unwrap_or_default();
+    if actions != "true" || observed_workflow != workflow || observed_sha != candidate_sha {
+        return Err(
+            "evidence grading is authoritative only inside its exact candidate GitHub workflow"
+                .into(),
+        );
+    }
+    if let Some(run_id) = run_id {
+        if observed_run.parse::<u64>().ok() != Some(run_id) {
+            return Err("evidence bundle is not bound to the executing GitHub run".into());
+        }
+    }
+    Ok(())
 }
 
 fn kan_snapshot_counts(bytes: &[u8]) -> Result<(u64, Vec<String>), String> {
@@ -934,6 +1040,7 @@ struct ReconstructionEvidence {
     acquired_input_cid: String,
     intervention_cid: String,
     handoff_cid: String,
+    review_claim_cid: String,
     wakeup_evidence_path: String,
     wakeup_evidence_sha256: String,
     wakeup_raw_events: AddressedArtifact,
@@ -959,6 +1066,7 @@ struct ReconstructionSource {
     acquired_input_cid: String,
     intervention_cid: String,
     handoff_cid: String,
+    review_claim_cid: String,
     kan_authors: Vec<String>,
     suite_commit: String,
     census_base: String,
@@ -991,7 +1099,19 @@ struct BulkKanRead {
 struct BulkKanSubject {
     subject: String,
     excluded_by_trust: u64,
-    claims: Vec<day::kan_client::Claim>,
+    claims: Vec<ReconstructionClaim>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReconstructionClaim {
+    cid: String,
+    kind: String,
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    author: Option<String>,
+    #[serde(default)]
+    cites: Vec<String>,
 }
 
 pub fn grade_reconstruction(
@@ -1001,6 +1121,11 @@ pub fn grade_reconstruction(
     candidate_sha: &str,
     evidence_commit: &str,
 ) -> Outcome<()> {
+    if let Err(error) =
+        github_actions_origin("v0.13 workflow reconstruction trial", candidate_sha, None)
+    {
+        return Outcome::Finding(Finding::new(error));
+    }
     let protocol_path = root.join(RECONSTRUCTION_PROTOCOL);
     let protocol: serde_json::Value =
         match read(&protocol_path).and_then(|bytes| json(&protocol_path, &bytes)) {
@@ -1012,6 +1137,7 @@ pub fn grade_reconstruction(
         "remove-acquired-input",
         "remove-intervention",
         "remove-handoff",
+        "remove-review",
         "remove-wakeup",
         "remove-suite-commit",
         "remove-census-base",
@@ -1095,6 +1221,7 @@ fn authenticate_reconstruction(
         || declared.acquired_input_cid != evidence.acquired_input_cid
         || declared.intervention_cid != evidence.intervention_cid
         || declared.handoff_cid != evidence.handoff_cid
+        || declared.review_claim_cid != evidence.review_claim_cid
         || declared.kan_authors != evidence.kan_authors
         || declared.suite_commit != evidence.suite_commit
         || declared.census_base != evidence.census_base
@@ -1117,13 +1244,8 @@ fn authenticate_reconstruction(
     if !source.join(".claims").is_dir() {
         return Err("evidence commit has no published signed kan claims".into());
     }
-    if evidence.kan_authors.is_empty()
-        || evidence
-            .kan_authors
-            .iter()
-            .any(|author| !author.starts_with("did:key:") || author.len() <= "did:key:".len())
-    {
-        return Err("evidence manifest has no explicit kan signing principals".into());
+    if evidence.kan_authors != [V013_EVIDENCE_PRINCIPAL] {
+        return Err("evidence manifest does not use the pinned v0.13 review principal".into());
     }
     let mut command = std::process::Command::new("kan");
     command.args(["show", "--all", "--json"]);
@@ -1190,6 +1312,7 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         ("acquired-input CID", &evidence.acquired_input_cid),
         ("intervention CID", &evidence.intervention_cid),
         ("handoff CID", &evidence.handoff_cid),
+        ("review claim CID", &evidence.review_claim_cid),
         ("wakeup evidence path", &evidence.wakeup_evidence_path),
         ("kan read path", &evidence.kan_read_path),
     ] {
@@ -1201,6 +1324,7 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         ("acquired-input CID", &evidence.acquired_input_cid),
         ("intervention CID", &evidence.intervention_cid),
         ("handoff CID", &evidence.handoff_cid),
+        ("review claim CID", &evidence.review_claim_cid),
     ] {
         if !cid.starts_with("bafy") || cid.len() < 50 {
             return Err(format!("{field} is not a content-addressed CID"));
@@ -1241,17 +1365,7 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         })
         .collect::<Result<Vec<_>, _>>()?;
     validate_codex_turn(&events, wakeup.rendered_context.trim())?;
-    if !events.iter().any(|event| {
-        event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
-            && event
-                .pointer("/item/type")
-                .and_then(serde_json::Value::as_str)
-                == Some("command_execution")
-            && event
-                .pointer("/item/command")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|command| command.contains("kan show --all --json"))
-    }) {
+    if !completed_command(&events, "kan show --all --json", &[]) {
         return Err(
             "fresh wakeup raw events do not prove the required bulk kan command ran".into(),
         );
@@ -1263,7 +1377,7 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         return Err("kan read digest differs from its manifest address".into());
     }
     let kan_read: BulkKanRead = json(&kan_path, &kan_bytes)?;
-    validate_bulk_reconstruction(&kan_read, evidence)?;
+    validate_bulk_reconstruction(&kan_read, evidence, &events)?;
     Ok(())
 }
 
@@ -1318,6 +1432,7 @@ fn validate_fresh_wakeup(
 fn validate_bulk_reconstruction(
     read: &BulkKanRead,
     evidence: &ReconstructionEvidence,
+    events: &[serde_json::Value],
 ) -> Result<(), String> {
     if read.v != 1 || read.excluded_by_trust != 0 {
         return Err("bulk kan evidence is unsupported or narrowed by trust".into());
@@ -1332,10 +1447,12 @@ fn validate_bulk_reconstruction(
     let acquired = unique_claim(read, &evidence.acquired_input_cid)?;
     let intervention = unique_claim(read, &evidence.intervention_cid)?;
     let handoff = unique_claim(read, &evidence.handoff_cid)?;
+    let review = unique_claim(read, &evidence.review_claim_cid)?;
     for (label, claim) in [
         ("acquired-input", acquired.1),
         ("intervention", intervention.1),
         ("handoff", handoff.1),
+        ("review", review.1),
     ] {
         if !claim
             .author
@@ -1351,6 +1468,13 @@ fn validate_bulk_reconstruction(
         validate_event_claim::<day::events::AcquiredInput>(acquired.1, "day-acquired-input")?;
     let intervention_payload =
         validate_event_claim::<day::events::Intervention>(intervention.1, "day-intervention")?;
+    if acquired.1.author.as_deref() != Some(acquired_payload.recorded_by.as_str())
+        || intervention.1.author.as_deref() != Some(intervention_payload.recorded_by.as_str())
+    {
+        return Err(
+            "event block recording principal differs from its signed claim envelope".into(),
+        );
+    }
     if acquired.0 != acquired_payload.work_subject
         || intervention.0 != intervention_payload.work_subject
         || acquired_payload.work_subject != intervention_payload.work_subject
@@ -1368,6 +1492,24 @@ fn validate_bulk_reconstruction(
     if handoff.0 != evidence.stream_subject || handoff.1.kind != "Observation" {
         return Err("handoff CID is not an Observation on the declared stream subject".into());
     }
+    if review.0 != "v0.13-workflow-ergonomics"
+        || !matches!(review.1.kind.as_str(), "Decision" | "Result")
+        || !review.1.text.as_deref().is_some_and(|text| {
+            text.contains("v0.13 reconstruction evidence reviewed as genuine work")
+        })
+        || ![
+            evidence.acquired_input_cid.as_str(),
+            evidence.intervention_cid.as_str(),
+            evidence.handoff_cid.as_str(),
+        ]
+        .iter()
+        .all(|cid| review.1.cites.iter().any(|cited| cited == cid))
+    {
+        return Err(
+            "pinned review claim does not adjudicate the exact real-work reconstruction claims"
+                .into(),
+        );
+    }
     let text = handoff
         .1
         .text
@@ -1376,30 +1518,75 @@ fn validate_bulk_reconstruction(
     let scopes = day::atoms::extract_fenced::<day::stream::HandoffScopes>(text)
         .ok_or_else(|| "handoff claim has no day-handoff-scopes block".to_string())?
         .map_err(|error| format!("handoff scope block is invalid: {error}"))?;
-    if !scopes
+    let suite = scopes
         .suites
         .iter()
-        .any(|scope| scope.commit == evidence.suite_commit && scope.tree_clean)
-        || !scopes.censuses.iter().any(|scope| {
-            scope.base == evidence.census_base
-                && scope.head == evidence.census_head
-                && scope.unaccounted == 0
-        })
-        || !scopes.ci.iter().any(|scope| {
-            scope.run_id == evidence.ci_run_id
-                && scope.head_sha == evidence.ci_head_sha
-                && scope.conclusion == "success"
-        })
-    {
+        .find(|scope| scope.commit == evidence.suite_commit && scope.tree_clean);
+    let census = scopes.censuses.iter().find(|scope| {
+        scope.base == evidence.census_base
+            && scope.head == evidence.census_head
+            && scope.unaccounted == 0
+    });
+    let ci = scopes.ci.iter().find(|scope| {
+        scope.run_id == evidence.ci_run_id
+            && scope.head_sha == evidence.ci_head_sha
+            && scope.conclusion == "success"
+    });
+    let (Some(suite), Some(_census), Some(_ci)) = (suite, census, ci) else {
         return Err("handoff scopes do not bind the declared suite/census/CI coordinates".into());
+    };
+    let suite_command = suite.argv.join(" ");
+    let census_command = format!(
+        "census-demonstrations {}..{}",
+        evidence.census_base, evidence.census_head
+    );
+    let ci_command = format!("gh run view {}", evidence.ci_run_id);
+    if !completed_command(events, &suite_command, &[])
+        || !completed_command(events, &census_command, &["unaccounted", "0"])
+        || !completed_command(
+            events,
+            &ci_command,
+            &[evidence.ci_head_sha.as_str(), "success"],
+        )
+    {
+        return Err(
+            "fresh wakeup raw events do not independently recheck suite census and CI scopes"
+                .into(),
+        );
     }
     Ok(())
+}
+
+fn completed_command(events: &[serde_json::Value], needle: &str, output: &[&str]) -> bool {
+    events.iter().any(|event| {
+        event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
+            && event
+                .pointer("/item/type")
+                .and_then(serde_json::Value::as_str)
+                == Some("command_execution")
+            && event
+                .pointer("/item/status")
+                .and_then(serde_json::Value::as_str)
+                == Some("completed")
+            && event
+                .pointer("/item/exit_code")
+                .and_then(serde_json::Value::as_i64)
+                == Some(0)
+            && event
+                .pointer("/item/command")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|command| command.contains(needle))
+            && event
+                .pointer("/item/aggregated_output")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|observed| output.iter().all(|required| observed.contains(required)))
+    })
 }
 
 fn unique_claim<'a>(
     read: &'a BulkKanRead,
     cid: &str,
-) -> Result<(&'a str, &'a day::kan_client::Claim), String> {
+) -> Result<(&'a str, &'a ReconstructionClaim), String> {
     let mut found = read.subjects.iter().flat_map(|subject| {
         subject
             .claims
@@ -1419,7 +1606,7 @@ fn unique_claim<'a>(
 }
 
 fn validate_event_claim<T: day::atoms::Versioned + serde::de::DeserializeOwned>(
-    claim: &day::kan_client::Claim,
+    claim: &ReconstructionClaim,
     fence: &str,
 ) -> Result<T, String> {
     if claim.kind != "Observation" {
@@ -1473,6 +1660,10 @@ fn reconstruction_controls(
         (
             "remove-handoff",
             Box::new(|value| value.handoff_cid.clear()),
+        ),
+        (
+            "remove-review",
+            Box::new(|value| value.review_claim_cid.clear()),
         ),
         (
             "remove-wakeup",
@@ -1714,9 +1905,10 @@ mod tests {
         let manifest = serde_json::json!({
             "schema": 1,
             "candidate_sha": candidate,
+            "github_run_id": 1,
             "protocol_sha256": digest(&protocol_bytes),
-            "harness": "fixture",
-            "harness_version": "1",
+            "harness": "codex-cli",
+            "harness_version": "codex-cli 0.147.0",
             "model": "fixture-model",
             "scenarios": files
         });
@@ -1725,7 +1917,16 @@ mod tests {
             serde_json::to_vec_pretty(&manifest).unwrap(),
         )
         .unwrap();
-        assert!(grade_askme_inner(root, bundle.path()).is_ok());
+        assert!(grade_askme_inner(root, bundle.path(), None).is_ok());
+        assert!(
+            !grade_askme(root, bundle.path(), &candidate, 1).is_passed(),
+            "synthetic structural fixtures are never authoritative workflow evidence"
+        );
+        assert!(validate_codex_turn(
+            &[serde_json::json!({"event": {"message": "invented"}})],
+            "invented"
+        )
+        .is_err());
 
         let manifest_value: serde_json::Value =
             serde_json::from_slice(&std::fs::read(bundle.path().join("manifest.json")).unwrap())
@@ -1736,7 +1937,7 @@ mod tests {
         let raw_path = bundle.path().join(raw_relative);
         let raw_original = std::fs::read(&raw_path).unwrap();
         std::fs::write(&raw_path, b"{}\n").unwrap();
-        assert!(grade_askme_inner(root, bundle.path())
+        assert!(grade_askme_inner(root, bundle.path(), None)
             .unwrap_err()
             .contains("raw Codex event log digest differs"));
         std::fs::write(&raw_path, raw_original).unwrap();
@@ -1756,7 +1957,7 @@ mod tests {
             serde_json::to_vec_pretty(&manifest).unwrap(),
         )
         .unwrap();
-        assert!(grade_askme_inner(root, bundle.path())
+        assert!(grade_askme_inner(root, bundle.path(), None)
             .unwrap_err()
             .contains("did not address"));
     }
@@ -1769,6 +1970,7 @@ mod tests {
         let input_cid = format!("bafy{}", "i".repeat(55));
         let intervention_cid = format!("bafy{}", "j".repeat(55));
         let handoff_cid = format!("bafy{}", "k".repeat(55));
+        let review_claim_cid = format!("bafy{}", "r".repeat(55));
         let rendered = format!(
             "agents/handoff/main {input_cid} {intervention_cid} {handoff_cid} {candidate} {base} {candidate} 42 {candidate}"
         );
@@ -1791,7 +1993,10 @@ mod tests {
         let raw = [
             serde_json::json!({"type": "thread.started", "thread_id": "thread-wakeup"}),
             serde_json::json!({"type": "turn.started"}),
-            serde_json::json!({"type": "item.completed", "item": {"id": "command-1", "type": "command_execution", "command": "kan show --all --json"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-1", "type": "command_execution", "command": "kan show --all --json", "aggregated_output": "signed claims", "exit_code": 0, "status": "completed"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-2", "type": "command_execution", "command": "cargo test", "aggregated_output": "ok", "exit_code": 0, "status": "completed"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-3", "type": "command_execution", "command": format!("just census-demonstrations {base}..{candidate}"), "aggregated_output": "unaccounted | 0", "exit_code": 0, "status": "completed"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-4", "type": "command_execution", "command": "gh run view 42 --json headSha,conclusion", "aggregated_output": format!("{{\"headSha\":\"{candidate}\",\"conclusion\":\"success\"}}"), "exit_code": 0, "status": "completed"}}),
             serde_json::json!({"type": "item.completed", "item": {"id": "message-1", "type": "agent_message", "text": rendered}}),
             serde_json::json!({"type": "turn.completed", "usage": {}}),
         ]
@@ -1805,9 +2010,9 @@ mod tests {
             work_subject: "work/main".into(),
             topic: "release".into(),
             provider: day::events::Source::Recorder {
-                principal: "did:key:zFixture".into(),
+                principal: V013_EVIDENCE_PRINCIPAL.into(),
             },
-            recorded_by: "did:key:zFixture".into(),
+            recorded_by: V013_EVIDENCE_PRINCIPAL.into(),
             facts: vec!["candidate exists".into()],
             decisions: vec![],
             unresolved: vec![],
@@ -1820,9 +2025,9 @@ mod tests {
             summary: "operator approved the direction".into(),
             material_effect: "continued the release work".into(),
             source: day::events::Source::Recorder {
-                principal: "did:key:zFixture".into(),
+                principal: V013_EVIDENCE_PRINCIPAL.into(),
             },
-            recorded_by: "did:key:zFixture".into(),
+            recorded_by: V013_EVIDENCE_PRINCIPAL.into(),
             basis: vec!["cid-basis".into()],
         };
         let scopes = serde_json::json!({
@@ -1840,11 +2045,16 @@ mod tests {
             "excluded_by_trust": 0,
             "subjects": [
                 {"subject": "work/main", "excluded_by_trust": 0, "claims": [
-                    {"cid": &input_cid, "kind": "Observation", "author": "did:key:zFixture", "text": acquired.to_claim_text()},
-                    {"cid": &intervention_cid, "kind": "Observation", "author": "did:key:zFixture", "text": intervention.to_claim_text()}
+                    {"cid": &input_cid, "kind": "Observation", "author": V013_EVIDENCE_PRINCIPAL, "text": acquired.to_claim_text()},
+                    {"cid": &intervention_cid, "kind": "Observation", "author": V013_EVIDENCE_PRINCIPAL, "text": intervention.to_claim_text()}
                 ]},
                 {"subject": "agents/handoff/main", "excluded_by_trust": 0, "claims": [
-                    {"cid": &handoff_cid, "kind": "Observation", "author": "did:key:zFixture", "text": handoff_text}
+                    {"cid": &handoff_cid, "kind": "Observation", "author": V013_EVIDENCE_PRINCIPAL, "text": handoff_text}
+                ]},
+                {"subject": "v0.13-workflow-ergonomics", "excluded_by_trust": 0, "claims": [
+                    {"cid": &review_claim_cid, "kind": "Decision", "author": V013_EVIDENCE_PRINCIPAL,
+                     "text": "v0.13 reconstruction evidence reviewed as genuine work",
+                     "cites": [&input_cid, &intervention_cid, &handoff_cid]}
                 ]}
             ]
         });
@@ -1863,6 +2073,7 @@ mod tests {
             acquired_input_cid: input_cid,
             intervention_cid,
             handoff_cid,
+            review_claim_cid,
             wakeup_evidence_path: "wakeup.json".into(),
             wakeup_evidence_sha256: digest(&wakeup_bytes),
             wakeup_raw_events: AddressedArtifact {
@@ -1871,7 +2082,7 @@ mod tests {
             },
             kan_read_path: "kan.json".into(),
             kan_read_sha256: digest(&kan_bytes),
-            kan_authors: vec!["did:key:zFixture".into()],
+            kan_authors: vec![V013_EVIDENCE_PRINCIPAL.into()],
             suite_commit: candidate,
             census_base: base,
             census_head: "a".repeat(40),
@@ -1894,6 +2105,7 @@ mod tests {
             "acquired_input_cid": evidence.acquired_input_cid,
             "intervention_cid": evidence.intervention_cid,
             "handoff_cid": evidence.handoff_cid,
+            "review_claim_cid": evidence.review_claim_cid,
             "kan_authors": evidence.kan_authors,
             "suite_commit": evidence.suite_commit,
             "census_base": evidence.census_base,
@@ -1941,6 +2153,17 @@ mod tests {
         )
         .unwrap_err()
         .contains("no published signed kan claims"));
+        assert!(
+            !grade_reconstruction(
+                Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+                bundle.path(),
+                source.path(),
+                &evidence.candidate_sha,
+                source_head.trim(),
+            )
+            .is_passed(),
+            "a locally assembled bundle is never authoritative workflow evidence"
+        );
 
         let wakeup_path = bundle.path().join("wakeup.json");
         let wakeup_bytes = std::fs::read(&wakeup_path).unwrap();

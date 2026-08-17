@@ -78,11 +78,16 @@ def sha256(path):
 
 
 def main():
-    if len(sys.argv) != 5:
-        raise SystemExit("usage: run-v013-askme-trial.py PROTOCOL CANDIDATE MODEL OUTPUT_DIR")
+    if len(sys.argv) != 6:
+        raise SystemExit(
+            "usage: run-v013-askme-trial.py PROTOCOL CANDIDATE MODEL GITHUB_RUN_ID OUTPUT_DIR"
+        )
     protocol_path = Path(sys.argv[1]).resolve()
     candidate, model = sys.argv[2], sys.argv[3]
-    output_dir = Path(sys.argv[4]).resolve()
+    github_run_id = int(sys.argv[4])
+    if github_run_id <= 0:
+        raise RuntimeError("GitHub run ID must be positive")
+    output_dir = Path(sys.argv[5]).resolve()
     output_dir.mkdir(parents=True, exist_ok=False)
     protocol = json.loads(protocol_path.read_text())
     root = Path.cwd()
@@ -213,6 +218,7 @@ def main():
             {
                 "schema": 1,
                 "candidate_sha": candidate,
+                "github_run_id": github_run_id,
                 "protocol_sha256": sha256(protocol_path),
                 "harness": "codex-cli",
                 "harness_version": version,

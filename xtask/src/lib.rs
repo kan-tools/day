@@ -36,7 +36,11 @@ fn run_release(command: ReleaseCommand, root: &Path, process: &dyn Process) -> O
         ReleaseCommand::VerifyPublicationV013 { candidate_sha } => {
             release::v013::verify_publication(root, &candidate_sha, process)
         }
-        ReleaseCommand::GradeAskmeV013 { bundle } => release::v013::grade_askme(root, &bundle),
+        ReleaseCommand::GradeAskmeV013 {
+            bundle,
+            candidate_sha,
+            github_run_id,
+        } => release::v013::grade_askme(root, &bundle, &candidate_sha, github_run_id),
         ReleaseCommand::GradeReconstructionV013 {
             bundle,
             source,

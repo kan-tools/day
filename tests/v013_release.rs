@@ -29,6 +29,7 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
         "candidate_sha:",
         "model:",
         "grade-askme-v013",
+        "${{ github.run_id }}",
         "actions/upload-artifact@v4",
         "evidence/v0.13/askme-${{ github.run_id }}",
     ] {
@@ -41,6 +42,7 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
     assert!(runner.contains("kan-before.json") && runner.contains("kan-after.json"));
     assert!(runner.contains("raw_events") && runner.contains("sha256(path)"));
     assert!(runner.contains("command_log") && runner.contains("sha256(command_log)"));
+    assert!(runner.contains("github_run_id"));
     assert!(runner.contains("kan show --all --json exited"));
     assert!(!runner.contains("return {\"raw\": completed.stderr, \"claims\": 0"));
 }
@@ -64,12 +66,16 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
 
     let grader = text("xtask/src/release/v013.rs");
     assert!(grader.contains("evidence commit has no published signed kan claims"));
+    assert!(grader.contains("V013_EVIDENCE_PRINCIPAL"));
+    assert!(grader.contains("pinned review claim does not adjudicate"));
+    assert!(grader.contains("authoritative only inside its exact candidate GitHub workflow"));
     assert!(
         grader.contains("addressed kan read differs from kan's authenticated signed-claim view")
     );
     assert!(
         grader.contains("fresh wakeup raw events do not prove the required bulk kan command ran")
     );
+    assert!(grader.contains("independently recheck suite census and CI scopes"));
 
     let runner = text("scripts/run-v013-reconstruction-trial.py");
     assert!(runner.contains("no prior conversation transcript"));
@@ -78,7 +84,7 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
 
     let protocol: serde_json::Value =
         serde_json::from_str(&text(".release/protocols/reconstruction-v1.json")).unwrap();
-    assert_eq!(protocol["removal_controls"].as_array().unwrap().len(), 11);
+    assert_eq!(protocol["removal_controls"].as_array().unwrap().len(), 12);
 }
 
 #[test]

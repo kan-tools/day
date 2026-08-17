@@ -26,6 +26,8 @@ pub enum Error {
     UnattributedSourceClaim(String),
     #[error("{field} looks like a raw conversation transcript; record a summary instead")]
     Transcript { field: &'static str },
+    #[error("event payload is invalid: {0}")]
+    InvalidPayload(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,6 +213,7 @@ pub fn record_acquired_input(
         material_effect: request.material_effect,
         basis: cleaned("basis CID", request.basis)?,
     };
+    crate::atoms::Versioned::validate(&payload).map_err(Error::InvalidPayload)?;
     let text = payload.to_claim_text();
     Ok(client.append(Write::new("observe", &request.subject, &text).cites(&payload.basis))?)
 }
@@ -245,6 +248,7 @@ pub fn record_intervention(
         recorded_by,
         basis: cleaned("basis CID", request.basis)?,
     };
+    crate::atoms::Versioned::validate(&payload).map_err(Error::InvalidPayload)?;
     let text = payload.to_claim_text();
     Ok(client.append(Write::new("observe", &request.subject, &text).cites(&payload.basis))?)
 }

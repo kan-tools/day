@@ -62,8 +62,10 @@ jobs:
           evidence="$RUNNER_TEMP/askme-evidence"
           python3 scripts/run-v013-askme-trial.py \
             .release/protocols/askme-v1.json \
-            "${{ inputs.candidate_sha }}" "${{ inputs.model }}" "$evidence"
-          cargo run --locked -p xtask -- release grade-askme-v013 "$evidence"
+            "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
+            "${{ github.run_id }}" "$evidence"
+          cargo run --locked -p xtask -- release grade-askme-v013 \
+            "$evidence" "${{ inputs.candidate_sha }}" "${{ github.run_id }}"
       - uses: actions/upload-artifact@v4
         with:
           name: v013-askme-${{ inputs.candidate_sha }}-${{ github.run_id }}

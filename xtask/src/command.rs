@@ -54,7 +54,13 @@ pub enum ReleaseCommand {
     /// Resolve every published v0.13 artifact back to the unchanged candidate
     VerifyPublicationV013 { candidate_sha: String },
     /// Grade a v0.13 /askme evidence bundle from raw scenario transcripts
-    GradeAskmeV013 { bundle: PathBuf },
+    GradeAskmeV013 {
+        bundle: PathBuf,
+        /// Candidate SHA supplied by the workflow invocation
+        candidate_sha: String,
+        /// GitHub Actions run that generated the bundle
+        github_run_id: u64,
+    },
     /// Verify a v0.13 reconstruction bundle and execute its removal controls
     GradeReconstructionV013 {
         bundle: PathBuf,
