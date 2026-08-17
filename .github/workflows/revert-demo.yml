@@ -1,6 +1,9 @@
 name: Revert demonstrations
 
 env:
+  # Demonstrated tests may invoke accepted-RFC validation, which resolves the
+  # proposal PR and its server-timestamped review evidence through gh.
+  GH_TOKEN: ${{ github.token }}
   # Demonstrated tests may resolve fresh-clone v3 claim projections. The
   # compatibility matrix owns the older CLI floor; the verifier needs the
   # newest measured reader for the evidence format present in this tree.

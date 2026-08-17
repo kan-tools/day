@@ -831,8 +831,7 @@ fn mutate_index_status(path: &Path) -> Result<(), CheckError> {
     let line = source
         .lines()
         .find(|line| {
-            line.starts_with("- [RFC 1:")
-                && line.contains("](1-frame-indexed-process-model.md) — ")
+            line.starts_with("- [RFC 1:") && line.contains("](1-frame-indexed-process-model.md) — ")
         })
         .ok_or_else(|| {
             finding(format!(

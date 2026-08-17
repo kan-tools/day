@@ -504,6 +504,10 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         "the verifier must install and prove the newest measured kan is present; kan-backed tests cannot re-derive from a red missing-reader baseline"
     );
     assert!(
+        yaml.contains("GH_TOKEN: ${{ github.token }}"),
+        "demonstrated tests may run accepted-RFC validation; the verifier must provide the same read-only GitHub authority as ordinary CI or report a red baseline before applying any revert"
+    );
+    assert!(
         yaml.contains("could not compute a merge base") && yaml.contains("exit 1"),
         "a job that cannot build its commit range must fail rather than pass \
          with nothing to do — could-not-check outranks checked-and-clean, and a \
