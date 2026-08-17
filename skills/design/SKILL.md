@@ -202,6 +202,10 @@ deliberate open question (those warn; they do not fail).
 day design record .design/<slug>.md
 ```
 
+If the design names an existing claim as normative authority, append one
+`--cites <cid>` for each such claim. Do not assume mentioning a CID in the
+document creates a graph edge: the Plan must cite it directly.
+
 It appends an `observe` carrying the validation result, a `plan` for the design
 citing it, and one `decide` per bullet under the schema's resolved-questions
 section citing the plan — building `--cites` from CIDs it captured itself.

@@ -355,6 +355,9 @@ pub enum DesignAction {
         /// Schema slug to validate against
         #[arg(long, default_value = crate::schema::DEFAULT_SLUG)]
         schema: String,
+        /// Normative claim CID the Plan directly depends on (repeatable)
+        #[arg(long = "cites")]
+        cites: Vec<String>,
     },
 }
 
@@ -803,10 +806,11 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             path,
             subject,
             schema,
+            cites,
         }) => {
             let schema = crate::schema::Schema::load(&client, &schema)?;
             let recorded =
-                crate::record::design(&client, &path, &cwd, subject.as_deref(), &schema)?;
+                crate::record::design(&client, &path, &cwd, subject.as_deref(), &schema, &cites)?;
             print!("{}", recorded.render());
             Ok(ExitCode::SUCCESS)
         }

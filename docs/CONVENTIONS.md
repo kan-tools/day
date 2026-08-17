@@ -360,6 +360,10 @@ validation result, a `plan` for the design citing it, and one `decide` per
 bullet under `resolved_section` citing the plan. day assembles `--cites`
 from CIDs it captured itself, which is what makes the "pass a file path to
 `--cites`" error unreachable rather than merely warned against.
+When a design is normatively governed by an existing claim, pass that CID with
+repeatable `--cites <cid>`. The Plan directly cites it and includes the
+normative CID list in its own text identity, so a later identical recording
+cannot mistake an older uncited Plan for the governed one.
 
 **A document that fails validation is still recorded**, with the result
 embedded in the plan claim. Gating would mostly cause people to skip

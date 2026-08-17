@@ -174,6 +174,34 @@ fn ac5_record_appends_observe_then_plan_then_one_decide_per_resolved_question() 
 }
 
 #[test]
+fn a_design_plan_directly_cites_and_names_its_normative_claims() {
+    let dir = workspace(DOC);
+    let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafyreischema")]);
+    let normative = "bafyreiciww5vnalro4sfzw5l36kj6qcgttgns52tm5oqwsh2v47otrq3ua";
+
+    let out = day(
+        dir.path(),
+        &kan,
+        &["design", "record", ".design/thing.md", "--cites", normative],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let log = appends(dir.path());
+    let plan = log
+        .iter()
+        .find(|entry| entry.starts_with("plan "))
+        .expect("design recording writes a Plan");
+    assert!(plan.contains(&format!("--cites {normative}")), "{plan}");
+    assert!(
+        plan.contains(&format!("[normative citations: {normative}]")),
+        "the Plan text must make the authority-bearing citation part of its repeatable identity: {plan}"
+    );
+}
+
+#[test]
 fn ac6_a_failing_doc_is_still_recorded_with_the_result_embedded() {
     let dir = workspace(&DOC.replace("## Architecture", "## Notes"));
     let kan = write_kan_stub(dir.path(), &[schema_claim("design-doc", "bafyreischema")]);

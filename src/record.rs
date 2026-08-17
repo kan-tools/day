@@ -222,6 +222,7 @@ pub fn design(
     base: &Path,
     subject: Option<&str>,
     schema: &Schema,
+    normative_cites: &[String],
 ) -> Result<Recorded, Error> {
     let (doc, source) = read_document_with_source(path)?;
     let report = design::check(&doc, schema, base);
@@ -308,8 +309,13 @@ pub fn design(
     let summary = doc
         .summary_line()
         .unwrap_or_else(|| "(no summary section)".to_string());
+    let citation_marker = if normative_cites.is_empty() {
+        String::new()
+    } else {
+        format!(" [normative citations: {}]", normative_cites.join(","))
+    };
     let plan_text = format!(
-        "{}{shown}): {summary} [{}]",
+        "{}{shown}): {summary} [{}]{citation_marker}",
         design_plan_opening(&subject),
         report.summary()
     );
@@ -366,6 +372,11 @@ pub fn design(
             let mut cites = vec![observe.clone()];
             if let Some((cid, _)) = previous {
                 cites.push(cid.clone());
+            }
+            for cid in normative_cites {
+                if !cites.contains(cid) {
+                    cites.push(cid.clone());
+                }
             }
             let mut write = Write::new("plan", &subject, &plan_text).cites(&cites);
             let title = doc.title.clone();
