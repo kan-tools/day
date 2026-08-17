@@ -168,11 +168,13 @@ fn ac5_a_project_can_replace_days_blocks_and_the_replacement_is_visible() {
 #[test]
 fn ac6_the_projection_is_bounded() {
     let dir = tempfile::tempdir().unwrap();
-    // The long item goes FIRST: the two bounds are independent, and putting
-    // it last let the count cap discard it before its length ever mattered,
-    // so the test passed on truncation it never exercised.
-    let mut claims = vec![practice("bafyreilong", &"verbose ".repeat(200))];
-    claims.extend((0..20).map(|i| practice(&format!("bafyreia{i}"), &format!("Item number {i}."))));
+    // The long item goes LAST: projection is newest-first, so this makes both
+    // independent bounds fire in one run instead of letting the count cap
+    // discard the item before its length matters.
+    let mut claims = (0..20)
+        .map(|i| practice(&format!("bafyreia{i}"), &format!("Item number {i}.")))
+        .collect::<Vec<_>>();
+    claims.push(practice("bafyreilong", &"verbose ".repeat(200)));
 
     let kan = write_kan_stub(dir.path(), &claims);
     let text = context(dir.path(), &kan);
@@ -246,12 +248,39 @@ fn a_declared_cap_below_the_default_is_honoured_and_named() {
         "the notice must quote the cap in force, not the default: {text}"
     );
     assert!(
-        text.contains("7 further item(s) not shown"),
+        text.contains("7 older item(s) not shown"),
         "and the count must be derived from it: {text}"
     );
     assert!(
-        !text.contains("Item number 5."),
-        "items past the declared cap must not project: {text}"
+        text.contains("Item number 9.") && !text.contains("Item number 0."),
+        "the cap must retain the newest items and withhold the oldest: {text}"
+    );
+}
+
+#[test]
+fn the_default_cap_keeps_the_newest_practice() {
+    let dir = tempfile::tempdir().unwrap();
+    let claims = (0..15)
+        .map(|i| practice(&format!("bafyreia{i}"), &format!("Item number {i}.")))
+        .collect::<Vec<_>>();
+    let kan = write_kan_stub(dir.path(), &claims);
+    let text = context(dir.path(), &kan);
+
+    assert!(
+        text.contains("Item number 14."),
+        "newest item missing: {text}"
+    );
+    assert!(
+        text.contains("Item number 3."),
+        "cap kept too few items: {text}"
+    );
+    assert!(
+        !text.contains("Item number 2.") && !text.contains("Item number 0."),
+        "the three oldest items should be withheld: {text}"
+    );
+    assert!(
+        text.contains("3 older item(s) not shown") && text.contains("newest-first projection"),
+        "the report must name both the loss and the ordering policy: {text}"
     );
 }
 
@@ -326,17 +355,16 @@ fn the_truncation_note_counts_only_items_the_reader_received() {
         "bafyreisch",
         "Injection.\n\n```day-injection\n{\"max_practice_items\":3}\n```\n",
     )];
-    // Three short ones first, so the cap delivers exactly these and withholds
-    // every long one. Order is load-bearing: reversed, the long items are the
-    // survivors and the bug is invisible.
-    claims.extend((0..3).map(|i| practice(&format!("bafyreis{i}"), &format!("Short {i}."))));
+    // Five long ones first, then three short ones. Projection is newest-first,
+    // so the cap delivers exactly the short items and withholds every long one.
     claims.extend((0..5).map(|i| practice(&format!("bafyreil{i}"), &long)));
+    claims.extend((0..3).map(|i| practice(&format!("bafyreis{i}"), &format!("Short {i}."))));
 
     let kan = write_kan_stub(dir.path(), &claims);
     let text = context(dir.path(), &kan);
 
     assert!(
-        text.contains("5 further item(s) not shown"),
+        text.contains("5 older item(s) not shown"),
         "the count cap withheld five: {text}"
     );
     assert!(
@@ -380,7 +408,7 @@ fn the_truncation_note_still_fires_for_a_delivered_item() {
          free tomorrow: {text}"
     );
     assert!(
-        text.contains("3 further item(s) not shown"),
+        text.contains("3 older item(s) not shown"),
         "the count cap is reported separately: {text}"
     );
 }

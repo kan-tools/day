@@ -230,6 +230,15 @@ pub fn project(client: &KanClient) -> Projection {
         drops.push(dropped);
     }
 
+    // The fold is intentionally oldest-first because it describes the durable
+    // list as recorded. Projection has a different job: when attention is
+    // bounded, retain the most recently learned practice. New rules are often
+    // recorded because the old working set just failed, so dropping them first
+    // makes the cap select against the information most likely to matter now
+    // (day#143). Keep the text and its truncation accounting in lockstep.
+    projection.items.reverse();
+    drops.reverse();
+
     if foreign > 0 {
         projection.notes.push(format!(
             "{foreign} claim(s) on `{PRACTICE_SUBJECT}` were not projected: they are not \
@@ -243,8 +252,8 @@ pub fn project(client: &KanClient) -> Projection {
         projection.items.truncate(cap);
         drops.truncate(cap);
         projection.notes.push(format!(
-            "{dropped} further item(s) not shown: a projection is capped at {cap} \
-             so it cannot crowd out the request it is meant to inform."
+            "{dropped} older item(s) not shown: a newest-first projection is capped at \
+             {cap} so it cannot crowd out the request it is meant to inform."
         ));
     }
 

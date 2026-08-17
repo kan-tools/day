@@ -167,8 +167,10 @@ blocking tool says about itself. day states which of its blocks was replaced,
 so the suppression is visible in the thing being suppressed.
 
 The projection is bounded — a per-item excerpt and a cap on item count, both
-reported when they bite. Session-start competes with your actual request for
-attention, and this is the one part of it a project can grow without limit.
+reported when they bite. Items are presented newest first, so a binding cap
+withholds the oldest recorded practice rather than the rules learned most
+recently. Session-start competes with your actual request for attention, and
+this is the one part of it a project can grow without limit.
 
 ## Atoms — `atom/<slug>`
 
