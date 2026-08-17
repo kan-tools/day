@@ -40,6 +40,14 @@ verify-v013-contract:
 verify-v013-plan:
     cargo run -p xtask -- release verify-plan-v013
 
+# Resolve all required workflow conclusions at one clean candidate SHA.
+verify-v013-candidate candidate:
+    cargo run -p xtask -- release verify-candidate-v013 {{candidate}}
+
+# Resolve the release workflow, tag, crate, GitHub Release, and kan claim.
+verify-v013-publication candidate:
+    cargo run -p xtask -- release verify-publication-v013 {{candidate}}
+
 # Grade a raw v0.13 /askme evidence bundle.
 grade-v013-askme bundle:
     cargo run -p xtask -- release grade-askme-v013 {{bundle}}

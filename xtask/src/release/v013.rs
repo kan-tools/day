@@ -264,6 +264,240 @@ fn validate_plan(
     Ok(())
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkflowRun {
+    database_id: u64,
+    head_sha: String,
+    status: String,
+    conclusion: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubRelease {
+    tag_name: String,
+    is_draft: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct CratesResponse {
+    version: CratesVersion,
+}
+
+#[derive(Debug, Deserialize)]
+struct CratesVersion {
+    num: String,
+}
+
+pub fn verify_candidate(root: &Path, candidate: &str, process: &dyn Process) -> Outcome<()> {
+    match verify_candidate_inner(root, candidate, process) {
+        Ok(runs) => {
+            println!(
+                "v0.13 candidate verified: {candidate}; {} required workflow run(s) succeeded",
+                runs.len()
+            );
+            for (workflow, run_id) in runs {
+                println!("  {workflow}: run {run_id}");
+            }
+            Outcome::Passed(())
+        }
+        Err(error) => Outcome::Finding(Finding::new(error)),
+    }
+}
+
+fn verify_candidate_inner(
+    root: &Path,
+    candidate: &str,
+    process: &dyn Process,
+) -> Result<Vec<(&'static str, u64)>, String> {
+    full_sha("candidate SHA", candidate)?;
+    let head = checked(process, root, "git", ["rev-parse", "HEAD"], "local HEAD")?;
+    if head.trim() != candidate {
+        return Err(format!(
+            "local HEAD {} differs from candidate {candidate}",
+            head.trim()
+        ));
+    }
+    let status = checked(
+        process,
+        root,
+        "git",
+        ["status", "--porcelain"],
+        "working-tree status",
+    )?;
+    if !status.trim().is_empty() {
+        return Err("candidate working tree is dirty".into());
+    }
+    workflow_runs(root, candidate, WORKFLOWS, process)
+}
+
+pub fn verify_publication(root: &Path, candidate: &str, process: &dyn Process) -> Outcome<()> {
+    match verify_publication_inner(root, candidate, process) {
+        Ok(release_run) => {
+            println!(
+                "v0.13 publication verified: tag={VERSION} candidate={candidate} release-run={release_run} crate={} GitHub-Release=present kan-claim=present",
+                VERSION.trim_start_matches('v')
+            );
+            Outcome::Passed(())
+        }
+        Err(error) => Outcome::Finding(Finding::new(error)),
+    }
+}
+
+fn verify_publication_inner(
+    root: &Path,
+    candidate: &str,
+    process: &dyn Process,
+) -> Result<u64, String> {
+    full_sha("candidate SHA", candidate)?;
+    let tag_target = checked(
+        process,
+        root,
+        "git",
+        ["rev-list", "-n", "1", VERSION],
+        "release tag",
+    )?;
+    if tag_target.trim() != candidate {
+        return Err(format!(
+            "release tag {VERSION} targets {}, not candidate {candidate}",
+            tag_target.trim()
+        ));
+    }
+    let release_runs = workflow_runs(root, candidate, &[".github/workflows/release.yml"], process)?;
+    let release_run = release_runs[0].1;
+
+    let release_json = checked(
+        process,
+        root,
+        "gh",
+        [
+            "release",
+            "view",
+            VERSION,
+            "--repo",
+            "kan-tools/day",
+            "--json",
+            "tagName,isDraft",
+        ],
+        "GitHub Release",
+    )?;
+    let release: GithubRelease = serde_json::from_str(&release_json)
+        .map_err(|error| format!("GitHub Release response is malformed: {error}"))?;
+    if release.tag_name != VERSION || release.is_draft {
+        return Err("GitHub Release is absent, draft, or names a different tag".into());
+    }
+
+    let version = VERSION.trim_start_matches('v');
+    let crate_url = format!("https://crates.io/api/v1/crates/day/{version}");
+    let crate_json = checked(
+        process,
+        root,
+        "curl",
+        ["--fail", "--silent", "--show-error", crate_url.as_str()],
+        "crates.io package",
+    )?;
+    let published: CratesResponse = serde_json::from_str(&crate_json)
+        .map_err(|error| format!("crates.io response is malformed: {error}"))?;
+    if published.version.num != version {
+        return Err("crates.io returned a different package version".into());
+    }
+
+    let claim_json = checked(
+        process,
+        root,
+        "kan",
+        ["show", "release", "--json"],
+        "kan release claim",
+    )?;
+    let claims: KanShow = serde_json::from_str(&claim_json)
+        .map_err(|error| format!("kan release response is malformed: {error}"))?;
+    let claim_matches = claims.claims.iter().any(|claim| {
+        claim.kind == "Result"
+            && claim
+                .text
+                .as_deref()
+                .is_some_and(|text| text.contains(VERSION) && text.contains(candidate))
+    });
+    if !claim_matches {
+        return Err("kan has no release Result binding the tag to the candidate SHA".into());
+    }
+    Ok(release_run)
+}
+
+fn workflow_runs(
+    root: &Path,
+    candidate: &str,
+    workflows: &[&'static str],
+    process: &dyn Process,
+) -> Result<Vec<(&'static str, u64)>, String> {
+    let mut verified = Vec::with_capacity(workflows.len());
+    for workflow in workflows {
+        let output = checked(
+            process,
+            root,
+            "gh",
+            [
+                "run",
+                "list",
+                "--repo",
+                "kan-tools/day",
+                "--workflow",
+                workflow,
+                "--commit",
+                candidate,
+                "--limit",
+                "100",
+                "--json",
+                "databaseId,headSha,status,conclusion",
+            ],
+            &format!("workflow {workflow}"),
+        )?;
+        let runs: Vec<WorkflowRun> = serde_json::from_str(&output)
+            .map_err(|error| format!("workflow `{workflow}` response is malformed: {error}"))?;
+        let run = runs.iter().find(|run| {
+            run.database_id != 0
+                && run.head_sha == candidate
+                && run.status == "completed"
+                && run.conclusion == "success"
+        });
+        match run {
+            Some(run) => verified.push((*workflow, run.database_id)),
+            None => {
+                return Err(format!(
+                    "workflow `{workflow}` has no completed successful run at candidate {candidate}"
+                ))
+            }
+        }
+    }
+    Ok(verified)
+}
+
+fn checked<I, S>(
+    process: &dyn Process,
+    root: &Path,
+    program: &str,
+    args: I,
+    label: &str,
+) -> Result<String, String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<std::ffi::OsString>,
+{
+    let output = process
+        .run(&ProcessRequest::new(program, args, root))
+        .map_err(|error| format!("could not resolve {label}: {error}"))?;
+    if output.status != 0 {
+        Err(format!(
+            "could not resolve {label} (exit {}): {}",
+            output.status,
+            output.stderr.trim()
+        ))
+    } else {
+        Ok(output.stdout)
+    }
+}
+
 const ASKME_PROTOCOL: &str = ".release/protocols/askme-v1.json";
 const RECONSTRUCTION_PROTOCOL: &str = ".release/protocols/reconstruction-v1.json";
 

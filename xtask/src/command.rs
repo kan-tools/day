@@ -49,6 +49,10 @@ pub enum ReleaseCommand {
         #[arg(default_value = ".release/v0.13-plan.json")]
         manifest: PathBuf,
     },
+    /// Require every v0.13 candidate workflow to have succeeded at one clean SHA
+    VerifyCandidateV013 { candidate_sha: String },
+    /// Resolve every published v0.13 artifact back to the unchanged candidate
+    VerifyPublicationV013 { candidate_sha: String },
     /// Grade a v0.13 /askme evidence bundle from raw scenario transcripts
     GradeAskmeV013 { bundle: PathBuf },
     /// Verify a v0.13 reconstruction bundle and execute its removal controls

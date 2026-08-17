@@ -30,6 +30,12 @@ fn run_release(command: ReleaseCommand, root: &Path, process: &dyn Process) -> O
         ReleaseCommand::VerifyPlanV013 { manifest } => {
             release::v013::verify_plan(root, &manifest, process)
         }
+        ReleaseCommand::VerifyCandidateV013 { candidate_sha } => {
+            release::v013::verify_candidate(root, &candidate_sha, process)
+        }
+        ReleaseCommand::VerifyPublicationV013 { candidate_sha } => {
+            release::v013::verify_publication(root, &candidate_sha, process)
+        }
         ReleaseCommand::GradeAskmeV013 { bundle } => release::v013::grade_askme(root, &bundle),
         ReleaseCommand::GradeReconstructionV013 { bundle } => {
             release::v013::grade_reconstruction(root, &bundle)
