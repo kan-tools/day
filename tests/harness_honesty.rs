@@ -518,6 +518,12 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
         "on a pull_request the default checkout is the MERGE commit, whose \
          message carries no trailer; the job must verify what was written"
     );
+    assert!(
+        yaml.contains("grep '^Accounts-for:'")
+            && yaml.contains("git rev-parse \"${named}^{commit}\"")
+            && yaml.contains("if [ \"$accounted\" = \"true\" ]"),
+        "the verifier must honor append-only Accounts-for corrections just as the census does; otherwise an exempt malformed historical trailer can make every later head permanently red"
+    );
     // **The trigger set, positively.** A trigger whose commit range is always
     // empty is a green job that checked nothing: after a merge,
     // `merge-base(origin/main, HEAD)` IS `HEAD`.

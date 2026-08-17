@@ -97,6 +97,23 @@ jobs:
           commits=""
           for sha in $(git rev-list "$base..HEAD"); do
             if git log -1 --format=%B "$sha" | grep -q '^Demonstrated-by:'; then
+              # Append-only Accounts-for claims are the repository's supported
+              # way to correct malformed historical evidence metadata. Keep
+              # this selector aligned with the census instead of re-queuing a
+              # trailer that the current graph classifies as exempt.
+              accounted="false"
+              while IFS= read -r line; do
+                named="${line#Accounts-for: }"
+                named="${named%% *}"
+                full="$(git rev-parse "${named}^{commit}" 2>/dev/null || true)"
+                if [ "$full" = "$sha" ]; then
+                  accounted="true"
+                  break
+                fi
+              done < <(git log --format=%B "$sha..HEAD" | grep '^Accounts-for:' || true)
+              if [ "$accounted" = "true" ]; then
+                continue
+              fi
               commits="$commits $sha"
             fi
           done
