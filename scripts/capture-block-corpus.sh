@@ -161,7 +161,7 @@ capture_one() {
   bin="$1"; tag="$2"
   run="$WORK/run-$tag"
   make_stub "$run"
-  ( cd "$run" && git init -q . && git commit -q --allow-empty -m init )
+  ( cd "$run" && git init -q . && git -c commit.gpgsign=false commit -q --allow-empty -m init )
 
   # Verbs that write a fenced block. Not every tag has every verb, so each is
   # attempted and a failure is fine — the corpus records what this version

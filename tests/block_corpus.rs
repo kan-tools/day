@@ -18,9 +18,53 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/block-corpus")
+}
+
+#[test]
+fn current_corpus_capture_isolated_commit_ignores_maintainer_signing_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap()
+    };
+    assert!(run(&["init", "-q"]).status.success());
+    assert!(run(&["config", "user.name", "corpus test"])
+        .status
+        .success());
+    assert!(run(&["config", "user.email", "corpus@example.invalid"])
+        .status
+        .success());
+    assert!(run(&["config", "commit.gpgsign", "true"]).status.success());
+    assert!(run(&["config", "gpg.program", "false"]).status.success());
+    assert!(
+        !run(&["commit", "-q", "--allow-empty", "-m", "unsigned fixture"])
+            .status
+            .success(),
+        "premise: inherited signing policy must make the disposable commit fail"
+    );
+    assert!(run(&[
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "unsigned fixture",
+    ])
+    .status
+    .success());
+    let script = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/capture-block-corpus.sh"),
+    )
+    .unwrap();
+    assert!(script.contains("git -c commit.gpgsign=false commit"));
 }
 
 struct Captured {
