@@ -1285,6 +1285,24 @@ fn rfc1_vector_loader_rejects_ambiguous_jcs_input() {
             "integer is not exactly representable as IEEE-754",
         ),
         (
+            "saturating-u64-integer.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"unsafe\": 18446744073709551615,",
+                1,
+            ),
+            "integer is not exactly representable as IEEE-754",
+        ),
+        (
+            "rounded-large-integer.json",
+            source.replacen(
+                "\"_version\": 3,",
+                "\"_version\": 3,\n      \"unsafe\": 295147905179352825857,",
+                1,
+            ),
+            "integer is not exactly representable as IEEE-754",
+        ),
+        (
             "unicode-noncharacter.json",
             source.replacen(
                 "\"_version\": 3,",

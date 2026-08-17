@@ -4,6 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use num_bigint::BigUint;
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -42,11 +43,85 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
     Outcome::Passed(())
 }
 
-fn parse_ijson(source: &str) -> Result<Value, serde_json::Error> {
+fn parse_ijson(source: &str) -> Result<Value, String> {
+    require_exact_integer_tokens(source)?;
     let mut deserializer = serde_json::Deserializer::from_str(source);
-    let value = IJsonSeed.deserialize(&mut deserializer)?;
-    deserializer.end()?;
+    let value = IJsonSeed
+        .deserialize(&mut deserializer)
+        .map_err(|error| error.to_string())?;
+    deserializer.end().map_err(|error| error.to_string())?;
     Ok(value)
+}
+
+fn require_exact_integer_tokens(source: &str) -> Result<(), String> {
+    let bytes = source.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'"' {
+            index += 1;
+            while index < bytes.len() {
+                match bytes[index] {
+                    b'\\' => index = (index + 2).min(bytes.len()),
+                    b'"' => {
+                        index += 1;
+                        break;
+                    }
+                    _ => index += 1,
+                }
+            }
+            continue;
+        }
+        if bytes[index] != b'-' && !bytes[index].is_ascii_digit() {
+            index += 1;
+            continue;
+        }
+
+        let start = index;
+        if bytes[index] == b'-' {
+            index += 1;
+        }
+        while index < bytes.len() && bytes[index].is_ascii_digit() {
+            index += 1;
+        }
+        let mut integer_token = true;
+        if index < bytes.len() && bytes[index] == b'.' {
+            integer_token = false;
+            index += 1;
+            while index < bytes.len() && bytes[index].is_ascii_digit() {
+                index += 1;
+            }
+        }
+        if index < bytes.len() && matches!(bytes[index], b'e' | b'E') {
+            integer_token = false;
+            index += 1;
+            if index < bytes.len() && matches!(bytes[index], b'+' | b'-') {
+                index += 1;
+            }
+            while index < bytes.len() && bytes[index].is_ascii_digit() {
+                index += 1;
+            }
+        }
+        if !integer_token {
+            continue;
+        }
+
+        let token = &source[start..index];
+        let magnitude = token.strip_prefix('-').unwrap_or(token);
+        let Some(integer) = BigUint::parse_bytes(magnitude.as_bytes(), 10) else {
+            continue;
+        };
+        if integer == BigUint::default() {
+            continue;
+        }
+        let bits = integer.bits();
+        let significant_bits = bits - integer.trailing_zeros().unwrap_or(0);
+        if bits > 1024 || significant_bits > 53 {
+            return Err(format!(
+                "integer is not exactly representable as IEEE-754: {token}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 struct IJsonSeed;
@@ -83,11 +158,6 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     where
         E: de::Error,
     {
-        if (value as f64) as i64 != value {
-            return Err(E::custom(
-                "integer is not exactly representable as IEEE-754",
-            ));
-        }
         Ok(Value::Number(value.into()))
     }
 
@@ -95,11 +165,6 @@ impl<'de> Visitor<'de> for IJsonVisitor {
     where
         E: de::Error,
     {
-        if (value as f64) as u64 != value {
-            return Err(E::custom(
-                "integer is not exactly representable as IEEE-754",
-            ));
-        }
         Ok(Value::Number(value.into()))
     }
 
