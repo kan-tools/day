@@ -364,6 +364,8 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "Alice:choose A Bob:choose B",
         "[Alice] choose A [Bob] choose B",
         "Alice — choose A; Bob — choose B",
+        "Alice—choose A; Bob—choose B",
+        "Alice–choose A; Bob–choose B",
     ] {
         let hostile_transcript = run(
             dir.path(),
@@ -486,5 +488,40 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         ],
     );
     assert!(!dashed_subject.status.success());
-    assert!(appends(dir.path()).is_empty());
+    assert!(
+        appends(dir.path()).is_empty(),
+        "every transcript and malformed request above must refuse before append"
+    );
+
+    for bounded_summary in [
+        "Decision: choose A. Effect: narrows the release.",
+        "Risk: stale evidence. Mitigation: re-run the gate.",
+        "RFC 1 source: accepted. release scope: six issues.",
+    ] {
+        let accepted = run(
+            dir.path(),
+            &kan,
+            &[
+                "acquired-input",
+                "record",
+                "work/topic",
+                "--topic",
+                "x",
+                "--reported-provider",
+                "human",
+                "--fact",
+                bounded_summary,
+                "--material-effect",
+                "y",
+                "--cites",
+                "cid-basis",
+            ],
+        );
+        assert!(
+            accepted.status.success(),
+            "ordinary labeled summary was mistaken for a transcript: {bounded_summary}: {}",
+            String::from_utf8_lossy(&accepted.stderr)
+        );
+    }
+    assert_eq!(appends(dir.path()).len(), 3);
 }

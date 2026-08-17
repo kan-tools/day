@@ -63,8 +63,9 @@
     "record-command-only-after-explicit-yes",
     "decline-appends-nothing",
     "raw-transcript-is-not-recorded",
-    "workflow-generated-raw-event-logs-and-command-logs-are-addressed-and-each-assistant-turn-is-derived-from-a-complete-typed-codex-turn-on-one-thread-with-closed-event-and-item-lifecycle-ordering",
+    "workflow-generated-raw-event-logs-and-command-logs-are-addressed-and-each-assistant-turn-is-derived-from-a-complete-typed-codex-turn-on-one-thread-with-closed-type-stable-event-and-item-lifecycle-ordering",
     "the-pinned-codex-harness-candidate-and-github-run-are-external-coordinates-and-an-unreadable-kan-snapshot-fails-rather-than-reading-as-empty",
-    "codex-authentication-skill-installation-and-scenario-execution-use-the-same-isolated-codex-home"
+    "codex-authentication-skill-installation-and-scenario-execution-use-the-same-isolated-codex-home",
+    "authoritative-grading-is-bound-to-github-com-kan-tools-day-the-exact-registered-workflow-file-workflow-dispatch-candidate-and-run"
   ]
 }

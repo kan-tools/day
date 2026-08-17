@@ -613,7 +613,7 @@ fn grade_askme_inner(
         || protocol.id != "day-v0.13-askme-v1"
         || protocol.rubric_version != "askme-rubric-v1"
         || protocol.skill != "skills/askme/SKILL.md"
-        || protocol.global_checks.len() != 11
+        || protocol.global_checks.len() != 12
     {
         return Err(
             "askme protocol identity or closed rubric is not the registered v1 shape".into(),
@@ -862,7 +862,7 @@ fn validate_codex_turn<'a>(
     if turn_starts != 1 || turn_completions != 1 {
         return Err("does not contain a complete Codex turn".into());
     }
-    let mut items = std::collections::BTreeMap::<&str, bool>::new();
+    let mut items = std::collections::BTreeMap::<&str, (&str, bool)>::new();
     for event in &events[2..events.len() - 1] {
         let event_type = event
             .get("type")
@@ -876,33 +876,45 @@ fn validate_codex_turn<'a>(
             .and_then(serde_json::Value::as_str)
             .filter(|id| !id.trim().is_empty())
             .ok_or_else(|| format!("`{event_type}` has no item identifier"))?;
+        let item_type = event
+            .pointer("/item/type")
+            .and_then(serde_json::Value::as_str)
+            .expect("typed item checked above");
         match event_type {
             "item.started" => {
-                if items.insert(id, false).is_some() {
+                if items.insert(id, (item_type, false)).is_some() {
                     return Err(format!("item `{id}` starts more than once"));
                 }
             }
             "item.updated" => {
-                if items.get(id) != Some(&false) {
+                if !items.get(id).is_some_and(|(started_type, completed)| {
+                    *started_type == item_type && !completed
+                }) {
                     return Err(format!(
-                        "item `{id}` is updated outside an active lifecycle"
+                        "item `{id}` is updated outside one type-stable active lifecycle"
                     ));
                 }
             }
             "item.completed" => match items.get_mut(id) {
-                Some(completed) if !*completed => *completed = true,
-                Some(_) => return Err(format!("item `{id}` completes more than once")),
+                Some((started_type, completed)) if *started_type == item_type && !*completed => {
+                    *completed = true
+                }
+                Some(_) => {
+                    return Err(format!(
+                        "item `{id}` changes type or completes more than once"
+                    ))
+                }
                 None => {
                     // Codex 0.147 emits atomic items (including messages and
                     // reasoning) as completion-only events. They are a closed
                     // lifecycle, unlike an update or duplicate completion.
-                    items.insert(id, true);
+                    items.insert(id, (item_type, true));
                 }
             },
             _ => unreachable!("allowed item event checked above"),
         }
     }
-    if items.values().any(|completed| !completed) {
+    if items.values().any(|(_, completed)| !completed) {
         return Err("contains an item lifecycle without completion".into());
     }
     let final_message = events
@@ -934,18 +946,58 @@ fn github_actions_origin(
     candidate_sha: &str,
     run_id: Option<u64>,
 ) -> Result<(), String> {
-    let actions = std::env::var("GITHUB_ACTIONS").unwrap_or_default();
-    let observed_workflow = std::env::var("GITHUB_WORKFLOW").unwrap_or_default();
-    let observed_sha = std::env::var("GITHUB_SHA").unwrap_or_default();
-    let observed_run = std::env::var("GITHUB_RUN_ID").unwrap_or_default();
-    if actions != "true" || observed_workflow != workflow || observed_sha != candidate_sha {
+    let origin = GithubActionsOrigin {
+        actions: std::env::var("GITHUB_ACTIONS").unwrap_or_default(),
+        workflow: std::env::var("GITHUB_WORKFLOW").unwrap_or_default(),
+        sha: std::env::var("GITHUB_SHA").unwrap_or_default(),
+        run_id: std::env::var("GITHUB_RUN_ID").unwrap_or_default(),
+        repository: std::env::var("GITHUB_REPOSITORY").unwrap_or_default(),
+        server: std::env::var("GITHUB_SERVER_URL").unwrap_or_default(),
+        event: std::env::var("GITHUB_EVENT_NAME").unwrap_or_default(),
+        workflow_ref: std::env::var("GITHUB_WORKFLOW_REF").unwrap_or_default(),
+    };
+    validate_github_actions_origin(workflow, candidate_sha, run_id, &origin)
+}
+
+#[derive(Debug)]
+struct GithubActionsOrigin {
+    actions: String,
+    workflow: String,
+    sha: String,
+    run_id: String,
+    repository: String,
+    server: String,
+    event: String,
+    workflow_ref: String,
+}
+
+fn validate_github_actions_origin(
+    workflow: &str,
+    candidate_sha: &str,
+    run_id: Option<u64>,
+    origin: &GithubActionsOrigin,
+) -> Result<(), String> {
+    let workflow_file = match workflow {
+        "v0.13 askme behavioral trial" => "askme-behavioral-trial.yml",
+        "v0.13 workflow reconstruction trial" => "workflow-reconstruction-trial.yml",
+        _ => return Err("evidence grader named an unregistered workflow".into()),
+    };
+    let expected_ref = format!("kan-tools/day/.github/workflows/{workflow_file}@");
+    if origin.actions != "true"
+        || origin.workflow != workflow
+        || origin.sha != candidate_sha
+        || origin.repository != "kan-tools/day"
+        || origin.server != "https://github.com"
+        || origin.event != "workflow_dispatch"
+        || !origin.workflow_ref.starts_with(&expected_ref)
+        || origin.workflow_ref.len() == expected_ref.len()
+    {
         return Err(
-            "evidence grading is authoritative only inside its exact candidate GitHub workflow"
-                .into(),
+            "evidence grading is authoritative only inside the exact kan-tools/day candidate GitHub workflow file".into(),
         );
     }
     if let Some(run_id) = run_id {
-        if observed_run.parse::<u64>().ok() != Some(run_id) {
+        if origin.run_id.parse::<u64>().ok() != Some(run_id) {
             return Err("evidence bundle is not bound to the executing GitHub run".into());
         }
     }
@@ -1405,6 +1457,15 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         })
         .collect::<Result<Vec<_>, _>>()?;
     validate_codex_turn(&events, wakeup.rendered_context.trim())?;
+    if completed_command_output(&events, "git rev-parse HEAD").map(str::trim)
+        != Some(evidence.candidate_sha.as_str())
+        || !completed_command_output(&events, "git status --porcelain")
+            .is_some_and(|output| output.trim().is_empty())
+    {
+        return Err(
+            "fresh wakeup raw events do not prove a clean checkout at the candidate SHA".into(),
+        );
+    }
     if !completed_command(&events, "kan show --all --json", &[]) {
         return Err(
             "fresh wakeup raw events do not prove the required bulk kan command ran".into(),
@@ -1601,8 +1662,16 @@ fn validate_bulk_reconstruction(
 }
 
 fn completed_command(events: &[serde_json::Value], expected: &str, output: &[&str]) -> bool {
-    events.iter().any(|event| {
-        event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
+    completed_command_output(events, expected)
+        .is_some_and(|observed| output.iter().all(|required| observed.contains(required)))
+}
+
+fn completed_command_output<'a>(
+    events: &'a [serde_json::Value],
+    expected: &str,
+) -> Option<&'a str> {
+    events.iter().find_map(|event| {
+        (event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
             && event
                 .pointer("/item/type")
                 .and_then(serde_json::Value::as_str)
@@ -1618,11 +1687,13 @@ fn completed_command(events: &[serde_json::Value], expected: &str, output: &[&st
             && event
                 .pointer("/item/command")
                 .and_then(serde_json::Value::as_str)
-                .is_some_and(|command| command.trim() == expected)
-            && event
+                .is_some_and(|command| command.trim() == expected))
+        .then(|| {
+            event
                 .pointer("/item/aggregated_output")
                 .and_then(serde_json::Value::as_str)
-                .is_some_and(|observed| output.iter().all(|required| observed.contains(required)))
+                .unwrap_or("")
+        })
     })
 }
 
@@ -1784,6 +1855,38 @@ fn full_sha(field: &str, value: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn authoritative_origin_is_the_exact_upstream_workflow_not_a_named_fork() {
+        let candidate = "a".repeat(40);
+        let mut origin = GithubActionsOrigin {
+            actions: "true".into(),
+            workflow: "v0.13 askme behavioral trial".into(),
+            sha: candidate.clone(),
+            run_id: "42".into(),
+            repository: "kan-tools/day".into(),
+            server: "https://github.com".into(),
+            event: "workflow_dispatch".into(),
+            workflow_ref:
+                "kan-tools/day/.github/workflows/askme-behavioral-trial.yml@refs/heads/candidate"
+                    .into(),
+        };
+        assert!(validate_github_actions_origin(
+            "v0.13 askme behavioral trial",
+            &candidate,
+            Some(42),
+            &origin
+        )
+        .is_ok());
+        origin.repository = "attacker/fork".into();
+        assert!(validate_github_actions_origin(
+            "v0.13 askme behavioral trial",
+            &candidate,
+            Some(42),
+            &origin
+        )
+        .is_err());
+    }
 
     #[test]
     fn removing_or_adding_any_contract_member_is_a_mismatch() {
@@ -1985,6 +2088,15 @@ mod tests {
             serde_json::json!({"type": "turn.completed", "usage": {}}),
         ];
         assert!(validate_codex_turn(&unpaired, "invented").is_err());
+        let type_changing = [
+            serde_json::json!({"type": "thread.started", "thread_id": "thread"}),
+            serde_json::json!({"type": "turn.started"}),
+            serde_json::json!({"type": "item.started", "item": {"id": "same", "type": "reasoning", "text": "thinking"}}),
+            serde_json::json!({"type": "item.updated", "item": {"id": "same", "type": "command_execution", "command": "cargo test"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "same", "type": "agent_message", "text": "invented"}}),
+            serde_json::json!({"type": "turn.completed", "usage": {}}),
+        ];
+        assert!(validate_codex_turn(&type_changing, "invented").is_err());
 
         let manifest_value: serde_json::Value =
             serde_json::from_slice(&std::fs::read(bundle.path().join("manifest.json")).unwrap())
@@ -2051,6 +2163,8 @@ mod tests {
         let raw = [
             serde_json::json!({"type": "thread.started", "thread_id": "thread-wakeup"}),
             serde_json::json!({"type": "turn.started"}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-head", "type": "command_execution", "command": "git rev-parse HEAD", "aggregated_output": format!("{candidate}\n"), "exit_code": 0, "status": "completed"}}),
+            serde_json::json!({"type": "item.completed", "item": {"id": "command-clean", "type": "command_execution", "command": "git status --porcelain", "aggregated_output": "", "exit_code": 0, "status": "completed"}}),
             serde_json::json!({"type": "item.completed", "item": {"id": "command-1", "type": "command_execution", "command": "kan show --all --json", "aggregated_output": "signed claims", "exit_code": 0, "status": "completed"}}),
             serde_json::json!({"type": "item.completed", "item": {"id": "command-2", "type": "command_execution", "command": "cargo test", "aggregated_output": "ok", "exit_code": 0, "status": "completed"}}),
             serde_json::json!({"type": "item.completed", "item": {"id": "command-3", "type": "command_execution", "command": format!("just census-demonstrations {base}..{candidate}"), "aggregated_output": "unaccounted | 0", "exit_code": 0, "status": "completed"}}),

@@ -363,6 +363,9 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
                 .strip_prefix('[')
                 .and_then(|word| word.split_once(']'))
                 .is_some_and(|(label, _)| speaker_label(label));
+            let compact_dash = word
+                .find(['–', '—'])
+                .is_some_and(|split| speaker_label(&word[..split]));
             let dashed = words.get(index + 1).is_some_and(|next| {
                 matches!(
                     next.trim_matches(|character: char| {
@@ -373,7 +376,7 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
                     word.trim_matches(|character: char| !character.is_alphanumeric()),
                 )
             });
-            colon || bracketed || dashed
+            colon || bracketed || compact_dash || dashed
         })
         .take(2)
         .count();
@@ -386,10 +389,42 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
 
 fn speaker_label(label: &str) -> bool {
     let label = label.trim_matches(|character: char| !character.is_alphanumeric());
-    !label.is_empty()
-        && label.chars().count() <= 40
-        && label.chars().all(char::is_alphanumeric)
-        && label.chars().any(char::is_alphabetic)
+    if label.is_empty()
+        || label.chars().count() > 40
+        || !label.chars().all(char::is_alphanumeric)
+        || !label.chars().any(char::is_alphabetic)
+    {
+        return false;
+    }
+    let lower = label.to_lowercase();
+    if matches!(
+        lower.as_str(),
+        "user" | "human" | "assistant" | "agent" | "system" | "speaker"
+    ) {
+        return true;
+    }
+    if matches!(
+        lower.as_str(),
+        "decision"
+            | "effect"
+            | "risk"
+            | "mitigation"
+            | "fact"
+            | "facts"
+            | "source"
+            | "scope"
+            | "summary"
+            | "topic"
+            | "provider"
+            | "recorder"
+            | "release"
+            | "unresolved"
+    ) {
+        return false;
+    }
+    let mut characters = label.chars();
+    characters.next().is_some_and(char::is_uppercase)
+        && characters.all(|character| !character.is_alphabetic() || character.is_lowercase())
 }
 
 fn fenced<T: Serialize>(opening: &str, fence: &str, value: &T) -> String {

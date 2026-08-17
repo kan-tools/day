@@ -78,7 +78,10 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
     assert!(grader.contains("evidence commit has no published signed kan claims"));
     assert!(grader.contains("V013_EVIDENCE_PRINCIPAL"));
     assert!(grader.contains("pinned review claim does not adjudicate"));
-    assert!(grader.contains("authoritative only inside its exact candidate GitHub workflow"));
+    assert!(grader.contains("exact kan-tools/day candidate GitHub workflow file"));
+    assert!(grader.contains("origin.repository != \"kan-tools/day\""));
+    assert!(grader.contains("GITHUB_WORKFLOW_REF"));
+    assert!(grader.contains("workflow_dispatch"));
     assert!(
         grader.contains("addressed kan read differs from kan's authenticated signed-claim view")
     );
@@ -93,6 +96,9 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
     assert!(runner.contains("no prior conversation transcript"));
     assert!(runner.contains("wakeup-events.jsonl"));
     assert!(runner.contains("--trust"));
+    assert!(runner.contains("candidate checkout HEAD differs"));
+    assert!(runner.contains("git status --porcelain"));
+    assert!(workflow.contains("$GITHUB_WORKSPACE"));
     assert!(runner.contains("do not wrap or combine them"));
 
     let protocol: serde_json::Value =

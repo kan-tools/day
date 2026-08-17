@@ -61,8 +61,9 @@
     "the evidence source is an exact immutable git commit whose published kan claims are signature and CID checked by kan under the pinned v0.13 project review principal",
     "a Decision or Result on v0.13-workflow-ergonomics by the pinned principal must cite the acquired-input intervention and handoff claims and explicitly adjudicate them as genuine work",
     "bulk kan evidence is generated from that signed-claim checkout then parsed so each required CID has the expected author kind subject relationship and versioned block",
-    "the workflow authenticates installs the candidate skill and launches a new Codex session from one isolated Codex home without prior transcript then digest-addresses its closed-lifecycle typed raw events and exact final message",
-    "fresh wakeup evidence must contain a completed typed agent-message turn and completed command events whose strings exactly equal kan show --all --json plus the recovered suite census and CI invocations; comments shell prefixes and output-only lookalikes are not execution evidence",
+    "the workflow authenticates installs the candidate skill and launches a new Codex session from one isolated Codex home and the clean candidate checkout without prior transcript while a narrow wrapper routes kan reads to the signed evidence checkout",
+    "fresh wakeup evidence must use a closed type-stable item lifecycle and contain a completed typed agent-message turn plus exact successful git rev-parse HEAD git status --porcelain kan show --all --json and recovered suite census and CI command events; comments shell prefixes wrong item types and output-only lookalikes are not execution evidence",
+    "authoritative-grading-is-bound-to-github-com-kan-tools-day-the-exact-registered-workflow-file-workflow-dispatch-candidate-and-run",
     "publication behavioral and reconstruction evidence name one candidate SHA"
   ]
 }

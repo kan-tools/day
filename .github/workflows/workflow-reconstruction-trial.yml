@@ -82,7 +82,7 @@ jobs:
           set -euo pipefail
           python3 scripts/run-v013-reconstruction-trial.py \
             "$RUNNER_TEMP/reconstruction-source/${{ inputs.manifest_path }}" \
-            "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
+            "$GITHUB_WORKSPACE" "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
             "$RUNNER_TEMP/reconstruction-evidence"
       - name: Derive the reconstruction verdict and every removal control
         run: |
