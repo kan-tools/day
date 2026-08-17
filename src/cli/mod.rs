@@ -391,17 +391,24 @@ pub enum AcquiredInputAction {
         /// Reported provider description; does not authenticate that provider
         #[arg(
             long,
-            conflicts_with = "provider_claim",
-            required_unless_present = "provider_claim"
+            conflicts_with_all = ["provider_claim", "recorder_provider"],
+            required_unless_present_any = ["provider_claim", "recorder_provider"]
         )]
         reported_provider: Option<String>,
         /// Separately signed claim whose author authenticates the provider
         #[arg(
             long,
-            conflicts_with = "reported_provider",
-            required_unless_present = "reported_provider"
+            conflicts_with_all = ["reported_provider", "recorder_provider"],
+            required_unless_present_any = ["reported_provider", "recorder_provider"]
         )]
         provider_claim: Option<String>,
+        /// The active recording signer is also the authenticated provider
+        #[arg(
+            long,
+            conflicts_with_all = ["reported_provider", "provider_claim"],
+            required_unless_present_any = ["reported_provider", "provider_claim"]
+        )]
+        recorder_provider: bool,
         #[arg(long = "fact")]
         facts: Vec<String>,
         #[arg(long = "decision")]
@@ -431,17 +438,24 @@ pub enum InterventionAction {
         /// Reported source; remains signer-authored reported provenance
         #[arg(
             long,
-            conflicts_with = "source_claim",
-            required_unless_present = "source_claim"
+            conflicts_with_all = ["source_claim", "recorder_source"],
+            required_unless_present_any = ["source_claim", "recorder_source"]
         )]
         reported_source: Option<String>,
         /// Separately signed source claim whose author is authenticated
         #[arg(
             long,
-            conflicts_with = "reported_source",
-            required_unless_present = "reported_source"
+            conflicts_with_all = ["reported_source", "recorder_source"],
+            required_unless_present_any = ["reported_source", "recorder_source"]
         )]
         source_claim: Option<String>,
+        /// The active recording signer is also the authenticated source
+        #[arg(
+            long,
+            conflicts_with_all = ["reported_source", "source_claim"],
+            required_unless_present_any = ["reported_source", "source_claim"]
+        )]
+        recorder_source: bool,
         /// Claim CID supporting the classification (repeatable)
         #[arg(long = "cites")]
         basis: Vec<String>,
@@ -803,6 +817,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             topic,
             reported_provider,
             provider_claim,
+            recorder_provider,
             facts,
             decisions,
             unresolved,
@@ -816,6 +831,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     topic,
                     reported_provider,
                     provider_claim,
+                    recorder_provider,
                     facts,
                     decisions,
                     unresolved,
@@ -833,6 +849,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
             material_effect,
             reported_source,
             source_claim,
+            recorder_source,
             basis,
         }) => {
             let cid = crate::events::record_intervention(
@@ -844,6 +861,7 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
                     material_effect,
                     reported_source,
                     source_claim,
+                    recorder_source,
                     basis,
                 },
             )?;

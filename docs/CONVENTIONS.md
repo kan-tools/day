@@ -1052,9 +1052,13 @@ provenance; a name in the payload never manufactures human authorship. A
 `--provider-claim` or `--source-claim` derives the principal from a separately
 signed visible claim and cites it automatically. That authenticates the source
 claim's speech only; repository admission and consumer trust remain separate.
+`--recorder-provider` or `--recorder-source` states that the active claim signer
+is also the source, authenticated directly by the new claim's envelope.
 
 Raw transcripts are not durable claim content. `/askme` summarizes and asks
-for explicit consent before invoking the acquired-input action.
+for explicit consent before invoking the acquired-input action. The recording
+surface also rejects turn-by-turn text carrying multiple explicit speaker
+labels; callers must provide the structured summary fields instead.
 
 ## Declared block types — `schema/blocks`
 

@@ -85,6 +85,45 @@ fn acquired_input_is_opt_in_structured_and_reported_without_false_authorship() {
 }
 
 #[test]
+fn recorder_provider_is_authenticated_by_the_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim("basis", "cid-basis", "repository evidence")],
+    );
+
+    let out = run(
+        dir.path(),
+        &kan,
+        &[
+            "acquired-input",
+            "record",
+            "work/topic",
+            "--topic",
+            "release scope",
+            "--recorder-provider",
+            "--fact",
+            "the recorder supplied this fact",
+            "--material-effect",
+            "the plan changed",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let writes = appends(dir.path());
+    assert_eq!(writes.len(), 1);
+    let payload = payload(&writes[0], "day-acquired-input");
+    assert_eq!(payload["recorded_by"], STUB_AUTHOR);
+    assert_eq!(payload["provider"]["provenance"], "recorder");
+    assert_eq!(payload["provider"]["principal"], STUB_AUTHOR);
+}
+
+#[test]
 fn reported_human_intervention_remains_authored_by_the_active_signer() {
     let dir = tempfile::tempdir().unwrap();
     let kan = write_kan_stub(
@@ -168,6 +207,58 @@ fn separately_signed_source_derives_the_principal_and_is_cited() {
 }
 
 #[test]
+fn recorder_source_is_authenticated_by_the_envelope_for_every_fixed_kind() {
+    let dir = tempfile::tempdir().unwrap();
+    let kan = write_kan_stub(
+        dir.path(),
+        &[claim("basis", "cid-basis", "repository evidence")],
+    );
+    let kinds = [
+        "direction-correction",
+        "missing-context",
+        "answered-question",
+        "stopped-work",
+        "approval",
+    ];
+
+    for kind in kinds {
+        let out = run(
+            dir.path(),
+            &kan,
+            &[
+                "intervention",
+                "record",
+                "work/topic",
+                "--kind",
+                kind,
+                "--summary",
+                "the recorder classified its own intervention",
+                "--material-effect",
+                "the work changed",
+                "--recorder-source",
+                "--cites",
+                "cid-basis",
+            ],
+        );
+        assert!(
+            out.status.success(),
+            "{kind}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    let writes = appends(dir.path());
+    assert_eq!(writes.len(), kinds.len());
+    for (write, kind) in writes.iter().zip(kinds) {
+        let payload = payload(write, "day-intervention");
+        assert_eq!(payload["kind"], kind);
+        assert_eq!(payload["recorded_by"], STUB_AUTHOR);
+        assert_eq!(payload["source"]["provenance"], "recorder");
+        assert_eq!(payload["source"]["principal"], STUB_AUTHOR);
+    }
+}
+
+#[test]
 fn malformed_or_ambiguous_requests_append_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let kan = write_kan_stub(
@@ -229,18 +320,20 @@ fn malformed_or_ambiguous_requests_append_nothing() {
             "--reported-provider",
             "human",
             "--fact",
-            "x",
+            "Human: choose A Agent: acknowledged Human: actually choose B",
             "--material-effect",
             "y",
             "--cites",
             "cid-basis",
-            "--transcript",
-            "raw conversation",
         ],
     );
     assert!(
         !transcript.status.success(),
-        "the recording surface must not accept raw transcript content"
+        "the recording surface must reject transcript-shaped content inside an accepted summary field"
+    );
+    assert!(
+        String::from_utf8_lossy(&transcript.stderr).contains("raw conversation transcript"),
+        "the refusal must name the invariant rather than looking like a parse failure"
     );
     assert!(appends(dir.path()).is_empty());
 }

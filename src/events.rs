@@ -24,11 +24,16 @@ pub enum Error {
     MissingSourceClaim(String),
     #[error("source claim `{0}` has no author, so it cannot authenticate a provider")]
     UnattributedSourceClaim(String),
+    #[error("{field} looks like a raw conversation transcript; record a summary instead")]
+    Transcript { field: &'static str },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "provenance", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Source {
+    /// The recording principal is also the source. The claim envelope
+    /// authenticates this principal directly; no second claim is needed.
+    Recorder { principal: String },
     /// The recorder reports who supplied the material; this is not first-hand
     /// authentication of that provider.
     Reported { description: String },
@@ -57,6 +62,7 @@ impl crate::atoms::Versioned for AcquiredInput {
 
     fn validate(&self) -> Result<(), String> {
         validate_source(&self.provider)?;
+        validate_recorder_source(&self.provider, &self.recorded_by)?;
         for (field, value) in [
             ("work subject", self.work_subject.as_str()),
             ("topic", self.topic.as_str()),
@@ -64,6 +70,7 @@ impl crate::atoms::Versioned for AcquiredInput {
             ("material effect", self.material_effect.as_str()),
         ] {
             nonempty(field, value).map_err(|error| error.to_string())?;
+            reject_transcript(field, value).map_err(|error| error.to_string())?;
         }
         if self.facts.is_empty() && self.decisions.is_empty() && self.unresolved.is_empty() {
             return Err("at least one fact, decision, or unresolved item is required".into());
@@ -71,6 +78,9 @@ impl crate::atoms::Versioned for AcquiredInput {
         if self.basis.is_empty() {
             return Err("at least one basis CID is required".into());
         }
+        validate_summaries("fact", &self.facts)?;
+        validate_summaries("decision", &self.decisions)?;
+        validate_summaries("unresolved item", &self.unresolved)?;
         Ok(())
     }
 }
@@ -113,6 +123,7 @@ impl crate::atoms::Versioned for Intervention {
 
     fn validate(&self) -> Result<(), String> {
         validate_source(&self.source)?;
+        validate_recorder_source(&self.source, &self.recorded_by)?;
         for (field, value) in [
             ("work subject", self.work_subject.as_str()),
             ("summary", self.summary.as_str()),
@@ -120,6 +131,7 @@ impl crate::atoms::Versioned for Intervention {
             ("recording author", self.recorded_by.as_str()),
         ] {
             nonempty(field, value).map_err(|error| error.to_string())?;
+            reject_transcript(field, value).map_err(|error| error.to_string())?;
         }
         if self.basis.is_empty() {
             return Err("at least one basis CID is required".into());
@@ -144,6 +156,7 @@ pub struct AcquiredInputRequest {
     pub topic: String,
     pub reported_provider: Option<String>,
     pub provider_claim: Option<String>,
+    pub recorder_provider: bool,
     pub facts: Vec<String>,
     pub decisions: Vec<String>,
     pub unresolved: Vec<String>,
@@ -159,6 +172,7 @@ pub struct InterventionRequest {
     pub material_effect: String,
     pub reported_source: Option<String>,
     pub source_claim: Option<String>,
+    pub recorder_source: bool,
     pub basis: Vec<String>,
 }
 
@@ -169,6 +183,8 @@ pub fn record_acquired_input(
     nonempty("work subject", &request.subject)?;
     nonempty("topic", &request.topic)?;
     nonempty("material effect", &request.material_effect)?;
+    reject_transcript("topic", &request.topic)?;
+    reject_transcript("material effect", &request.material_effect)?;
     if request.facts.is_empty() && request.decisions.is_empty() && request.unresolved.is_empty() {
         return Err(Error::EmptyAcquiredInput);
     }
@@ -177,6 +193,8 @@ pub fn record_acquired_input(
         client,
         request.reported_provider.take(),
         request.provider_claim.take(),
+        request.recorder_provider,
+        &recorded_by,
         &mut request.basis,
     )?;
     if request.basis.is_empty() {
@@ -204,11 +222,15 @@ pub fn record_intervention(
     nonempty("work subject", &request.subject)?;
     nonempty("summary", &request.summary)?;
     nonempty("material effect", &request.material_effect)?;
+    reject_transcript("summary", &request.summary)?;
+    reject_transcript("material effect", &request.material_effect)?;
     let recorded_by = client.identity().ok_or(Error::UnknownRecorder)?;
     let source = source(
         client,
         request.reported_source.take(),
         request.source_claim.take(),
+        request.recorder_source,
+        &recorded_by,
         &mut request.basis,
     )?;
     if request.basis.is_empty() {
@@ -231,8 +253,15 @@ fn source(
     client: &KanClient,
     reported: Option<String>,
     claim: Option<String>,
+    recorder: bool,
+    recorded_by: &str,
     basis: &mut Vec<String>,
 ) -> Result<Source, Error> {
+    if recorder {
+        return Ok(Source::Recorder {
+            principal: recorded_by.to_owned(),
+        });
+    }
     if let Some(cid) = claim {
         let author = client
             .show_all()?
@@ -257,6 +286,7 @@ fn source(
 
 fn validate_source(source: &Source) -> Result<(), String> {
     let fields: Vec<(&str, &str)> = match source {
+        Source::Recorder { principal } => vec![("recording source principal", principal.as_str())],
         Source::Reported { description } => {
             vec![("reported provider/source", description.as_str())]
         }
@@ -273,6 +303,15 @@ fn validate_source(source: &Source) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_recorder_source(source: &Source, recorded_by: &str) -> Result<(), String> {
+    if let Source::Recorder { principal } = source {
+        if principal != recorded_by {
+            return Err("recorder source principal must equal the recording author".into());
+        }
+    }
+    Ok(())
+}
+
 fn nonempty(field: &'static str, value: &str) -> Result<(), Error> {
     if value.trim().is_empty() {
         Err(Error::Empty { field })
@@ -284,8 +323,50 @@ fn nonempty(field: &'static str, value: &str) -> Result<(), Error> {
 fn cleaned(field: &'static str, values: Vec<String>) -> Result<Vec<String>, Error> {
     for value in &values {
         nonempty(field, value)?;
+        reject_transcript(field, value)?;
     }
     Ok(values)
+}
+
+fn validate_summaries(field: &'static str, values: &[String]) -> Result<(), String> {
+    for value in values {
+        nonempty(field, value).map_err(|error| error.to_string())?;
+        reject_transcript(field, value).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+/// Rejects the common durable-transcript failure shape without pretending day
+/// can infer whether arbitrary prose originated in a conversation. Two or more
+/// explicit speaker-turn labels are enough to identify turn-by-turn content;
+/// one label remains valid quoted evidence or ordinary prose.
+fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
+    let turns = value
+        .split_whitespace()
+        .filter_map(|word| {
+            let word = word.trim_end_matches(|character: char| {
+                matches!(character, '*' | '_' | '`' | ']' | ')')
+            });
+            let label = word.strip_suffix(':')?;
+            Some(
+                label
+                    .trim_matches(|character: char| !character.is_alphanumeric())
+                    .to_ascii_lowercase(),
+            )
+        })
+        .filter(|label| {
+            matches!(
+                label.as_str(),
+                "human" | "user" | "assistant" | "agent" | "system"
+            )
+        })
+        .take(2)
+        .count();
+    if turns >= 2 {
+        Err(Error::Transcript { field })
+    } else {
+        Ok(())
+    }
 }
 
 fn fenced<T: Serialize>(opening: &str, fence: &str, value: &T) -> String {
