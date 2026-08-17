@@ -517,8 +517,8 @@ fn ac5_every_instructed_read_names_its_failure_handling() {
     // of its job while looking like it was. The LIST is derived by
     // `shipped_skills()`; this is the other half.
     assert_eq!(
-        bullets_checked, 31,
-        "expected exactly 31 instructed reads across the six skills, found \
+        bullets_checked, 35,
+        "expected exactly 35 instructed reads across the six skills, found \
          {bullets_checked}. If a bullet was added or removed, update this number \
          — if it dropped sharply the bullet parse broke and every assertion above \
          was checking nothing."

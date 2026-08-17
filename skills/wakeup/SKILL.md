@@ -109,8 +109,9 @@ claims and check each one. Typical claims and their checks:
 |---|---|
 | HEAD is at `<sha>` | `git log --oneline -1`, and `git log --oneline <sha>..HEAD` for what landed since |
 | branch `<name>` | `git branch --show-current` |
-| CI green | `gh run list --branch <name> --limit 3` |
-| the suite passes | run it, or say you did not |
+| GitHub Actions run `<run-id>` at `<head-sha>` concluded success | `gh run view <run-id> --json databaseId,headSha,conclusion,workflowName,url`; require both the same run ID and head SHA |
+| `<suite-command>` passes at `<full-sha>` | first require `git cat-file -e <full-sha>^{commit}`; run the exact command in a clean checkout of that commit, or say you did not |
+| census has N unaccounted over `<base>..<head>` | require both commits with `git cat-file -e`, then run `just census-demonstrations <base>..<head>` — never its current default range |
 | tree clean | `git status --porcelain` |
 | issue #N is open/closed | `gh issue view N --json state` |
 | a design is recorded | the claim is in the `--all --json` you already read |
@@ -120,6 +121,15 @@ Classify each as **CONFIRMED**, **DRIFTED** (with what it is now), or
 **UNCHECKABLE** (with why). Do not silently drop one you could not check —
 could-not-check outranks checked-and-clean, and a verification report that omits
 what it skipped asserts a completeness it did not establish.
+
+The coordinates belong to the recorded measurement, not to the session doing
+the checking. Advancing or merging HEAD does not change a suite SHA, census
+base/head pair, or CI run/head pair. If a legacy handoff says only "suite
+passes", "census clean", or "CI green", classify that assertion UNCHECKABLE:
+do not silently substitute the current HEAD, a newly derived census range, or
+the newest workflow run. If a scoped commit no longer exists locally and
+cannot be fetched, or an exact CI run is unreadable, that assertion is likewise
+UNCHECKABLE and the missing coordinate is named.
 
 **Anything that drifted is the most valuable thing in the output.** It is the
 work someone else did, or the thing that broke, since the handoff was written.

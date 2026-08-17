@@ -33,6 +33,11 @@ report it CONFIRMED against the same absence.
 - **HEAD** — `git log --oneline -1`.
   **If this read fails:** the repo has no commits. Say so rather than omitting
   the line, since a missing HEAD claim reads as an oversight.
+- **Immutable HEAD coordinate** — `git rev-parse HEAD`.
+  Use the full SHA in every suite or census claim. The abbreviated display from
+  `git log --oneline -1` is for people, not a durable measurement coordinate.
+  **If this read fails:** mark every suite and census assertion that needs the
+  commit UNCHECKABLE; do not copy the abbreviated SHA or a remembered value.
 - **Tree** — `git status --porcelain`.
   **If this read fails:** say so in the handoff. Empty output means clean; a
   failed command does not, and "clean" is a claim the next session will check.
@@ -48,6 +53,35 @@ Also note whether this is a git worktree (`git rev-parse --git-common-dir`
 differing from `--git-dir`). kan#197: a worktree gets its own `.kan/`, so Phase
 4's write would fork the log into one nobody reads. **Run the write from the
 main checkout.**
+
+### Immutable measurement scopes (day#152)
+
+A pass/fail word without the inputs that selected its work is not a result the
+next session can check. Before writing any measurement, capture and retain its
+scope:
+
+- **Local suite:** record the exact command and full `git rev-parse HEAD` SHA.
+  Check `git status --porcelain` before and after it. Only say the suite passed
+  *at that commit* when both reads are empty; otherwise say the result included
+  an uncommitted working tree and is not reconstructable from the SHA alone.
+  **If this read fails:** report the suite assertion UNCHECKABLE and name which
+  command, SHA, or tree-state read could not be established.
+- **Demonstration census:** compute the full base with `git merge-base main
+  HEAD`, compute the full head with `git rev-parse HEAD`, and run `just
+  census-demonstrations <base>..<head>`. Write both SHAs and the counts. Never
+  record only "census clean" or rely on the census's time-relative default.
+  **If this read fails:** report the census UNCHECKABLE with the failed base,
+  head, or census command; do not derive a replacement range later.
+- **GitHub Actions CI:** query `gh run list --branch <name> --limit 3 --json
+  databaseId,headSha,conclusion,workflowName,url`. A CI claim names GitHub
+  Actions, the workflow, immutable database run ID, full `headSha`, and
+  conclusion. Branch plus "green" is not an immutable scope.
+  **If this read fails:** report CI UNCHECKABLE; do not promote an absent or
+  unreadable run to green.
+
+If any coordinate cannot be read, write that the measurement is UNCHECKABLE
+and why. Do not replace a failed coordinate read with the current branch,
+current HEAD, current default census range, or newest CI run.
 
 ## Your task
 
@@ -121,8 +155,10 @@ an independent note:
 
 Structure that makes the round trip work:
 
-1. **State, with how it was verified.** Branch, HEAD, CI, suite, tree. Each a
-   claim; each checkable.
+1. **State, with how it was verified.** Branch, HEAD, CI, suite, census, tree.
+   Suite claims name their exact command and commit; census claims name exact
+   base and head SHAs; CI claims name provider run ID and head SHA. Each is a
+   claim the paired skill can check without consulting a moving default.
 2. **The decision a reader needs** to understand the work — the one or two
    choices without which the next step looks arbitrary. Not a changelog.
 3. **What is next, in order**, and why that order. If something was promoted or

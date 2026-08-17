@@ -316,6 +316,45 @@ fn day_173_the_handoff_atom_binds_its_thread_and_defaults_to_nothing() {
     );
 }
 
+/// day#152 — measurements cross the session boundary only with immutable
+/// coordinates. These are prompt contracts rather than model-behavior tests:
+/// the real-harness round trip belongs to the v0.13 trial, while this test
+/// prevents either shipped half from dropping the fields that make that trial
+/// possible.
+#[test]
+fn day_152_handoff_measurements_keep_their_original_scope() {
+    let handoff = std::fs::read_to_string(repo_root().join("skills/handoff/SKILL.md")).unwrap();
+    let wakeup = std::fs::read_to_string(repo_root().join("skills/wakeup/SKILL.md")).unwrap();
+
+    for required in [
+        "git rev-parse HEAD",
+        "git merge-base main",
+        "census-demonstrations <base>..<head>",
+        "databaseId,headSha,conclusion",
+        "exact command",
+        "full `headSha`",
+    ] {
+        assert!(
+            handoff.contains(required),
+            "handoff dropped immutable measurement field {required:?} (day#152)"
+        );
+    }
+
+    for required in [
+        "gh run view <run-id>",
+        "git cat-file -e <full-sha>^{commit}",
+        "census-demonstrations <base>..<head>",
+        "Advancing or merging HEAD does not change",
+        "classify that assertion UNCHECKABLE",
+        "do not silently substitute the current HEAD",
+    ] {
+        assert!(
+            wakeup.contains(required),
+            "wakeup no longer replays or fails closed on {required:?} (day#152)"
+        );
+    }
+}
+
 #[test]
 fn ac8_the_review_atom_declares_all_four_verdicts() {
     let text =
