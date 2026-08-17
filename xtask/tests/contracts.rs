@@ -18,44 +18,20 @@ impl Process for FixtureProcess {
 }
 
 #[test]
-fn process_results_remain_three_distinct_states() {
-    for (result, expected) in [
-        (
-            Ok(ProcessOutput {
-                status: 0,
-                stdout: String::new(),
-                stderr: String::new(),
-            }),
-            "passed",
-        ),
-        (
-            Ok(ProcessOutput {
-                status: 7,
-                stdout: String::new(),
-                stderr: String::new(),
-            }),
-            "finding",
-        ),
-        (Err("missing cargo".to_owned()), "could-not-check"),
-    ] {
-        let process = FixtureProcess {
-            result,
-            calls: RefCell::new(Vec::new()),
-        };
-        let outcome = xtask::run(
-            Xtask::Validate {
-                command: ValidateCommand::Rfc { self_test: false },
-            },
-            Path::new("/fixture"),
-            &process,
-        );
-        let actual = match outcome {
-            Outcome::Passed(()) => "passed",
-            Outcome::Finding(_) => "finding",
-            Outcome::CouldNotCheck(_) => "could-not-check",
-        };
-        assert_eq!(actual, expected);
-    }
+fn native_rfc_validation_fails_closed_before_requesting_process_authority() {
+    let process = FixtureProcess {
+        result: Err("process authority must not be reached".to_owned()),
+        calls: RefCell::new(Vec::new()),
+    };
+    let outcome = xtask::run(
+        Xtask::Validate {
+            command: ValidateCommand::Rfc { self_test: false },
+        },
+        Path::new("/fixture"),
+        &process,
+    );
+    assert!(matches!(outcome, Outcome::Finding(_)));
+    assert!(process.calls.borrow().is_empty());
 }
 
 #[test]
@@ -84,26 +60,15 @@ fn profiles_reference_only_known_checks_and_release_contains_ci() {
 }
 
 #[test]
-fn rfc_self_test_is_an_explicit_process_request() {
-    let process = FixtureProcess {
-        result: Ok(ProcessOutput {
-            status: 0,
-            stdout: String::new(),
-            stderr: String::new(),
-        }),
-        calls: RefCell::new(Vec::new()),
-    };
-    let outcome = xtask::run(
-        Xtask::Validate {
-            command: ValidateCommand::Rfc { self_test: true },
-        },
-        Path::new("/fixture"),
-        &process,
-    );
-    assert!(outcome.is_passed());
-    let calls = process.calls.borrow();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].display(), "scripts/check-rfcs-adrs.sh --self-test");
+fn rfc_compatibility_shim_is_policy_free_and_the_normative_path_is_preserved() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let shim = std::fs::read_to_string(root.join("scripts/check-rfcs-adrs.sh")).unwrap();
+    assert!(shim.starts_with("#!/bin/sh\nset -eu\n"));
+    assert!(shim.contains("-p xtask -- validate rfc"));
+    assert!(!shim.contains("mutation") && !shim.contains("require_fields"));
+
+    let rfc0 = std::fs::read_to_string(root.join("rfcs/0-rfc-and-adr-process.md")).unwrap();
+    assert!(rfc0.contains("`scripts/check-rfcs-adrs.sh` validates"));
 }
 
 #[test]

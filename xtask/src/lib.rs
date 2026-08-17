@@ -3,6 +3,7 @@ pub mod command;
 pub mod evidence;
 pub mod outcome;
 pub mod profile;
+pub mod validate;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -36,22 +37,25 @@ fn run_validate(command: ValidateCommand, root: &Path, process: &dyn Process) ->
                 run_profile(profile, root, process)
             }
         }
-        ValidateCommand::Rfc { self_test } => {
-            let args = self_test.then_some("--self-test").into_iter();
-            run_legacy(root, process, "scripts/check-rfcs-adrs.sh", args)
-        }
-        ValidateCommand::Publication { rfc } => match rfc {
-            0 => run_legacy(
+        ValidateCommand::Rfc { self_test } => validate::rfc::run(root, process, self_test),
+        ValidateCommand::Publication { rfc, self_test } => match rfc {
+            0 => validate::publication::run(
+                validate::publication::PublicationKind::Rfc0,
                 root,
                 process,
-                "scripts/check-rfc0-publication.py",
-                std::iter::empty::<&str>(),
+                &self_test
+                    .then_some(OsString::from("--self-test"))
+                    .into_iter()
+                    .collect::<Vec<_>>(),
             ),
-            1 => run_legacy(
+            1 => validate::publication::run(
+                validate::publication::PublicationKind::Denotational,
                 root,
                 process,
-                "scripts/check-rfc1-denotational-publication.py",
-                std::iter::empty::<&str>(),
+                &self_test
+                    .then_some(OsString::from("--self-test"))
+                    .into_iter()
+                    .collect::<Vec<_>>(),
             ),
             other => Outcome::CouldNotCheck(CouldNotCheck::new(format!(
                 "no publication validator is registered for RFC {other}"
@@ -64,16 +68,17 @@ fn run_validate(command: ValidateCommand, root: &Path, process: &dyn Process) ->
             if self_test {
                 args.push(OsString::from("--self-test"));
             }
-            run_legacy(root, process, "scripts/check-rfc1-vectors.py", args)
+            validate::vectors::run(root, &args)
         }
         ValidateCommand::Formal { self_test } => {
-            let args = self_test.then_some("--self-test").into_iter();
-            run_legacy(
-                root,
-                process,
-                "scripts/check-rfc1-formal-obligations.py",
-                args,
-            )
+            let args = self_test
+                .then_some(OsString::from("--self-test"))
+                .into_iter()
+                .collect::<Vec<_>>();
+            validate::formal::run(root, &args)
+        }
+        ValidateCommand::Review(TrailingArgs { args }) => {
+            validate::review::run(root, process, &args)
         }
     }
 }
@@ -81,7 +86,7 @@ fn run_validate(command: ValidateCommand, root: &Path, process: &dyn Process) ->
 fn run_evidence(command: EvidenceCommand, root: &Path, process: &dyn Process) -> Outcome<()> {
     match command {
         EvidenceCommand::BehaviourDiff(TrailingArgs { args }) => {
-            run_legacy(root, process, "scripts/behaviour-diff.py", args)
+            evidence::behaviour::run(root, process, &args)
         }
         EvidenceCommand::Mutate(TrailingArgs { args }) => {
             evidence::mutation::run(root, process, &args)
@@ -151,14 +156,6 @@ fn run_profile(
         }
     }
     Outcome::Passed(())
-}
-
-fn run_legacy<I, S>(root: &Path, process: &dyn Process, program: &str, args: I) -> Outcome<()>
-where
-    I: IntoIterator<Item = S>,
-    S: Into<OsString>,
-{
-    run_program(root, process, program, args)
 }
 
 fn run_program<I, S>(root: &Path, process: &dyn Process, program: &str, args: I) -> Outcome<()>

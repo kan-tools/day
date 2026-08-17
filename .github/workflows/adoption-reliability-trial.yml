@@ -221,16 +221,9 @@ jobs:
           set -euo pipefail
           mkdir trial-evidence
           counter="$RUNNER_TEMP/behaviour-diff-invocations"
-          mv scripts/behaviour-diff.py scripts/behaviour-diff.real.py
-          printf '%s\n' '#!/bin/sh' \
-            ': "${DAY_BEHAVIOUR_DIFF_COUNTER:?}"' \
-            'printf "1\\n" >> "$DAY_BEHAVIOUR_DIFF_COUNTER"' \
-            'exec python3 "$(dirname "$0")/behaviour-diff.real.py" "$@"' \
-            > scripts/behaviour-diff.py
-          chmod +x scripts/behaviour-diff.py
           export DAY_BEHAVIOUR_DIFF_COUNTER="$counter"
           set +e
-          scripts/behaviour-diff.py --expect-fixtures 999 >/dev/null 2>&1
+          cargo run --quiet -p xtask -- evidence behaviour-diff --expect-fixtures 999 >/dev/null 2>&1
           set -e
           [ "$(wc -l < "$counter")" -eq 1 ]
           rm "$counter"
@@ -251,10 +244,11 @@ jobs:
           [ ! -e "$counter" ]
           kill "$unrelated_pid" 2>/dev/null || true
           wait "$unrelated_pid" 2>/dev/null || true
-          mv scripts/behaviour-diff.real.py scripts/behaviour-diff.py
           grep -F 'test result: ok. 0 passed; 0 failed; 8 ignored' trial-evidence/default-suite.txt
           cargo test --test behaviour_diff -- --ignored --test-threads=1 2>&1 | tee trial-evidence/behaviour-diff.txt
           grep -F 'test result: ok. 8 passed; 0 failed; 0 ignored' trial-evidence/behaviour-diff.txt
+          [ "$(wc -l < "$counter")" -eq 8 ]
+          rm "$counter"
           DAY_TRIAL_EVIDENCE_DIR="$PWD/trial-evidence/trust-envelopes" \
             cargo test --test kan_conformance conformance_trust_withholding_shapes_are_what_day_keys_on -- --nocapture \
             2>&1 | tee trial-evidence/trust-real-kan.txt
@@ -266,9 +260,10 @@ jobs:
         run: |
           set -euo pipefail
           cp Cargo.toml "$RUNNER_TEMP/Cargo.toml"
+          cargo build --quiet -p xtask
           printf '\nthis is not toml\n' >> Cargo.toml
           set +e
-          python3 scripts/behaviour-diff.py --since HEAD --expect-fixtures 4 >trial-evidence/head-failure.txt 2>&1
+          target/debug/xtask evidence behaviour-diff --since HEAD --expect-fixtures 4 >trial-evidence/head-failure.txt 2>&1
           head_code=$?
           set -e
           mv "$RUNNER_TEMP/Cargo.toml" Cargo.toml
@@ -283,7 +278,7 @@ jobs:
           bad_base="$(git rev-parse HEAD)"
           git switch -q --detach "${{ inputs.rc_sha }}"
           set +e
-          python3 scripts/behaviour-diff.py --since "$bad_base" --expect-fixtures 4 >trial-evidence/base-failure.txt 2>&1
+          target/debug/xtask evidence behaviour-diff --since "$bad_base" --expect-fixtures 4 >trial-evidence/base-failure.txt 2>&1
           base_code=$?
           set -e
           [ "$base_code" -ne 0 ]

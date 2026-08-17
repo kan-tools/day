@@ -44,6 +44,10 @@ demonstrate *args:
 mutate *args:
     cargo run -p xtask -- evidence mutate {{args}}
 
+# Compare current day behaviour with a base revision over the fixture corpus.
+behaviour-diff *args:
+    cargo run -p xtask -- evidence behaviour-diff {{args}}
+
 # Account for every commit in a range under the demonstration rule.
 census-demonstrations *args:
     cargo run -p xtask -- census demonstrations {{args}}

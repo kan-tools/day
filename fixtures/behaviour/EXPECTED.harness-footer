@@ -7,7 +7,7 @@
 #   import subprocess
 #   args = [l.rstrip("\n") for l in open("fixtures/behaviour/EXPECTED.harness-footer")
 #           if l.strip() and not l.startswith("#")]
-#   raise SystemExit(subprocess.run(["python3", "scripts/behaviour-diff.py",
+#   raise SystemExit(subprocess.run(["scripts/behaviour-diff.py",
 #       "--since", "9b8afa7", "--expect-fixtures", "4"] + args).returncode)
 #   PY
 #

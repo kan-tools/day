@@ -1171,6 +1171,7 @@ fn publication_checkers_accept_githubs_suffixless_origin() {
             .expect("the checker under test should replace the committed fixture copy");
         let out = Command::new(checkout.join(checker))
             .current_dir(&checkout)
+            .env("DAY_XTASK_MANIFEST", repo_root().join("Cargo.toml"))
             .output()
             .expect("the publication checker should run");
         let text = format!(
@@ -1222,12 +1223,12 @@ fn ordinary_ci_uses_the_newest_measured_kan() {
 /// vacuous at the exact lifecycle transition they exist to protect.
 #[test]
 fn rfc_acceptance_self_tests_survive_the_review_transition() {
-    let checker = read("scripts/check-rfcs-adrs.sh");
+    let checker = read("xtask/src/validate/rfc.rs");
     assert!(
-        checker.contains("s/- Authors:/- Kan-claim: bafyrecursive\\n- Authors:/")
-            && checker.contains("grep -Eq '^- Kan-claim:'")
-            && checker.contains("self-test could not construct recursive-publication mutation"),
-        "the recursive-publication guard must be portable, and its mutation must be capture-free and prove that it was constructed"
+        checker.contains("recursive-publication")
+            && checker.contains("- Kan-claim: bafyrecursive\\n- Authors:")
+            && checker.contains("normative RFC bytes contain a claim-CID backlink"),
+        "the native recursive-publication guard and its mutation must remain paired"
     );
     let out = Command::new("bash")
         .args(["scripts/check-rfcs-adrs.sh", "--self-test"])

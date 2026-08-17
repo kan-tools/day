@@ -47,6 +47,8 @@ pub enum ValidateCommand {
     Publication {
         #[arg(long, default_value_t = 0)]
         rfc: u32,
+        #[arg(long)]
+        self_test: bool,
     },
     Vectors {
         path: Option<PathBuf>,
@@ -57,6 +59,7 @@ pub enum ValidateCommand {
         #[arg(long)]
         self_test: bool,
     },
+    Review(TrailingArgs),
 }
 
 #[derive(Debug, Subcommand)]
