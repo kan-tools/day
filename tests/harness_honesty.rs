@@ -1228,11 +1228,11 @@ fn ordinary_ci_uses_the_newest_measured_kan() {
     );
 }
 
-/// RFC lifecycle mutation tests must continue to mutate after a proposal moves
-/// from Draft to Review; otherwise the acceptance checks silently become
-/// vacuous at the exact lifecycle transition they exist to protect.
+/// RFC lifecycle mutation tests must continue to reach their intended guards
+/// after a proposal becomes Accepted; otherwise live review validation can
+/// mask the append-only history checks the harness is meant to protect.
 #[test]
-fn rfc_acceptance_self_tests_survive_the_review_transition() {
+fn rfc_acceptance_self_tests_survive_the_acceptance_transition() {
     let checker = read("xtask/src/validate/rfc.rs");
     assert!(
         checker.contains("recursive-publication")
@@ -1253,9 +1253,10 @@ fn rfc_acceptance_self_tests_survive_the_review_transition() {
     assert!(
         out.status.success()
             && text.contains("accepted-metadata mutation rejected")
+            && text.contains("historical-renumber mutation rejected")
             && text.contains("forged-review mutation rejected")
             && text.contains("short-review mutation rejected"),
-        "acceptance mutations must still fire while RFC 0 is in Review:\n{text}"
+        "acceptance mutations must still reach their intended guards:\n{text}"
     );
 }
 

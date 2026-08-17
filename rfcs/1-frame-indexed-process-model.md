@@ -1,12 +1,12 @@
 # RFC 1: Frame-indexed process model
 
-- Status: Review
+- Status: Accepted
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: https://github.com/kan-tools/day/pull/224
 - Review-started-at: 2026-08-17T05:40:00Z
-- Review-period-ends: 2026-08-20T05:40:00Z
-- Review-override: None
+- Review-period-ends: 2026-08-17T05:44:39Z
+- Review-override: unanimous:https://github.com/kan-tools/day/pull/224@683e41425a719e6c2cce7fec5a5320bd9e9ceea4
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative
 - Superseded-by: None
 - Profile-relationship: approximation
@@ -660,7 +660,7 @@ accepted RFC and naming the semantic obligation it implements.
 
 ## Implementation status
 
-Review. Current day partially implements operational profile v1 but uses older
+Accepted. Current day partially implements operational profile v1 but uses older
 rendering and flat witness assembly. No claim is made that the denotational
 target is implemented. Acceptance precedes the v0.13 implementation restart;
 implementation work will be decomposed into issues after review.

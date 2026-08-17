@@ -749,6 +749,19 @@ fn mutate_fixture(root: &Path, label: &str) -> Result<(), CheckError> {
                 "RFC 1: Frame-indexed process model](1-frame-indexed-process-model.md)",
                 "RFC 2: Frame-indexed process model](2-frame-indexed-process-model.md)",
             )?;
+            // Keep this mutation outside the accepted lifecycle. Otherwise the
+            // discussion PR correctly rejects the invented RFC 2 before the
+            // append-only allocation check can observe the renumbering.
+            replace(
+                &root.join("rfcs/2-frame-indexed-process-model.md"),
+                "- Status: Accepted",
+                "- Status: Draft",
+            )?;
+            replace(
+                &root.join("rfcs/README.md"),
+                "RFC 2: Frame-indexed process model](2-frame-indexed-process-model.md) — Accepted",
+                "RFC 2: Frame-indexed process model](2-frame-indexed-process-model.md) — Draft",
+            )?;
             replace(
                 &root.join("rfcs/numbers.tsv"),
                 "1\t1-frame-indexed-process-model.md",
