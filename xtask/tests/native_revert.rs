@@ -55,6 +55,7 @@ fn a_real_reverse_patch_fails_its_named_test_and_restores() {
             include: &[],
             exclude: &[],
             target_dir: None,
+            allow_rejects: false,
         },
     )
     .unwrap();

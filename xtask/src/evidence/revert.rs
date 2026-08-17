@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::capability::process::{Process, ProcessOutput, ProcessRequest};
+use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilePatch {
@@ -48,6 +50,362 @@ pub struct DemonstrateRequest<'a> {
     pub include: &'a [String],
     pub exclude: &'a [String],
     pub target_dir: Option<&'a Path>,
+    pub allow_rejects: bool,
+}
+
+#[derive(Default)]
+struct CliArgs {
+    tests: Option<Vec<String>>,
+    rev: Option<String>,
+    include: Vec<String>,
+    exclude: Vec<String>,
+}
+
+pub fn is_verify(args: &[OsString]) -> bool {
+    args.iter().any(|arg| arg == "--verify")
+}
+
+pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()> {
+    if is_verify(args) {
+        return run_verify(root, process, args);
+    }
+    let options = match parse_args(args) {
+        Ok(options) => options,
+        Err(detail) => return Outcome::CouldNotCheck(CouldNotCheck::new(detail)),
+    };
+    let Some(names) = options.tests.as_ref() else {
+        return Outcome::CouldNotCheck(CouldNotCheck::new(
+            "--tests is required unless --verify is given",
+        ));
+    };
+    let repository = match git(root, process, ["rev-parse", "--show-toplevel"]) {
+        Ok(value) => PathBuf::from(value.trim()),
+        Err(error) => return reported_error(error),
+    };
+    let (patch, label) = if let Some(rev) = &options.rev {
+        match patch_for_rev(&repository, process, rev) {
+            Ok(patch) => (patch, rev.clone()),
+            Err(error) => return reported_error(error),
+        }
+    } else {
+        let patch = match git(&repository, process, ["diff", "--unified=0", "HEAD"]) {
+            Ok(value) => value,
+            Err(error) => return reported_error(error),
+        };
+        if let Ok(untracked) = git(
+            &repository,
+            process,
+            ["ls-files", "--others", "--exclude-standard"],
+        ) {
+            let paths = untracked
+                .split_whitespace()
+                .filter(|path| !path.starts_with("tests/"))
+                .collect::<Vec<_>>();
+            if !paths.is_empty() {
+                println!("note: untracked and therefore NOT reverted: {paths:?}");
+            }
+        }
+        (patch, "worktree".to_owned())
+    };
+
+    match demonstrate(
+        &repository,
+        process,
+        DemonstrateRequest {
+            patch: &patch,
+            names,
+            label: &label,
+            include: &options.include,
+            exclude: &options.exclude,
+            target_dir: None,
+            allow_rejects: false,
+        },
+    ) {
+        Err(error) => reported_error(error),
+        Ok(result) if result.outcome == DemonstrationOutcome::Vacuous => {
+            println!("\n*** VACUOUS *** — the fix was reverted and {names:?} still passed.");
+            println!("The test does not observe the finding it was written to close.");
+            Outcome::Finding(Finding::reported("revert demonstration was vacuous"))
+        }
+        Ok(result) => {
+            let quiet = names
+                .iter()
+                .filter(|name| !result.caught.contains(name))
+                .collect::<Vec<_>>();
+            if !quiet.is_empty() {
+                let rendered = quiet
+                    .iter()
+                    .map(|name| format!("'{name}'"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!(
+                    "note: named but did not fail under revert, so NOT in the trailer: [{rendered}]"
+                );
+            }
+            println!(
+                "\nDEMONSTRATED — failed under revert: {}",
+                result.caught.join(", ")
+            );
+            if options.rev.as_deref().is_none_or(|rev| rev == "HEAD") {
+                println!("\nPaste into the commit message:\n");
+                let scope = if options.include.is_empty() {
+                    String::new()
+                } else {
+                    format!("include={} ", options.include.join(","))
+                };
+                println!(
+                    "    Demonstrated-by: revert=HEAD tests={} {scope}outcome=DEMONSTRATED",
+                    result.caught.join(",")
+                );
+            } else {
+                println!(
+                    "\nNo trailer printed: this demonstrated {}, which is not the commit a trailer would land on.",
+                    options.rev.as_deref().unwrap_or_default()
+                );
+            }
+            Outcome::Passed(())
+        }
+    }
+}
+
+fn run_verify(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()> {
+    if args.len() != 2 || args[0] != "--verify" {
+        return Outcome::CouldNotCheck(CouldNotCheck::new(
+            "usage: xtask evidence revert --verify <rev>",
+        ));
+    }
+    let spec = args[1].to_string_lossy();
+    let repository = match git(root, process, ["rev-parse", "--show-toplevel"]) {
+        Ok(value) => PathBuf::from(value.trim()),
+        Err(error) => return reported_error(error),
+    };
+    let rev = match git(
+        &repository,
+        process,
+        ["rev-parse", "--verify", &format!("{spec}^{{commit}}")],
+    ) {
+        Ok(value) => value.trim().to_owned(),
+        Err(error) => return reported_error(error),
+    };
+    let body = match git(&repository, process, ["log", "-1", "--format=%B", &rev]) {
+        Ok(value) => value,
+        Err(error) => return reported_error(error),
+    };
+    if !body
+        .lines()
+        .any(|line| line.starts_with(crate::evidence::trailer::PREFIX))
+    {
+        println!("{spec}: no Demonstrated-by: trailer; nothing to verify");
+        return Outcome::Passed(());
+    }
+    let claim = match crate::evidence::trailer::parse_message(&body) {
+        Ok(value) => value,
+        Err(error) => {
+            return reported_error(RevertError::new(
+                "REVERT-FAILED",
+                format!("{rev} carries a trailer that does not parse: {error}"),
+            ))
+        }
+    };
+    if claim.outcome != "DEMONSTRATED" {
+        println!(
+            "{spec}: *** {} *** — a trailer may only claim DEMONSTRATED.",
+            claim.outcome
+        );
+        return Outcome::Finding(Finding::reported("trailer claims a non-demonstration"));
+    }
+    let include = claim
+        .include
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .filter(|path| !path.is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let patch = match patch_for_rev(&repository, process, &rev) {
+        Ok(value) => value,
+        Err(error) => return reported_error(error),
+    };
+    let head = match git(
+        &repository,
+        process,
+        ["rev-parse", "--verify", "HEAD^{commit}"],
+    ) {
+        Ok(value) => value.trim().to_owned(),
+        Err(error) => return reported_error(error),
+    };
+
+    let first = verify_attempt(
+        &repository,
+        process,
+        &rev,
+        &patch,
+        &claim.tests,
+        &include,
+        false,
+    );
+    let result = match first {
+        Err(error) if error.outcome == "BASELINE-RED" && rev != head => {
+            println!(
+                "{rev}: historical baseline is red; retrying the same reversion against audited HEAD {head}"
+            );
+            verify_attempt(
+                &repository,
+                process,
+                &head,
+                &patch,
+                &claim.tests,
+                &include,
+                true,
+            )
+        }
+        other => other,
+    };
+    let result = match result {
+        Ok(value) => value,
+        Err(error) => return reported_error(error),
+    };
+    let mut expected = claim.tests.clone();
+    let mut actual = result.caught.clone();
+    expected.sort();
+    actual.sort();
+    if result.outcome != DemonstrationOutcome::Demonstrated || expected != actual {
+        println!("{spec}: *** VACUOUS *** — the trailer claims DEMONSTRATED");
+        return Outcome::Finding(Finding::reported("trailer did not re-derive"));
+    }
+    println!(
+        "{spec}: DEMONSTRATED (re-derived; caught by {})",
+        result.caught.join(", ")
+    );
+    Outcome::Passed(())
+}
+
+fn verify_attempt(
+    repository: &Path,
+    process: &dyn Process,
+    at: &str,
+    patch: &str,
+    names: &[String],
+    include: &[String],
+    allow_rejects: bool,
+) -> Result<Demonstration, RevertError> {
+    let temp = tempfile::Builder::new()
+        .prefix("revert-demo-")
+        .tempdir()
+        .map_err(|error| RevertError::new("REVERT-FAILED", error.to_string()))?;
+    let tree = temp.path().join("tree");
+    git(
+        repository,
+        process,
+        [
+            OsString::from("worktree"),
+            OsString::from("add"),
+            OsString::from("--detach"),
+            tree.as_os_str().to_owned(),
+            OsString::from(at),
+        ],
+    )?;
+    let result = demonstrate(
+        &tree,
+        process,
+        DemonstrateRequest {
+            patch,
+            names,
+            label: at,
+            include,
+            exclude: &[],
+            target_dir: None,
+            allow_rejects,
+        },
+    );
+    let cleanup = git(
+        repository,
+        process,
+        [
+            OsString::from("worktree"),
+            OsString::from("remove"),
+            OsString::from("--force"),
+            tree.as_os_str().to_owned(),
+        ],
+    );
+    if let Err(error) = cleanup {
+        return Err(RevertError::new(
+            "NOT-RESTORED",
+            format!("could not remove verification worktree: {}", error.detail),
+        ));
+    }
+    result
+}
+
+fn parse_args(args: &[OsString]) -> Result<CliArgs, String> {
+    let mut parsed = CliArgs::default();
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index].to_string_lossy();
+        let value = |index: &mut usize| -> Result<String, String> {
+            *index += 1;
+            args.get(*index)
+                .map(|value| value.to_string_lossy().into_owned())
+                .ok_or_else(|| format!("{flag} requires a value"))
+        };
+        match flag.as_ref() {
+            "--tests" => {
+                parsed.tests = Some(
+                    value(&mut index)?
+                        .split(',')
+                        .filter(|name| !name.is_empty())
+                        .map(str::to_owned)
+                        .collect(),
+                );
+            }
+            "--rev" => parsed.rev = Some(value(&mut index)?),
+            "--include" => parsed.include.push(value(&mut index)?),
+            "--exclude" => parsed.exclude.push(value(&mut index)?),
+            unknown => return Err(format!("unknown revert option `{unknown}`")),
+        }
+        index += 1;
+    }
+    Ok(parsed)
+}
+
+fn patch_for_rev(root: &Path, process: &dyn Process, rev: &str) -> Result<String, RevertError> {
+    let parents = git(root, process, ["rev-list", "--parents", "-n", "1", rev])?;
+    match parents.split_whitespace().count() {
+        count if count > 2 => Err(RevertError::new(
+            "REVERT-FAILED",
+            format!("{rev} is a merge commit; a merge has no single change to invert"),
+        )),
+        2 => git(
+            root,
+            process,
+            ["diff", "--unified=0", &format!("{rev}^"), rev],
+        ),
+        _ => git(root, process, ["show", "--format=", "--unified=0", rev]),
+    }
+}
+
+fn git<I, S>(root: &Path, process: &dyn Process, args: I) -> Result<String, RevertError>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<OsString>,
+{
+    let request = ProcessRequest::new("git", args, root);
+    let output = process
+        .run(&request)
+        .map_err(|error| RevertError::new("REVERT-FAILED", error))?;
+    if output.status == 0 {
+        Ok(output.stdout)
+    } else {
+        Err(RevertError::new(
+            "REVERT-FAILED",
+            format!("{}: {}", request.display(), output.stderr.trim()),
+        ))
+    }
+}
+
+fn reported_error(error: RevertError) -> Outcome<()> {
+    println!("{}: {}", error.outcome, error.detail);
+    Outcome::CouldNotCheck(CouldNotCheck::reported(error.detail, 1))
 }
 
 impl RevertError {
@@ -98,18 +456,27 @@ pub fn demonstrate(
     }
 
     let snapshot = Snapshot::take(root, &filtered.touched)?;
-    let apply = ProcessRequest::new("git", ["apply", "-R", "--unidiff-zero", "-"], root)
-        .with_stdin(filtered.text.into_bytes());
+    let mut apply_args = vec!["apply", "-R", "--unidiff-zero"];
+    if request.allow_rejects {
+        apply_args.push("--reject");
+    }
+    apply_args.push("-");
+    let apply = ProcessRequest::new("git", apply_args, root).with_stdin(filtered.text.into_bytes());
     let applied = process
         .run(&apply)
         .map_err(|error| RevertError::new("REVERT-FAILED", error));
     let result = match applied {
         Err(error) => Err(error),
-        Ok(output) if output.status != 0 => Err(RevertError::new(
+        Ok(output) if output.status != 0 && !request.allow_rejects => Err(RevertError::new(
             "REVERT-FAILED",
             format!("the reverse patch did not apply: {}", output.stderr.trim()),
         )),
-        Ok(_) => {
+        Ok(output) => {
+            if output.status != 0 {
+                println!(
+                    "current-head fallback: rejected overlapping historical hunks; checking every still-applicable hunk"
+                );
+            }
             let under_revert = run_tests(root, process, request.names, request.target_dir)?;
             require_ran(request.names, &under_revert, "under revert")?;
             let caught = under_revert

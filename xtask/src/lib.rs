@@ -87,7 +87,7 @@ fn run_evidence(command: EvidenceCommand, root: &Path, process: &dyn Process) ->
             evidence::mutation::run(root, process, &args)
         }
         EvidenceCommand::Revert(TrailingArgs { args }) => {
-            run_legacy(root, process, "scripts/revert-demo.py", args)
+            evidence::revert::run(root, process, &args)
         }
     }
 }

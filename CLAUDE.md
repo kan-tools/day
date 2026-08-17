@@ -358,7 +358,7 @@ discipline are on `practice`; the outcomes and their meanings are below, because
 that is reference material rather than instruction.
 
 ```
-python3 scripts/revert-demo.py --tests harness_honesty::the_matrix_does_not_exclude_the_tag
+just demonstrate --tests harness_honesty::the_matrix_does_not_exclude_the_tag
 ```
 
 **This rule shipped only because the tooling made it nearly free**, which is the

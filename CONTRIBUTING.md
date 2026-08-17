@@ -133,7 +133,7 @@ the branch by reverting the commit again and confirming the named test
 actually fails.
 
 ```bash
-python3 scripts/revert-demo.py --tests plugin::some_test
+just demonstrate --tests plugin::some_test
 ```
 
 Qualify the test target (`plugin::some_test`, not `some_test`) — the
