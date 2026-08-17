@@ -105,3 +105,15 @@ fn rfc_self_test_is_an_explicit_process_request() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].display(), "scripts/check-rfcs-adrs.sh --self-test");
 }
+
+#[test]
+fn process_authority_carries_stdin_and_environment_explicitly() {
+    let request = ProcessRequest::new("git", ["apply", "-"], Path::new("/fixture"))
+        .with_env("CARGO_TARGET_DIR", "/fixture/target")
+        .with_stdin(b"patch bytes".to_vec());
+    assert_eq!(request.stdin.as_deref(), Some(b"patch bytes".as_slice()));
+    assert_eq!(
+        request.env.get(std::ffi::OsStr::new("CARGO_TARGET_DIR")),
+        Some(&"/fixture/target".into())
+    );
+}
