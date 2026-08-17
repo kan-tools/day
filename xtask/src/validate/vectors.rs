@@ -221,7 +221,7 @@ fn validate_certificate_profile(data: &Value) -> Result<(), String> {
             && string(declaration.get("relationship")) == Some("sufficient"),
         "unsupported certificate declaration",
     )?;
-    let declaration_bytes = serde_json::to_vec(declaration)
+    let declaration_bytes = serde_json_canonicalizer::to_vec(declaration)
         .map_err(|error| format!("could not canonicalize declaration: {error}"))?;
     let declaration_digest = format!("{:x}", Sha256::digest(&declaration_bytes));
     let cases = array(profile.get("cases"), "certificate cases are absent")?;
@@ -1166,7 +1166,8 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
                 *address = replacement.clone();
             }
             let declaration = data.pointer("/certificate_profile/declaration").ok_or("self-test could not find declaration")?;
-            let bytes = serde_json::to_vec(declaration).map_err(|error| error.to_string())?;
+            let bytes = serde_json_canonicalizer::to_vec(declaration)
+                .map_err(|error| error.to_string())?;
             let digest = format!("{:x}", Sha256::digest(bytes));
             for index in 0..2 {
                 let Some(binding) = data.pointer_mut(&format!("/certificate_profile/cases/{index}/certificate/witness_system/declaration_sha256")) else {

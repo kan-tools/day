@@ -32,6 +32,8 @@
   "certificate_profile": {
     "declaration": {
       "_version": 3,
+      "\uE000": "scalar-order-first",
+      "\uD83D\uDE00": "utf16-order-first",
       "subject": "telos/releasable",
       "relationship": "sufficient",
       "components": [
@@ -53,7 +55,7 @@
             {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
             {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
           ],
-          "witness_system": {"subject": "telos/releasable", "declaration_sha256": "434dd4bbd369631ec441c1efff4ddb0eda7f0a7bcf41a0783f4d4b897b961ae6"},
+          "witness_system": {"subject": "telos/releasable", "declaration_sha256": "c245aa5f817a05e7c5e9764db6e607f35ad02f8ce04eccccdf17d8842cfe418c"},
           "components": [
             {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
             {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-1"}}
@@ -74,7 +76,7 @@
             {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
             {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
           ],
-          "witness_system": {"subject": "telos/releasable", "declaration_sha256": "434dd4bbd369631ec441c1efff4ddb0eda7f0a7bcf41a0783f4d4b897b961ae6"},
+          "witness_system": {"subject": "telos/releasable", "declaration_sha256": "c245aa5f817a05e7c5e9764db6e607f35ad02f8ce04eccccdf17d8842cfe418c"},
           "components": [
             {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
             {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-2"}}
