@@ -34,8 +34,10 @@ fn native_census_matches_the_legacy_branch_report() {
     let new = native("main..HEAD");
     assert_eq!(new.status.code(), old.status.code());
     assert_eq!(new.stdout, old.stdout);
-    assert!(new.stderr.is_empty());
-    assert!(String::from_utf8_lossy(&old.stderr).contains("deprecated:"));
+    let old_stderr = String::from_utf8(old.stderr).unwrap();
+    let (deprecation, delegated_stderr) = old_stderr.split_once('\n').unwrap();
+    assert!(deprecation.starts_with("deprecated:"));
+    assert_eq!(new.stderr, delegated_stderr.as_bytes());
 }
 
 #[test]
