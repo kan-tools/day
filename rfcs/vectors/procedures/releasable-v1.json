@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "relationship": "sufficient",
+  "components": ["candidate", "tests"],
+  "outcomes": ["material", "missing", "vacuous", "timeout", "error", "not-run"],
+  "assembly": {
+    "kind": "all",
+    "shared_coordinates": [
+      {"name": "candidate", "components": ["candidate", "tests"]}
+    ]
+  },
+  "result_precedence": ["uncheckable", "not-certified", "certified"]
+}

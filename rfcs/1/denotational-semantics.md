@@ -16,15 +16,17 @@ atoms are process 1-cells, bridges are composites of atoms, and realizability is
 witnessed by 2-cells relating a present predicate to the predicate induced by a
 bridge and a target telos.
 
-The essential picture in a frame $f$ is the equipment square
+The essential picture in a frame $f$ is the following globular equipment cell;
+its vertical boundaries are identities, while its horizontal source and target
+are predicates:
 
 $$
 \begin{array}{ccccc}
-X_0 & \overset{\;B\;}{\rightsquigarrow} & X_n
+X_0 & \overset{\;P_0\;}{\rightsquigarrow} & I
   & \qquad & \eta:P_0\Longrightarrow T\odot B\\[4pt]
-{\scriptstyle P_0}\Downarrow & \underset{\eta}{\Rightarrow} &
-  \Downarrow{\scriptstyle T} & & \\[2pt]
-I & = & I & &
+{\scriptstyle 1_{X_0}}\downarrow & \underset{\eta}{\Rightarrow} &
+  \downarrow{\scriptstyle 1_I} & & \\[2pt]
+X_0 & \underset{\;T\odot B\;}{\rightsquigarrow} & I & &
 \end{array}
 $$
 
@@ -200,11 +202,11 @@ $P_0$.
 
 $$
 \begin{array}{ccccc}
-X & \xrightarrow{\;1_X\;} & X
+X & \overset{\;P_0\;}{\rightsquigarrow} & I
   & \qquad & \eta_0:P_0\Rightarrow T\odot1_X\cong T\\[4pt]
-{\scriptstyle P_0}\Downarrow & \underset{\eta_0}{\Rightarrow} &
-  \Downarrow{\scriptstyle T} & & \\[2pt]
-I & = & I. & &
+{\scriptstyle 1_X}\downarrow & \underset{\eta_0}{\Rightarrow} &
+  \downarrow{\scriptstyle 1_I} & & \\[2pt]
+X & \underset{\;T\odot1_X\;}{\rightsquigarrow} & I. & &
 \end{array}
 $$
 
@@ -439,12 +441,15 @@ follows from a one-way natural transformation. “Not certified” is not
 
 ### Example 6.6 — Finite truth-value models
 
-Take $\mathcal V_f=\mathbf{Set}$ and suppress $E$. If
-$\lVert W\rVert=\{s_1\}$ and
-$\operatorname{Obs}(T)=\{s_1,s_2\}$, inclusion is sufficient but not
-necessary. Reversing the sets is necessary but not sufficient. Equal sets with
-identity maps give an exact presentation. These examples select direction
-without pretending profile v1 implements all three relationships.
+Take $\mathcal V_f$ to be the finite poset $0<1$, regarded as a category with
+a unique arrow $x\to y$ exactly when $x\le y$, and suppress $E$. If
+$\lVert W\rVert=0$ and $\operatorname{Obs}(T)=1$, the forward arrow exists but
+the reverse does not, so the system is sufficient but not necessary. Reversing
+the values gives only the reverse arrow, hence necessary but not sufficient.
+Equal values give identity arrows both ways and an exact presentation. Unlike
+arbitrary nonempty finite sets, this category makes absence of the reverse
+transformation inspectable. These examples select direction without pretending
+profile v1 implements all three relationships.
 
 ## 7. Witness assembly and convolution
 

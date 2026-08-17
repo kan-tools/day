@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "composition": {
     "convention": "right-to-left",
     "atoms": [
@@ -29,6 +29,48 @@
     {"id": "legacy-flat", "relationship": "unspecified", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "component-report"},
     {"id": "necessary-unsupported", "relationship": "necessary", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "unsupported"},
     {"id": "exact-unsupported", "relationship": "exact", "components": [{"name": "candidate", "outcome": "material", "coordinate": "candidate-1"}], "expected": "unsupported"}
+  ],
+  "certificate_profile": {
+    "declaration": {
+      "_version": 3,
+      "subject": "telos/releasable",
+      "relationship": "sufficient",
+      "components": [
+        {"name": "candidate", "coordinates": ["candidate"]},
+        {"name": "tests", "coordinates": ["candidate"]}
+      ],
+      "assembly": {"kind": "all", "shared_coordinates": [{"name": "candidate", "components": ["candidate", "tests"]}]},
+      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "procedures/releasable-v1.json", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "version": "1"}
+    },
+    "certificate": {
+      "_version": 1,
+      "frame": {"kind": "implicit-local", "repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111"},
+      "fresh_assessment": true,
+      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "procedures/releasable-v1.json", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "version": "1"},
+      "scope": {"subject": "telos/releasable"},
+      "evidence": [
+        {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+        {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+      ],
+      "witness_system": {"subject": "telos/releasable", "declaration_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+      "components": [
+        {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
+        {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-1"}}
+      ],
+      "outcome": "certified",
+      "limitations": []
+    },
+    "expected": "certified"
+  },
+  "frame_read_cases": [
+    {"id": "same-provenance-stored", "stored": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "fresh_assessment": false, "expected": "historical-only"},
+    {"id": "different-provenance-stored", "stored": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "2222222222222222222222222222222222222222"}, "fresh_assessment": false, "expected": "provenance-mismatch"},
+    {"id": "same-provenance-fresh", "stored": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "current": {"repository": "repo", "commit": "1111111111111111111111111111111111111111"}, "fresh_assessment": true, "expected": "certified"}
+  ],
+  "relationship_examples": [
+    {"id": "sufficient-only", "category": "finite-poset", "assembly_rank": 0, "observation_rank": 1, "forward": true, "reverse": false, "relationship": "sufficient"},
+    {"id": "necessary-only", "category": "finite-poset", "assembly_rank": 1, "observation_rank": 0, "forward": false, "reverse": true, "relationship": "necessary"},
+    {"id": "exact", "category": "finite-poset", "assembly_rank": 1, "observation_rank": 1, "forward": true, "reverse": true, "relationship": "exact"}
   ],
   "migration_cases": [
     {"id": "invertible-reindexing", "comparison": "invertible", "procedure": "supported", "coordinates": "preserved", "transported": ["telos", "evidence", "procedure", "assessment", "witness", "atom", "bridge", "realization"], "lost": [], "expected": "equivalent"},

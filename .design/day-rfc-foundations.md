@@ -1,4 +1,4 @@
-# Feature: Day RFC foundations and process-model specification, correction round 6
+# Feature: Day RFC foundations and process-model specification, correction round 7
 
 ## Summary
 
@@ -141,6 +141,38 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
   witness assembly, and frame migration. Unselected categorical choices remain
   labelled conjectures or obligations rather than silently becoming theorems.
 
+- REQ-19: Operational profile v1 must define one canonical, independently
+  implementable sufficient-certificate contract. The witness-system
+  declaration fixes, before assessment, its component names, assembly and
+  shared-coordinate constraints, and an exact resolvable procedure-spec
+  artifact address. A certificate records a closed outcome for every declared
+  component and binds that outcome to the evidence claim CIDs and canonical
+  coordinate values used. Certification is computed only from this normative
+  object; reference vectors and the executable checker must parse the same
+  shape rather than a simplified surrogate.
+
+- REQ-20: Operational profile v1 must not pretend that its serialized
+  repository and commit fields identify the full operational frame. Stored
+  frame fields are provenance for the assessment that produced them, not a
+  frame-equality key. A stored certificate may be rendered as historical
+  evidence but its verdict never transports into a current frame, even when
+  repository and commit match; current-frame certification requires a fresh
+  execution of the declared procedure. A detectable provenance mismatch must
+  be reported rather than hidden.
+
+- REQ-21: Every equipment diagram in the companion must respect its declared
+  typing. Predicates and processes declared as horizontal proarrows may appear
+  as the source or target of globular 2-cells, but must not be drawn as vertical
+  frame maps. Any square with non-identity vertical boundaries must introduce
+  genuine vertical arrows and any required companions or conjoints explicitly.
+
+- REQ-22: The sufficient, necessary, and exact worked examples must use a
+  category whose arrows discriminate direction. A sufficient-but-not-necessary
+  example has an assembly-to-observation arrow and provably no reverse arrow;
+  a necessary-but-not-sufficient example has only the reverse; and an exact
+  example has arrows both ways satisfying the stated equivalence. Bare Set
+  functions between nonempty finite sets do not establish these distinctions.
+
 ## Acceptance Criteria
 
 - [ ] AC-1: (REQ-1, REQ-2) `rfcs/0-rfc-and-adr-process.md`, `rfcs/template.md`,
@@ -237,6 +269,30 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
       abstract objects to profile-v1 artifacts and state exactly which
       categorical structure the instance forgets.
 
+- [ ] AC-19: (REQ-19) A committed certificate vector uses the normative
+      profile-v1 declaration and certificate schemas. The checker rejects a
+      missing component outcome, an undeclared component, an unbound evidence
+      CID, a missing shared-coordinate value, a post-result assembly change,
+      and a procedure reference whose repository, commit, path, digest, or
+      version does not match the declared procedure specification.
+
+- [ ] AC-20: (REQ-20) RFC 1 states that serialized frame fields are provenance,
+      not equality. A reference vector with the same repository and commit as
+      the current checkout still cannot import its historical `certified`
+      verdict; a fresh assessment can certify. A differing repository or
+      commit produces an explicit provenance-mismatch result.
+
+- [ ] AC-21: (REQ-21) The companion's opening realization diagram and identity
+      attainment diagram are globular cells with identity vertical boundaries,
+      consistent with the later definition of $P_0$, $T$, and $B$ as horizontal
+      proarrows. A structural documentation check rejects the former ill-typed
+      versions that placed $P_0$ or $T$ on a vertical boundary.
+
+- [ ] AC-22: (REQ-22) The companion and RFC use a preorder or poset instance
+      for sufficient, necessary, and exact witness relationships. The checker
+      confirms direction by order comparison and rejects the old nonempty-Set
+      example because functions exist in both directions.
+
 - [ ] AC-12: (post-acceptance rollout gate; REQ-13) Every deferred rollout area has a GitHub issue citing
       RFC 1 and naming the relevant semantic obligation. Closing or deferring
       an issue cannot change RFC 1's accepted semantics without a superseding
@@ -255,8 +311,8 @@ This work serves `telos/composable-process`, `telos/vocabulary-substrate`,
 
 ## Architecture
 
-This correction answers BLOCK verdict
-`bafyreickogt7nsnfoqqutdfz5qknfgsdwlyfhwmmp3salyl5ricde2zeci`. The blocked
+This correction answers the latest BLOCK verdict
+`bafyreihokzhd65oi6cekkajbq4yosuvmzty6idcx2uzfezguwamsj4boem`. The blocked
 draft remains append-only history; the corrected design and RFC bytes receive a
 new Plan and fresh cold review.
 
@@ -287,8 +343,9 @@ assessment; witness observation and assembly; convolution; frame migration;
 then operational decategorification. Definitions precede uses, propositions
 name the exact claim being made, proof sketches expose required coherence
 laws, and open obligations prevent provisional tensors or adjoints from being
-treated as settled structure. Worked instances use finite sets and current day
-objects so that commutativity and information loss can be inspected directly.
+treated as settled structure. Worked instances use finite posets and current
+day objects so that arrow direction, commutativity, and information loss can be
+inspected directly.
 
 `docs/TELOS.md` remains explanatory foundations: motivation, plausible
 fiction, weak equivalence, and the longer category-theoretic trajectory.
@@ -315,6 +372,27 @@ semantic obligations. Packs transport project vocabulary; they do not become
 the authority for RFC semantics or silently execute unfamiliar procedures.
 Release and behavioral-trial automation remains repository-owned and is
 connected to day through general atom and witness contracts.
+
+Profile-v1 sufficient certification has one authority surface. The
+`day-telos` declaration fixes an ordered component set, assembly constraints,
+and an immutable repository artifact address for the procedure specification
+before any component result exists. The `day-assessment` certificate then
+gives one closed outcome per component plus the exact evidence CIDs and
+canonical coordinate values consumed. Its result is derived from that complete
+object, and the reference-vector checker consumes the identical schema.
+
+The serialized frame block deliberately remains provenance rather than a
+false identity abstraction. A certificate says where an assessment occurred;
+it cannot establish that a later reader inhabits the same actor, kan view,
+environment, scope, or checkout state. Consequently no stored verdict is
+imported as a current verdict. A current certification is produced only by a
+fresh run of the addressed procedure, while provenance mismatches remain
+visible diagnostics.
+
+The companion uses globular cells for realizability and identity attainment.
+Its directional witness examples use a finite poset, where existence or
+absence of an arrow is determined by order and therefore actually
+distinguishes sufficient, necessary, and exact relations.
 
 ## Resolved Questions
 
@@ -380,6 +458,23 @@ connected to day through general atom and witness contracts.
   equipment, enrichment, tensor, representability, or adjoint choices appear
   as open obligations and do not acquire normative force from mathematical
   presentation alone.
+- RQ-20: A profile-v1 sufficient witness system is predeclared, not assembled
+  after seeing results. Its declaration fixes components, coordinate-equality
+  constraints, and an exact procedure-spec address; its certificate records
+  per-component outcomes and the evidence and coordinate bindings from which
+  the assembly result is derived.
+- RQ-21: Procedure specifications use immutable repository artifact addresses
+  consisting of canonical repository, full commit, path, SHA-256 digest, and
+  schema version. This is resolvable from a fresh clone and does not depend on
+  an unversioned procedure name being globally meaningful.
+- RQ-22: Profile-v1 frame serialization is provenance, not equality. Stored
+  verdicts are historical evidence only and never certify a reader's current
+  frame; rerunning the declared procedure is the sole current-frame
+  certification operation.
+- RQ-23: Realization and identity-attainment drawings are globular equipment
+  cells unless genuine vertical frame maps are explicitly introduced. The
+  sufficient/necessary/exact examples use a finite poset so arrow direction is
+  observable rather than accidental Set inhabitation.
 
 ## Open Questions
 

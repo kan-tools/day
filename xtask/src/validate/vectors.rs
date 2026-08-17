@@ -55,7 +55,7 @@ fn parse_args(args: &[OsString]) -> Result<(Option<PathBuf>, bool), String> {
 
 pub fn validate(data: &Value) -> Result<(), String> {
     require(
-        data.get("version").and_then(Value::as_i64) == Some(2),
+        data.get("version").and_then(Value::as_i64) == Some(3),
         "unsupported vector version",
     )?;
     let composition = object(data.get("composition"), "composition is absent")?;
@@ -194,7 +194,297 @@ pub fn validate(data: &Value) -> Result<(), String> {
     )?;
 
     validate_witnesses(data)?;
+    validate_certificate_profile(data)?;
+    validate_frame_reads(data)?;
+    validate_relationship_examples(data)?;
     validate_migrations(data)
+}
+
+fn validate_certificate_profile(data: &Value) -> Result<(), String> {
+    let profile = object(
+        data.get("certificate_profile"),
+        "certificate profile is absent",
+    )?;
+    let declaration = object(
+        profile.get("declaration"),
+        "certificate declaration is absent",
+    )?;
+    let certificate = object(profile.get("certificate"), "certificate is absent")?;
+    require(
+        declaration.get("_version") == Some(&json!(3))
+            && string(declaration.get("relationship")) == Some("sufficient"),
+        "unsupported certificate declaration",
+    )?;
+    let subject = required_string(declaration.get("subject"), "declaration subject is absent")?;
+    require(
+        nested(certificate, "scope", "subject").and_then(Value::as_str) == Some(subject)
+            && nested(certificate, "witness_system", "subject").and_then(Value::as_str)
+                == Some(subject),
+        "certificate is not bound to its declaration",
+    )?;
+    let declaration_digest = required_string(
+        nested(certificate, "witness_system", "declaration_sha256"),
+        "declaration digest is absent",
+    )?;
+    require(
+        declaration_digest.len() == 64
+            && declaration_digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+        "declaration digest is not lowercase SHA-256",
+    )?;
+    let procedure = object(
+        declaration.get("procedure_spec"),
+        "procedure specification is absent",
+    )?;
+    validate_artifact_address(procedure, "procedure specification", true)?;
+    require(
+        certificate.get("procedure_spec") == declaration.get("procedure_spec"),
+        "certificate procedure specification does not match its declaration",
+    )?;
+    require(
+        certificate.get("fresh_assessment") == Some(&Value::Bool(true)),
+        "certificate was not produced by a fresh assessment",
+    )?;
+
+    let declared_components = array(declaration.get("components"), "declared components absent")?;
+    let assessed_components = array(certificate.get("components"), "component outcomes absent")?;
+    require(
+        !declared_components.is_empty() && declared_components.len() == assessed_components.len(),
+        "declared and assessed component census disagree",
+    )?;
+    let evidence = array(
+        certificate.get("evidence"),
+        "certificate evidence is absent",
+    )?;
+    let evidence_cids = evidence
+        .iter()
+        .map(|item| required_string(item.get("cid"), "evidence CID is absent"))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    require(
+        evidence_cids.len() == evidence.len(),
+        "evidence CIDs are duplicated",
+    )?;
+    for item in evidence {
+        validate_artifact_address(
+            object(item.get("artifact"), "evidence artifact is absent")?,
+            "evidence artifact",
+            false,
+        )?;
+    }
+    let assessed = assessed_components
+        .iter()
+        .map(|item| {
+            let component = object(Some(item), "component assessment is malformed")?;
+            let name = required_string(component.get("name"), "component name is absent")?;
+            let outcome = required_string(component.get("outcome"), "component outcome is absent")?;
+            require(
+                [
+                    "material", "missing", "vacuous", "timeout", "error", "not-run",
+                ]
+                .contains(&outcome),
+                "unknown component outcome",
+            )?;
+            let bindings = string_array(
+                component.get("evidence_cids"),
+                "component evidence bindings are absent",
+            )?;
+            require(
+                !bindings.is_empty()
+                    && bindings
+                        .iter()
+                        .all(|cid| evidence_cids.contains(cid.as_str())),
+                "component cites unbound evidence",
+            )?;
+            Ok((name, component))
+        })
+        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    require(
+        assessed.len() == assessed_components.len(),
+        "component assessments are duplicated",
+    )?;
+    for item in declared_components {
+        let declared = object(Some(item), "declared component is malformed")?;
+        let name = required_string(declared.get("name"), "declared component name is absent")?;
+        let assessed = assessed
+            .get(name)
+            .ok_or("undeclared or missing component outcome")?;
+        let coordinates = object(
+            assessed.get("coordinates"),
+            "component coordinates are absent",
+        )?;
+        for coordinate in string_array(
+            declared.get("coordinates"),
+            "declared component coordinates are absent",
+        )? {
+            required_string(
+                coordinates.get(&coordinate),
+                format!("component coordinate is absent: {name}/{coordinate}"),
+            )?;
+        }
+    }
+    let assembly = object(
+        declaration.get("assembly"),
+        "assembly declaration is absent",
+    )?;
+    require(
+        string(assembly.get("kind")) == Some("all"),
+        "unsupported assembly kind",
+    )?;
+    for constraint in array(
+        assembly.get("shared_coordinates"),
+        "shared-coordinate declaration is absent",
+    )? {
+        let constraint = object(
+            Some(constraint),
+            "shared-coordinate declaration is malformed",
+        )?;
+        let coordinate = required_string(constraint.get("name"), "coordinate name is absent")?;
+        let names = string_array(
+            constraint.get("components"),
+            "coordinate components are absent",
+        )?;
+        require(!names.is_empty(), "coordinate component set is empty")?;
+        let values = names
+            .iter()
+            .map(|name| {
+                assessed
+                    .get(name.as_str())
+                    .and_then(|item| item.get("coordinates"))
+                    .and_then(|map| map.get(coordinate))
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| format!("shared coordinate is unbound: {name}/{coordinate}"))
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        require(values.len() == 1, "shared-coordinate mismatch")?;
+    }
+    let derived = if assessed.values().any(|item| {
+        matches!(
+            string(item.get("outcome")),
+            Some("timeout" | "error" | "not-run")
+        )
+    }) {
+        "uncheckable"
+    } else if assessed
+        .values()
+        .all(|item| string(item.get("outcome")) == Some("material"))
+    {
+        "certified"
+    } else {
+        "not-certified"
+    };
+    require(
+        string(certificate.get("outcome")) == Some(derived)
+            && string(profile.get("expected")) == Some(derived),
+        "certificate outcome is not derived from component assessments",
+    )
+}
+
+fn validate_artifact_address(
+    address: &Map<String, Value>,
+    label: &str,
+    require_version: bool,
+) -> Result<(), String> {
+    for field in ["repository", "path"] {
+        required_string(address.get(field), format!("{label} {field} is absent"))?;
+    }
+    if require_version {
+        required_string(address.get("version"), format!("{label} version is absent"))?;
+    }
+    let commit = required_string(address.get("commit"), format!("{label} commit is absent"))?;
+    let digest = required_string(address.get("sha256"), format!("{label} digest is absent"))?;
+    require(
+        commit.len() == 40 && commit.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        format!("{label} commit is not a full object ID"),
+    )?;
+    require(
+        digest.len() == 64
+            && digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+        format!("{label} digest is not lowercase SHA-256"),
+    )
+}
+
+fn validate_frame_reads(data: &Value) -> Result<(), String> {
+    let cases = array(data.get("frame_read_cases"), "frame read cases are absent")?;
+    let by_id = cases_by_id(cases, "frame read case ID is absent")?;
+    require(
+        by_id.keys().copied().collect::<BTreeSet<_>>()
+            == BTreeSet::from([
+                "same-provenance-stored",
+                "different-provenance-stored",
+                "same-provenance-fresh",
+            ]),
+        "frame read case census changed",
+    )?;
+    for value in cases {
+        let case = object(Some(value), "frame read case is malformed")?;
+        let same = case.get("stored") == case.get("current");
+        let fresh = case
+            .get("fresh_assessment")
+            .and_then(Value::as_bool)
+            .ok_or("fresh-assessment flag absent")?;
+        let derived = if !same {
+            "provenance-mismatch"
+        } else if fresh {
+            "certified"
+        } else {
+            "historical-only"
+        };
+        require(
+            string(case.get("expected")) == Some(derived),
+            "stored verdict was transported into the current frame",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_relationship_examples(data: &Value) -> Result<(), String> {
+    let cases = array(
+        data.get("relationship_examples"),
+        "relationship examples are absent",
+    )?;
+    let by_id = cases_by_id(cases, "relationship example ID is absent")?;
+    require(
+        by_id.keys().copied().collect::<BTreeSet<_>>()
+            == BTreeSet::from(["sufficient-only", "necessary-only", "exact"]),
+        "relationship example census changed",
+    )?;
+    for value in cases {
+        let case = object(Some(value), "relationship example is malformed")?;
+        require(
+            string(case.get("category")) == Some("finite-poset"),
+            "relationship example is not direction-discriminating",
+        )?;
+        let assembly = case
+            .get("assembly_rank")
+            .and_then(Value::as_i64)
+            .ok_or("assembly rank absent")?;
+        let observation = case
+            .get("observation_rank")
+            .and_then(Value::as_i64)
+            .ok_or("observation rank absent")?;
+        let forward = assembly <= observation;
+        let reverse = observation <= assembly;
+        let relationship = if forward && reverse {
+            "exact"
+        } else if forward {
+            "sufficient"
+        } else if reverse {
+            "necessary"
+        } else {
+            "incomparable"
+        };
+        require(
+            case.get("forward") == Some(&Value::Bool(forward))
+                && case.get("reverse") == Some(&Value::Bool(reverse))
+                && string(case.get("relationship")) == Some(relationship),
+            "relationship direction does not follow the finite poset",
+        )?;
+    }
+    Ok(())
 }
 
 fn validate_witnesses(data: &Value) -> Result<(), String> {
@@ -560,7 +850,7 @@ fn migration_outcome(case: &Map<String, Value>) -> Result<String, String> {
 }
 
 fn run_self_test(data: &Value) -> Result<(), String> {
-    const NAMES: [&str; 20] = [
+    const NAMES: [&str; 34] = [
         "composition-boundary",
         "coherence",
         "claim-reuse",
@@ -581,6 +871,20 @@ fn run_self_test(data: &Value) -> Result<(), String> {
         "absent-legacy-name",
         "duplicate-migration-id",
         "reversed-migration-detail",
+        "missing-certificate-outcome",
+        "undeclared-certificate-component",
+        "unbound-component-evidence",
+        "missing-shared-coordinate",
+        "post-result-assembly-change",
+        "procedure-path-mismatch",
+        "procedure-repository-mismatch",
+        "procedure-commit-mismatch",
+        "procedure-digest-mismatch",
+        "procedure-version-mismatch",
+        "stored-verdict-transport",
+        "hidden-provenance-mismatch",
+        "set-relationship-example",
+        "reversed-poset-direction",
     ];
     for name in NAMES {
         let mut candidate = data.clone();
@@ -703,6 +1007,62 @@ fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
             *value = json!(["shared-coordinate", "gluing-proof", "assembled-witness"]);
             field_mut(data, "migration_cases", "forgotten-coordinate", "lost")
                 .map(|v| *v = json!(["component-assessments"]))
+        }
+        "missing-certificate-outcome" => data
+            .pointer_mut("/certificate_profile/certificate/components/0/outcome")
+            .map(|v| *v = Value::Null),
+        "undeclared-certificate-component" => data
+            .pointer_mut("/certificate_profile/certificate/components/0/name")
+            .map(|v| *v = json!("invented")),
+        "unbound-component-evidence" => data
+            .pointer_mut("/certificate_profile/certificate/components/0/evidence_cids/0")
+            .map(|v| *v = json!("cid-absent")),
+        "missing-shared-coordinate" => data
+            .pointer_mut("/certificate_profile/certificate/components/1/coordinates/candidate")
+            .map(|v| *v = Value::Null),
+        "post-result-assembly-change" => data
+            .pointer_mut(
+                "/certificate_profile/declaration/assembly/shared_coordinates/0/components/1",
+            )
+            .map(|v| *v = json!("invented")),
+        "procedure-path-mismatch" => data
+            .pointer_mut("/certificate_profile/certificate/procedure_spec/path")
+            .map(|v| *v = json!("procedures/other.json")),
+        "procedure-repository-mismatch" => data
+            .pointer_mut("/certificate_profile/certificate/procedure_spec/repository")
+            .map(|v| *v = json!("https://example.invalid/other")),
+        "procedure-commit-mismatch" => data
+            .pointer_mut("/certificate_profile/certificate/procedure_spec/commit")
+            .map(|v| *v = json!("2222222222222222222222222222222222222222")),
+        "procedure-digest-mismatch" => data
+            .pointer_mut("/certificate_profile/certificate/procedure_spec/sha256")
+            .map(|v| {
+                *v = json!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+            }),
+        "procedure-version-mismatch" => data
+            .pointer_mut("/certificate_profile/certificate/procedure_spec/version")
+            .map(|v| *v = json!("2")),
+        "stored-verdict-transport" => field_mut(
+            data,
+            "frame_read_cases",
+            "same-provenance-stored",
+            "expected",
+        )
+        .map(|v| *v = json!("certified")),
+        "hidden-provenance-mismatch" => field_mut(
+            data,
+            "frame_read_cases",
+            "different-provenance-stored",
+            "expected",
+        )
+        .map(|v| *v = json!("historical-only")),
+        "set-relationship-example" => {
+            field_mut(data, "relationship_examples", "sufficient-only", "category")
+                .map(|v| *v = json!("Set"))
+        }
+        "reversed-poset-direction" => {
+            field_mut(data, "relationship_examples", "sufficient-only", "reverse")
+                .map(|v| *v = json!(true))
         }
         _ => None,
     }
