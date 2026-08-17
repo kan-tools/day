@@ -40,19 +40,19 @@
         {"name": "tests", "coordinates": ["candidate"]}
       ],
       "assembly": {"kind": "all", "shared_coordinates": [{"name": "candidate", "components": ["candidate", "tests"]}]},
-      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "procedures/releasable-v1.json", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "version": "1"}
+      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "rfcs/vectors/procedures/releasable-v1.json", "sha256": "c9dfd138754450cc0f29544f9b8ef6a8f07c28a30b36a99d27bf58ded48a75fc", "version": "1"}
     },
     "certificate": {
       "_version": 1,
-      "frame": {"kind": "implicit-local", "repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111"},
+      "frame": {"kind": "implicit-local", "repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1"},
       "fresh_assessment": true,
-      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "procedures/releasable-v1.json", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "version": "1"},
+      "procedure_spec": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "rfcs/vectors/procedures/releasable-v1.json", "sha256": "c9dfd138754450cc0f29544f9b8ef6a8f07c28a30b36a99d27bf58ded48a75fc", "version": "1"},
       "scope": {"subject": "telos/releasable"},
       "evidence": [
-        {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
-        {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "1111111111111111111111111111111111111111", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+        {"cid": "cid-candidate", "role": "candidate", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/release/day", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+        {"cid": "cid-tests", "role": "tests", "artifact": {"repository": "https://github.com/kan-tools/day", "commit": "079b9e83ee6cb1e7716664a943d82e4936f3cfc1", "path": "target/test-result.json", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
       ],
-      "witness_system": {"subject": "telos/releasable", "declaration_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+      "witness_system": {"subject": "telos/releasable", "declaration_sha256": "1013bea9bd360bc794b2e8fccf0fd82ec85b233ac576f5b9b11c48851ea3ead6"},
       "components": [
         {"name": "candidate", "outcome": "material", "evidence_cids": ["cid-candidate"], "coordinates": {"candidate": "candidate-1"}},
         {"name": "tests", "outcome": "material", "evidence_cids": ["cid-tests"], "coordinates": {"candidate": "candidate-1"}}

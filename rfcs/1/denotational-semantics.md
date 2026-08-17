@@ -1,6 +1,6 @@
 # Day as an indexed process equipment
 
-Status: normative denotational companion to Draft RFC 1
+Status: normative denotational companion to Review RFC 1
 
 This document is incorporated by the `Denotational target` section of
 [`RFC 1`](../1-frame-indexed-process-model.md). RFC 1 remains authoritative for

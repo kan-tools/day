@@ -4,8 +4,8 @@
 - Authors: day maintainers
 - Created: 2026-08-15
 - Discussion: https://github.com/kan-tools/day/pull/224
-- Review-started-at: 2026-08-17T04:22:00Z
-- Review-period-ends: 2026-08-20T04:22:00Z
+- Review-started-at: 2026-08-17T04:45:00Z
+- Review-period-ends: 2026-08-20T04:45:00Z
 - Review-override: None
 - Supersedes: The implicit ontology in `docs/TELOS.md` and concrete vocabulary in `docs/CONVENTIONS.md` where this RFC is explicitly normative
 - Superseded-by: None
@@ -347,6 +347,9 @@ object ID and `sha256` is lowercase hexadecimal. `fresh_assessment` MUST be
 true: stored certificates are historical evidence, never imported current
 verdicts. The procedure address MUST exactly equal the predeclared address and
 the witness-system subject and digest MUST bind the declaration bytes used.
+`declaration_sha256` is the lowercase SHA-256 of the declaration object encoded
+with the JSON Canonicalization Scheme (RFC 8785), so independent readers hash
+the same bytes.
 Component names MUST be distinct and equal the declared components. Every
 component records one closed probe outcome, at least one evidence CID present
 in the certificate evidence array, and every coordinate required by its
