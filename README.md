@@ -17,7 +17,7 @@ unless a version is given:
 
 ```bash
 cargo install kan --version 0.13.0-beta.1
-cargo install day --version 0.12.2
+cargo install day --version 0.13.0-beta.1
 ```
 
 Then, from a git repository:
@@ -180,19 +180,19 @@ verification, version compatibility, worktrees, and common recovery paths.
 
 ## Status
 
-Early. **v0.12.2** makes installation harness-neutral, isolates expensive behaviour-diff
-verification behind an explicit release-required gate, and consumes kan's per-subject
-trust-withholding evidence. It retains the narrowed-read and worktree/log honesty of
-v0.12.1, while
-`schema/injection/cadence` and `schema/injection/max_practice_items` resolve
-independently instead of the newer claim silently resetting the other. It also
-carries a round of honest-reads fixes, and their common shape is worth stating
-because it is where defects live in this codebase now: **every one was a reader
-reporting something it could not read as something that was not there.** A fence
-opened and never closed read as "nothing declared". A value assembled from three
-layers skipped the validation a single claim gets. A compatibility cell recorded
-a build failure in *day* as a fact about *kan*, and an unmeasurable environment
-as a pairing that does not work.
+Early. **v0.13.0-beta.1 is a candidate.** It makes active work more economical
+to recover: visible handoff streams have one honest bulk-read inventory,
+handoff measurements retain executable immutable scopes, and compaction gets a
+distinct reorientation path. `/askme`, acquired-input records, and intervention
+records preserve explicit consent and provenance without retaining transcripts.
+The candidate contract, real-harness protocol, reconstruction controls, and
+publication dependencies are repository-owned under `.release/`; passing
+feature tests alone is not presented as a release verdict.
+
+This boundary also fixes newest-practice projection and lets a recorded Plan
+directly cite its normative claims. RFC 1 remains the semantic constraint, but
+kan's not-yet-shipped RFC 1 authorship surface and the deeper retrieval/profile
+work are deliberately bumped rather than approximated with legacy roles.
 
 Each fix moved the guarantee into a mechanism rather than into attention: one
 fenced-block scanner with four states instead of two readers that disagreed, the

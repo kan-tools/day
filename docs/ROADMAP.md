@@ -9,7 +9,7 @@ it always said something else.
 
 ## Where we are
 
-**Release candidate: `v0.12.2`.** day declares, reads,
+**Release candidate: `v0.13.0-beta.1`.** day declares, reads,
 assesses and records: verbs, slash commands, three hooks, a status line, and
 three substrates (kan; git read-only; project-declared commands). The
 v0.7 line delivered honest reads (`beta.2`) and declared vocabularies
@@ -22,6 +22,14 @@ the repository-wide QA line: honest narrowed reads, worktree-aware kan
 routing, structured command probes, and legible configuration. `v0.12.2`
 removes the bootstrap runtime, adds portable install guidance, isolates the
 behaviour-diff gate, and consumes per-subject trust evidence.
+
+The v0.13 candidate is the workflow-ergonomics package: #93, #143, #152,
+#193, #195, and #204. It distinguishes post-compaction reorientation, keeps
+the newest projected practice, preserves immutable handoff measurement scopes,
+lists visible handoff streams honestly, and adds explicit acquired-input and
+intervention records behind `/askme`'s consent boundary. Its independently
+typed `.release/v0.13.json` contract binds the candidate workflows and evidence
+protocols without pretending to be a generic RFC 1 certificate.
 
 ### Planning horizon
 
@@ -1130,6 +1138,16 @@ process step should still fail `day doctor` when it does not compose.
 deferrals citing the same reason is a sequence rather than a coincidence, and
 the sequence exists so a seventh absent-means-default loader is not added by
 accident inside a convenience feature.
+
+## v0.14 — Retrieval and the deferred semantics pass
+
+The next line begins with the work deliberately removed from the v0.13 gate:
+process-aware progressive disclosure (#234), declarable `/askme` prompts
+(#194), trigger-scoped practice, and the design-integrity/vocabulary work.
+RFC 1 authorship (#196) remains blocked on kan's actual RFC 1 write surface; it
+will land against that surface rather than standardizing the superseded role
+registry. The seven semantic rollout records #227–#233 remain the explicit path
+toward the v1.0 bar, not hidden prerequisites of an ergonomics beta.
 
 ## v1.0 — Someone else ships with it
 

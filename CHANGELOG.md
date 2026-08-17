@@ -29,6 +29,44 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 ## [Unreleased]
 
+## [v0.13.0-beta.1] — candidate
+
+### Added
+
+- One bulk-read `day stream list` inventory and executable immutable handoff
+  scopes, including a moving-HEAD/merge round trip and an unscoped legacy
+  `UNCHECKABLE` control ([#152], [#204]).
+- General `/askme`, explicit `day-acquired-input` observations, and fixed-kind
+  intervention observations with reported, separately authenticated, or
+  signer-as-source provenance ([#193], [#195]).
+- A typed v0.13 contract, preregistered real-Codex behavioral protocol,
+  transcript-derived grader, reconstruction verifier, and removal controls.
+- Direct normative claim citations on recorded design Plans.
+
+### Fixed
+
+- Session-start distinguishes post-compaction reorientation without adding a
+  blocking pre-compaction hook ([#93]).
+- Practice projection retains the newest items when its configured cap is
+  reached ([#143]).
+- Transcript-shaped multi-speaker content is refused at the acquired-input and
+  intervention write boundary.
+
+### Deferred
+
+- RFC 1 authorship ([#196]) remains blocked on kan's RFC 1 write surface and is
+  not approximated with legacy roles. Process-aware retrieval ([#234]) and the
+  remaining workflow/profile work move beyond the v0.13 critical path.
+
+[#93]: https://github.com/kan-tools/day/issues/93
+[#143]: https://github.com/kan-tools/day/issues/143
+[#152]: https://github.com/kan-tools/day/issues/152
+[#193]: https://github.com/kan-tools/day/issues/193
+[#195]: https://github.com/kan-tools/day/issues/195
+[#196]: https://github.com/kan-tools/day/issues/196
+[#204]: https://github.com/kan-tools/day/issues/204
+[#234]: https://github.com/kan-tools/day/issues/234
+
 ## [v0.12.2] — 2026-08-14
 
 ### Changed
