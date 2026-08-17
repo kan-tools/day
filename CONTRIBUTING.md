@@ -151,20 +151,42 @@ a `pub fn` whose only callers were its own tests, a workflow whose commit
 range was always empty so it was permanently green for having found nothing.
 
 Related, and worth knowing before you reach for a loop: `scripts/` already
-has the tools. `mutate.py`, `revert-demo.py`, `demonstration-census.py` and
-`capture-block-corpus.sh` each report could-not-check as distinct from
-checked-and-clean, which hand-rolled versions of them have repeatedly failed
-to do.
+has compatibility entry points for the tools now moving behind `just` and the
+private Rust `xtask`. Run `just --list` rather than discovering tools by
+filename. `just demonstrate --tests ...`, for example, is the supported form
+of the revert demonstration. The old paths remain temporarily because existing
+automation and RFC0 name them; [#221](https://github.com/kan-tools/day/issues/221)
+and [#222](https://github.com/kan-tools/day/issues/222) state the evidence
+required to remove them.
 
 ## Building and testing
 
 ```bash
-cargo build --workspace --all-targets
-cargo test --workspace
+just --list
+just check
+just ci
+just build
+just test
+just lint
+just format-check
 cargo test --test behaviour_diff -- --ignored --test-threads=1
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all -- --check
 ```
+
+`just` is the supported human and CI surface; its recipes contain no validation
+policy. They delegate to Cargo or to the private, non-published `xtask` workspace
+crate. `xtask` is the conventional Rust name for repository-development tasks
+and is intentionally separate from day's public command tree.
+
+Repository validators classify outcomes as **passed**, **finding**, or
+**could-not-check**. A finding means the check ran and found the prohibited
+state. Could-not-check means a required tool, repository fact, or external read
+was unavailable; it is non-zero and never treated as a clean result.
+
+Add a validator as a named command below `xtask/src/validate/`,
+`xtask/src/evidence/`, or `xtask/src/census/`, give it a negative fixture that
+proves its substantive decision can fail, and then enumerate it in the relevant
+profile. Profiles do not discover checks from the filesystem: a disappearing
+check must make the inventory fail rather than silently shrink it.
 
 The MSRV is declared in `Cargo.toml` as `rust-version` and is checked by CI's
 `msrv` job, which reads the declared value rather than repeating it.

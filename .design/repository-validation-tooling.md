@@ -78,7 +78,9 @@ human-facing task surface.
   accepted: one enumerates all migrated legacy script paths and their removal
   criterion; the other tracks replacing RFC0's named script path with a stable
   validator contract through the RFC process. Neither issue may use a date
-  alone as its removal criterion.
+  alone as its removal criterion. These are
+  [day#221](https://github.com/kan-tools/day/issues/221) and
+  [day#222](https://github.com/kan-tools/day/issues/222), respectively.
 - REQ-11: The migration preserves the current hermetic and adversarial
   demonstrations. A check is not considered migrated until its existing tests,
   mutations, and revert demonstrations exercise the new implementation rather
@@ -225,31 +227,31 @@ making the new implementation the only source of policy.
 
 ## Resolved Questions
 
-- **Use a private Rust tool, not the public CLI.** Repository validation is how
+- **RQ-1 — Use a private Rust tool, not the public CLI.** Repository validation is how
   day proves itself, not vocabulary day transports to projects. Adding it to
   `day` would widen a deliberately small product surface and confuse these two
   authorities.
-- **Use `just` for accessibility, not implementation.** A future maintainer and
+- **RQ-2 — Use `just` for accessibility, not implementation.** A future maintainer and
   CI should invoke the same memorable commands, while validation semantics stay
   typed and testable in Rust.
-- **Call the private crate `xtask`.** `xtask` is the established Rust convention
+- **RQ-3 — Call the private crate `xtask`.** `xtask` is the established Rust convention
   for repository-development tasks, while `just` remains the supported
   human-facing surface. The conventional internal name helps Rust contributors
   recognize the crate without making them learn or type it for routine work.
-- **Preserve legacy paths through shims.** Existing documentation, tests, and
+- **RQ-4 — Preserve legacy paths through shims.** Existing documentation, tests, and
   RFC0 made filenames interfaces. Abrupt removal would make accepted claims
   false; permanent duplication would preserve the architectural problem.
-- **Sunset work is explicit.** One GitHub issue governs ordinary compatibility
+- **RQ-5 — Sunset work is explicit.** One GitHub issue governs ordinary compatibility
   shims. RFC0's path gets a separate issue because its removal requires a change
   in normative authority, not merely proof that callers migrated.
-- **Migrate validation before operations.** Release, compatibility cells,
+- **RQ-6 — Migrate validation before operations.** Release, compatibility cells,
   capture utilities, and rendering have different side effects and operational
   audiences. Pulling them into the first abstraction would design the command
   tree before those requirements are studied.
-- **Profiles enumerate rather than discover.** A filesystem scan can report
+- **RQ-7 — Profiles enumerate rather than discover.** A filesystem scan can report
   green after a check disappears. Named checked-in membership makes a shrinking
   validation surface observable.
-- **Keep domain outcomes while sharing the top-level classification.** The
+- **RQ-8 — Keep domain outcomes while sharing the top-level classification.** The
   revert harness needs `VACUOUS`, `BASELINE-RED`, and its other precise states;
   every validator also needs the common distinction between a finding and an
   inability to check.
