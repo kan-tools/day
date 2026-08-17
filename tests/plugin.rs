@@ -242,6 +242,10 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
             "skills/install/SKILL.md",
             "Installation is portable plugin content",
         ),
+        (
+            "skills/askme/SKILL.md",
+            "A driver affordance, deliberately not a process atom",
+        ),
     ];
     for file in shipped_commands() {
         let file = file.as_str();
@@ -263,10 +267,15 @@ fn ac7_and_ac8_the_plugin_ships_both_atoms_as_commands() {
             text.contains(must_contain),
             "{file} should contain {must_contain:?}"
         );
-        if file != "skills/install/SKILL.md" {
+        if !matches!(file, "skills/install/SKILL.md" | "skills/askme/SKILL.md") {
             assert!(
                 text.contains("```day-atom"),
                 "{file} should declare its atom interface"
+            );
+        } else if file == "skills/askme/SKILL.md" {
+            assert!(
+                !text.contains("```day-atom"),
+                "/askme is a driver affordance; inventing an atom interface is day#193's rejected fiction"
             );
         }
     }
@@ -371,6 +380,45 @@ fn day_204_both_list_paths_call_the_shared_stream_report() {
         assert!(
             text.contains("branch, worktree") && text.contains("staleness"),
             "{skill} may infer state the stream report cannot establish"
+        );
+    }
+}
+
+#[test]
+fn day_193_askme_is_adaptive_non_recording_until_explicit_consent() {
+    let text = std::fs::read_to_string(repo_root().join("skills/askme/SKILL.md")).unwrap();
+    for required in [
+        "one question at a time",
+        "Facts supplied",
+        "Decisions made",
+        "Unresolved items",
+        "Material effect",
+        "skip",
+        "stop",
+        "Record this acquired input as an Observation now?",
+        "If the answer is not an explicit yes, append nothing",
+        "reported provider provenance",
+        "No raw transcript",
+        "#194",
+    ] {
+        assert!(text.contains(required), "askme dropped {required:?}");
+    }
+    assert!(!text.contains("```day-atom"));
+
+    let consent = text
+        .find("Record this acquired input as an Observation now?")
+        .unwrap();
+    let command = text.find("day acquired-input record").unwrap();
+    assert!(
+        consent < command,
+        "the recording command must occur only after the explicit consent question"
+    );
+
+    for file in ["src/hooks.rs", "src/mcp.rs"] {
+        let source = std::fs::read_to_string(repo_root().join(file)).unwrap();
+        assert!(
+            !source.contains("record_acquired_input") && !source.contains("record_intervention"),
+            "{file} gained an automatic event-writing path"
         );
     }
 }

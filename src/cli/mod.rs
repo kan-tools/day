@@ -99,6 +99,8 @@ pub enum Error {
     Tension(#[from] crate::tension::Error),
     #[error(transparent)]
     Status(#[from] crate::status::Error),
+    #[error(transparent)]
+    Events(#[from] crate::events::Error),
 }
 
 #[derive(Debug, Parser)]
@@ -146,6 +148,12 @@ pub enum Command {
     /// Validate and record design documents
     #[command(subcommand)]
     Design(DesignAction),
+    /// Record explicitly requested acquired input as an ordinary kan Observation
+    #[command(subcommand)]
+    AcquiredInput(AcquiredInputAction),
+    /// Record an explicitly classified, non-exhaustive intervention
+    #[command(subcommand)]
+    Intervention(InterventionAction),
     /// Inspect the visible live handoff streams without inferring their position
     #[command(subcommand)]
     Stream(StreamAction),
@@ -370,6 +378,74 @@ pub enum ReviewAction {
 pub enum StreamAction {
     /// List visible live handoff streams from one bulk kan read
     List,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AcquiredInputAction {
+    /// Append one validated day-acquired-input Observation
+    Record {
+        /// Work subject the input affects
+        subject: String,
+        #[arg(long)]
+        topic: String,
+        /// Reported provider description; does not authenticate that provider
+        #[arg(
+            long,
+            conflicts_with = "provider_claim",
+            required_unless_present = "provider_claim"
+        )]
+        reported_provider: Option<String>,
+        /// Separately signed claim whose author authenticates the provider
+        #[arg(
+            long,
+            conflicts_with = "reported_provider",
+            required_unless_present = "reported_provider"
+        )]
+        provider_claim: Option<String>,
+        #[arg(long = "fact")]
+        facts: Vec<String>,
+        #[arg(long = "decision")]
+        decisions: Vec<String>,
+        #[arg(long = "unresolved")]
+        unresolved: Vec<String>,
+        #[arg(long)]
+        material_effect: String,
+        /// Claim CID supporting the record (repeatable)
+        #[arg(long = "cites")]
+        basis: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InterventionAction {
+    /// Append one validated day-intervention Observation
+    Record {
+        /// Work subject on which the intervention landed
+        subject: String,
+        #[arg(long, value_enum)]
+        kind: crate::events::InterventionKind,
+        #[arg(long)]
+        summary: String,
+        #[arg(long)]
+        material_effect: String,
+        /// Reported source; remains signer-authored reported provenance
+        #[arg(
+            long,
+            conflicts_with = "source_claim",
+            required_unless_present = "source_claim"
+        )]
+        reported_source: Option<String>,
+        /// Separately signed source claim whose author is authenticated
+        #[arg(
+            long,
+            conflicts_with = "reported_source",
+            required_unless_present = "reported_source"
+        )]
+        source_claim: Option<String>,
+        /// Claim CID supporting the classification (repeatable)
+        #[arg(long = "cites")]
+        basis: Vec<String>,
+    },
 }
 
 pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
@@ -719,6 +795,58 @@ pub async fn run(cli: Cli) -> Result<ExitCode, Error> {
         }) => {
             let cid = crate::record::review(&client, &subject, &verdict, &rationale, &cites)?;
             println!("recorded verdict on `{subject}` ({cid})");
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::AcquiredInput(AcquiredInputAction::Record {
+            subject,
+            topic,
+            reported_provider,
+            provider_claim,
+            facts,
+            decisions,
+            unresolved,
+            material_effect,
+            basis,
+        }) => {
+            let cid = crate::events::record_acquired_input(
+                &client,
+                crate::events::AcquiredInputRequest {
+                    subject,
+                    topic,
+                    reported_provider,
+                    provider_claim,
+                    facts,
+                    decisions,
+                    unresolved,
+                    material_effect,
+                    basis,
+                },
+            )?;
+            println!("recorded acquired input ({cid})");
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Intervention(InterventionAction::Record {
+            subject,
+            kind,
+            summary,
+            material_effect,
+            reported_source,
+            source_claim,
+            basis,
+        }) => {
+            let cid = crate::events::record_intervention(
+                &client,
+                crate::events::InterventionRequest {
+                    subject,
+                    kind,
+                    summary,
+                    material_effect,
+                    reported_source,
+                    source_claim,
+                    basis,
+                },
+            )?;
+            println!("recorded intervention ({cid})");
             Ok(ExitCode::SUCCESS)
         }
         Command::Stream(StreamAction::List) => {

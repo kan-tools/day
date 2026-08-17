@@ -330,18 +330,19 @@ fn ac3_every_skill_declares_the_name_of_its_directory() {
         skills,
         [
             "adversarial-review",
+            "askme",
             "design",
             "handoff",
             "install",
             "wakeup",
             "witness-interview"
         ],
-        "the five process atoms plus the portable installation skill"
+        "the five process atoms plus the askme driver affordance and portable installation skill"
     );
     assert_eq!(
         skills.len(),
-        6,
-        "expected exactly 6 skills; if this dropped to zero the SKILL.md \
+        7,
+        "expected exactly 7 skills; if this dropped to zero the SKILL.md \
          discovery broke and every assertion below was checking nothing"
     );
 
@@ -385,16 +386,22 @@ fn ac3_every_skill_declares_the_name_of_its_directory() {
             "{name}: description must be non-empty and at most 1024 characters"
         );
 
-        if name != "install" {
+        if !matches!(name.as_str(), "install" | "askme") {
             assert!(
                 body.contains("```day-atom"),
                 "skills/{name}/SKILL.md should still declare its atom interface — the \
                  packaging moved, the vocabulary did not"
             );
-        } else {
+        } else if name == "install" {
             assert!(
                 body.contains("Installation is portable plugin content"),
                 "the support skill must state its harness-neutral boundary"
+            );
+        } else {
+            assert!(
+                body.contains("deliberately not a process atom")
+                    && !body.contains("```day-atom"),
+                "askme must remain an explicit driver-affordance exception, not silently weaken atom coverage"
             );
         }
     }
@@ -436,8 +443,8 @@ fn ac4_no_skill_body_pre_executes_a_command() {
         }
     }
     assert_eq!(
-        scanned, 6,
-        "expected to scan 6 skill bodies; if this dropped the scan was asserting \
+        scanned, 7,
+        "expected to scan 7 skill bodies; if this dropped the scan was asserting \
          nothing"
     );
 }
@@ -517,8 +524,8 @@ fn ac5_every_instructed_read_names_its_failure_handling() {
     // of its job while looking like it was. The LIST is derived by
     // `shipped_skills()`; this is the other half.
     assert_eq!(
-        bullets_checked, 35,
-        "expected exactly 35 instructed reads across the six skills, found \
+        bullets_checked, 37,
+        "expected exactly 37 instructed reads across the seven skills, found \
          {bullets_checked}. If a bullet was added or removed, update this number \
          — if it dropped sharply the bullet parse broke and every assertion above \
          was checking nothing."

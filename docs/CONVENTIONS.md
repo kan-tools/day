@@ -1034,9 +1034,29 @@ segment silently missing would be indistinguishable from one day could not
 fill, and that distinction is load-bearing. The narrowing indicator and the
 partial-read report are never elided for width at all.
 
+## Acquired input and interventions
+
+`day acquired-input record` and `day intervention record` append ordinary kan
+`Observation` claims on the work subject. The first carries a
+`day-acquired-input` block separating facts, decisions, unresolved items, and
+material effect. The second carries a `day-intervention` block with one of the
+fixed v0.13 kinds: direction correction, missing context, answered question,
+stopped work, or approval.
+
+Both actions are explicit and non-exhaustive. Hooks, prompts, and ordinary
+human turns append neither. The claim envelope's signer is the recording
+author. `--reported-provider` and `--reported-source` remain reported
+provenance; a name in the payload never manufactures human authorship. A
+`--provider-claim` or `--source-claim` derives the principal from a separately
+signed visible claim and cites it automatically. That authenticates the source
+claim's speech only; repository admission and consumer trust remain separate.
+
+Raw transcripts are not durable claim content. `/askme` summarizes and asks
+for explicit consent before invoking the acquired-input action.
+
 ## Declared block types — `schema/blocks`
 
-day owns seven fenced block types and, until v0.7, a project could invent
+day owns built-in fenced block types and, until v0.7, a project could invent
 none. A research program instantiating day's process for a non-software domain
 needed exactly one more — `research-claim`, carrying a claim's evidential
 station — and had nowhere to put it (day#74).
@@ -1103,10 +1123,10 @@ an absence it did not check:
 | an instance is present and violates the spec | `MISSING` |
 | an instance is present and valid | `MATERIAL` |
 
-**The seven built-in fences are reserved.** Declaring `day-atom`,
-`day-telos`, `day-bridge`, `day-witness`, `day-schema`, `day-docs`, or
-`day-tension` in `schema/blocks` is refused by name rather than silently
-shadowing the built-in.
+**Built-in fences are reserved.** Declaring `day-atom`, `day-telos`,
+`day-bridge`, `day-witness`, `day-schema`, `day-docs`, `day-tension`,
+`day-acquired-input`, `day-intervention`, or `day-blocks` in `schema/blocks`
+is refused by name rather than silently shadowing the built-in.
 
 ### Why day's own blocks are not declared this way
 

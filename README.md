@@ -124,6 +124,10 @@ Deliberately small. The theory is ambitious; the tool is not.
   your project declared in kan.
 - **`day design record`** / **`day review record`** — append the claim chain
   for a design pass, or a four-value review verdict citing what it audits.
+- **`day acquired-input record`** / **`day intervention record`** — explicit,
+  validated Observation conventions for useful human input and material
+  interventions. They preserve the active signer, citations, and reported
+  versus separately signed source provenance; neither is automatic.
 - **`day hook session-start`** — the harness integration. Injects the teloi in
   play, the declared atoms, what's still open, and any drift warnings — and
   renders the **footer** the status line shows: position (`☀️ atom: build`),
@@ -137,6 +141,9 @@ Deliberately small. The theory is ambitious; the tool is not.
   declaration day could not interpret.
 
 **Commands**
+- **`/askme`** — gather semi-structured human input one question at a time,
+  separating facts, decisions, unresolved items, and material effect. It writes
+  nothing unless the person explicitly asks to record the final summary.
 - **`/design`** — interactive, codebase-grounded design authoring that records
   into kan and validates against your schema.
 - **`/adversarial-review`** — a hostile-by-default post-implementation audit

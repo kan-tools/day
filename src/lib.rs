@@ -21,6 +21,7 @@ pub mod config;
 pub mod design;
 pub mod docs;
 pub mod doctor;
+pub mod events;
 pub mod fold;
 pub mod footer;
 pub mod git;

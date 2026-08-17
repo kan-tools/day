@@ -1,7 +1,7 @@
 //! Project-declared block schemas — a vocabulary day validates but did not
 //! invent.
 //!
-//! day owns seven fenced block types and, until this, a project could invent
+//! day owns fenced block types and, until this, a project could invent
 //! none. A research program tried to instantiate day's process for a
 //! non-software domain and needed exactly one more — `research-claim`, carrying
 //! a claim's evidential station — and had nowhere to put it (day#74).
@@ -51,6 +51,8 @@ pub const RESERVED_FENCES: &[&str] = &[
     crate::schema::FENCE_INFO,
     crate::docs::FENCE_INFO,
     crate::tension::FENCE_INFO,
+    crate::events::ACQUIRED_INPUT_FENCE,
+    crate::events::INTERVENTION_FENCE,
     FENCE_INFO,
 ];
 
