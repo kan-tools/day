@@ -1,4 +1,4 @@
-name: v0.13 workflow reconstruction trial
+name: v0.13 post-merge reconstruction observation
 
 on:
   workflow_dispatch:
@@ -84,13 +84,12 @@ jobs:
             "$GITHUB_WORKSPACE" "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
             "${{ github.run_id }}" \
             "$RUNNER_TEMP/reconstruction-evidence"
-      - name: Derive the reconstruction verdict and every removal control
+      - name: Describe the retained observation boundary
         run: |
-          set -euo pipefail
-          cargo run --locked -p xtask -- release grade-reconstruction-v013 \
-            "$RUNNER_TEMP/reconstruction-evidence" \
-            "$RUNNER_TEMP/reconstruction-source" \
-            "${{ inputs.candidate_sha }}" "$EVIDENCE_COMMIT"
+          echo "This post-merge artifact is observational and assumes an honest producer." \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "It is not a candidate gate, semantic proof, or adversarial attestation." \
+            >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -39,6 +39,7 @@ fn profiles_reference_only_known_checks_and_release_contains_ci() {
     let known = [
         "rfc",
         "rfc-self-test",
+        "instrumentation",
         "cargo-build",
         "cargo-test",
         "cargo-clippy",

@@ -6,7 +6,9 @@
     ".github/workflows/ci.yml",
     ".github/workflows/agent-plugins.yml",
     ".github/workflows/kan-compat.yml",
-    ".github/workflows/migration-matrix.yml",
+    ".github/workflows/migration-matrix.yml"
+  ],
+  "observational_workflows": [
     ".github/workflows/askme-behavioral-trial.yml",
     ".github/workflows/workflow-reconstruction-trial.yml"
   ],

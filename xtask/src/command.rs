@@ -53,24 +53,6 @@ pub enum ReleaseCommand {
     VerifyCandidateV013 { candidate_sha: String },
     /// Resolve every published v0.13 artifact back to the unchanged candidate
     VerifyPublicationV013 { candidate_sha: String },
-    /// Grade a v0.13 /askme evidence bundle from raw scenario transcripts
-    GradeAskmeV013 {
-        bundle: PathBuf,
-        /// Candidate SHA supplied by the workflow invocation
-        candidate_sha: String,
-        /// GitHub Actions run that generated the bundle
-        github_run_id: u64,
-    },
-    /// Verify a v0.13 reconstruction bundle and execute its removal controls
-    GradeReconstructionV013 {
-        bundle: PathBuf,
-        /// Exact evidence checkout from which the workflow generated the bundle
-        source: PathBuf,
-        /// Candidate SHA supplied by the workflow invocation, not the bundle
-        candidate_sha: String,
-        /// Immutable evidence commit checked out at the bundle path
-        evidence_commit: String,
-    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -98,6 +80,11 @@ pub enum ValidateCommand {
     Formal {
         #[arg(long)]
         self_test: bool,
+    },
+    /// Verify the repository's declared instrumentation boundaries
+    Instrumentation {
+        #[arg(default_value = ".release/instrumentation.json")]
+        manifest: PathBuf,
     },
     Review(TrailingArgs),
 }

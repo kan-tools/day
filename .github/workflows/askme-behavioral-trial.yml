@@ -1,4 +1,4 @@
-name: v0.13 askme behavioral trial
+name: v0.13 askme observational trial
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 jobs:
-  real-harness:
+  observe-real-harness:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$CODEX_HOME/skills/askme"
           cp skills/askme/SKILL.md "$CODEX_HOME/skills/askme/SKILL.md"
-      - name: Run preregistered multi-turn scenarios and derive verdicts
+      - name: Retain preregistered multi-turn observations
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/askme-evidence"
@@ -65,8 +65,10 @@ jobs:
             .release/protocols/askme-v1.json \
             "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
             "${{ github.run_id }}" "$evidence"
-          cargo run --locked -p xtask -- release grade-askme-v013 \
-            "$evidence" "${{ inputs.candidate_sha }}" "${{ github.run_id }}"
+          echo "This artifact is observational and assumes an honest producer." \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "It is not a candidate gate or adversarial attestation." \
+            >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: v013-askme-${{ inputs.candidate_sha }}-${{ github.run_id }}

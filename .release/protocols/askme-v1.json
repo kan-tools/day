@@ -2,6 +2,9 @@
   "schema": 1,
   "id": "day-v0.13-askme-v1",
   "rubric_version": "askme-rubric-v1",
+  "evidence_layer": "observational-trial",
+  "producer_assumption": "honest-producer",
+  "authoritative": false,
   "skill": "skills/askme/SKILL.md",
   "scenarios": [
     {
@@ -62,10 +65,9 @@
     "summary-separates-four-buckets",
     "record-command-only-after-explicit-yes",
     "decline-appends-nothing",
-    "before-after-snapshots-are-differenced-by-cid-and-the-exact-consented-append-is-the-cid-returned-by-a-successful-standalone-exact-root-owned-wrapper-command-and-decodes-as-a-valid-transcript-free-day-acquired-input-observation-with-matching-subject-author-and-duplicate-free-exact-citations-while-trusted-post-process-receipts-equal-the-addressed-raw-codex-command-events",
-    "workflow-generated-raw-event-logs-and-command-logs-are-addressed-and-each-assistant-turn-is-derived-from-a-complete-typed-codex-turn-on-one-thread-with-closed-type-stable-event-and-item-lifecycle-ordering",
-    "the-pinned-codex-harness-candidate-and-github-run-are-external-coordinates-and-an-unreadable-kan-snapshot-fails-rather-than-reading-as-empty",
-    "codex-authentication-skill-installation-and-scenario-execution-use-the-same-isolated-codex-home",
-    "authoritative-grading-is-bound-to-github-com-kan-tools-day-the-exact-registered-workflow-file-workflow-dispatch-candidate-and-run"
+    "before-and-after-kan-snapshots-and-raw-codex-jsonl-are-retained",
+    "the-candidate-model-harness-version-and-github-run-are-recorded",
+    "unreadable-kan-snapshots-fail-rather-than-reading-as-empty",
+    "codex-authentication-skill-installation-and-scenario-execution-use-the-same-isolated-codex-home"
   ]
 }

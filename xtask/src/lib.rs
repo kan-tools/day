@@ -36,23 +36,6 @@ fn run_release(command: ReleaseCommand, root: &Path, process: &dyn Process) -> O
         ReleaseCommand::VerifyPublicationV013 { candidate_sha } => {
             release::v013::verify_publication(root, &candidate_sha, process)
         }
-        ReleaseCommand::GradeAskmeV013 {
-            bundle,
-            candidate_sha,
-            github_run_id,
-        } => release::v013::grade_askme(root, &bundle, &candidate_sha, github_run_id),
-        ReleaseCommand::GradeReconstructionV013 {
-            bundle,
-            source,
-            candidate_sha,
-            evidence_commit,
-        } => release::v013::grade_reconstruction(
-            root,
-            &bundle,
-            &source,
-            &candidate_sha,
-            &evidence_commit,
-        ),
     }
 }
 
@@ -113,6 +96,9 @@ fn run_validate(command: ValidateCommand, root: &Path, process: &dyn Process) ->
                 .collect::<Vec<_>>();
             validate::formal::run(root, &args)
         }
+        ValidateCommand::Instrumentation { manifest } => {
+            validate::instrumentation::run(root, &manifest)
+        }
         ValidateCommand::Review(TrailingArgs { args }) => {
             validate::review::run(root, process, &args)
         }
@@ -156,6 +142,13 @@ fn run_profile(
             "rfc-self-test" => {
                 run_validate(ValidateCommand::Rfc { self_test: true }, root, process)
             }
+            "instrumentation" => run_validate(
+                ValidateCommand::Instrumentation {
+                    manifest: PathBuf::from(".release/instrumentation.json"),
+                },
+                root,
+                process,
+            ),
             "cargo-build" => run_program(
                 root,
                 process,

@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "policy": ".design/instrumentation-policy.md",
+  "default_threat_model": "honest-producer-bugs-omissions-and-corruption",
+  "cost_by_trigger": {
+    "local": "Seconds to a few minutes; invoked explicitly or through a named profile.",
+    "ci": "Bounded by the ordinary just ci job budget and reported by that workflow.",
+    "manual": "Potentially model- and network-expensive; never runs implicitly or joins just ci.",
+    "release": "Network-dependent and run only during candidate or publication reconciliation."
+  },
+  "owner_by_kind": {
+    "command": "The version-neutral xtask module implementing the command; release adapters own composition only.",
+    "workflow": "The tracked workflow file and its invoked version-neutral command or observational runner.",
+    "protocol": "The tracked protocol plus its observational runner; no product-state owner."
+  },
+  "lifecycle_rules": {
+    "permanent": "Maintained with ordinary CI and changed with its owning feature.",
+    "release_scoped": "Frozen after publication except for a demonstrated correctness repair.",
+    "post_merge": "Run after merge when evidence exists, retain as a workflow artifact, then freeze with the release."
+  },
+  "entries": [
+    {"id":"command:validate/profile","layer":"repository-integration","trigger":"local","conclusion":"The selected named check composition completed.","does_not_establish":"That unselected checks or external systems are correct.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:validate/rfc","layer":"deterministic-invariant","trigger":"ci","conclusion":"RFC and ADR structural invariants hold for tracked inputs.","does_not_establish":"That a design is desirable or implemented.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:validate/publication","layer":"deterministic-invariant","trigger":"ci","conclusion":"Published RFC mirrors match their normative sources.","does_not_establish":"That publication infrastructure or readers are available.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:validate/vectors","layer":"external-conformance","trigger":"ci","conclusion":"The implementation agrees with the checked process-model vectors.","does_not_establish":"Conformance beyond the vector corpus.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:validate/formal","layer":"external-conformance","trigger":"ci","conclusion":"The formal companion checks its declared properties.","does_not_establish":"Correctness outside the formal model and assumptions.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:validate/instrumentation","layer":"repository-integration","trigger":"ci","conclusion":"Instrumentation surfaces have exhaustive declared boundaries.","does_not_establish":"That each instrument proves more than its declared conclusion.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:validate/review","layer":"repository-integration","trigger":"local","conclusion":"Review records satisfy the repository review schema.","does_not_establish":"That the review judgment is correct.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:evidence/behaviour-diff","layer":"repository-integration","trigger":"local","conclusion":"Addressed behavior differs across the selected revisions.","does_not_establish":"A causal or universal behavioral claim.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:evidence/mutate","layer":"deterministic-invariant","trigger":"local","conclusion":"One declared mutation is detected by its harness.","does_not_establish":"Completeness against other mutations.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:evidence/revert","layer":"repository-integration","trigger":"local","conclusion":"The addressed change is necessary for the selected harness result.","does_not_establish":"That it is sufficient for the whole release.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:census/demonstrations","layer":"repository-integration","trigger":"ci","conclusion":"Changed production surfaces are demonstrated or explicitly exempted.","does_not_establish":"That demonstrations cover all semantic behavior.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:census/findings","layer":"repository-integration","trigger":"local","conclusion":"Review findings are accounted for by the selected range.","does_not_establish":"That no undiscovered finding exists.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"command:release/verify-v013","layer":"repository-integration","trigger":"release","conclusion":"The v0.13 release manifest equals its thin typed composition.","does_not_establish":"The behavior or authenticity of referenced systems.","lifecycle":"release-scoped","adversarial_attestation":false},
+    {"id":"command:release/verify-plan-v013","layer":"repository-integration","trigger":"release","conclusion":"The selected Plan resolves to its exact tracked artifact.","does_not_establish":"That every Plan requirement is satisfied.","lifecycle":"release-scoped","adversarial_attestation":false},
+    {"id":"command:release/verify-candidate-v013","layer":"release-reconciliation","trigger":"release","conclusion":"Four deterministic candidate workflows succeeded at one clean SHA.","does_not_establish":"Observational trial quality or resistance to a malicious producer.","lifecycle":"release-scoped","adversarial_attestation":false},
+    {"id":"command:release/verify-publication-v013","layer":"release-reconciliation","trigger":"release","conclusion":"Tag, release workflow, crate, GitHub Release, and kan Result reconcile to one SHA.","does_not_establish":"Behavior beyond the qualified candidate.","lifecycle":"release-scoped","adversarial_attestation":false},
+    {"id":"workflow:ci","layer":"repository-integration","trigger":"ci","conclusion":"The repository CI profile passes.","does_not_establish":"External compatibility outside declared jobs.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"workflow:agent-plugins","layer":"external-conformance","trigger":"ci","conclusion":"Declared agent plugin packages pass their integration checks.","does_not_establish":"All host or future plugin compatibility.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"workflow:kan-compat","layer":"external-conformance","trigger":"ci","conclusion":"The declared kan compatibility matrix passes.","does_not_establish":"Compatibility outside the declared versions.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"workflow:migration-matrix","layer":"external-conformance","trigger":"ci","conclusion":"Declared migration paths pass their matrix.","does_not_establish":"Arbitrary historical repository migration.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"workflow:askme-behavioral-trial","layer":"observational-trial","trigger":"manual","conclusion":"A named model produced retained raw interactions for the preregistered scenarios.","does_not_establish":"A deterministic pass, universal model behavior, or malicious-producer resistance.","lifecycle":"release-scoped","adversarial_attestation":false},
+    {"id":"workflow:workflow-reconstruction-trial","layer":"observational-trial","trigger":"manual","conclusion":"A fresh session produced retained wakeup output against an addressed evidence checkout.","does_not_establish":"Cryptographic truth of narrative claims or malicious-producer resistance.","lifecycle":"post-merge","adversarial_attestation":false},
+    {"id":"workflow:release","layer":"release-reconciliation","trigger":"release","conclusion":"Release artifacts were published from the selected candidate.","does_not_establish":"Semantic correctness beyond candidate qualification.","lifecycle":"permanent","adversarial_attestation":false},
+    {"id":"protocol:askme-v1","layer":"observational-trial","trigger":"manual","conclusion":"The same named interaction scenarios can be replayed and inspected.","does_not_establish":"An authoritative behavioral grade.","lifecycle":"release-scoped","adversarial_attestation":false},
+    {"id":"protocol:reconstruction-v1","layer":"observational-trial","trigger":"manual","conclusion":"The same fresh-wakeup observation can be repeated after merge.","does_not_establish":"A security attestation or candidate gate.","lifecycle":"post-merge","adversarial_attestation":false}
+  ]
+}

@@ -28,8 +28,10 @@ The v0.13 candidate is the workflow-ergonomics package: #93, #143, #152,
 the newest projected practice, preserves immutable handoff measurement scopes,
 lists visible handoff streams honestly, and adds explicit acquired-input and
 intervention records behind `/askme`'s consent boundary. Its independently
-typed `.release/v0.13.json` contract binds the candidate workflows and evidence
-protocols without pretending to be a generic RFC 1 certificate.
+typed `.release/v0.13.json` contract distinguishes four candidate-gating
+workflows from two honest-producer observational protocols. The latter retain
+real-harness evidence without becoming source gates or pretending to be a
+generic RFC 1 certificate.
 
 ### Planning horizon
 

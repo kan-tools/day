@@ -48,14 +48,6 @@ verify-v013-candidate candidate:
 verify-v013-publication candidate:
     cargo run -p xtask -- release verify-publication-v013 {{candidate}}
 
-# Grade a workflow-generated v0.13 /askme evidence bundle.
-grade-v013-askme bundle candidate github_run_id:
-    cargo run -p xtask -- release grade-askme-v013 {{bundle}} {{candidate}} {{github_run_id}}
-
-# Grade a workflow-generated v0.13 reconstruction bundle against its immutable source checkout.
-grade-v013-reconstruction bundle source candidate evidence_commit:
-    cargo run -p xtask -- release grade-reconstruction-v013 {{bundle}} {{source}} {{candidate}} {{evidence_commit}}
-
 # RFC and ADR validation.
 check-rfc *args:
     cargo run -p xtask -- validate rfc {{args}}

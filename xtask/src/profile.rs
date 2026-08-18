@@ -13,6 +13,7 @@ pub const CI: Profile = Profile {
     checks: &[
         "rfc",
         "rfc-self-test",
+        "instrumentation",
         "cargo-build",
         "cargo-test",
         "cargo-clippy",

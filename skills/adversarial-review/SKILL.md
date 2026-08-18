@@ -153,6 +153,17 @@ finding this review produces.
 
 ### Step 2 — REQ/AC coverage table
 
+Before judging evidence, read any repository instrumentation policy and classify
+each cited instrument by its declared layer and threat model. Report both what
+the instrument establishes and what it explicitly does not. A finding is
+release-blocking when the implementation violates an in-scope requirement,
+overstates the instrument's declared conclusion, or fails under its declared
+producer assumptions. A stronger assurance request—such as malicious-producer
+resistance for an honest-producer observational trial—is a concrete follow-up,
+not a BLOCK, unless the design explicitly required that stronger layer. Do not
+turn increasingly elaborate attack fixtures into an undeclared threat-model
+expansion.
+
 For each REQ and AC in the design doc, produce a row: the requirement, the
 verdict (`met` / `partial` / `unmet` / `unverifiable`), and **the evidence**.
 

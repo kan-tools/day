@@ -1,69 +1,29 @@
 {
   "schema": 1,
   "id": "day-v0.13-reconstruction-v1",
-  "rubric_version": "reconstruction-rubric-v1",
-  "required_claims": [
-    "stream",
-    "acquired-input",
-    "intervention",
-    "scoped-handoff",
-    "pinned-review",
-    "fresh-wakeup"
-  ],
+  "rubric_version": "reconstruction-observation-v1",
+  "evidence_layer": "observational-trial",
+  "producer_assumption": "honest-producer",
+  "authoritative": false,
+  "lifecycle": "post-merge",
   "required_coordinates": [
     "candidate-sha",
+    "evidence-commit",
     "stream-subject",
-    "acquired-input-cid",
-    "intervention-cid",
-    "handoff-cid",
-    "review-claim-cid",
-    "suite-commit",
-    "census-base",
-    "census-head",
-    "ci-run-id",
-    "ci-head-sha"
+    "model",
+    "github-run-id"
   ],
-  "source_manifest_fields": [
-    "schema",
-    "candidate_sha",
-    "behavioral_candidate_sha",
-    "publication_candidate_sha",
-    "stream_subject",
-    "acquired_input_cid",
-    "intervention_cid",
-    "handoff_cid",
-    "review_claim_cid",
-    "kan_authors",
-    "suite_commit",
-    "census_base",
-    "census_head",
-    "ci_run_id",
-    "ci_head_sha"
-  ],
-  "removal_controls": [
-    "remove-stream",
-    "remove-acquired-input",
-    "remove-intervention",
-    "remove-handoff",
-    "remove-review",
-    "remove-wakeup",
-    "remove-suite-commit",
-    "remove-census-base",
-    "remove-census-head",
-    "remove-ci-run-id",
-    "remove-ci-head-sha",
-    "change-candidate-sha"
+  "retained_artifacts": [
+    "source-manifest",
+    "bulk-kan-read",
+    "raw-codex-jsonl",
+    "final-assistant-message"
   ],
   "constraints": [
-    "the intervention must arise during genuine work and must not be manufactured for the trial",
-    "the fresh wakeup receives no raw transcript",
-    "every required claim is read from kan rather than copied from the trial prompt",
-    "the evidence source is an exact immutable git commit whose published kan claims are signature and CID checked by kan under the pinned v0.13 project review principal",
-    "a Decision or Result on v0.13-workflow-ergonomics by the pinned principal must cite the acquired-input intervention and handoff claims and explicitly adjudicate them as genuine work",
-    "bulk kan evidence is generated from that signed-claim checkout then parsed so each required CID has the expected author kind subject relationship and versioned block",
-    "the workflow authenticates installs the candidate skill and launches a new Codex session from one isolated Codex home and the clean candidate checkout without prior transcript; root-owned wrappers outside the model-writable checkout pin real executables and reject the wrong working directory head or dirty tree while kan reads route to the signed evidence checkout",
-    "fresh wakeup evidence must use a closed type-stable item lifecycle and contain a completed typed agent-message turn plus exact successful git rev-parse HEAD git status --porcelain kan show --all --json and recovered suite census and CI command events in that order; after the model exits the workflow runner deletes model-writable Cargo artifacts and independently executes the authenticated handoff suite from a fresh target, retaining digest-addressed typed evidence; census and CI output is structurally parsed, and comments shell prefixes wrong item types malformed output cached-artifact substitution and output-only lookalikes are not execution evidence",
-    "authoritative-grading-is-bound-to-github-com-kan-tools-day-the-exact-registered-workflow-file-ref-workflow-sha-workflow-dispatch-candidate-and-generated-bundle-run-id",
-    "publication behavioral and reconstruction evidence name one candidate SHA"
+    "the fresh wakeup receives no raw conversation transcript",
+    "the evidence source is an exact immutable git commit",
+    "the candidate checkout is exact and clean before the observation",
+    "kan-read-errors-and-empty-final-output-fail-the-run",
+    "the artifact records what the named harness produced and is not a candidate gate security attestation or semantic proof"
   ]
 }
