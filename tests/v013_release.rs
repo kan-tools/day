@@ -34,6 +34,10 @@ fn candidate_gates_and_observational_trials_are_distinct() {
         "GithubActionsOrigin",
         "RawEvent",
         "Receipt",
+        "struct PlanManifest",
+        "struct WorkflowRun",
+        "serde_json::from_str",
+        "ProcessRequest",
     ] {
         assert!(
             !adapter.contains(forbidden),

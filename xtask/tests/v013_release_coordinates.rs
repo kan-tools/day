@@ -69,4 +69,9 @@ fn candidate_and_publication_resolve_every_coordinate_to_one_sha() {
     let output = run(root.path(), &bin, "verify-candidate-v013");
     assert!(!output.status.success(), "wrong-SHA workflow was accepted");
     assert!(String::from_utf8_lossy(&output.stderr).contains("no completed successful run"));
+
+    executable(&bin.join("gh"), "#!/bin/sh\nexit 97\n");
+    let output = run(root.path(), &bin, "verify-candidate-v013");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("COULD-NOT-CHECK"));
 }
