@@ -61,9 +61,9 @@
     "the evidence source is an exact immutable git commit whose published kan claims are signature and CID checked by kan under the pinned v0.13 project review principal",
     "a Decision or Result on v0.13-workflow-ergonomics by the pinned principal must cite the acquired-input intervention and handoff claims and explicitly adjudicate them as genuine work",
     "bulk kan evidence is generated from that signed-claim checkout then parsed so each required CID has the expected author kind subject relationship and versioned block",
-    "the workflow authenticates installs the candidate skill and launches a new Codex session from one isolated Codex home and the clean candidate checkout without prior transcript while a narrow wrapper routes kan reads to the signed evidence checkout",
-    "fresh wakeup evidence must use a closed type-stable item lifecycle and contain a completed typed agent-message turn plus exact successful git rev-parse HEAD git status --porcelain kan show --all --json and recovered suite census and CI command events; comments shell prefixes wrong item types and output-only lookalikes are not execution evidence",
-    "authoritative-grading-is-bound-to-github-com-kan-tools-day-the-exact-registered-workflow-file-workflow-dispatch-candidate-and-run",
+    "the workflow authenticates installs the candidate skill and launches a new Codex session from one isolated Codex home and the clean candidate checkout without prior transcript; root-owned wrappers outside the model-writable checkout pin real executables and reject the wrong working directory head or dirty tree while kan reads route to the signed evidence checkout",
+    "fresh wakeup evidence must use a closed type-stable item lifecycle and contain a completed typed agent-message turn plus exact successful git rev-parse HEAD git status --porcelain kan show --all --json and recovered suite census and CI command events in that order; census and CI output is structurally parsed, and comments shell prefixes wrong item types malformed output and output-only lookalikes are not execution evidence",
+    "authoritative-grading-is-bound-to-github-com-kan-tools-day-the-exact-registered-workflow-file-ref-workflow-sha-workflow-dispatch-candidate-and-generated-bundle-run-id",
     "publication behavioral and reconstruction evidence name one candidate SHA"
   ]
 }

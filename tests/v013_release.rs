@@ -88,7 +88,9 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
     assert!(
         grader.contains("fresh wakeup raw events do not prove the required bulk kan command ran")
     );
-    assert!(grader.contains("independently recheck suite census and CI scopes"));
+    assert!(
+        grader.contains("independently recheck ordered candidate, suite, census, and CI scopes")
+    );
     assert!(grader.contains("command.trim() == expected"));
     assert!(grader.contains("contains an item lifecycle without completion"));
 
@@ -99,7 +101,21 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
     assert!(runner.contains("candidate checkout HEAD differs"));
     assert!(runner.contains("git status --porcelain"));
     assert!(workflow.contains("$GITHUB_WORKSPACE"));
+    assert!(workflow.contains("${{ github.run_id }}"));
     assert!(runner.contains("do not wrap or combine them"));
+    assert!(runner.contains("/opt/day-v013-trusted-"));
+    assert!(runner.contains("sudo\", \"install"));
+    assert!(runner.contains("wrong candidate working directory"));
+    assert!(runner.contains("wrong candidate HEAD"));
+    assert!(runner.contains("candidate checkout is dirty"));
+    assert!(runner.contains("shutil.copy2(candidate_day"));
+    assert!(runner.contains("real_tools[\"codex\"]"));
+    assert!(!workflow.contains("target/debug\" >> \"$GITHUB_PATH"));
+    assert!(grader.contains("census_has_zero_unaccounted"));
+    assert!(grader.contains("ci_output_matches"));
+    assert!(grader.contains("status_index < kan_index"));
+    assert!(grader.contains("GITHUB_WORKFLOW_SHA"));
+    assert!(grader.contains("GITHUB_REF"));
 
     let protocol: serde_json::Value =
         serde_json::from_str(&text(".release/protocols/reconstruction-v1.json")).unwrap();

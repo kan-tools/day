@@ -366,6 +366,10 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "Alice — choose A; Bob — choose B",
         "Alice—choose A; Bob—choose B",
         "Alice–choose A; Bob–choose B",
+        "**Alice**\nchoose A\n**Bob**\nchoose B",
+        "# Alice\nchoose A\n# Bob\nchoose B",
+        "_Alice_\nchoose A\n_Bob_\nchoose B",
+        "`Alice`\nchoose A\n`Bob`\nchoose B",
     ] {
         let hostile_transcript = run(
             dir.path(),
@@ -497,6 +501,8 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "Decision: choose A. Effect: narrows the release.",
         "Risk: stale evidence. Mitigation: re-run the gate.",
         "RFC 1 source: accepted. release scope: six issues.",
+        "Q1: choose A. Q2: choose B.",
+        "AC1: rejects transcripts. AC2: accepts summaries.",
     ] {
         let accepted = run(
             dir.path(),
@@ -523,5 +529,5 @@ fn malformed_or_ambiguous_requests_append_nothing() {
             String::from_utf8_lossy(&accepted.stderr)
         );
     }
-    assert_eq!(appends(dir.path()).len(), 3);
+    assert_eq!(appends(dir.path()).len(), 5);
 }

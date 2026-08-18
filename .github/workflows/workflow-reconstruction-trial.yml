@@ -42,7 +42,6 @@ jobs:
           cargo build --locked --bin day
           cargo install kan --version 0.13.0-beta.1 --locked
           npm install --global @openai/codex@0.147.0
-          echo "$GITHUB_WORKSPACE/target/debug" >> "$GITHUB_PATH"
       - name: Authenticate the fresh Codex harness
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -83,6 +82,7 @@ jobs:
           python3 scripts/run-v013-reconstruction-trial.py \
             "$RUNNER_TEMP/reconstruction-source/${{ inputs.manifest_path }}" \
             "$GITHUB_WORKSPACE" "${{ inputs.candidate_sha }}" "${{ inputs.model }}" \
+            "${{ github.run_id }}" \
             "$RUNNER_TEMP/reconstruction-evidence"
       - name: Derive the reconstruction verdict and every removal control
         run: |

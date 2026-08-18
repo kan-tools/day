@@ -955,6 +955,8 @@ fn github_actions_origin(
         server: std::env::var("GITHUB_SERVER_URL").unwrap_or_default(),
         event: std::env::var("GITHUB_EVENT_NAME").unwrap_or_default(),
         workflow_ref: std::env::var("GITHUB_WORKFLOW_REF").unwrap_or_default(),
+        ref_name: std::env::var("GITHUB_REF").unwrap_or_default(),
+        workflow_sha: std::env::var("GITHUB_WORKFLOW_SHA").unwrap_or_default(),
     };
     validate_github_actions_origin(workflow, candidate_sha, run_id, &origin)
 }
@@ -969,6 +971,8 @@ struct GithubActionsOrigin {
     server: String,
     event: String,
     workflow_ref: String,
+    ref_name: String,
+    workflow_sha: String,
 }
 
 fn validate_github_actions_origin(
@@ -989,15 +993,20 @@ fn validate_github_actions_origin(
         || origin.repository != "kan-tools/day"
         || origin.server != "https://github.com"
         || origin.event != "workflow_dispatch"
-        || !origin.workflow_ref.starts_with(&expected_ref)
-        || origin.workflow_ref.len() == expected_ref.len()
+        || origin.ref_name.is_empty()
+        || origin.workflow_ref != format!("{expected_ref}{}", origin.ref_name)
+        || origin.workflow_sha != candidate_sha
     {
         return Err(
             "evidence grading is authoritative only inside the exact kan-tools/day candidate GitHub workflow file".into(),
         );
     }
+    let observed_run_id = origin.run_id.parse::<u64>().ok().filter(|id| *id != 0);
+    if observed_run_id.is_none() {
+        return Err("GitHub workflow run ID is absent or invalid".into());
+    }
     if let Some(run_id) = run_id {
-        if origin.run_id.parse::<u64>().ok() != Some(run_id) {
+        if observed_run_id != Some(run_id) {
             return Err("evidence bundle is not bound to the executing GitHub run".into());
         }
     }
@@ -1125,6 +1134,7 @@ fn grade_askme_scenario(
 #[serde(deny_unknown_fields)]
 struct ReconstructionEvidence {
     schema: u64,
+    github_run_id: u64,
     candidate_sha: String,
     behavioral_candidate_sha: String,
     publication_candidate_sha: String,
@@ -1213,11 +1223,6 @@ pub fn grade_reconstruction(
     candidate_sha: &str,
     evidence_commit: &str,
 ) -> Outcome<()> {
-    if let Err(error) =
-        github_actions_origin("v0.13 workflow reconstruction trial", candidate_sha, None)
-    {
-        return Outcome::Finding(Finding::new(error));
-    }
     let protocol_path = root.join(RECONSTRUCTION_PROTOCOL);
     let protocol: serde_json::Value =
         match read(&protocol_path).and_then(|bytes| json(&protocol_path, &bytes)) {
@@ -1264,6 +1269,13 @@ pub fn grade_reconstruction(
             Ok(evidence) => evidence,
             Err(error) => return Outcome::Finding(Finding::new(error)),
         };
+    if let Err(error) = github_actions_origin(
+        "v0.13 workflow reconstruction trial",
+        candidate_sha,
+        Some(evidence.github_run_id),
+    ) {
+        return Outcome::Finding(Finding::new(error));
+    }
     if let Err(error) =
         authenticate_reconstruction(&source, &bundle, &evidence, candidate_sha, evidence_commit)
     {
@@ -1369,7 +1381,7 @@ fn authenticate_reconstruction(
 }
 
 fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> Result<(), String> {
-    if evidence.schema != 1 {
+    if evidence.schema != 1 || evidence.github_run_id == 0 {
         return Err("reconstruction manifest has unsupported schema".into());
     }
     for (field, sha) in [
@@ -1457,16 +1469,17 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         })
         .collect::<Result<Vec<_>, _>>()?;
     validate_codex_turn(&events, wakeup.rendered_context.trim())?;
-    if completed_command_output(&events, "git rev-parse HEAD").map(str::trim)
+    if completed_command_event(&events, "git rev-parse HEAD").map(|(_, output)| output.trim())
         != Some(evidence.candidate_sha.as_str())
-        || !completed_command_output(&events, "git status --porcelain")
+        || !completed_command_event(&events, "git status --porcelain")
+            .map(|(_, output)| output)
             .is_some_and(|output| output.trim().is_empty())
     {
         return Err(
             "fresh wakeup raw events do not prove a clean checkout at the candidate SHA".into(),
         );
     }
-    if !completed_command(&events, "kan show --all --json", &[]) {
+    if completed_command_event(&events, "kan show --all --json").is_none() {
         return Err(
             "fresh wakeup raw events do not prove the required bulk kan command ran".into(),
         );
@@ -1645,32 +1658,51 @@ fn validate_bulk_reconstruction(
         "gh run view {} --json headSha,conclusion",
         evidence.ci_run_id
     );
-    if !completed_command(events, &suite_command, &[])
-        || !completed_command(events, &census_command, &["unaccounted", "0"])
-        || !completed_command(
-            events,
-            &ci_command,
-            &[evidence.ci_head_sha.as_str(), "success"],
-        )
+    let Some((head_index, head_output)) = completed_command_event(events, "git rev-parse HEAD")
+    else {
+        return Err("fresh wakeup did not execute the candidate HEAD check".into());
+    };
+    let Some((status_index, status_output)) =
+        completed_command_event(events, "git status --porcelain")
+    else {
+        return Err("fresh wakeup did not execute the clean-tree check".into());
+    };
+    let Some((kan_index, _)) = completed_command_event(events, "kan show --all --json") else {
+        return Err("fresh wakeup did not execute the authenticated kan read".into());
+    };
+    let Some((suite_index, _)) = completed_command_event(events, &suite_command) else {
+        return Err("fresh wakeup did not execute the declared suite".into());
+    };
+    let Some((census_index, census_output)) = completed_command_event(events, &census_command)
+    else {
+        return Err("fresh wakeup did not execute the declared census".into());
+    };
+    let Some((ci_index, ci_output)) = completed_command_event(events, &ci_command) else {
+        return Err("fresh wakeup did not execute the declared CI check".into());
+    };
+    if head_output.trim() != evidence.candidate_sha
+        || !status_output.trim().is_empty()
+        || !(head_index < status_index
+            && status_index < kan_index
+            && kan_index < suite_index
+            && suite_index < census_index
+            && census_index < ci_index)
+        || !census_has_zero_unaccounted(census_output)
+        || !ci_output_matches(ci_output, &evidence.ci_head_sha)
     {
         return Err(
-            "fresh wakeup raw events do not independently recheck suite census and CI scopes"
+            "fresh wakeup raw events do not independently recheck ordered candidate, suite, census, and CI scopes"
                 .into(),
         );
     }
     Ok(())
 }
 
-fn completed_command(events: &[serde_json::Value], expected: &str, output: &[&str]) -> bool {
-    completed_command_output(events, expected)
-        .is_some_and(|observed| output.iter().all(|required| observed.contains(required)))
-}
-
-fn completed_command_output<'a>(
+fn completed_command_event<'a>(
     events: &'a [serde_json::Value],
     expected: &str,
-) -> Option<&'a str> {
-    events.iter().find_map(|event| {
+) -> Option<(usize, &'a str)> {
+    events.iter().enumerate().find_map(|(index, event)| {
         (event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
             && event
                 .pointer("/item/type")
@@ -1689,12 +1721,30 @@ fn completed_command_output<'a>(
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(|command| command.trim() == expected))
         .then(|| {
-            event
-                .pointer("/item/aggregated_output")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("")
+            (
+                index,
+                event
+                    .pointer("/item/aggregated_output")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(""),
+            )
         })
     })
+}
+
+fn census_has_zero_unaccounted(output: &str) -> bool {
+    output
+        .lines()
+        .any(|line| line.split('|').map(str::trim).collect::<Vec<_>>() == ["unaccounted", "0"])
+}
+
+fn ci_output_matches(output: &str, expected_head: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(output.trim())
+        .ok()
+        .is_some_and(|value| {
+            value.get("headSha").and_then(serde_json::Value::as_str) == Some(expected_head)
+                && value.get("conclusion").and_then(serde_json::Value::as_str) == Some("success")
+        })
 }
 
 fn unique_claim<'a>(
@@ -1870,6 +1920,8 @@ mod tests {
             workflow_ref:
                 "kan-tools/day/.github/workflows/askme-behavioral-trial.yml@refs/heads/candidate"
                     .into(),
+            ref_name: "refs/heads/candidate".into(),
+            workflow_sha: candidate.clone(),
         };
         assert!(validate_github_actions_origin(
             "v0.13 askme behavioral trial",
@@ -1878,6 +1930,36 @@ mod tests {
             &origin
         )
         .is_ok());
+        origin.workflow_ref =
+            "kan-tools/day/.github/workflows/askme-behavioral-trial.yml@refs/heads/other".into();
+        assert!(validate_github_actions_origin(
+            "v0.13 askme behavioral trial",
+            &candidate,
+            Some(42),
+            &origin
+        )
+        .is_err());
+        origin.workflow_ref =
+            "kan-tools/day/.github/workflows/askme-behavioral-trial.yml@refs/heads/candidate"
+                .into();
+        origin.workflow_sha = "b".repeat(40);
+        assert!(validate_github_actions_origin(
+            "v0.13 askme behavioral trial",
+            &candidate,
+            Some(42),
+            &origin
+        )
+        .is_err());
+        origin.workflow_sha = candidate.clone();
+        origin.run_id = "41".into();
+        assert!(validate_github_actions_origin(
+            "v0.13 askme behavioral trial",
+            &candidate,
+            Some(42),
+            &origin
+        )
+        .is_err());
+        origin.run_id = "42".into();
         origin.repository = "attacker/fork".into();
         assert!(validate_github_actions_origin(
             "v0.13 askme behavioral trial",
@@ -2238,6 +2320,7 @@ mod tests {
         let kan_bytes = std::fs::read(bundle.path().join("kan.json")).unwrap();
         let evidence = ReconstructionEvidence {
             schema: 1,
+            github_run_id: 73,
             candidate_sha: candidate.clone(),
             behavioral_candidate_sha: candidate.clone(),
             publication_candidate_sha: candidate.clone(),
@@ -2267,11 +2350,45 @@ mod tests {
             .lines()
             .map(|line| serde_json::from_str(line).unwrap())
             .collect::<Vec<serde_json::Value>>();
-        assert!(!completed_command(
-            &raw_values,
-            "cargo test",
-            &["definitely absent"]
+        let head = completed_command_event(&raw_values, "git rev-parse HEAD")
+            .unwrap()
+            .0;
+        let suite = completed_command_event(&raw_values, "cargo test")
+            .unwrap()
+            .0;
+        assert!(head < suite, "candidate checks must precede the suite");
+        let mut out_of_order = raw_values.clone();
+        out_of_order.swap(head, suite);
+        assert!(
+            completed_command_event(&out_of_order, "git rev-parse HEAD")
+                .unwrap()
+                .0
+                > completed_command_event(&out_of_order, "cargo test")
+                    .unwrap()
+                    .0,
+            "the hostile ordering must be observable"
+        );
+        assert!(census_has_zero_unaccounted("unaccounted | 0"));
+        assert!(!census_has_zero_unaccounted("unaccounted | 10"));
+        assert!(ci_output_matches(
+            &format!(
+                "{{\"headSha\":\"{}\",\"conclusion\":\"success\"}}",
+                "a".repeat(40)
+            ),
+            &"a".repeat(40)
         ));
+        assert!(!ci_output_matches("headSha success", &"a".repeat(40)));
+        assert!(!ci_output_matches(
+            &format!(
+                "{{\"headSha\":\"{}\",\"conclusion\":\"failure\"}}",
+                "a".repeat(40)
+            ),
+            &"a".repeat(40)
+        ));
+        assert_eq!(
+            completed_command_event(&raw_values, "cargo test").map(|(_, output)| output),
+            Some("ok")
+        );
         let forged = [serde_json::json!({
             "type": "item.completed",
             "item": {
@@ -2284,7 +2401,7 @@ mod tests {
             }
         })];
         assert!(
-            !completed_command(&forged, "cargo test", &[]),
+            completed_command_event(&forged, "cargo test").is_none(),
             "a comment containing the expected command must not certify execution"
         );
         assert!(reconstruction_controls(bundle.path(), &evidence)

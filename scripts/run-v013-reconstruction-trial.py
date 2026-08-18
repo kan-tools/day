@@ -30,15 +30,21 @@ def sha256(path):
 
 
 def main():
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 7:
         raise SystemExit(
             "usage: run-v013-reconstruction-trial.py SOURCE_MANIFEST "
-            "CANDIDATE_CHECKOUT CANDIDATE MODEL OUTPUT_DIR"
+            "CANDIDATE_CHECKOUT CANDIDATE MODEL GITHUB_RUN_ID OUTPUT_DIR"
         )
     source_manifest = Path(sys.argv[1]).resolve()
     candidate_repo = Path(sys.argv[2]).resolve()
     candidate, model = sys.argv[3], sys.argv[4]
-    output_dir = Path(sys.argv[5]).resolve()
+    try:
+        github_run_id = int(sys.argv[5])
+    except ValueError as error:
+        raise RuntimeError("GitHub run ID is not an integer") from error
+    if github_run_id <= 0:
+        raise RuntimeError("GitHub run ID must be positive")
+    output_dir = Path(sys.argv[6]).resolve()
     output_dir.mkdir(parents=True, exist_ok=False)
     source = json.loads(source_manifest.read_text())
     if source.get("schema") != 1 or source.get("candidate_sha") != candidate:
@@ -52,9 +58,12 @@ def main():
         raise RuntimeError("candidate checkout HEAD differs from the workflow candidate")
     if run(["git", "status", "--porcelain"], candidate_repo).strip():
         raise RuntimeError("candidate checkout is not clean before the fresh wakeup")
-    real_kan = shutil.which("kan")
-    if real_kan is None:
-        raise RuntimeError("pinned kan binary is not on PATH")
+    required_tools = ["kan", "git", "cargo", "just", "gh", "codex"]
+    real_tools = {tool: shutil.which(tool) for tool in required_tools}
+    missing = [tool for tool, path in real_tools.items() if path is None]
+    if missing:
+        raise RuntimeError(f"required executable(s) not on PATH: {', '.join(missing)}")
+    real_kan = real_tools["kan"]
     kan_path = output_dir / "kan.json"
     kan_argv = [real_kan, "show", "--all", "--json"]
     for author in authors:
@@ -62,13 +71,47 @@ def main():
     run(kan_argv, source_repo, kan_path)
     json.loads(kan_path.read_text())
 
-    wrapper_dir = Path(tempfile.mkdtemp(prefix="day-v013-kan-wrapper-"))
-    wrapper = wrapper_dir / "kan"
+    wrapper_stage = Path(tempfile.mkdtemp(prefix="day-v013-wrapper-stage-"))
+    wrapper_dir = Path(f"/opt/day-v013-trusted-{github_run_id}")
+    expected_cwd = shlex.quote(str(candidate_repo))
+    real_git = shlex.quote(real_tools["git"])
+    candidate_arg = shlex.quote(candidate)
+    candidate_check = (
+        f'test "$(pwd -P)" = {expected_cwd} || '
+        '{ echo "wrong candidate working directory" >&2; exit 97; }\n'
+        f'test "$({real_git} rev-parse HEAD)" = {candidate_arg} || '
+        '{ echo "wrong candidate HEAD" >&2; exit 98; }\n'
+        f'test -z "$({real_git} status --porcelain)" || '
+        '{ echo "candidate checkout is dirty" >&2; exit 99; }\n'
+    )
+    for tool in ["git", "cargo", "just", "gh"]:
+        wrapper = wrapper_stage / tool
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            f"{candidate_check}"
+            f"exec {shlex.quote(real_tools[tool])} \"$@\"\n"
+        )
+        wrapper.chmod(0o755)
+
+    candidate_day = candidate_repo / "target" / "debug" / "day"
+    if not candidate_day.is_file():
+        raise RuntimeError("built candidate day binary is missing")
+    shutil.copy2(candidate_day, wrapper_stage / "day.real")
+    day_wrapper = wrapper_stage / "day"
+    day_wrapper.write_text(
+        "#!/bin/sh\n"
+        f"{candidate_check}"
+        'exec "$(dirname "$0")/day.real" "$@"\n'
+    )
+    day_wrapper.chmod(0o755)
+
+    wrapper = wrapper_stage / "kan"
     trust = " ".join(
         f"--trust {shlex.quote(author)}" for author in authors
     )
     wrapper.write_text(
         "#!/bin/sh\n"
+        f"{candidate_check}"
         f"cd {shlex.quote(str(source_repo))}\n"
         'if [ "$#" -eq 3 ] && [ "$1" = show ] && [ "$2" = --all ] '
         '&& [ "$3" = --json ]; then\n'
@@ -77,6 +120,26 @@ def main():
         f"exec {shlex.quote(real_kan)} \"$@\"\n"
     )
     wrapper.chmod(0o755)
+    subprocess.run(
+        ["sudo", "install", "-d", "-o", "root", "-g", "root", "-m", "0555", str(wrapper_dir)],
+        check=True,
+    )
+    for staged in wrapper_stage.iterdir():
+        subprocess.run(
+            [
+                "sudo",
+                "install",
+                "-o",
+                "root",
+                "-g",
+                "root",
+                "-m",
+                "0555",
+                str(staged),
+                str(wrapper_dir / staged.name),
+            ],
+            check=True,
+        )
     os.environ["PATH"] = f"{wrapper_dir}:{os.environ['PATH']}"
 
     raw_path = output_dir / "wakeup-events.jsonl"
@@ -100,7 +163,7 @@ def main():
     )
     run(
         [
-            "codex",
+            real_tools["codex"],
             "exec",
             "--json",
             "--approve-for-me",
@@ -142,6 +205,7 @@ def main():
     )
     source.update(
         {
+            "github_run_id": github_run_id,
             "wakeup_evidence_path": wakeup_path.name,
             "wakeup_evidence_sha256": sha256(wakeup_path),
             "wakeup_raw_events": {

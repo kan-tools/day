@@ -350,8 +350,13 @@ fn validate_summaries(field: &'static str, values: &[String]) -> Result<(), Stri
 /// colon is not required, and dash-delimited dialogue is covered too. One
 /// label remains valid quoted evidence or ordinary prose.
 fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
+    let heading_turns = value
+        .lines()
+        .filter(|line| markdown_speaker_heading(line))
+        .take(2)
+        .count();
     let words = value.split_whitespace().collect::<Vec<_>>();
-    let turns = words
+    let inline_turns = words
         .iter()
         .enumerate()
         .filter(|(index, word)| {
@@ -380,20 +385,32 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
         })
         .take(2)
         .count();
-    if turns >= 2 {
+    if heading_turns >= 2 || inline_turns >= 2 {
         Err(Error::Transcript { field })
     } else {
         Ok(())
     }
 }
 
+fn markdown_speaker_heading(line: &str) -> bool {
+    let line = line.trim();
+    let marked = line.starts_with('#')
+        || (line.starts_with("**") && line.ends_with("**") && line.len() > 4)
+        || (line.starts_with('_') && line.ends_with('_') && line.len() > 2)
+        || (line.starts_with('`') && line.ends_with('`') && line.len() > 2);
+    if !marked {
+        return false;
+    }
+    let label = line
+        .trim_start_matches('#')
+        .trim()
+        .trim_matches(|character| matches!(character, '*' | '_' | '`'));
+    speaker_label(label)
+}
+
 fn speaker_label(label: &str) -> bool {
     let label = label.trim_matches(|character: char| !character.is_alphanumeric());
-    if label.is_empty()
-        || label.chars().count() > 40
-        || !label.chars().all(char::is_alphanumeric)
-        || !label.chars().any(char::is_alphabetic)
-    {
+    if label.is_empty() || label.chars().count() > 40 || !label.chars().all(char::is_alphabetic) {
         return false;
     }
     let lower = label.to_lowercase();
