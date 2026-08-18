@@ -360,6 +360,32 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "speaker names must not bypass transcript rejection"
     );
 
+    let split_speakers = run(
+        dir.path(),
+        &kan,
+        &[
+            "acquired-input",
+            "record",
+            "work/topic",
+            "--topic",
+            "x",
+            "--reported-provider",
+            "human",
+            "--fact",
+            "Alice: choose A",
+            "--fact",
+            "Bob: choose B",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(
+        !split_speakers.status.success(),
+        "splitting speaker turns across repeated narrative values must not make a transcript durable"
+    );
+
     for hostile in [
         "Alice:choose A Bob:choose B",
         "[Alice] choose A [Bob] choose B",

@@ -338,6 +338,7 @@ fn cleaned(field: &'static str, values: Vec<String>) -> Result<Vec<String>, Erro
         nonempty(field, value)?;
         reject_transcript(field, value)?;
     }
+    reject_transcript(field, &values.join("\n"))?;
     Ok(values)
 }
 
@@ -346,6 +347,7 @@ fn validate_summaries(field: &'static str, values: &[String]) -> Result<(), Stri
         nonempty(field, value).map_err(|error| error.to_string())?;
         reject_transcript(field, value).map_err(|error| error.to_string())?;
     }
+    reject_transcript(field, &values.join("\n")).map_err(|error| error.to_string())?;
     Ok(())
 }
 
