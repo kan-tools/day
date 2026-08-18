@@ -571,19 +571,19 @@ struct AskmeEvidence {
     candidate_sha: String,
     user_turns: Vec<String>,
     assistant_turns: Vec<String>,
-    commands: Vec<Vec<String>>,
+    commands: Vec<String>,
     claims_before: u64,
     claims_after: u64,
     durable_claim_texts: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct DayCommandReceipt {
-    argv: Vec<String>,
+    command: String,
+    status: String,
     exit_code: i64,
-    stdout: String,
-    stderr: String,
+    output: String,
     cid: Option<String>,
 }
 
@@ -698,7 +698,7 @@ fn grade_raw_askme_artifacts(
         ));
     }
     let mut thread_id: Option<String> = None;
-    let mut raw_record_commands = 0;
+    let mut raw_record_receipts = Vec::new();
     for (index, (artifact, turn)) in addressed
         .raw_events
         .iter()
@@ -729,34 +729,7 @@ fn grade_raw_askme_artifacts(
                 evidence.id
             )
         })?;
-        raw_record_commands += values
-            .iter()
-            .filter(|event| {
-                event.get("type").and_then(serde_json::Value::as_str) == Some("item.completed")
-                    && event
-                        .pointer("/item/type")
-                        .and_then(serde_json::Value::as_str)
-                        == Some("command_execution")
-                    && event
-                        .pointer("/item/status")
-                        .and_then(serde_json::Value::as_str)
-                        == Some("completed")
-                    && event
-                        .pointer("/item/exit_code")
-                        .and_then(serde_json::Value::as_i64)
-                        == Some(0)
-                    && event
-                        .pointer("/item/command")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|command| {
-                            command
-                                .split_whitespace()
-                                .collect::<Vec<_>>()
-                                .windows(2)
-                                .any(|pair| pair == ["acquired-input", "record"])
-                        })
-            })
-            .count();
+        raw_record_receipts.extend(values.iter().filter_map(raw_record_receipt));
         match &thread_id {
             Some(expected) if expected != observed_thread => {
                 return Err(format!(
@@ -779,9 +752,15 @@ fn grade_raw_askme_artifacts(
                 .map_err(|error| format!("day command receipt is malformed: {error}"))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    if receipts != raw_record_receipts {
+        return Err(format!(
+            "askme scenario `{}` addressed receipts differ from the addressed raw Codex command events",
+            evidence.id
+        ));
+    }
     let observed_commands = receipts
         .iter()
-        .map(|receipt| receipt.argv.clone())
+        .map(|receipt| receipt.command.clone())
         .collect::<Vec<_>>();
     if observed_commands != evidence.commands {
         return Err(format!(
@@ -789,20 +768,16 @@ fn grade_raw_askme_artifacts(
             evidence.id
         ));
     }
-    let record_receipts = receipts
-        .iter()
-        .filter(|receipt| {
-            receipt
-                .argv
-                .windows(2)
-                .any(|pair| pair == ["acquired-input", "record"])
+    let record_receipts = receipts.iter().collect::<Vec<_>>();
+    if record_receipts.len() != usize::from(expected_record)
+        || record_receipts.iter().any(|receipt| {
+            receipt.status != "completed"
+                || receipt.exit_code != 0
+                || !standalone_acquired_input_record(&receipt.command)
         })
-        .collect::<Vec<_>>();
-    if raw_record_commands != record_receipts.len()
-        || record_receipts.len() != usize::from(expected_record)
     {
         return Err(format!(
-            "askme scenario `{}` raw Codex commands, wrapper log, and recording expectation differ",
+            "askme scenario `{}` raw Codex command receipts are not exact standalone successful recorders",
             evidence.id
         ));
     }
@@ -849,13 +824,12 @@ fn grade_raw_askme_artifacts(
         };
         match day::atoms::extract_fenced::<day::events::AcquiredInput>(text) {
             Some(Ok(payload))
-                if record_receipts[0].exit_code == 0
-                    && record_receipts[0].cid.as_deref() == Some(cid.as_str())
-                    && record_receipts[0].stdout.contains(cid.as_str())
-                    && record_receipts[0].stderr.is_empty()
+                if record_receipts[0].cid.as_deref() == Some(cid.as_str())
+                    && record_receipts[0].output.contains(cid.as_str())
                     && claim.subject.as_deref() == Some(payload.work_subject.as_str())
                     && claim.kind.as_deref() == Some("Observation")
                     && claim.author.as_deref() == Some(payload.recorded_by.as_str())
+                    && claim.cites.len() == payload.basis.len()
                     && payload
                         .basis
                         .iter()
@@ -882,6 +856,114 @@ fn addressed_bytes(
         return Err(format!("{label} digest differs from its manifest address"));
     }
     Ok(bytes)
+}
+
+fn raw_record_receipt(event: &serde_json::Value) -> Option<DayCommandReceipt> {
+    if event.get("type").and_then(serde_json::Value::as_str) != Some("item.completed")
+        || event
+            .pointer("/item/type")
+            .and_then(serde_json::Value::as_str)
+            != Some("command_execution")
+    {
+        return None;
+    }
+    let command = event
+        .pointer("/item/command")
+        .and_then(serde_json::Value::as_str)?;
+    if !command.contains("acquired-input") || !command.contains("record") {
+        return None;
+    }
+    let output = event
+        .pointer("/item/aggregated_output")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    Some(DayCommandReceipt {
+        command: command.to_owned(),
+        status: event
+            .pointer("/item/status")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        exit_code: event
+            .pointer("/item/exit_code")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(-1),
+        output: output.to_owned(),
+        cid: returned_cid(output).map(str::to_owned),
+    })
+}
+
+fn returned_cid(output: &str) -> Option<&str> {
+    output
+        .split('(')
+        .skip(1)
+        .filter_map(|tail| tail.split_once(')').map(|(candidate, _)| candidate))
+        .find(|candidate| candidate.starts_with("bafy") && !candidate.contains(char::is_whitespace))
+}
+
+fn standalone_acquired_input_record(command: &str) -> bool {
+    let command = command.trim();
+    if command.is_empty()
+        || command.contains(['\n', '\r', ';', '&', '|', '<', '>', '`'])
+        || command.contains("$(")
+    {
+        return false;
+    }
+    let Some(words) = conservative_shell_words(command) else {
+        return false;
+    };
+    if words.len() == 3
+        && matches!(
+            Path::new(&words[0])
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("sh" | "bash" | "zsh")
+        )
+        && words[1] == "-lc"
+    {
+        return standalone_acquired_input_record(&words[2]);
+    }
+    words.len() > 3
+        && Path::new(&words[0])
+            .file_name()
+            .and_then(|name| name.to_str())
+            == Some("day")
+        && words[1] == "acquired-input"
+        && words[2] == "record"
+}
+
+fn conservative_shell_words(command: &str) -> Option<Vec<String>> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+    for character in command.chars() {
+        if escaped {
+            word.push(character);
+            escaped = false;
+            continue;
+        }
+        match (quote, character) {
+            (Some('\''), '\'') | (Some('"'), '"') => quote = None,
+            (Some('\''), character) | (Some('"'), character) => word.push(character),
+            (None, '\'') | (None, '"') => quote = Some(character),
+            (None, '\\') => escaped = true,
+            (None, character) if character.is_whitespace() => {
+                if !word.is_empty() {
+                    words.push(std::mem::take(&mut word));
+                }
+            }
+            (None, character) => word.push(character),
+            _ => unreachable!(),
+        }
+    }
+    if escaped || quote.is_some() {
+        return None;
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    Some(words)
 }
 
 fn validate_codex_turn<'a>(
@@ -1268,10 +1350,7 @@ fn grade_askme_scenario(
     let record_commands = evidence
         .commands
         .iter()
-        .filter(|argv| {
-            argv.windows(2)
-                .any(|pair| pair == ["acquired-input", "record"])
-        })
+        .filter(|command| standalone_acquired_input_record(command))
         .count();
     if expected.expect.record {
         if record_commands != 1 || evidence.claims_after <= evidence.claims_before {
@@ -2269,7 +2348,7 @@ mod tests {
                 "candidate_sha": candidate,
                 "user_turns": scenario.turns,
                 "assistant_turns": assistant_turns,
-                "commands": if scenario.expect.record { serde_json::json!([["acquired-input", "record"]]) } else { serde_json::json!([]) },
+                "commands": if scenario.expect.record { serde_json::json!(["day acquired-input record --fact summary"]) } else { serde_json::json!([]) },
                 "claims_before": 2,
                 "claims_after": claims_after,
                 "durable_claim_texts": durable_texts
@@ -2283,7 +2362,7 @@ mod tests {
                     .path()
                     .join(format!("{}-events-{index}.jsonl", scenario.id));
                 let command_event = if scenario.expect.record && index + 1 == turns_for_raw.len() {
-                    "{\"type\":\"item.completed\",\"item\":{\"id\":\"record-command\",\"type\":\"command_execution\",\"command\":\"day acquired-input record\",\"aggregated_output\":\"recorded\",\"exit_code\":0,\"status\":\"completed\"}}\n"
+                    "{\"type\":\"item.completed\",\"item\":{\"id\":\"record-command\",\"type\":\"command_execution\",\"command\":\"day acquired-input record --fact summary\",\"aggregated_output\":\"recorded acquired input (bafyrecorded)\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n"
                 } else {
                     ""
                 };
@@ -2316,7 +2395,7 @@ mod tests {
             ];
             if claims_after == 3 {
                 after_claims.push(serde_json::json!({
-                    "cid": "cid-after-3",
+                    "cid": "bafyrecorded",
                     "subject": "work/askme",
                     "kind": "Observation",
                     "author": "did:key:recorder",
@@ -2333,7 +2412,7 @@ mod tests {
             .unwrap();
             let command_path = bundle.path().join(format!("{}-commands.log", scenario.id));
             let command_text = if scenario.expect.record {
-                "{\"argv\":[\"acquired-input\",\"record\"],\"exit_code\":0,\"stdout\":\"recorded acquired input (cid-after-3)\\n\",\"stderr\":\"\",\"cid\":\"cid-after-3\"}\n"
+                "{\"command\":\"day acquired-input record --fact summary\",\"status\":\"completed\",\"exit_code\":0,\"output\":\"recorded acquired input (bafyrecorded)\\n\",\"cid\":\"bafyrecorded\"}\n"
             } else {
                 ""
             };
@@ -2389,10 +2468,10 @@ mod tests {
         let command_original = std::fs::read(&command_path).unwrap();
         let manifest_original = std::fs::read(bundle.path().join("manifest.json")).unwrap();
         let failed_receipt = serde_json::json!({
-            "argv": ["acquired-input", "record"],
+            "command": "day acquired-input record --fact summary",
+            "status": "completed",
             "exit_code": 2,
-            "stdout": "",
-            "stderr": "invalid arguments",
+            "output": "invalid arguments",
             "cid": null
         });
         std::fs::write(
@@ -2417,13 +2496,102 @@ mod tests {
         .unwrap();
         assert!(grade_askme_inner(root, bundle.path(), None)
             .unwrap_err()
-            .contains("recorder receipt and new acquired-input envelope differ"));
-        std::fs::write(&command_path, command_original).unwrap();
+            .contains("addressed receipts differ from the addressed raw Codex command events"));
+        std::fs::write(&command_path, &command_original).unwrap();
         std::fs::write(bundle.path().join("manifest.json"), &manifest_original).unwrap();
         let evidence_path = bundle.path().join(format!("{record_id}.json"));
         let after_path = bundle.path().join(format!("{record_id}-kan-after.json"));
         let evidence_original = std::fs::read(&evidence_path).unwrap();
         let after_original = std::fs::read(&after_path).unwrap();
+
+        let mut compound_manifest: serde_json::Value =
+            serde_json::from_slice(&manifest_original).unwrap();
+        let compound_entry = compound_manifest["scenarios"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|entry| entry["id"] == record_id)
+            .unwrap();
+        let raw_artifact = compound_entry["raw_events"]
+            .as_array_mut()
+            .unwrap()
+            .last_mut()
+            .unwrap();
+        let raw_path = bundle.path().join(raw_artifact["path"].as_str().unwrap());
+        let raw_original = std::fs::read(&raw_path).unwrap();
+        let compound = "day acquired-input record --fact missing || kan observe manual";
+        assert!(!standalone_acquired_input_record(compound));
+        let raw_compound = String::from_utf8(raw_original.clone())
+            .unwrap()
+            .replace("day acquired-input record --fact summary", compound);
+        std::fs::write(&raw_path, raw_compound).unwrap();
+        let compound_receipt = serde_json::json!({
+            "command": compound,
+            "status": "completed",
+            "exit_code": 0,
+            "output": "recorded acquired input (bafyrecorded)\n",
+            "cid": "bafyrecorded"
+        });
+        std::fs::write(
+            &command_path,
+            format!("{}\n", serde_json::to_string(&compound_receipt).unwrap()),
+        )
+        .unwrap();
+        let mut compound_evidence: serde_json::Value =
+            serde_json::from_slice(&evidence_original).unwrap();
+        compound_evidence["commands"] = serde_json::json!([compound]);
+        std::fs::write(
+            &evidence_path,
+            serde_json::to_vec_pretty(&compound_evidence).unwrap(),
+        )
+        .unwrap();
+        raw_artifact["sha256"] = digest(&std::fs::read(&raw_path).unwrap()).into();
+        compound_entry["command_log"]["sha256"] =
+            digest(&std::fs::read(&command_path).unwrap()).into();
+        compound_entry["sha256"] = digest(&std::fs::read(&evidence_path).unwrap()).into();
+        std::fs::write(
+            bundle.path().join("manifest.json"),
+            serde_json::to_vec_pretty(&compound_manifest).unwrap(),
+        )
+        .unwrap();
+        let compound_error = grade_askme_inner(root, bundle.path(), None).unwrap_err();
+        assert!(
+            compound_error.contains(
+                "explicit-yes branch did not produce exactly one recording command and append"
+            ),
+            "unexpected compound-command error: {compound_error}"
+        );
+        std::fs::write(&raw_path, raw_original).unwrap();
+        std::fs::write(&command_path, &command_original).unwrap();
+        std::fs::write(&evidence_path, &evidence_original).unwrap();
+        std::fs::write(bundle.path().join("manifest.json"), &manifest_original).unwrap();
+
+        let mut extra_cites_after: serde_json::Value =
+            serde_json::from_slice(&after_original).unwrap();
+        extra_cites_after["subjects"][0]["claims"][2]["cites"] =
+            serde_json::json!(["bafy-basis", "bafy-fabricated"]);
+        std::fs::write(&after_path, serde_json::to_vec(&extra_cites_after).unwrap()).unwrap();
+        let mut extra_cites_manifest: serde_json::Value =
+            serde_json::from_slice(&manifest_original).unwrap();
+        let extra_cites_entry = extra_cites_manifest["scenarios"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|entry| entry["id"] == record_id)
+            .unwrap();
+        extra_cites_entry["kan_after"]["sha256"] =
+            digest(&std::fs::read(&after_path).unwrap()).into();
+        std::fs::write(
+            bundle.path().join("manifest.json"),
+            serde_json::to_vec_pretty(&extra_cites_manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(grade_askme_inner(root, bundle.path(), None)
+            .unwrap_err()
+            .contains("recorder receipt and new acquired-input envelope differ"));
+        std::fs::write(&after_path, &after_original).unwrap();
+        std::fs::write(bundle.path().join("manifest.json"), &manifest_original).unwrap();
+
         let serialized_transcript = day::events::AcquiredInput {
             work_subject: "work/askme".into(),
             topic: "release".into(),

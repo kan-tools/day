@@ -5,9 +5,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 
 def run(argv, cwd, env, output=None):
@@ -77,6 +79,39 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def record_receipts(raw_files):
+    receipts = []
+    for path in raw_files:
+        for line in path.read_text().splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            item = event.get("item", {})
+            command = item.get("command")
+            if (
+                event.get("type") != "item.completed"
+                or item.get("type") != "command_execution"
+                or not isinstance(command, str)
+                or "acquired-input" not in command
+                or "record" not in command
+            ):
+                continue
+            output = item.get("aggregated_output", "")
+            exit_code = item.get("exit_code")
+            match = re.search(r"\((bafy[^)]+)\)", output) if exit_code == 0 else None
+            receipts.append(
+                {
+                    "command": command,
+                    "status": item.get("status"),
+                    "exit_code": exit_code,
+                    "output": output,
+                    "cid": match.group(1) if match else None,
+                }
+            )
+    return receipts
+
+
 def main():
     if len(sys.argv) != 6:
         raise SystemExit(
@@ -95,6 +130,24 @@ def main():
     if not real_day.is_file():
         raise RuntimeError(f"candidate day binary is missing at {real_day}")
 
+    wrapper_stage = Path(tempfile.mkdtemp(prefix="day-v013-askme-wrapper-"))
+    wrapper_dir = Path(f"/opt/day-v013-askme-{github_run_id}")
+    shutil.copy2(real_day, wrapper_stage / "day.real")
+    wrapper = wrapper_stage / "day"
+    wrapper.write_text(f"#!/bin/sh\nexec '{wrapper_dir / 'day.real'}' \"$@\"\n")
+    wrapper.chmod(0o755)
+    run(
+        ["sudo", "install", "-d", "-o", "root", "-g", "root", "-m", "0555", str(wrapper_dir)],
+        root,
+        os.environ.copy(),
+    )
+    for staged in wrapper_stage.iterdir():
+        run(
+            ["sudo", "install", "-o", "root", "-g", "root", "-m", "0555", str(staged), str(wrapper_dir / staged.name)],
+            root,
+            os.environ.copy(),
+        )
+
     entries = []
     for scenario in protocol["scenarios"]:
         scenario_dir = output_dir / scenario["id"]
@@ -106,32 +159,8 @@ def main():
         run(["git", "commit", "-qm", "scratch", "--allow-empty"], repo, os.environ.copy())
 
         command_log = scenario_dir / "commands.log"
-        command_log.write_text("")
-        wrapper_dir = scenario_dir / "bin"
-        wrapper_dir.mkdir()
-        helper = wrapper_dir / "day-wrapper.py"
-        helper.write_text(
-            "#!/usr/bin/env python3\n"
-            "import json, os, re, subprocess, sys\n"
-            f"completed = subprocess.run([{json.dumps(str(real_day))}, *sys.argv[1:]], text=True, capture_output=True)\n"
-            "match = re.search(r'\\((bafy[^)]+)\\)', completed.stdout) if completed.returncode == 0 else None\n"
-            "receipt = {'argv': sys.argv[1:], 'exit_code': completed.returncode, 'stdout': completed.stdout, 'stderr': completed.stderr, 'cid': match.group(1) if match else None}\n"
-            "with open(os.environ['DAY_TRIAL_COMMAND_LOG'], 'a') as log:\n"
-            "    log.write(json.dumps(receipt, separators=(',', ':')) + '\\n')\n"
-            "sys.stdout.write(completed.stdout)\n"
-            "sys.stderr.write(completed.stderr)\n"
-            "raise SystemExit(completed.returncode)\n"
-        )
-        helper.chmod(0o755)
-        wrapper = wrapper_dir / "day"
-        wrapper.write_text(
-            "#!/bin/sh\n"
-            f"exec '{helper}' \"$@\"\n"
-        )
-        wrapper.chmod(0o755)
         env = os.environ.copy()
         env["PATH"] = f"{wrapper_dir}:{env['PATH']}"
-        env["DAY_TRIAL_COMMAND_LOG"] = str(command_log)
         if scenario["id"] != "context-free-repo":
             run([str(real_day), "init"], repo, env)
 
@@ -143,7 +172,9 @@ def main():
         prompt = (
             f"Use the askme skill for this topic: {scenario['topic']!r}. "
             f"Use work subject trial/askme/{scenario['id']}. Ask exactly one question, then stop "
-            "and wait for the next user turn. Do not simulate or anticipate the user's answers."
+            "and wait for the next user turn. Do not simulate or anticipate the user's answers. "
+            "If explicit consent eventually requires recording, invoke day acquired-input record "
+            "as one standalone one-line shell command; do not combine it with another command."
         )
         jsonl = run(
             [
@@ -175,14 +206,11 @@ def main():
 
         after = kan_snapshot(repo, env)
         evidence_path = scenario_dir / "evidence.json"
-        commands = []
-        if command_log.exists():
-            receipts = [
-                json.loads(line)
-                for line in command_log.read_text().splitlines()
-                if line.strip()
-            ]
-            commands = [receipt["argv"] for receipt in receipts]
+        receipts = record_receipts(raw_files)
+        command_log.write_text(
+            "".join(json.dumps(receipt, separators=(",", ":")) + "\n" for receipt in receipts)
+        )
+        commands = [receipt["command"] for receipt in receipts]
         evidence_path.write_text(
             json.dumps(
                 {
