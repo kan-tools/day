@@ -44,7 +44,11 @@ fn candidate_and_publication_resolve_every_coordinate_to_one_sha() {
     );
     executable(
         &bin.join("curl"),
-        "#!/bin/sh\necho '{\"version\":{\"num\":\"0.13.0-beta.1\"}}'\n",
+        "#!/bin/sh\ncase \" $* \" in\n  *' --output '*) while [ \"$1\" != --output ]; do shift; done; : > \"$2\" ;;\n  *) echo '{\"version\":{\"num\":\"0.13.0-beta.1\"}}' ;;\nesac\n",
+    );
+    executable(
+        &bin.join("tar"),
+        &format!("#!/bin/sh\necho '{{\"git\":{{\"sha1\":\"{SHA}\",\"dirty\":false}}}}'\n"),
     );
     executable(
         &bin.join("kan"),
@@ -82,4 +86,27 @@ fn candidate_and_publication_resolve_every_coordinate_to_one_sha() {
     let output = run(root.path(), &bin, "verify-publication-v013");
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("FINDING"));
+
+    executable(
+        &bin.join("tar"),
+        "#!/bin/sh\necho '{\"git\":{\"sha1\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"dirty\":false}}'\n",
+    );
+    executable(
+        &bin.join("git"),
+        &format!(
+            "#!/bin/sh\ncase \"$1 $2\" in\n  'rev-list -n') echo {SHA} ;;\n  *) exit 97 ;;\nesac\n"
+        ),
+    );
+    executable(
+        &bin.join("gh"),
+        &format!("#!/bin/sh\ncase \"$1 $2\" in\n  'run list') echo '[{{\"databaseId\":42,\"headSha\":\"{SHA}\",\"status\":\"completed\",\"conclusion\":\"success\"}}]' ;;\n  'release view') echo '{{\"tagName\":\"v0.13.0-beta.1\",\"isDraft\":false}}' ;;\n  *) exit 97 ;;\nesac\n"),
+    );
+    let output = run(root.path(), &bin, "verify-publication-v013");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("VCS metadata"));
+
+    executable(&bin.join("tar"), "#!/bin/sh\necho 'not-json'\n");
+    let output = run(root.path(), &bin, "verify-publication-v013");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("malformed"));
 }

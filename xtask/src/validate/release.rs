@@ -89,6 +89,17 @@ struct CratesVersion {
     num: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct CargoVcsInfo {
+    git: CargoGit,
+}
+
+#[derive(Debug, Deserialize)]
+struct CargoGit {
+    sha1: String,
+    dirty: bool,
+}
+
 enum CheckError {
     Finding(String),
     CouldNotCheck(String),
@@ -358,6 +369,55 @@ fn verify_publication_inner(
     if package.version.num != version {
         return Err(CheckError::finding(
             "crates.io returned another package version",
+        ));
+    }
+    let archive_dir = tempfile::tempdir().map_err(|error| {
+        CheckError::unavailable(format!(
+            "could not create crate verification directory: {error}"
+        ))
+    })?;
+    let archive = archive_dir
+        .path()
+        .join(format!("{}-{version}.crate", identity.crate_name));
+    let download = format!(
+        "https://crates.io/api/v1/crates/{}/{version}/download",
+        identity.crate_name
+    );
+    run_checked(
+        process,
+        root,
+        "curl",
+        [
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--output",
+            archive
+                .to_str()
+                .ok_or_else(|| CheckError::unavailable("crate verification path is not UTF-8"))?,
+            &download,
+        ],
+        "crates.io package download",
+        Nonzero::CouldNotCheck,
+    )?;
+    let vcs_path = format!("{}-{version}/.cargo_vcs_info.json", identity.crate_name);
+    let vcs_json = run_checked(
+        process,
+        root,
+        "tar",
+        ["-xOf", archive.to_str().unwrap(), &vcs_path],
+        "published crate VCS metadata",
+        Nonzero::Finding,
+    )?;
+    let vcs: CargoVcsInfo = serde_json::from_str(&vcs_json).map_err(|error| {
+        CheckError::finding(format!(
+            "published crate VCS metadata is malformed: {error}"
+        ))
+    })?;
+    if vcs.git.sha1 != candidate || vcs.git.dirty {
+        return Err(CheckError::finding(
+            "published crate VCS metadata does not bind the clean candidate SHA",
         ));
     }
     let claim_json = run_checked(
