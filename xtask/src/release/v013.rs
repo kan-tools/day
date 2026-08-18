@@ -1118,12 +1118,7 @@ fn grade_askme_scenario(
         return fail("non-consent branch mutated the claim log");
     }
     for text in &evidence.durable_claim_texts {
-        let lowered = text.to_ascii_lowercase();
-        let labels = ["human:", "user:", "assistant:", "agent:"]
-            .iter()
-            .filter(|label| lowered.contains(**label))
-            .count();
-        if labels >= 2 {
+        if day::events::contains_transcript_shape(text) {
             return fail("durable claim content contains a raw multi-speaker transcript");
         }
     }
@@ -1146,6 +1141,7 @@ struct ReconstructionEvidence {
     wakeup_evidence_path: String,
     wakeup_evidence_sha256: String,
     wakeup_raw_events: AddressedArtifact,
+    runner_suite: AddressedArtifact,
     kan_read_path: String,
     kan_read_sha256: String,
     kan_authors: Vec<String>,
@@ -1175,6 +1171,21 @@ struct ReconstructionSource {
     census_head: String,
     ci_run_id: u64,
     ci_head_sha: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RunnerSuiteEvidence {
+    schema: u64,
+    argv: Vec<String>,
+    candidate_sha: String,
+    head_sha: String,
+    tree_clean: bool,
+    exit_code: i64,
+    #[serde(rename = "stdout")]
+    _stdout: String,
+    #[serde(rename = "stderr")]
+    _stderr: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1491,7 +1502,7 @@ fn validate_reconstruction(bundle: &Path, evidence: &ReconstructionEvidence) -> 
         return Err("kan read digest differs from its manifest address".into());
     }
     let kan_read: BulkKanRead = json(&kan_path, &kan_bytes)?;
-    validate_bulk_reconstruction(&kan_read, evidence, &events)?;
+    validate_bulk_reconstruction(bundle, &kan_read, evidence, &events)?;
     Ok(())
 }
 
@@ -1544,6 +1555,7 @@ fn validate_fresh_wakeup(
 }
 
 fn validate_bulk_reconstruction(
+    bundle: &Path,
     read: &BulkKanRead,
     evidence: &ReconstructionEvidence,
     events: &[serde_json::Value],
@@ -1650,6 +1662,25 @@ fn validate_bulk_reconstruction(
         return Err("handoff scopes do not bind the declared suite/census/CI coordinates".into());
     };
     let suite_command = suite.argv.join(" ");
+    let suite_bytes = addressed_bytes(
+        bundle,
+        &evidence.runner_suite,
+        "independent runner suite evidence",
+    )?;
+    let runner_suite: RunnerSuiteEvidence = serde_json::from_slice(&suite_bytes)
+        .map_err(|error| format!("independent runner suite evidence is malformed: {error}"))?;
+    if runner_suite.schema != 1
+        || runner_suite.argv != suite.argv
+        || runner_suite.candidate_sha != evidence.candidate_sha
+        || runner_suite.head_sha != evidence.candidate_sha
+        || !runner_suite.tree_clean
+        || runner_suite.exit_code != 0
+    {
+        return Err(
+            "independent runner suite did not execute the declared suite from the clean candidate"
+                .into(),
+        );
+    }
     let census_command = format!(
         "just census-demonstrations {}..{}",
         evidence.census_base, evidence.census_head
@@ -2318,6 +2349,22 @@ mod tests {
         )
         .unwrap();
         let kan_bytes = std::fs::read(bundle.path().join("kan.json")).unwrap();
+        let runner_suite = serde_json::json!({
+            "schema": 1,
+            "argv": ["cargo", "test"],
+            "candidate_sha": candidate,
+            "head_sha": candidate,
+            "tree_clean": true,
+            "exit_code": 0,
+            "stdout": "tests passed",
+            "stderr": ""
+        });
+        std::fs::write(
+            bundle.path().join("runner-suite.json"),
+            serde_json::to_vec_pretty(&runner_suite).unwrap(),
+        )
+        .unwrap();
+        let runner_suite_bytes = std::fs::read(bundle.path().join("runner-suite.json")).unwrap();
         let evidence = ReconstructionEvidence {
             schema: 1,
             github_run_id: 73,
@@ -2334,6 +2381,10 @@ mod tests {
             wakeup_raw_events: AddressedArtifact {
                 path: "wakeup-events.jsonl".into(),
                 sha256: digest(raw.as_bytes()),
+            },
+            runner_suite: AddressedArtifact {
+                path: "runner-suite.json".into(),
+                sha256: digest(&runner_suite_bytes),
             },
             kan_read_path: "kan.json".into(),
             kan_read_sha256: digest(&kan_bytes),
@@ -2368,6 +2419,27 @@ mod tests {
                     .0,
             "the hostile ordering must be observable"
         );
+        let out_of_order_bytes = out_of_order
+            .iter()
+            .map(|event| serde_json::to_string(event).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        std::fs::write(
+            bundle.path().join("out-of-order-events.jsonl"),
+            &out_of_order_bytes,
+        )
+        .unwrap();
+        let mut out_of_order_evidence = evidence.clone();
+        out_of_order_evidence.wakeup_raw_events = AddressedArtifact {
+            path: "out-of-order-events.jsonl".into(),
+            sha256: digest(out_of_order_bytes.as_bytes()),
+        };
+        assert!(
+            validate_reconstruction(bundle.path(), &out_of_order_evidence)
+                .unwrap_err()
+                .contains("ordered candidate")
+        );
         assert!(census_has_zero_unaccounted("unaccounted | 0"));
         assert!(!census_has_zero_unaccounted("unaccounted | 10"));
         assert!(ci_output_matches(
@@ -2385,6 +2457,32 @@ mod tests {
             ),
             &"a".repeat(40)
         ));
+        let forged_runner_suite = serde_json::json!({
+            "schema": 1,
+            "argv": ["cargo", "test", "--no-run"],
+            "candidate_sha": "a".repeat(40),
+            "head_sha": "a".repeat(40),
+            "tree_clean": true,
+            "exit_code": 0,
+            "stdout": "",
+            "stderr": ""
+        });
+        let forged_runner_suite_bytes = serde_json::to_vec_pretty(&forged_runner_suite).unwrap();
+        std::fs::write(
+            bundle.path().join("forged-runner-suite.json"),
+            &forged_runner_suite_bytes,
+        )
+        .unwrap();
+        let mut forged_runner_evidence = evidence.clone();
+        forged_runner_evidence.runner_suite = AddressedArtifact {
+            path: "forged-runner-suite.json".into(),
+            sha256: digest(&forged_runner_suite_bytes),
+        };
+        assert!(
+            validate_reconstruction(bundle.path(), &forged_runner_evidence)
+                .unwrap_err()
+                .contains("independent runner suite")
+        );
         assert_eq!(
             completed_command_event(&raw_values, "cargo test").map(|(_, output)| output),
             Some("ok")

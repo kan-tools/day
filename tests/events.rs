@@ -370,6 +370,7 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "# Alice\nchoose A\n# Bob\nchoose B",
         "_Alice_\nchoose A\n_Bob_\nchoose B",
         "`Alice`\nchoose A\n`Bob`\nchoose B",
+        "**Alice Smith**\nchoose A\n**Bob Jones**\nchoose B",
     ] {
         let hostile_transcript = run(
             dir.path(),

@@ -392,6 +392,13 @@ fn reject_transcript(field: &'static str, value: &str) -> Result<(), Error> {
     }
 }
 
+/// Returns whether text has the same multi-speaker shape rejected by event
+/// validation. Release evidence uses this to avoid maintaining a weaker copy
+/// of the durable-record boundary.
+pub fn contains_transcript_shape(value: &str) -> bool {
+    reject_transcript("text", value).is_err()
+}
+
 fn markdown_speaker_heading(line: &str) -> bool {
     let line = line.trim();
     let marked = line.starts_with('#')
@@ -405,7 +412,21 @@ fn markdown_speaker_heading(line: &str) -> bool {
         .trim_start_matches('#')
         .trim()
         .trim_matches(|character| matches!(character, '*' | '_' | '`'));
-    speaker_label(label)
+    speaker_label(label) || multiword_speaker_name(label)
+}
+
+fn multiword_speaker_name(label: &str) -> bool {
+    let parts = label.split_whitespace().collect::<Vec<_>>();
+    (2..=4).contains(&parts.len())
+        && parts.iter().all(|part| {
+            part.chars().all(char::is_alphabetic)
+                && part.chars().next().is_some_and(char::is_uppercase)
+                && part
+                    .chars()
+                    .skip(1)
+                    .all(|character| !character.is_alphabetic() || character.is_lowercase())
+                && !semantic_label(&part.to_lowercase())
+        })
 }
 
 fn speaker_label(label: &str) -> bool {
@@ -420,9 +441,21 @@ fn speaker_label(label: &str) -> bool {
     ) {
         return true;
     }
-    if matches!(
-        lower.as_str(),
-        "decision"
+    if semantic_label(&lower) {
+        return false;
+    }
+    let mut characters = label.chars();
+    characters.next().is_some_and(char::is_uppercase)
+        && characters.all(|character| !character.is_alphabetic() || character.is_lowercase())
+}
+
+fn semantic_label(lower: &str) -> bool {
+    matches!(
+        lower,
+        "acceptance"
+            | "candidate"
+            | "criteria"
+            | "decision"
             | "effect"
             | "risk"
             | "mitigation"
@@ -435,13 +468,10 @@ fn speaker_label(label: &str) -> bool {
             | "provider"
             | "recorder"
             | "release"
+            | "requirement"
+            | "requirements"
             | "unresolved"
-    ) {
-        return false;
-    }
-    let mut characters = label.chars();
-    characters.next().is_some_and(char::is_uppercase)
-        && characters.all(|character| !character.is_alphabetic() || character.is_lowercase())
+    )
 }
 
 fn fenced<T: Serialize>(opening: &str, fence: &str, value: &T) -> String {

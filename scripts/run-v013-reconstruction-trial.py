@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -27,6 +28,36 @@ def run(argv, cwd, output=None):
 
 def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def declared_suite(kan_path, source):
+    kan = json.loads(kan_path.read_text())
+    claims = [
+        claim
+        for subject in kan.get("subjects", [])
+        for claim in subject.get("claims", [])
+        if claim.get("cid") == source.get("handoff_cid")
+    ]
+    if len(claims) != 1 or not isinstance(claims[0].get("text"), str):
+        raise RuntimeError("authenticated kan read has no unique handoff claim")
+    match = re.search(
+        r"```day-handoff-scopes\s*\n(.*?)\n```", claims[0]["text"], re.DOTALL
+    )
+    if match is None:
+        raise RuntimeError("handoff claim has no day-handoff-scopes block")
+    scopes = json.loads(match.group(1))
+    suites = [
+        suite
+        for suite in scopes.get("suites", [])
+        if suite.get("commit") == source.get("suite_commit")
+        and suite.get("tree_clean") is True
+    ]
+    if len(suites) != 1:
+        raise RuntimeError("handoff has no unique clean candidate suite")
+    argv = suites[0].get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(v, str) and v for v in argv):
+        raise RuntimeError("handoff suite argv is malformed")
+    return argv
 
 
 def main():
@@ -59,6 +90,7 @@ def main():
     if run(["git", "status", "--porcelain"], candidate_repo).strip():
         raise RuntimeError("candidate checkout is not clean before the fresh wakeup")
     required_tools = ["kan", "git", "cargo", "just", "gh", "codex"]
+    base_env = os.environ.copy()
     real_tools = {tool: shutil.which(tool) for tool in required_tools}
     missing = [tool for tool, path in real_tools.items() if path is None]
     if missing:
@@ -178,6 +210,59 @@ def main():
         candidate_repo,
         raw_path,
     )
+
+    suite_argv = declared_suite(kan_path, source)
+    if suite_argv[0] not in real_tools:
+        raise RuntimeError("declared suite does not use a pinned harness executable")
+    if run([real_tools["git"], "rev-parse", "HEAD"], candidate_repo).strip() != candidate:
+        raise RuntimeError("candidate HEAD changed during fresh wakeup")
+    if run([real_tools["git"], "status", "--porcelain"], candidate_repo).strip():
+        raise RuntimeError("candidate checkout changed during fresh wakeup")
+    candidate_target = candidate_repo / "target"
+    if candidate_target.exists():
+        shutil.rmtree(candidate_target)
+    executed_suite = [real_tools[suite_argv[0]], *suite_argv[1:]]
+    suite_env = base_env.copy()
+    suite_target = Path(tempfile.mkdtemp(prefix="day-v013-independent-cargo-"))
+    suite_env["CARGO_TARGET_DIR"] = str(suite_target)
+    for variable in [
+        "RUSTC_WRAPPER",
+        "RUSTC_WORKSPACE_WRAPPER",
+        "RUSTFLAGS",
+        "CARGO_ENCODED_RUSTFLAGS",
+    ]:
+        suite_env.pop(variable, None)
+    suite_run = subprocess.run(
+        executed_suite,
+        cwd=candidate_repo,
+        env=suite_env,
+        text=True,
+        capture_output=True,
+    )
+    shutil.rmtree(suite_target)
+    suite_path = output_dir / "runner-suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "argv": suite_argv,
+                "candidate_sha": candidate,
+                "head_sha": run(
+                    [real_tools["git"], "rev-parse", "HEAD"], candidate_repo
+                ).strip(),
+                "tree_clean": not run(
+                    [real_tools["git"], "status", "--porcelain"], candidate_repo
+                ).strip(),
+                "exit_code": suite_run.returncode,
+                "stdout": suite_run.stdout,
+                "stderr": suite_run.stderr,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    if suite_run.returncode:
+        raise RuntimeError(f"independent candidate suite exited {suite_run.returncode}")
     rendered = last_path.read_text()
     if not rendered.strip():
         raise RuntimeError("fresh wakeup produced no final assistant message")
@@ -211,6 +296,10 @@ def main():
             "wakeup_raw_events": {
                 "path": raw_path.name,
                 "sha256": sha256(raw_path),
+            },
+            "runner_suite": {
+                "path": suite_path.name,
+                "sha256": sha256(suite_path),
             },
             "kan_read_path": kan_path.name,
             "kan_read_sha256": sha256(kan_path),

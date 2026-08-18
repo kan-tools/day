@@ -110,6 +110,10 @@ fn reconstruction_trial_grades_an_addressed_commit_not_a_pass_marker() {
     assert!(runner.contains("candidate checkout is dirty"));
     assert!(runner.contains("shutil.copy2(candidate_day"));
     assert!(runner.contains("real_tools[\"codex\"]"));
+    assert!(runner.contains("declared_suite(kan_path, source)"));
+    assert!(runner.contains("shutil.rmtree(candidate_target)"));
+    assert!(runner.contains("runner-suite.json"));
+    assert!(grader.contains("independent runner suite evidence"));
     assert!(!workflow.contains("target/debug\" >> \"$GITHUB_PATH"));
     assert!(grader.contains("census_has_zero_unaccounted"));
     assert!(grader.contains("ci_output_matches"));
