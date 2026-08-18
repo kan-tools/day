@@ -1255,7 +1255,8 @@ fn rfc_acceptance_self_tests_survive_the_acceptance_transition() {
             && text.contains("accepted-metadata mutation rejected")
             && text.contains("historical-renumber mutation rejected")
             && text.contains("forged-review mutation rejected")
-            && text.contains("short-review mutation rejected"),
+            && text.contains("short-review mutation rejected")
+            && text.contains("duplicate-vector-key mutation rejected"),
         "acceptance mutations must still reach their intended guards:\n{text}"
     );
 }
