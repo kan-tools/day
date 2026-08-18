@@ -127,6 +127,23 @@ fn validate(root: &Path, manifest: &Path) -> Result<usize, String> {
             ));
         }
     }
+    for (id, required_layer) in [
+        ("command:validate/rfc", "repository-integration"),
+        ("command:validate/publication", "external-conformance"),
+        ("command:validate/vectors", "deterministic-invariant"),
+        ("command:validate/formal", "deterministic-invariant"),
+    ] {
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| format!("instrumentation inventory is missing `{id}`"))?;
+        if entry.layer != required_layer {
+            return Err(format!(
+                "instrumentation entry `{id}` misclassifies its checked dependency boundary; expected `{required_layer}`"
+            ));
+        }
+    }
     let expected = discover_surfaces(root)?;
     if ids != expected {
         let missing: Vec<_> = expected.difference(&ids).cloned().collect();

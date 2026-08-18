@@ -194,6 +194,15 @@ instrumentation may assume its runner and evidence producer are honest while
 still detecting bugs, omissions, stale coordinates, malformed evidence, and
 ordinary corruption.
 
+A leaf instrument is classified by the dependency needed to falsify its
+conclusion, not by the language or directory that implements it. A command that
+orchestrates heterogeneous leaf instruments is repository integration and may
+conclude only that the named composition completed; it does not make its live
+external leaves deterministic. Under this rule, supplied-byte vector and
+formal checks are deterministic, the fresh-clone/real-kan publication check is
+external conformance, and the RFC command that composes those checks with real
+review records is repository integration.
+
 ### Placement
 
 `xtask/src/outcome.rs` remains the shared result algebra.
