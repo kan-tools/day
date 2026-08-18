@@ -109,10 +109,24 @@ def main():
         command_log.write_text("")
         wrapper_dir = scenario_dir / "bin"
         wrapper_dir.mkdir()
+        helper = wrapper_dir / "day-wrapper.py"
+        helper.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, re, subprocess, sys\n"
+            f"completed = subprocess.run([{json.dumps(str(real_day))}, *sys.argv[1:]], text=True, capture_output=True)\n"
+            "match = re.search(r'\\((bafy[^)]+)\\)', completed.stdout) if completed.returncode == 0 else None\n"
+            "receipt = {'argv': sys.argv[1:], 'exit_code': completed.returncode, 'stdout': completed.stdout, 'stderr': completed.stderr, 'cid': match.group(1) if match else None}\n"
+            "with open(os.environ['DAY_TRIAL_COMMAND_LOG'], 'a') as log:\n"
+            "    log.write(json.dumps(receipt, separators=(',', ':')) + '\\n')\n"
+            "sys.stdout.write(completed.stdout)\n"
+            "sys.stderr.write(completed.stderr)\n"
+            "raise SystemExit(completed.returncode)\n"
+        )
+        helper.chmod(0o755)
         wrapper = wrapper_dir / "day"
         wrapper.write_text(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$DAY_TRIAL_COMMAND_LOG\"\n"
-            f"exec '{real_day}' \"$@\"\n"
+            "#!/bin/sh\n"
+            f"exec '{helper}' \"$@\"\n"
         )
         wrapper.chmod(0o755)
         env = os.environ.copy()
@@ -163,7 +177,12 @@ def main():
         evidence_path = scenario_dir / "evidence.json"
         commands = []
         if command_log.exists():
-            commands = [line.split() for line in command_log.read_text().splitlines() if line.strip()]
+            receipts = [
+                json.loads(line)
+                for line in command_log.read_text().splitlines()
+                if line.strip()
+            ]
+            commands = [receipt["argv"] for receipt in receipts]
         evidence_path.write_text(
             json.dumps(
                 {

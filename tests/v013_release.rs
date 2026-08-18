@@ -47,11 +47,15 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
     assert!(runner.contains("kan-before.json") && runner.contains("kan-after.json"));
     assert!(runner.contains("raw_events") && runner.contains("sha256(path)"));
     assert!(runner.contains("command_log") && runner.contains("sha256(command_log)"));
+    assert!(runner.contains("day-wrapper.py"));
+    assert!(runner.contains("'exit_code': completed.returncode"));
+    assert!(runner.contains("'cid': match.group(1) if match else None"));
     assert!(runner.contains("github_run_id"));
     assert!(runner.contains("kan show --all --json exited"));
     assert!(!runner.contains("return {\"raw\": completed.stderr, \"claims\": 0"));
     let grader = text("xtask/src/release/v013.rs");
     assert!(grader.contains("raw Codex commands, wrapper log, and recording expectation differ"));
+    assert!(grader.contains("recorder receipt and new acquired-input envelope differ"));
     assert!(grader.contains("did not append the exact expected claim set"));
     assert!(grader.contains("extract_fenced::<day::events::AcquiredInput>"));
 }

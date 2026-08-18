@@ -577,6 +577,16 @@ struct AskmeEvidence {
     durable_claim_texts: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DayCommandReceipt {
+    argv: Vec<String>,
+    exit_code: i64,
+    stdout: String,
+    stderr: String,
+    cid: Option<String>,
+}
+
 pub fn grade_askme(
     root: &Path,
     bundle: &Path,
@@ -761,14 +771,17 @@ fn grade_raw_askme_artifacts(
     let command_bytes = addressed_bytes(bundle, &addressed.command_log, "day command log")?;
     let command_text = std::str::from_utf8(&command_bytes)
         .map_err(|error| format!("day command log is not UTF-8: {error}"))?;
-    let observed_commands = command_text
+    let receipts = command_text
         .lines()
         .filter(|line| !line.trim().is_empty())
         .map(|line| {
-            line.split_whitespace()
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
+            serde_json::from_str::<DayCommandReceipt>(line)
+                .map_err(|error| format!("day command receipt is malformed: {error}"))
         })
+        .collect::<Result<Vec<_>, _>>()?;
+    let observed_commands = receipts
+        .iter()
+        .map(|receipt| receipt.argv.clone())
         .collect::<Vec<_>>();
     if observed_commands != evidence.commands {
         return Err(format!(
@@ -776,15 +789,17 @@ fn grade_raw_askme_artifacts(
             evidence.id
         ));
     }
-    let logged_record_commands = observed_commands
+    let record_receipts = receipts
         .iter()
-        .filter(|argv| {
-            argv.windows(2)
+        .filter(|receipt| {
+            receipt
+                .argv
+                .windows(2)
                 .any(|pair| pair == ["acquired-input", "record"])
         })
-        .count();
-    if raw_record_commands != logged_record_commands
-        || logged_record_commands != usize::from(expected_record)
+        .collect::<Vec<_>>();
+    if raw_record_commands != record_receipts.len()
+        || record_receipts.len() != usize::from(expected_record)
     {
         return Err(format!(
             "askme scenario `{}` raw Codex commands, wrapper log, and recording expectation differ",
@@ -825,21 +840,33 @@ fn grade_raw_askme_artifacts(
             evidence.id
         ));
     }
-    if let Some((_, Some(text))) = appended.first() {
+    if let Some((cid, claim)) = appended.first() {
+        let Some(text) = claim.text.as_deref() else {
+            return Err(format!(
+                "askme scenario `{}` new acquired-input claim has no text",
+                evidence.id
+            ));
+        };
         match day::atoms::extract_fenced::<day::events::AcquiredInput>(text) {
-            Some(Ok(_)) => {}
+            Some(Ok(payload))
+                if record_receipts[0].exit_code == 0
+                    && record_receipts[0].cid.as_deref() == Some(cid.as_str())
+                    && record_receipts[0].stdout.contains(cid.as_str())
+                    && record_receipts[0].stderr.is_empty()
+                    && claim.subject.as_deref() == Some(payload.work_subject.as_str())
+                    && claim.kind.as_deref() == Some("Observation")
+                    && claim.author.as_deref() == Some(payload.recorded_by.as_str())
+                    && payload
+                        .basis
+                        .iter()
+                        .all(|basis| claim.cites.iter().any(|cited| cited == basis)) => {}
             _ => {
                 return Err(format!(
-                    "askme scenario `{}` new claim is not a valid acquired-input event",
+                    "askme scenario `{}` recorder receipt and new acquired-input envelope differ",
                     evidence.id
                 ));
             }
         }
-    } else if expected_record {
-        return Err(format!(
-            "askme scenario `{}` new acquired-input claim has no text",
-            evidence.id
-        ));
     }
     Ok(())
 }
@@ -1096,8 +1123,16 @@ fn validate_github_actions_origin(
 }
 
 struct KanSnapshot {
-    claims: std::collections::BTreeMap<String, Option<String>>,
+    claims: std::collections::BTreeMap<String, SnapshotClaim>,
     texts: Vec<String>,
+}
+
+struct SnapshotClaim {
+    subject: Option<String>,
+    kind: Option<String>,
+    author: Option<String>,
+    cites: Vec<String>,
+    text: Option<String>,
 }
 
 fn kan_snapshot_counts(bytes: &[u8]) -> Result<KanSnapshot, String> {
@@ -1110,6 +1145,10 @@ fn kan_snapshot_counts(bytes: &[u8]) -> Result<KanSnapshot, String> {
     let mut claims_by_cid = std::collections::BTreeMap::new();
     let mut texts = Vec::new();
     for subject in subjects {
+        let outer_subject = subject
+            .get("subject")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
         let claims = subject
             .get("claims")
             .and_then(serde_json::Value::as_array)
@@ -1120,7 +1159,37 @@ fn kan_snapshot_counts(bytes: &[u8]) -> Result<KanSnapshot, String> {
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned);
             if let Some(cid) = claim.get("cid").and_then(serde_json::Value::as_str) {
-                if claims_by_cid.insert(cid.to_owned(), text.clone()).is_some() {
+                let snapshot_claim = SnapshotClaim {
+                    subject: claim
+                        .get("subject")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .or_else(|| outer_subject.clone()),
+                    kind: claim
+                        .get("kind")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned),
+                    author: claim
+                        .get("author")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned),
+                    cites: claim
+                        .get("cites")
+                        .and_then(serde_json::Value::as_array)
+                        .map(|values| {
+                            values
+                                .iter()
+                                .filter_map(serde_json::Value::as_str)
+                                .map(str::to_owned)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    text: text.clone(),
+                };
+                if claims_by_cid
+                    .insert(cid.to_owned(), snapshot_claim)
+                    .is_some()
+                {
                     return Err(format!("kan snapshot repeats CID `{cid}`"));
                 }
             }
@@ -2200,7 +2269,7 @@ mod tests {
                 "candidate_sha": candidate,
                 "user_turns": scenario.turns,
                 "assistant_turns": assistant_turns,
-                "commands": if scenario.expect.record { serde_json::json!([["day", "acquired-input", "record"]]) } else { serde_json::json!([]) },
+                "commands": if scenario.expect.record { serde_json::json!([["acquired-input", "record"]]) } else { serde_json::json!([]) },
                 "claims_before": 2,
                 "claims_after": claims_after,
                 "durable_claim_texts": durable_texts
@@ -2238,7 +2307,7 @@ mod tests {
             let after_path = bundle
                 .path()
                 .join(format!("{}-kan-after.json", scenario.id));
-            let before = serde_json::json!({"subjects": [{"claims": [
+            let before = serde_json::json!({"subjects": [{"subject": "existing", "claims": [
                 {"cid": "cid-before-1"}, {"cid": "cid-before-2"}
             ]}]});
             let mut after_claims = vec![
@@ -2246,7 +2315,14 @@ mod tests {
                 serde_json::json!({"cid": "cid-before-2"}),
             ];
             if claims_after == 3 {
-                after_claims.push(serde_json::json!({"cid": "cid-after-3", "text": acquired_text}));
+                after_claims.push(serde_json::json!({
+                    "cid": "cid-after-3",
+                    "subject": "work/askme",
+                    "kind": "Observation",
+                    "author": "did:key:recorder",
+                    "cites": ["bafy-basis"],
+                    "text": acquired_text
+                }));
             }
             std::fs::write(&before_path, serde_json::to_vec(&before).unwrap()).unwrap();
             std::fs::write(
@@ -2257,7 +2333,7 @@ mod tests {
             .unwrap();
             let command_path = bundle.path().join(format!("{}-commands.log", scenario.id));
             let command_text = if scenario.expect.record {
-                "day acquired-input record\n"
+                "{\"argv\":[\"acquired-input\",\"record\"],\"exit_code\":0,\"stdout\":\"recorded acquired input (cid-after-3)\\n\",\"stderr\":\"\",\"cid\":\"cid-after-3\"}\n"
             } else {
                 ""
             };
@@ -2309,11 +2385,45 @@ mod tests {
             .unwrap()
             .id
             .clone();
+        let command_path = bundle.path().join(format!("{record_id}-commands.log"));
+        let command_original = std::fs::read(&command_path).unwrap();
+        let manifest_original = std::fs::read(bundle.path().join("manifest.json")).unwrap();
+        let failed_receipt = serde_json::json!({
+            "argv": ["acquired-input", "record"],
+            "exit_code": 2,
+            "stdout": "",
+            "stderr": "invalid arguments",
+            "cid": null
+        });
+        std::fs::write(
+            &command_path,
+            format!("{}\n", serde_json::to_string(&failed_receipt).unwrap()),
+        )
+        .unwrap();
+        let mut failed_manifest: serde_json::Value =
+            serde_json::from_slice(&manifest_original).unwrap();
+        let failed_entry = failed_manifest["scenarios"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|entry| entry["id"] == record_id)
+            .unwrap();
+        failed_entry["command_log"]["sha256"] =
+            digest(&std::fs::read(&command_path).unwrap()).into();
+        std::fs::write(
+            bundle.path().join("manifest.json"),
+            serde_json::to_vec_pretty(&failed_manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(grade_askme_inner(root, bundle.path(), None)
+            .unwrap_err()
+            .contains("recorder receipt and new acquired-input envelope differ"));
+        std::fs::write(&command_path, command_original).unwrap();
+        std::fs::write(bundle.path().join("manifest.json"), &manifest_original).unwrap();
         let evidence_path = bundle.path().join(format!("{record_id}.json"));
         let after_path = bundle.path().join(format!("{record_id}-kan-after.json"));
         let evidence_original = std::fs::read(&evidence_path).unwrap();
         let after_original = std::fs::read(&after_path).unwrap();
-        let manifest_original = std::fs::read(bundle.path().join("manifest.json")).unwrap();
         let serialized_transcript = day::events::AcquiredInput {
             work_subject: "work/askme".into(),
             topic: "release".into(),
@@ -2362,7 +2472,7 @@ mod tests {
         .unwrap();
         assert!(grade_askme_inner(root, bundle.path(), None)
             .unwrap_err()
-            .contains("not a valid acquired-input event"));
+            .contains("recorder receipt and new acquired-input envelope differ"));
         std::fs::write(&evidence_path, evidence_original).unwrap();
         std::fs::write(&after_path, after_original).unwrap();
         std::fs::write(bundle.path().join("manifest.json"), manifest_original).unwrap();
