@@ -46,6 +46,28 @@ fn vector_shim_matches_the_native_self_test() {
 }
 
 #[test]
+fn vector_leaf_is_hermetic_over_supplied_bytes() {
+    let directory = tempfile::tempdir().unwrap();
+    let vector = root().join("rfcs/vectors/1-process-model.json");
+    let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .args([
+            "validate",
+            "vectors",
+            vector.to_str().unwrap(),
+            "--self-test",
+        ])
+        .current_dir(directory.path())
+        .env_remove("DAY_RFC_ROOT")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "supplied-byte vector validation depended on repository state: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn publication_shims_match_the_native_self_tests() {
     for (script, rfc) in [
         ("scripts/check-rfc0-publication.py", "0"),

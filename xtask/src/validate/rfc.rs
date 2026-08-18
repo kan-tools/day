@@ -69,7 +69,7 @@ pub fn run(root: &Path, process: &dyn Process, self_test: bool) -> Outcome<()> {
     let baseline = std::env::var_os("DAY_RFC_BASE_REGISTRY").map(PathBuf::from);
     let publication_skip =
         std::env::var_os("DAY_RFC_PUBLICATION_SKIP").is_some_and(|value| value == "1");
-    match check(&root, process, publication_skip, baseline.as_deref()) {
+    match check(&root, process, publication_skip, baseline.as_deref(), true) {
         Err(error) => reported(error),
         Ok(_) if self_test => match run_self_tests(&root, process, publication_skip) {
             Ok(()) => Outcome::Passed(()),
@@ -87,6 +87,7 @@ fn check(
     process: &dyn Process,
     publication_skip: bool,
     baseline_registry: Option<&Path>,
+    repository_binding: bool,
 ) -> Result<(usize, usize), CheckError> {
     for path in [
         "rfcs/README.md",
@@ -132,6 +133,12 @@ fn check(
     let vectors: Value =
         serde_json::from_str(&vector_source).map_err(|error| finding(error.to_string()))?;
     super::vectors::validate(&vectors).map_err(finding)?;
+    if repository_binding {
+        require_passed(
+            super::vectors::validate_repository(&vectors, root, process),
+            "RFC 1 procedure address could not be verified",
+        )?;
+    }
     println!("RFC 1 vectors: valid");
 
     let rfc_files = numbered_files(root.join("rfcs"), true)?;
@@ -594,7 +601,7 @@ fn run_self_tests(
         reset_fixture(root, fixture.path())?;
         mutate_fixture(fixture.path(), label)?;
         let baseline = fixture.path().join("base-numbers.tsv");
-        match check(fixture.path(), process, true, Some(&baseline)) {
+        match check(fixture.path(), process, true, Some(&baseline), false) {
             Ok(_) => return Err(finding(format!("self-test accepted {label} mutation"))),
             Err(error) => {
                 let expected = expected_error(label);
@@ -633,6 +640,10 @@ fn run_self_tests(
     require_passed(
         super::vectors::run(root, &self_test),
         "RFC 1 vector self-test failed",
+    )?;
+    require_passed(
+        super::vectors::repository_self_test(root, process),
+        "RFC 1 procedure-address self-test failed",
     )?;
     require_passed(
         super::formal::run(root, &self_test),

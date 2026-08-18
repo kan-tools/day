@@ -2,13 +2,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use num_bigint::BigUint;
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
+use crate::capability::process::{Process, ProcessRequest};
 use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
 pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
@@ -31,7 +31,7 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
         Ok(data) => data,
         Err(error) => return failed(error.to_string()),
     };
-    if let Err(detail) = validate_all(&data, &root) {
+    if let Err(detail) = validate(&data) {
         return failed(detail);
     }
     if self_test {
@@ -396,11 +396,6 @@ pub fn validate(data: &Value) -> Result<(), String> {
     validate_migrations(data)
 }
 
-fn validate_all(data: &Value, root: &Path) -> Result<(), String> {
-    validate(data)?;
-    validate_resolved_procedure(data, root)
-}
-
 fn validate_certificate_profile(data: &Value) -> Result<(), String> {
     let profile = object(
         data.get("certificate_profile"),
@@ -629,69 +624,107 @@ fn validate_artifact_address(
     )
 }
 
-fn validate_resolved_procedure(data: &Value, root: &Path) -> Result<(), String> {
+#[derive(Debug)]
+enum RepositoryError {
+    Finding(String),
+    Unavailable(String),
+}
+
+pub(crate) fn validate_repository(data: &Value, root: &Path, process: &dyn Process) -> Outcome<()> {
+    match validate_resolved_procedure(data, root, process) {
+        Ok(()) => Outcome::Passed(()),
+        Err(RepositoryError::Finding(detail)) => Outcome::Finding(Finding::new(detail)),
+        Err(RepositoryError::Unavailable(detail)) => {
+            Outcome::CouldNotCheck(CouldNotCheck::new(detail))
+        }
+    }
+}
+
+fn validate_resolved_procedure(
+    data: &Value,
+    root: &Path,
+    process: &dyn Process,
+) -> Result<(), RepositoryError> {
     let declaration = object(
         data.pointer("/certificate_profile/declaration"),
         "certificate declaration is absent",
-    )?;
+    )
+    .map_err(RepositoryError::Finding)?;
     let address = object(
         declaration.get("procedure_spec"),
         "procedure specification is absent",
-    )?;
-    let repository = required_string(address.get("repository"), "procedure repository absent")?;
-    let remote = Command::new("git")
-        .args(["config", "--get", "remote.origin.url"])
-        .current_dir(root)
-        .output()
-        .map_err(|error| format!("could not resolve procedure repository: {error}"))?;
+    )
+    .map_err(RepositoryError::Finding)?;
+    let repository = required_string(address.get("repository"), "procedure repository absent")
+        .map_err(RepositoryError::Finding)?;
+    let remote = process
+        .run(&ProcessRequest::new(
+            "git",
+            ["config", "--get", "remote.origin.url"],
+            root,
+        ))
+        .map_err(|error| {
+            RepositoryError::Unavailable(format!("could not resolve procedure repository: {error}"))
+        })?;
+    if remote.status != 0 {
+        return Err(RepositoryError::Finding(
+            "could not resolve procedure repository".into(),
+        ));
+    }
     require(
-        remote.status.success(),
-        "could not resolve procedure repository",
-    )?;
-    require(
-        normalized_repository(std::str::from_utf8(&remote.stdout).unwrap_or_default())
-            == normalized_repository(repository),
+        normalized_repository(&remote.stdout) == normalized_repository(repository),
         "procedure repository does not match the current repository",
-    )?;
-    let commit = required_string(address.get("commit"), "procedure commit absent")?;
-    let path = required_string(address.get("path"), "procedure path absent")?;
+    )
+    .map_err(RepositoryError::Finding)?;
+    let commit = required_string(address.get("commit"), "procedure commit absent")
+        .map_err(RepositoryError::Finding)?;
+    let path = required_string(address.get("path"), "procedure path absent")
+        .map_err(RepositoryError::Finding)?;
     let object = format!("{commit}:{path}");
-    let resolved = Command::new("git")
-        .args(["show", &object])
-        .current_dir(root)
-        .output()
-        .map_err(|error| format!("could not resolve procedure bytes: {error}"))?;
-    require(
-        resolved.status.success(),
-        "procedure artifact does not resolve at its declared commit and path",
-    )?;
-    let actual_digest = format!("{:x}", Sha256::digest(&resolved.stdout));
+    let resolved = process
+        .run(&ProcessRequest::new("git", ["show", &object], root))
+        .map_err(|error| {
+            RepositoryError::Unavailable(format!("could not resolve procedure bytes: {error}"))
+        })?;
+    if resolved.status != 0 {
+        return Err(RepositoryError::Finding(
+            "procedure artifact does not resolve at its declared commit and path".into(),
+        ));
+    }
+    let actual_digest = format!("{:x}", Sha256::digest(resolved.stdout.as_bytes()));
     require(
         string(address.get("sha256")) == Some(actual_digest.as_str()),
         "resolved procedure digest does not match its address",
-    )?;
-    let procedure: Value = serde_json::from_slice(&resolved.stdout)
-        .map_err(|error| format!("resolved procedure is not JSON: {error}"))?;
+    )
+    .map_err(RepositoryError::Finding)?;
+    let procedure: Value = serde_json::from_str(&resolved.stdout).map_err(|error| {
+        RepositoryError::Finding(format!("resolved procedure is not JSON: {error}"))
+    })?;
     require(
         procedure.get("version") == address.get("version")
             && procedure.get("relationship") == declaration.get("relationship"),
         "resolved procedure version or relationship disagrees with the declaration",
-    )?;
+    )
+    .map_err(RepositoryError::Finding)?;
     let procedure_components = string_array(
         procedure.get("components"),
         "resolved procedure components are absent",
-    )?;
-    let declared_components = array(declaration.get("components"), "declared components absent")?
+    )
+    .map_err(RepositoryError::Finding)?;
+    let declared_components = array(declaration.get("components"), "declared components absent")
+        .map_err(RepositoryError::Finding)?
         .iter()
         .map(|component| {
             required_string(component.get("name"), "declared component absent").map(str::to_owned)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(RepositoryError::Finding)?;
     require(
         procedure_components == declared_components
             && procedure.get("assembly") == declaration.get("assembly"),
         "resolved procedure components or assembly disagree with the declaration",
     )
+    .map_err(RepositoryError::Finding)
 }
 
 fn normalized_repository(value: &str) -> &str {
@@ -1145,8 +1178,21 @@ fn migration_outcome(case: &Map<String, Value>) -> Result<String, String> {
     .into())
 }
 
-fn run_self_test(data: &Value, root: &Path) -> Result<(), String> {
-    const NAMES: [&str; 36] = [
+#[allow(dead_code)]
+fn validate_all(data: &Value, root: &Path) -> Result<(), String> {
+    validate(data)?;
+    let process = crate::capability::process::SystemProcess;
+    match validate_repository(data, root, &process) {
+        Outcome::Passed(()) => Ok(()),
+        Outcome::Finding(finding) => Err(finding.detail),
+        Outcome::CouldNotCheck(unavailable) => Err(unavailable.detail),
+    }
+}
+
+const REPOSITORY_MUTATIONS: [&str; 1] = ["unresolved-procedure"];
+
+fn run_self_test(data: &Value, _root: &Path) -> Result<(), String> {
+    const NAMES: [&str; 35] = [
         "composition-boundary",
         "coherence",
         "claim-reuse",
@@ -1178,7 +1224,6 @@ fn run_self_test(data: &Value, root: &Path) -> Result<(), String> {
         "procedure-digest-mismatch",
         "procedure-version-mismatch",
         "stale-declaration-digest",
-        "unresolved-procedure",
         "stored-verdict-transport",
         "hidden-provenance-mismatch",
         "set-relationship-example",
@@ -1187,11 +1232,47 @@ fn run_self_test(data: &Value, root: &Path) -> Result<(), String> {
     for name in NAMES {
         let mut candidate = data.clone();
         mutate(&mut candidate, name)?;
-        if validate_all(&candidate, root).is_ok() {
+        if validate(&candidate).is_ok() {
             return Err(format!("self-test accepted mutation: {name}"));
         }
     }
     Ok(())
+}
+
+pub(crate) fn repository_self_test(root: &Path, process: &dyn Process) -> Outcome<()> {
+    let result = (|| -> Result<(), RepositoryError> {
+        let path = root.join("rfcs/vectors/1-process-model.json");
+        let source = std::fs::read_to_string(&path).map_err(|error| {
+            RepositoryError::Unavailable(format!("{}: {error}", path.display()))
+        })?;
+        let data = parse_ijson(&source).map_err(RepositoryError::Finding)?;
+        validate(&data).map_err(RepositoryError::Finding)?;
+        validate_resolved_procedure(&data, root, process)?;
+        for name in REPOSITORY_MUTATIONS {
+            let mut candidate = data.clone();
+            mutate(&mut candidate, name).map_err(RepositoryError::Finding)?;
+            if validate(&candidate).is_err() {
+                continue;
+            }
+            match validate_resolved_procedure(&candidate, root, process) {
+                Err(RepositoryError::Finding(_)) => {}
+                Err(error @ RepositoryError::Unavailable(_)) => return Err(error),
+                Ok(()) => {
+                    return Err(RepositoryError::Finding(format!(
+                        "repository self-test accepted mutation: {name}"
+                    )))
+                }
+            }
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => Outcome::Passed(()),
+        Err(RepositoryError::Finding(detail)) => Outcome::Finding(Finding::new(detail)),
+        Err(RepositoryError::Unavailable(detail)) => {
+            Outcome::CouldNotCheck(CouldNotCheck::new(detail))
+        }
+    }
 }
 
 fn mutate(data: &mut Value, name: &str) -> Result<(), String> {
