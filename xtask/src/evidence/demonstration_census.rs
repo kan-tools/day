@@ -45,16 +45,19 @@ pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()>
             Ok(value) => value.trim().to_owned(),
             Err(error) => return Outcome::CouldNotCheck(error),
         };
-        let bucket =
-            if trailer::parse_message(&body).is_ok_and(|claim| claim.outcome == "DEMONSTRATED") {
-                "demonstrated"
-            } else if body.lines().any(|line| line.starts_with("No trailer:"))
-                || accounted.contains_key(sha)
-            {
-                "exempt"
-            } else {
-                "unaccounted"
-            };
+        let bucket = if accounted.contains_key(sha) {
+            // An append-only correction supersedes the historical evidence
+            // classification. Keeping a retired trailer in `demonstrated`
+            // would make the census count evidence the verifier deliberately
+            // no longer re-derives.
+            "exempt"
+        } else if trailer::parse_message(&body).is_ok_and(|claim| claim.outcome == "DEMONSTRATED") {
+            "demonstrated"
+        } else if body.lines().any(|line| line.starts_with("No trailer:")) {
+            "exempt"
+        } else {
+            "unaccounted"
+        };
         let note = accounted
             .get(sha)
             .map(|reason| format!("  [accounted later: {reason}]"))

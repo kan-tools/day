@@ -1613,6 +1613,14 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         "the one to be accounted for",
     ]);
     let target = git(&["rev-parse", "HEAD"]);
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "a retired demonstration\n\nDemonstrated-by: revert=HEAD tests=old_instrument outcome=DEMONSTRATED",
+    ]);
+    let demonstrated_target = git(&["rev-parse", "HEAD"]);
     let _ = base;
 
     // premise: unaccounted before anything accounts for it.
@@ -1647,7 +1655,10 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         "-q",
         "--allow-empty",
         "-m",
-        &format!("accounts for it\n\nAccounts-for: {target} a stated reason\n\nNo trailer: this commit itself"),
+        &format!(
+            "accounts for both\n\nAccounts-for: {target} a stated reason\n\
+             Accounts-for: {demonstrated_target} retired instrument\n\nNo trailer: this commit itself"
+        ),
     ]);
     let (code, out) = census(&format!("{span_start}..HEAD"));
     assert_eq!(
@@ -1663,6 +1674,11 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
     assert!(
         out.contains("accounted later: a stated reason"),
         "the reason must be surfaced for review, or the hatch is unauditable: {out}"
+    );
+    assert!(
+        out.contains("accounted later: retired instrument"),
+        "a retired trailer must be visibly reclassified rather than still \
+         counted as demonstrated: {out}"
     );
 }
 
