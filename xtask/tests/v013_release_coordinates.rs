@@ -74,4 +74,12 @@ fn candidate_and_publication_resolve_every_coordinate_to_one_sha() {
     let output = run(root.path(), &bin, "verify-candidate-v013");
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("COULD-NOT-CHECK"));
+
+    executable(
+        &bin.join("git"),
+        "#!/bin/sh\ncase \"$1 $2\" in\n  'rev-list -n') echo 'fatal: unknown revision' >&2; exit 128 ;;\n  *) exit 97 ;;\nesac\n",
+    );
+    let output = run(root.path(), &bin, "verify-publication-v013");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("FINDING"));
 }

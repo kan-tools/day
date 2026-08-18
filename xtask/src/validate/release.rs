@@ -94,6 +94,12 @@ enum CheckError {
     CouldNotCheck(String),
 }
 
+#[derive(Clone, Copy)]
+enum Nonzero {
+    Finding,
+    CouldNotCheck,
+}
+
 impl CheckError {
     fn finding(message: impl Into<String>) -> Self {
         Self::Finding(message.into())
@@ -160,6 +166,7 @@ fn verify_plan_inner(
         "kan",
         ["show", manifest.subject.as_str(), "--json"],
         "Plan kan view",
+        Nonzero::CouldNotCheck,
     )?;
     let show: KanShow = parse_external("Plan kan view", &kan)?;
     let claim = show
@@ -187,6 +194,7 @@ fn verify_plan_inner(
         "git",
         ["show", &artifact_spec],
         "Plan artifact",
+        Nonzero::Finding,
     )?
     .into_bytes();
     let current = std::fs::read(root.join(&manifest.artifact.path)).map_err(|error| {
@@ -232,7 +240,14 @@ pub fn verify_candidate(
 ) -> Outcome<()> {
     let result = (|| {
         full_sha("candidate SHA", candidate).map_err(CheckError::finding)?;
-        let head = run_checked(process, root, "git", ["rev-parse", "HEAD"], "local HEAD")?;
+        let head = run_checked(
+            process,
+            root,
+            "git",
+            ["rev-parse", "HEAD"],
+            "local HEAD",
+            Nonzero::CouldNotCheck,
+        )?;
         if head.trim() != candidate {
             return Err(CheckError::finding(format!(
                 "local HEAD {} differs from candidate {candidate}",
@@ -245,6 +260,7 @@ pub fn verify_candidate(
             "git",
             ["status", "--porcelain"],
             "working-tree status",
+            Nonzero::CouldNotCheck,
         )?;
         if !status.trim().is_empty() {
             return Err(CheckError::finding("candidate working tree is dirty"));
@@ -288,6 +304,7 @@ fn verify_publication_inner(
         "git",
         ["rev-list", "-n", "1", identity.version],
         "release tag",
+        Nonzero::Finding,
     )?;
     if tag.trim() != candidate {
         return Err(CheckError::finding(
@@ -316,6 +333,7 @@ fn verify_publication_inner(
             "tagName,isDraft",
         ],
         "GitHub Release",
+        Nonzero::CouldNotCheck,
     )?;
     let release: GithubRelease = parse_external("GitHub Release", &release_json)?;
     if release.tag_name != identity.version || release.is_draft {
@@ -334,6 +352,7 @@ fn verify_publication_inner(
         "curl",
         ["--fail", "--silent", "--show-error", &url],
         "crates.io package",
+        Nonzero::CouldNotCheck,
     )?;
     let package: CratesResponse = parse_external("crates.io package", &crate_json)?;
     if package.version.num != version {
@@ -347,6 +366,7 @@ fn verify_publication_inner(
         "kan",
         ["show", identity.release_subject, "--json"],
         "kan release claim",
+        Nonzero::CouldNotCheck,
     )?;
     let claims: KanShow = parse_external("kan release claim", &claim_json)?;
     if !claims.claims.iter().any(|claim| {
@@ -391,6 +411,7 @@ fn workflow_runs<'a>(
                 "databaseId,headSha,status,conclusion",
             ],
             &format!("workflow {workflow}"),
+            Nonzero::CouldNotCheck,
         )?;
         let runs: Vec<WorkflowRun> = parse_external(&format!("workflow {workflow}"), &output)?;
         let run = runs.iter().find(|run| {
@@ -417,6 +438,7 @@ fn run_checked<I, S>(
     program: &str,
     args: I,
     label: &str,
+    nonzero: Nonzero,
 ) -> Result<String, CheckError>
 where
     I: IntoIterator<Item = S>,
@@ -428,11 +450,15 @@ where
     if output.status == 0 {
         Ok(output.stdout)
     } else {
-        Err(CheckError::unavailable(format!(
+        let message = format!(
             "could not resolve {label} (exit {}): {}",
             output.status,
             output.stderr.trim()
-        )))
+        );
+        match nonzero {
+            Nonzero::Finding => Err(CheckError::finding(message)),
+            Nonzero::CouldNotCheck => Err(CheckError::unavailable(message)),
+        }
     }
 }
 
