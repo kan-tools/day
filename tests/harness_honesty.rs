@@ -521,8 +521,12 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
     assert!(
         yaml.contains("grep '^Accounts-for:'")
             && yaml.contains("git rev-parse \"${named}^{commit}\"")
+            && yaml.contains("[ -z \"${reason:-}\" ]")
             && yaml.contains("if [ \"$accounted\" = \"true\" ]"),
-        "the verifier must honor append-only Accounts-for corrections just as the census does; otherwise an exempt malformed historical trailer can make every later head permanently red"
+        "the verifier must honor the census's complete Accounts-for grammar, \
+         including its required reason; accepting less can suppress a live \
+         contradiction check, while accepting none can make retired evidence \
+         permanently red"
     );
     // **The trigger set, positively.** A trigger whose commit range is always
     // empty is a green job that checked nothing: after a merge,

@@ -103,8 +103,14 @@ jobs:
               # trailer that the current graph classifies as exempt.
               accounted="false"
               while IFS= read -r line; do
-                named="${line#Accounts-for: }"
-                named="${named%% *}"
+                payload="${line#Accounts-for:}"
+                read -r named reason <<< "$payload"
+                # Match the census grammar: a retirement is reviewable only
+                # when it names a commit and states why its instrument ceased
+                # to apply. A bare target must not suppress re-derivation.
+                if [ -z "${named:-}" ] || [ -z "${reason:-}" ]; then
+                  continue
+                fi
                 full="$(git rev-parse "${named}^{commit}" 2>/dev/null || true)"
                 if [ "$full" = "$sha" ]; then
                   accounted="true"
