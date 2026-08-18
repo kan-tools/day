@@ -1,37 +1,11 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use clap::{Command, CommandFactory};
 use serde::Deserialize;
 
+use crate::command::Cli;
 use crate::outcome::{Finding, Outcome};
-
-const EXPECTED: &[&str] = &[
-    "command:validate/profile",
-    "command:validate/rfc",
-    "command:validate/publication",
-    "command:validate/vectors",
-    "command:validate/formal",
-    "command:validate/instrumentation",
-    "command:validate/review",
-    "command:evidence/behaviour-diff",
-    "command:evidence/mutate",
-    "command:evidence/revert",
-    "command:census/demonstrations",
-    "command:census/findings",
-    "command:release/verify-v013",
-    "command:release/verify-plan-v013",
-    "command:release/verify-candidate-v013",
-    "command:release/verify-publication-v013",
-    "workflow:ci",
-    "workflow:agent-plugins",
-    "workflow:kan-compat",
-    "workflow:migration-matrix",
-    "workflow:askme-behavioral-trial",
-    "workflow:workflow-reconstruction-trial",
-    "workflow:release",
-    "protocol:askme-v1",
-    "protocol:reconstruction-v1",
-];
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -132,7 +106,7 @@ fn validate(root: &Path, manifest: &Path) -> Result<usize, String> {
     let allowed_lifecycle = ["permanent", "release-scoped", "post-merge"];
     let mut ids = BTreeSet::new();
     for entry in &inventory.entries {
-        if !ids.insert(entry.id.as_str()) {
+        if !ids.insert(entry.id.clone()) {
             return Err(format!("duplicate instrumentation entry `{}`", entry.id));
         }
         if !allowed_layers.contains(&entry.layer.as_str())
@@ -153,33 +127,85 @@ fn validate(root: &Path, manifest: &Path) -> Result<usize, String> {
             ));
         }
     }
-    let expected: BTreeSet<_> = EXPECTED.iter().copied().collect();
+    let expected = discover_surfaces(root)?;
     if ids != expected {
-        let missing: Vec<_> = expected.difference(&ids).copied().collect();
-        let unknown: Vec<_> = ids.difference(&expected).copied().collect();
+        let missing: Vec<_> = expected.difference(&ids).cloned().collect();
+        let unknown: Vec<_> = ids.difference(&expected).cloned().collect();
         return Err(format!(
             "instrumentation inventory is not exhaustive; missing={missing:?} unknown={unknown:?}"
         ));
     }
-    for relative in [
-        ".design/instrumentation-policy.md",
-        ".github/workflows/ci.yml",
-        ".github/workflows/agent-plugins.yml",
-        ".github/workflows/kan-compat.yml",
-        ".github/workflows/migration-matrix.yml",
-        ".github/workflows/askme-behavioral-trial.yml",
-        ".github/workflows/workflow-reconstruction-trial.yml",
-        ".github/workflows/release.yml",
-        ".release/protocols/askme-v1.json",
-        ".release/protocols/reconstruction-v1.json",
-    ] {
-        if !root.join(relative).is_file() {
-            return Err(format!(
-                "classified instrumentation surface `{relative}` is missing"
-            ));
-        }
+    if !root.join(".design/instrumentation-policy.md").is_file() {
+        return Err("classified instrumentation policy is missing".into());
     }
     Ok(inventory.entries.len())
+}
+
+fn discover_surfaces(root: &Path) -> Result<BTreeSet<String>, String> {
+    let mut surfaces = BTreeSet::new();
+    collect_commands(&Cli::command(), "", &mut surfaces);
+    discover_files(
+        root,
+        ".github/workflows",
+        &["yml", "yaml"],
+        "workflow",
+        &mut surfaces,
+    )?;
+    discover_files(
+        root,
+        ".release/protocols",
+        &["json"],
+        "protocol",
+        &mut surfaces,
+    )?;
+    Ok(surfaces)
+}
+
+fn collect_commands(command: &Command, prefix: &str, surfaces: &mut BTreeSet<String>) {
+    let children: Vec<_> = command
+        .get_subcommands()
+        .filter(|child| child.get_name() != "help")
+        .collect();
+    if children.is_empty() {
+        if !prefix.is_empty() {
+            surfaces.insert(format!("command:{prefix}"));
+        }
+        return;
+    }
+    for child in children {
+        let path = if prefix.is_empty() {
+            child.get_name().to_owned()
+        } else {
+            format!("{prefix}/{}", child.get_name())
+        };
+        collect_commands(child, &path, surfaces);
+    }
+}
+
+fn discover_files(
+    root: &Path,
+    directory: &str,
+    extensions: &[&str],
+    kind: &str,
+    surfaces: &mut BTreeSet<String>,
+) -> Result<(), String> {
+    let directory = root.join(directory);
+    let entries = std::fs::read_dir(&directory)
+        .map_err(|error| format!("could not enumerate `{}`: {error}", directory.display()))?;
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("could not enumerate instrumentation: {error}"))?
+            .path();
+        let extension = path.extension().and_then(|value| value.to_str());
+        if extension.is_some_and(|value| extensions.contains(&value)) {
+            let stem = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| format!("instrumentation path `{}` is not UTF-8", path.display()))?;
+            surfaces.insert(format!("{kind}:{stem}"));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -187,10 +213,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expected_inventory_ids_are_unique() {
-        assert_eq!(
-            EXPECTED.iter().copied().collect::<BTreeSet<_>>().len(),
-            EXPECTED.len()
-        );
+    fn command_discovery_uses_the_real_clap_tree() {
+        let mut commands = BTreeSet::new();
+        collect_commands(&Cli::command(), "", &mut commands);
+        assert!(commands.contains("command:validate/instrumentation"));
+        assert!(commands.contains("command:release/verify-publication-v013"));
+        assert!(!commands.iter().any(|command| command.ends_with("/help")));
+    }
+
+    #[test]
+    fn workflow_discovery_sees_a_file_that_was_not_known_when_compiled() {
+        let root = tempfile::tempdir().unwrap();
+        let workflows = root.path().join(".github/workflows");
+        std::fs::create_dir_all(&workflows).unwrap();
+        std::fs::write(workflows.join("future-check.yml"), "name: future\n").unwrap();
+        let mut found = BTreeSet::new();
+        discover_files(
+            root.path(),
+            ".github/workflows",
+            &["yml", "yaml"],
+            "workflow",
+            &mut found,
+        )
+        .unwrap();
+        assert_eq!(found, BTreeSet::from(["workflow:future-check".to_owned()]));
     }
 }
