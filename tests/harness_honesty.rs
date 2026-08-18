@@ -519,14 +519,11 @@ fn the_revert_demo_job_is_wired_and_fails_when_it_cannot_check() {
          message carries no trailer; the job must verify what was written"
     );
     assert!(
-        yaml.contains("grep '^Accounts-for:'")
-            && yaml.contains("git rev-parse \"${named}^{commit}\"")
-            && yaml.contains("[ -z \"${reason:-}\" ]")
-            && yaml.contains("if [ \"$accounted\" = \"true\" ]"),
-        "the verifier must honor the census's complete Accounts-for grammar, \
-         including its required reason; accepting less can suppress a live \
-         contradiction check, while accepting none can make retired evidence \
-         permanently red"
+        yaml.contains("census demonstrations --live \"$base..HEAD\"")
+            && !yaml.contains("grep '^Accounts-for:'"),
+        "the verifier must obtain live demonstrations from the native census; \
+         duplicating Accounts-for parsing in shell lets malformed evidence \
+         suppress a contradiction check under one grammar but not the other"
     );
     // **The trigger set, positively.** A trigger whose commit range is always
     // empty is a green job that checked nothing: after a merge,
@@ -1596,6 +1593,17 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
             String::from_utf8_lossy(&out.stdout).to_string(),
         )
     };
+    let live = |range: &str| {
+        let out = Command::new(repo_root().join("scripts/demonstration-census.py"))
+            .args(["--live", range])
+            .current_dir(repo)
+            .output()
+            .expect("the live demonstration selector should be runnable");
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout).to_string(),
+        )
+    };
 
     git(&["init", "-q", "-b", "main"]);
     git(&["commit", "-q", "--allow-empty", "-m", "base"]);
@@ -1633,6 +1641,27 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         code,
         Some(1),
         "premise: an unaccounted commit must fail: {out}"
+    );
+
+    // A carriage return is whitespace, not a stated reason. The native live
+    // selector and human census must share this exact malformed-input rule;
+    // workflows must not grow a second shell grammar for it.
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        &format!("malformed retirement\n\nAccounts-for: {demonstrated_target} \r\n\nNo trailer: this commit itself"),
+    ]);
+    let (code, out) = live(&format!("{span_start}..HEAD"));
+    assert_eq!(
+        code,
+        Some(1),
+        "the unrelated unaccounted commit remains: {out}"
+    );
+    assert!(
+        out.lines().any(|line| line == demonstrated_target),
+        "a whitespace-only reason must not remove a live demonstration: {out:?}"
     );
 
     // Naming a commit OUTSIDE the span absolves nothing.
@@ -1683,6 +1712,16 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         out.contains("accounted later: retired instrument"),
         "a retired trailer must be visibly reclassified rather than still \
          counted as demonstrated: {out}"
+    );
+    let (code, out) = live(&format!("{span_start}..HEAD"));
+    assert_eq!(
+        code,
+        Some(0),
+        "the fully accounted span should be selectable: {out}"
+    );
+    assert!(
+        out.trim().is_empty(),
+        "retired demonstrations must not be emitted as live SHAs: {out:?}"
     );
 }
 

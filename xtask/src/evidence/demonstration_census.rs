@@ -9,12 +9,14 @@ use crate::outcome::{CouldNotCheck, Finding, Outcome};
 const NOTHING_TO_CHECK: u8 = 3;
 
 pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()> {
-    if args.len() > 1 {
+    let live_only = args.first().is_some_and(|arg| arg == "--live");
+    let explicit = if live_only { args.get(1) } else { args.first() };
+    if args.len() > usize::from(live_only) + 1 {
         return Outcome::CouldNotCheck(CouldNotCheck::new(
-            "usage: xtask census demonstrations [<base>..<head>]",
+            "usage: xtask census demonstrations [--live] [<base>..<head>]",
         ));
     }
-    let resolved = match resolve_span(root, process, args.first().map(OsString::as_os_str)) {
+    let resolved = match resolve_span(root, process, explicit.map(OsString::as_os_str)) {
         Ok(value) => value,
         Err(error) => return Outcome::CouldNotCheck(error),
     };
@@ -36,6 +38,7 @@ pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()>
         ("exempt", Vec::new()),
         ("unaccounted", Vec::new()),
     ]);
+    let mut live = Vec::new();
     for sha in &commits {
         let body = match git(root, process, ["log", "-1", "--format=%B", sha]) {
             Ok(value) => value,
@@ -62,13 +65,22 @@ pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()>
             .get(sha)
             .map(|reason| format!("  [accounted later: {reason}]"))
             .unwrap_or_default();
+        if bucket == "demonstrated" {
+            live.push(sha.clone());
+        }
         buckets
             .get_mut(bucket)
             .expect("all classifier buckets are initialized")
             .push(format!("{} {subject}{note}", &sha[..7]));
     }
 
-    print_report(&span, commits.len(), &buckets);
+    if live_only {
+        for sha in live {
+            println!("{sha}");
+        }
+    } else {
+        print_report(&span, commits.len(), &buckets);
+    }
     if buckets["unaccounted"].is_empty() {
         Outcome::Passed(())
     } else {
