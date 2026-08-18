@@ -29,7 +29,7 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 
 ## [Unreleased]
 
-## [v0.13.0-beta.1] — candidate
+## [v0.13.0-beta.1] — 2026-08-18
 
 ### Added
 

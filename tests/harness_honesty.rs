@@ -1502,6 +1502,38 @@ fn every_workflow_that_runs_the_suite_fetches_full_history() {
     );
 }
 
+/// **The self-contained release suite supplies its external readers.**
+///
+/// The tag release is deliberately self-contained, but its first v0.13 run
+/// omitted the pinned kan install and GitHub authority that ordinary CI
+/// provides. Four RFC/publication tests then failed because the reader was
+/// absent, before publishing began. The release job owns the same dependencies
+/// as the candidate suite even though a different event invokes it.
+#[test]
+fn the_release_suite_supplies_pinned_kan_and_github_authority() {
+    let release = read(".github/workflows/release.yml");
+    let matrix = read("tests/fixtures/kan-compat.tsv");
+    let newest = matrix
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let tag = fields.next()?;
+            (fields.next()? == "ok").then_some(tag)
+        })
+        .next_back()
+        .expect("the compatibility matrix must contain an ok row");
+    assert!(
+        release.contains(&format!("KAN_TAG: {newest}"))
+            && release.contains("GH_TOKEN: ${{ github.token }}")
+            && release.contains("--tag \"${KAN_TAG}\" --force kan")
+            && release.contains("test -x \"$(command -v kan)\""),
+        "release.yml must provide the same pinned kan reader and read-only \
+         GitHub authority as candidate CI instead of failing RFC checks through \
+         an absent dependency"
+    );
+}
+
 /// **The release workflow creates the GitHub Release**, and its notes guard is
 /// checked on the section rather than on the whole file.
 ///
