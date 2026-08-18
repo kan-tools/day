@@ -173,8 +173,9 @@ def main():
             f"Use the askme skill for this topic: {scenario['topic']!r}. "
             f"Use work subject trial/askme/{scenario['id']}. Ask exactly one question, then stop "
             "and wait for the next user turn. Do not simulate or anticipate the user's answers. "
-            "If explicit consent eventually requires recording, invoke day acquired-input record "
-            "as one standalone one-line shell command; do not combine it with another command."
+            "If explicit consent eventually requires recording, invoke "
+            f"{str(wrapper_dir / 'day')!r} acquired-input record as one standalone one-line "
+            "shell command; do not use another day path or combine it with another command."
         )
         jsonl = run(
             [

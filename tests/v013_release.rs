@@ -49,6 +49,7 @@ fn askme_trial_is_real_multiturn_and_retains_addressed_raw_evidence() {
     assert!(runner.contains("command_log") && runner.contains("sha256(command_log)"));
     assert!(runner.contains("record_receipts(raw_files)"));
     assert!(runner.contains("/opt/day-v013-askme-"));
+    assert!(runner.contains("do not use another day path"));
     assert!(!runner.contains("DAY_TRIAL_COMMAND_LOG"));
     assert!(runner.contains("github_run_id"));
     assert!(runner.contains("kan show --all --json exited"));

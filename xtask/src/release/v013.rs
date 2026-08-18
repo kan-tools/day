@@ -680,7 +680,13 @@ fn grade_askme_inner(
         }
         let evidence: AskmeEvidence = json(&path, &bytes)?;
         grade_askme_scenario(expected, &manifest, &evidence)?;
-        grade_raw_askme_artifacts(&bundle, addressed, &evidence, expected.expect.record)?;
+        grade_raw_askme_artifacts(
+            &bundle,
+            addressed,
+            &evidence,
+            expected.expect.record,
+            manifest.github_run_id,
+        )?;
     }
     Ok(protocol.scenarios.len())
 }
@@ -690,6 +696,7 @@ fn grade_raw_askme_artifacts(
     addressed: &EvidenceFile,
     evidence: &AskmeEvidence,
     expected_record: bool,
+    github_run_id: u64,
 ) -> Result<(), String> {
     if addressed.raw_events.len() != evidence.assistant_turns.len() {
         return Err(format!(
@@ -768,12 +775,13 @@ fn grade_raw_askme_artifacts(
             evidence.id
         ));
     }
+    let expected_day = format!("/opt/day-v013-askme-{github_run_id}/day");
     let record_receipts = receipts.iter().collect::<Vec<_>>();
     if record_receipts.len() != usize::from(expected_record)
         || record_receipts.iter().any(|receipt| {
             receipt.status != "completed"
                 || receipt.exit_code != 0
-                || !standalone_acquired_input_record(&receipt.command)
+                || !standalone_acquired_input_record(&receipt.command, &expected_day)
         })
     {
         return Err(format!(
@@ -829,11 +837,7 @@ fn grade_raw_askme_artifacts(
                     && claim.subject.as_deref() == Some(payload.work_subject.as_str())
                     && claim.kind.as_deref() == Some("Observation")
                     && claim.author.as_deref() == Some(payload.recorded_by.as_str())
-                    && claim.cites.len() == payload.basis.len()
-                    && payload
-                        .basis
-                        .iter()
-                        .all(|basis| claim.cites.iter().any(|cited| cited == basis)) => {}
+                    && exact_citations(&payload.basis, &claim.cites) => {}
             _ => {
                 return Err(format!(
                     "askme scenario `{}` recorder receipt and new acquired-input envelope differ",
@@ -901,7 +905,7 @@ fn returned_cid(output: &str) -> Option<&str> {
         .find(|candidate| candidate.starts_with("bafy") && !candidate.contains(char::is_whitespace))
 }
 
-fn standalone_acquired_input_record(command: &str) -> bool {
+fn standalone_acquired_input_record(command: &str, expected_day: &str) -> bool {
     let command = command.trim();
     if command.is_empty()
         || command.contains(['\n', '\r', ';', '&', '|', '<', '>', '`'])
@@ -921,15 +925,18 @@ fn standalone_acquired_input_record(command: &str) -> bool {
         )
         && words[1] == "-lc"
     {
-        return standalone_acquired_input_record(&words[2]);
+        return standalone_acquired_input_record(&words[2], expected_day);
     }
     words.len() > 3
-        && Path::new(&words[0])
-            .file_name()
-            .and_then(|name| name.to_str())
-            == Some("day")
+        && words[0] == expected_day
         && words[1] == "acquired-input"
         && words[2] == "record"
+}
+
+fn exact_citations(basis: &[String], cites: &[String]) -> bool {
+    let basis_set = basis.iter().collect::<std::collections::BTreeSet<_>>();
+    let cite_set = cites.iter().collect::<std::collections::BTreeSet<_>>();
+    basis_set.len() == basis.len() && cite_set.len() == cites.len() && basis_set == cite_set
 }
 
 fn conservative_shell_words(command: &str) -> Option<Vec<String>> {
@@ -1350,7 +1357,12 @@ fn grade_askme_scenario(
     let record_commands = evidence
         .commands
         .iter()
-        .filter(|command| standalone_acquired_input_record(command))
+        .filter(|command| {
+            standalone_acquired_input_record(
+                command,
+                &format!("/opt/day-v013-askme-{}/day", manifest.github_run_id),
+            )
+        })
         .count();
     if expected.expect.record {
         if record_commands != 1 || evidence.claims_after <= evidence.claims_before {
@@ -2348,7 +2360,7 @@ mod tests {
                 "candidate_sha": candidate,
                 "user_turns": scenario.turns,
                 "assistant_turns": assistant_turns,
-                "commands": if scenario.expect.record { serde_json::json!(["day acquired-input record --fact summary"]) } else { serde_json::json!([]) },
+                "commands": if scenario.expect.record { serde_json::json!(["/opt/day-v013-askme-1/day acquired-input record --fact summary"]) } else { serde_json::json!([]) },
                 "claims_before": 2,
                 "claims_after": claims_after,
                 "durable_claim_texts": durable_texts
@@ -2362,7 +2374,7 @@ mod tests {
                     .path()
                     .join(format!("{}-events-{index}.jsonl", scenario.id));
                 let command_event = if scenario.expect.record && index + 1 == turns_for_raw.len() {
-                    "{\"type\":\"item.completed\",\"item\":{\"id\":\"record-command\",\"type\":\"command_execution\",\"command\":\"day acquired-input record --fact summary\",\"aggregated_output\":\"recorded acquired input (bafyrecorded)\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n"
+                    "{\"type\":\"item.completed\",\"item\":{\"id\":\"record-command\",\"type\":\"command_execution\",\"command\":\"/opt/day-v013-askme-1/day acquired-input record --fact summary\",\"aggregated_output\":\"recorded acquired input (bafyrecorded)\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n"
                 } else {
                     ""
                 };
@@ -2412,7 +2424,7 @@ mod tests {
             .unwrap();
             let command_path = bundle.path().join(format!("{}-commands.log", scenario.id));
             let command_text = if scenario.expect.record {
-                "{\"command\":\"day acquired-input record --fact summary\",\"status\":\"completed\",\"exit_code\":0,\"output\":\"recorded acquired input (bafyrecorded)\\n\",\"cid\":\"bafyrecorded\"}\n"
+                "{\"command\":\"/opt/day-v013-askme-1/day acquired-input record --fact summary\",\"status\":\"completed\",\"exit_code\":0,\"output\":\"recorded acquired input (bafyrecorded)\\n\",\"cid\":\"bafyrecorded\"}\n"
             } else {
                 ""
             };
@@ -2468,7 +2480,7 @@ mod tests {
         let command_original = std::fs::read(&command_path).unwrap();
         let manifest_original = std::fs::read(bundle.path().join("manifest.json")).unwrap();
         let failed_receipt = serde_json::json!({
-            "command": "day acquired-input record --fact summary",
+            "command": "/opt/day-v013-askme-1/day acquired-input record --fact summary",
             "status": "completed",
             "exit_code": 2,
             "output": "invalid arguments",
@@ -2519,11 +2531,24 @@ mod tests {
             .unwrap();
         let raw_path = bundle.path().join(raw_artifact["path"].as_str().unwrap());
         let raw_original = std::fs::read(&raw_path).unwrap();
-        let compound = "day acquired-input record --fact missing || kan observe manual";
-        assert!(!standalone_acquired_input_record(compound));
-        let raw_compound = String::from_utf8(raw_original.clone())
-            .unwrap()
-            .replace("day acquired-input record --fact summary", compound);
+        assert!(standalone_acquired_input_record(
+            "/opt/day-v013-askme-1/day acquired-input record --fact summary",
+            "/opt/day-v013-askme-1/day"
+        ));
+        assert!(!standalone_acquired_input_record(
+            "./day acquired-input record --fact summary",
+            "/opt/day-v013-askme-1/day"
+        ));
+        let compound =
+            "/opt/day-v013-askme-1/day acquired-input record --fact missing || kan observe manual";
+        assert!(!standalone_acquired_input_record(
+            compound,
+            "/opt/day-v013-askme-1/day"
+        ));
+        let raw_compound = String::from_utf8(raw_original.clone()).unwrap().replace(
+            "/opt/day-v013-askme-1/day acquired-input record --fact summary",
+            compound,
+        );
         std::fs::write(&raw_path, raw_compound).unwrap();
         let compound_receipt = serde_json::json!({
             "command": compound,
@@ -2589,6 +2614,57 @@ mod tests {
         assert!(grade_askme_inner(root, bundle.path(), None)
             .unwrap_err()
             .contains("recorder receipt and new acquired-input envelope differ"));
+        std::fs::write(&after_path, &after_original).unwrap();
+        std::fs::write(bundle.path().join("manifest.json"), &manifest_original).unwrap();
+
+        let duplicate_basis_text = day::events::AcquiredInput {
+            work_subject: "work/askme".into(),
+            topic: "release".into(),
+            provider: day::events::Source::Recorder {
+                principal: "did:key:recorder".into(),
+            },
+            recorded_by: "did:key:recorder".into(),
+            facts: vec!["structured summary only".into()],
+            decisions: vec![],
+            unresolved: vec![],
+            material_effect: "records the explicit answer".into(),
+            basis: vec!["bafy-basis".into(), "bafy-basis".into()],
+        }
+        .to_claim_text();
+        let mut duplicate_evidence: serde_json::Value =
+            serde_json::from_slice(&evidence_original).unwrap();
+        duplicate_evidence["durable_claim_texts"][1] = duplicate_basis_text.clone().into();
+        std::fs::write(
+            &evidence_path,
+            serde_json::to_vec_pretty(&duplicate_evidence).unwrap(),
+        )
+        .unwrap();
+        let mut duplicate_after: serde_json::Value =
+            serde_json::from_slice(&after_original).unwrap();
+        duplicate_after["subjects"][0]["claims"][2]["text"] = duplicate_basis_text.into();
+        duplicate_after["subjects"][0]["claims"][2]["cites"] =
+            serde_json::json!(["bafy-basis", "bafy-fabricated"]);
+        std::fs::write(&after_path, serde_json::to_vec(&duplicate_after).unwrap()).unwrap();
+        let mut duplicate_manifest: serde_json::Value =
+            serde_json::from_slice(&manifest_original).unwrap();
+        let duplicate_entry = duplicate_manifest["scenarios"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|entry| entry["id"] == record_id)
+            .unwrap();
+        duplicate_entry["sha256"] = digest(&std::fs::read(&evidence_path).unwrap()).into();
+        duplicate_entry["kan_after"]["sha256"] =
+            digest(&std::fs::read(&after_path).unwrap()).into();
+        std::fs::write(
+            bundle.path().join("manifest.json"),
+            serde_json::to_vec_pretty(&duplicate_manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(grade_askme_inner(root, bundle.path(), None)
+            .unwrap_err()
+            .contains("recorder receipt and new acquired-input envelope differ"));
+        std::fs::write(&evidence_path, &evidence_original).unwrap();
         std::fs::write(&after_path, &after_original).unwrap();
         std::fs::write(bundle.path().join("manifest.json"), &manifest_original).unwrap();
 

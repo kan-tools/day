@@ -77,9 +77,7 @@ impl crate::atoms::Versioned for AcquiredInput {
         if self.facts.is_empty() && self.decisions.is_empty() && self.unresolved.is_empty() {
             return Err("at least one fact, decision, or unresolved item is required".into());
         }
-        if self.basis.is_empty() {
-            return Err("at least one basis CID is required".into());
-        }
+        validate_basis(&self.basis)?;
         validate_summaries("fact", &self.facts)?;
         validate_summaries("decision", &self.decisions)?;
         validate_summaries("unresolved item", &self.unresolved)?;
@@ -135,9 +133,7 @@ impl crate::atoms::Versioned for Intervention {
             nonempty(field, value).map_err(|error| error.to_string())?;
             reject_transcript(field, value).map_err(|error| error.to_string())?;
         }
-        if self.basis.is_empty() {
-            return Err("at least one basis CID is required".into());
-        }
+        validate_basis(&self.basis)?;
         Ok(())
     }
 }
@@ -314,6 +310,17 @@ fn validate_recorder_source(source: &Source, recorded_by: &str) -> Result<(), St
         if principal != recorded_by {
             return Err("recorder source principal must equal the recording author".into());
         }
+    }
+    Ok(())
+}
+
+fn validate_basis(basis: &[String]) -> Result<(), String> {
+    if basis.is_empty() {
+        return Err("at least one basis CID is required".into());
+    }
+    let unique = basis.iter().collect::<std::collections::BTreeSet<_>>();
+    if unique.len() != basis.len() {
+        return Err("basis CIDs must be unique".into());
     }
     Ok(())
 }
