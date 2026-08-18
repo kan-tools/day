@@ -43,7 +43,7 @@ pub fn run(root: &Path, args: &[OsString]) -> Outcome<()> {
     Outcome::Passed(())
 }
 
-fn parse_ijson(source: &str) -> Result<Value, String> {
+pub(crate) fn parse_ijson(source: &str) -> Result<Value, String> {
     require_exact_integer_tokens(source)?;
     let mut deserializer = serde_json::Deserializer::from_str(source);
     let value = IJsonSeed
@@ -667,7 +667,7 @@ fn validate_resolved_procedure(
             RepositoryError::Unavailable(format!("could not resolve procedure repository: {error}"))
         })?;
     if remote.status != 0 {
-        return Err(RepositoryError::Finding(
+        return Err(RepositoryError::Unavailable(
             "could not resolve procedure repository".into(),
         ));
     }
@@ -1581,6 +1581,29 @@ fn failed(detail: impl Into<String>) -> Outcome<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct RepositoryProcess {
+        remote_status: i32,
+        remote: &'static str,
+    }
+
+    impl Process for RepositoryProcess {
+        fn run(
+            &self,
+            request: &ProcessRequest,
+        ) -> Result<crate::capability::process::ProcessOutput, String> {
+            assert_eq!(
+                request.args.first().and_then(|arg| arg.to_str()),
+                Some("config")
+            );
+            Ok(crate::capability::process::ProcessOutput {
+                status: self.remote_status,
+                stdout: self.remote.into(),
+                stderr: String::new(),
+            })
+        }
+    }
+
     #[test]
     fn shipped_vectors_and_every_mutation_are_decisive() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -1590,5 +1613,40 @@ mod tests {
         .unwrap();
         validate_all(&data, root).unwrap();
         run_self_test(&data, root).unwrap();
+    }
+
+    #[test]
+    fn repository_binding_distinguishes_pass_finding_and_unavailable() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let source =
+            std::fs::read_to_string(root.join("rfcs/vectors/1-process-model.json")).unwrap();
+        let data = parse_ijson(&source).unwrap();
+        let system = crate::capability::process::SystemProcess;
+        assert!(matches!(
+            validate_repository(&data, root, &system),
+            Outcome::Passed(())
+        ));
+        assert!(matches!(
+            validate_repository(
+                &data,
+                root,
+                &RepositoryProcess {
+                    remote_status: 0,
+                    remote: "https://example.invalid/wrong",
+                },
+            ),
+            Outcome::Finding(_)
+        ));
+        assert!(matches!(
+            validate_repository(
+                &data,
+                root,
+                &RepositoryProcess {
+                    remote_status: 1,
+                    remote: "",
+                },
+            ),
+            Outcome::CouldNotCheck(_)
+        ));
     }
 }

@@ -2,8 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
-
 use crate::capability::process::{Process, ProcessRequest};
 use crate::outcome::{CouldNotCheck, Finding, Outcome};
 
@@ -130,8 +128,7 @@ fn check(
         )?;
     }
     let vector_source = read(root, "rfcs/vectors/1-process-model.json")?;
-    let vectors: Value =
-        serde_json::from_str(&vector_source).map_err(|error| finding(error.to_string()))?;
+    let vectors = super::vectors::parse_ijson(&vector_source).map_err(finding)?;
     super::vectors::validate(&vectors).map_err(finding)?;
     if repository_binding {
         require_passed(
@@ -593,6 +590,7 @@ fn run_self_tests(
         "short-review",
         "profile-relationship",
         "coherence-vector",
+        "duplicate-vector-key",
         "recursive-publication",
         "denotational-source",
         "denotational-math",
@@ -820,6 +818,11 @@ fn mutate_fixture(root: &Path, label: &str) -> Result<(), CheckError> {
             "\"outcome\": \"not-certified\",\n          \"limitations\": [\"shared coordinate candidate does not match\"]",
             "\"outcome\": \"certified\",\n          \"limitations\": [\"shared coordinate candidate does not match\"]",
         ),
+        "duplicate-vector-key" => replace(
+            &root.join("rfcs/vectors/1-process-model.json"),
+            "{\n",
+            "{\n  \"version\": 3,\n",
+        ),
         "recursive-publication" => replace(
             &root.join("rfcs/0-rfc-and-adr-process.md"),
             "- Authors:",
@@ -896,6 +899,7 @@ fn expected_error(label: &str) -> &str {
         "short-review" => "fewer than 72 review hours elapsed",
         "profile-relationship" => "unrecognized Profile-relationship",
         "coherence-vector" => "certificate outcome is not derived",
+        "duplicate-vector-key" => "duplicate JSON property name: version",
         "recursive-publication" => "normative RFC bytes contain a claim-CID backlink",
         "denotational-source" => "missing RFC 1 denotational companion source",
         "denotational-math" => "denotational HTML lacks MathJax rendering",
