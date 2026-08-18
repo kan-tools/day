@@ -128,4 +128,14 @@ fn candidate_and_publication_resolve_every_coordinate_to_one_sha() {
         assert_eq!(output.status.code(), Some(1));
         assert!(String::from_utf8_lossy(&output.stderr).contains("canonical Result"));
     }
+
+    executable(
+        &bin.join("kan"),
+        &format!(
+            "#!/bin/sh\necho '{{\"claims\":[{{\"cid\":\"bafy-release\",\"kind\":\"Result\",\"subject\":\"unrelated\",\"text\":\"v0.13.0-beta.1 candidate {SHA} — shipped\"}}]}}'\n"
+        ),
+    );
+    let output = run(root.path(), &bin, "verify-publication-v013");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("canonical Result"));
 }

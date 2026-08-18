@@ -432,6 +432,7 @@ fn verify_publication_inner(
     let binding = format!("{} candidate {} — ", identity.version, candidate);
     if !claims.claims.iter().any(|claim| {
         claim.kind == "Result"
+            && claim.subject == identity.release_subject
             && claim
                 .text
                 .as_deref()
