@@ -1633,7 +1633,27 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         "a retired demonstration\n\nDemonstrated-by: revert=HEAD tests=old_instrument outcome=DEMONSTRATED",
     ]);
     let demonstrated_target = git(&["rev-parse", "HEAD"]);
+    git(&[
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "a second retired demonstration\n\nDemonstrated-by: revert=HEAD tests=old_instrument_two outcome=DEMONSTRATED",
+    ]);
+    let demonstrated_target_two = git(&["rev-parse", "HEAD"]);
     let _ = base;
+
+    let (code, out) = live(&format!("{target}..{demonstrated_target_two}"));
+    assert_eq!(
+        code,
+        Some(0),
+        "the live-only span should be selectable: {out}"
+    );
+    assert_eq!(
+        out.trim(),
+        format!("{demonstrated_target} {demonstrated_target_two}"),
+        "the machine selector must emit multiple full SHAs on one scalar line suitable for GITHUB_OUTPUT"
+    );
 
     // premise: unaccounted before anything accounts for it.
     let (code, out) = census(&format!("{span_start}..HEAD"));
@@ -1660,7 +1680,8 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         "the unrelated unaccounted commit remains: {out}"
     );
     assert!(
-        out.lines().any(|line| line == demonstrated_target),
+        out.split_whitespace()
+            .any(|word| word == demonstrated_target),
         "a whitespace-only reason must not remove a live demonstration: {out:?}"
     );
 
@@ -1690,7 +1711,8 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         "-m",
         &format!(
             "accounts for both\n\nAccounts-for: {target} a stated reason\n\
-             Accounts-for: {demonstrated_target} retired instrument\n\nNo trailer: this commit itself"
+             Accounts-for: {demonstrated_target} retired instrument\n\
+             Accounts-for: {demonstrated_target_two} second retired instrument\n\nNo trailer: this commit itself"
         ),
     ]);
     let (code, out) = census(&format!("{span_start}..HEAD"));
@@ -1712,6 +1734,10 @@ fn accounts_for_is_bounded_to_the_span_and_never_reads_as_demonstrated() {
         out.contains("accounted later: retired instrument"),
         "a retired trailer must be visibly reclassified rather than still \
          counted as demonstrated: {out}"
+    );
+    assert!(
+        out.contains("accounted later: second retired instrument"),
+        "every retired live claim must remain visibly accounted: {out}"
     );
     let (code, out) = live(&format!("{span_start}..HEAD"));
     assert_eq!(

@@ -75,9 +75,10 @@ pub fn run(root: &Path, process: &dyn Process, args: &[OsString]) -> Outcome<()>
     }
 
     if live_only {
-        for sha in live {
-            println!("{sha}");
-        }
+        // GitHub scalar outputs and shell `for` both consume one
+        // whitespace-delimited line. Keeping the machine form single-line
+        // avoids turning a valid list into an invalid workflow command.
+        println!("{}", live.join(" "));
     } else {
         print_report(&span, commits.len(), &buckets);
     }
