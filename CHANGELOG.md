@@ -39,8 +39,9 @@ versioning is [SemVer](https://semver.org/spec/v2.0.0.html), pre-1.0.
 - General `/askme`, explicit `day-acquired-input` observations, and fixed-kind
   intervention observations with reported, separately authenticated, or
   signer-as-source provenance ([#193], [#195]).
-- A typed v0.13 contract, preregistered real-Codex behavioral protocol,
-  transcript-derived grader, reconstruction verifier, and removal controls.
+- A typed v0.13 contract plus preregistered, honest-producer observational
+  protocols for real-Codex `/askme` behavior and post-merge reconstruction;
+  these retain raw evidence without grading or gating the candidate.
 - Direct normative claim citations on recorded design Plans.
 
 ### Fixed
