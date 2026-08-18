@@ -386,6 +386,32 @@ fn malformed_or_ambiguous_requests_append_nothing() {
         "splitting speaker turns across repeated narrative values must not make a transcript durable"
     );
 
+    let split_categories = run(
+        dir.path(),
+        &kan,
+        &[
+            "acquired-input",
+            "record",
+            "work/topic",
+            "--topic",
+            "x",
+            "--reported-provider",
+            "human",
+            "--fact",
+            "Alice: choose A",
+            "--decision",
+            "Bob: choose B",
+            "--material-effect",
+            "y",
+            "--cites",
+            "cid-basis",
+        ],
+    );
+    assert!(
+        !split_categories.status.success(),
+        "splitting speaker turns across narrative categories must not make a transcript durable"
+    );
+
     for hostile in [
         "Alice:choose A Bob:choose B",
         "[Alice] choose A [Bob] choose B",

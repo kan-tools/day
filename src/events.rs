@@ -81,6 +81,19 @@ impl crate::atoms::Versioned for AcquiredInput {
         validate_summaries("fact", &self.facts)?;
         validate_summaries("decision", &self.decisions)?;
         validate_summaries("unresolved item", &self.unresolved)?;
+        let mut narrative = vec![
+            self.work_subject.as_str(),
+            self.topic.as_str(),
+            self.material_effect.as_str(),
+        ];
+        if let Source::Reported { description } = &self.provider {
+            narrative.push(description);
+        }
+        narrative.extend(self.facts.iter().map(String::as_str));
+        narrative.extend(self.decisions.iter().map(String::as_str));
+        narrative.extend(self.unresolved.iter().map(String::as_str));
+        reject_transcript("acquired input", &narrative.join("\n"))
+            .map_err(|error| error.to_string())?;
         Ok(())
     }
 }
@@ -133,6 +146,16 @@ impl crate::atoms::Versioned for Intervention {
             nonempty(field, value).map_err(|error| error.to_string())?;
             reject_transcript(field, value).map_err(|error| error.to_string())?;
         }
+        let mut narrative = vec![
+            self.work_subject.as_str(),
+            self.summary.as_str(),
+            self.material_effect.as_str(),
+        ];
+        if let Source::Reported { description } = &self.source {
+            narrative.push(description);
+        }
+        reject_transcript("intervention", &narrative.join("\n"))
+            .map_err(|error| error.to_string())?;
         validate_basis(&self.basis)?;
         Ok(())
     }
