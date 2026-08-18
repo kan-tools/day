@@ -429,15 +429,16 @@ fn verify_publication_inner(
         Nonzero::CouldNotCheck,
     )?;
     let claims: KanShow = parse_external("kan release claim", &claim_json)?;
+    let binding = format!("{} candidate {} — ", identity.version, candidate);
     if !claims.claims.iter().any(|claim| {
         claim.kind == "Result"
             && claim
                 .text
                 .as_deref()
-                .is_some_and(|text| text.contains(identity.version) && text.contains(candidate))
+                .is_some_and(|text| text.starts_with(&binding))
     }) {
         return Err(CheckError::finding(
-            "kan has no Result binding tag and candidate",
+            "kan has no canonical Result binding tag and candidate",
         ));
     }
     Ok(run)
